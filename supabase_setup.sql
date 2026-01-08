@@ -105,8 +105,13 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users 
     FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 5. PERMISSIONS
+-- 10. PERMISSIONS
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL ON public.profiles TO authenticated;
 GRANT SELECT ON public.profiles TO anon;
 GRANT ALL ON public.profiles TO service_role;
+
+-- 11. ADMIN MANAGEMENT (Instruction pour l'utilisateur)
+-- Pour promouvoir un utilisateur en administrateur, exécutez la commande suivante
+-- dans l'éditeur SQL de Supabase en remplaçant 'email@example.com' :
+-- UPDATE public.profiles SET role = 'admin' WHERE email = 'email@example.com';
