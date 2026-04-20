@@ -428,7 +428,9 @@ export default function Landing() {
                   key={card.title}
                   className="overflow-hidden rounded-[1.3rem] border border-black/10 bg-white"
                 >
-                  <div className={`relative h-40 overflow-hidden ${card.toneClass}`}>
+                  <div
+                    className={`relative h-40 overflow-hidden ${card.toneClass}`}
+                  >
                     {card.overlayImageUrl ? (
                       <img
                         src={card.overlayImageUrl}
