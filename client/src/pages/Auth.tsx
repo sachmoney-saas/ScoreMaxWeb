@@ -103,8 +103,8 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondary/30 p-4">
-      <Card className="w-full max-w-md shadow-2xl shadow-black/5 border-border/60">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md border-border/80 bg-card/92 shadow-[0_34px_95px_-62px_rgba(101,94,235,0.7)] backdrop-blur">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-display font-bold text-center">
             {isLogin ? "Bon retour parmi nous" : "Créer un compte"}
@@ -176,7 +176,7 @@ export default function AuthPage() {
                       <span className="text-muted-foreground">Robustesse:</span>
                       <span className="font-medium">{strength.label}</span>
                     </div>
-                    <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                       <div 
                         className={`h-full transition-all duration-300 ${strength.color}`} 
                         style={ { width: `${(strength.score / 5) * 100}%` } }
@@ -187,7 +187,7 @@ export default function AuthPage() {
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-11 text-base font-semibold shadow-lg shadow-primary/20" 
+                className="w-full h-11 text-base font-semibold shadow-[0_20px_55px_-35px_rgba(110,102,255,0.72)]"
                 disabled={isLoading}
                 data-testid="button-auth-submit"
               >

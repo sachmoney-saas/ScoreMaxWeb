@@ -1,9 +1,10 @@
 import pino from "pino";
+import { serverEnv } from "./env";
 
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = serverEnv.NODE_ENV !== "production";
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL || "info",
+  level: serverEnv.LOG_LEVEL,
   transport: isDev
     ? {
         target: "pino-pretty",
@@ -19,5 +20,5 @@ export const logger = pino({
       return { level: label.toUpperCase() };
     },
   },
-  base: isDev ? undefined : { env: process.env.NODE_ENV },
+  base: isDev ? undefined : { env: serverEnv.NODE_ENV },
 });

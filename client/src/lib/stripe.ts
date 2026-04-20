@@ -1,12 +1,13 @@
 import { supabase } from "./supabase";
+import { clientEnv } from "./env";
 
 /**
  * Stripe utility for future integration
- * This prepares the ground for Replit's managed Stripe integration.
+ * This prepares the ground for a future Stripe integration.
  */
 
 export const STRIPE_CONFIG = {
-  STRIPE_PUBLIC_KEY: import.meta.env.VITE_STRIPE_PUBLIC_KEY || "",
+  STRIPE_PUBLIC_KEY: clientEnv.VITE_STRIPE_PUBLIC_KEY,
 };
 
 export async function getSubscriptionStatus(userId: string) {

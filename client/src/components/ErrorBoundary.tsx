@@ -36,20 +36,22 @@ export class ErrorBoundary extends React.Component<Props, State> {
               </div>
             </div>
             <div className="space-y-2">
-              <h1 className="text-2xl font-bold tracking-tight">Something went wrong</h1>
+              <h1 className="text-2xl font-bold tracking-tight">
+                Something went wrong
+              </h1>
               <p className="text-muted-foreground">
                 An unexpected error occurred in the application.
               </p>
             </div>
             <div className="pt-4">
-              <Button 
-                onClick={() => window.location.href = "/"}
+              <Button
+                onClick={() => (window.location.href = "/")}
                 className="w-full rounded-full"
               >
                 Return to Home
               </Button>
             </div>
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <pre className="mt-8 p-4 bg-secondary rounded-lg text-left text-xs overflow-auto max-h-48 border border-border">
                 {this.state.error?.stack}
               </pre>
