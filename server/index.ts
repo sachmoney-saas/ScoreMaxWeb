@@ -10,7 +10,7 @@ import pinoHttp from "pino-http";
 const app = express();
 const httpServer = createServer(app);
 
-app.use(express.json());
+app.use(express.json({ limit: serverEnv.SCOREMAX_PAYLOAD_LIMIT }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use(
@@ -53,15 +53,18 @@ app.use(
         err,
         code: apiError.code,
         status: apiError.status,
-        details: apiError.details,
       },
       apiError.message,
     );
 
     res.status(apiError.status).json({
-      code: apiError.code,
-      message: apiError.message,
-      ...(apiError.details !== undefined ? { details: apiError.details } : {}),
+      ok: false,
+      httpStatus: apiError.status,
+      data: null,
+      error: {
+        code: apiError.code,
+        message: apiError.message,
+      },
     });
   });
 

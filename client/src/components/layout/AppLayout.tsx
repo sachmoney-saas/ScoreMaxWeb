@@ -47,7 +47,7 @@ type SidebarNavItem = {
 function ModernAppSidebar() {
   const [location] = useLocation();
   const { profile, isAdmin, signOut } = useAuth();
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, toggleSidebar } = useSidebar();
 
   const isCollapsed = state === "collapsed" && !isMobile;
 
@@ -81,32 +81,118 @@ function ModernAppSidebar() {
     <Sidebar
       collapsible="icon"
       variant="floating"
-      className="border-r border-transparent"
+      className="relative z-40 border-r border-transparent [--sidebar-width:18rem]"
     >
-      <SidebarHeader className="px-2 pt-3 pb-2">
-        <Link
-          href="/app"
-          className="group relative flex h-11 items-center overflow-hidden rounded-xl border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] px-3 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] transition-all hover:border-white/25"
+      <SidebarHeader
+        className={`${isCollapsed ? "px-1.5 pt-3 pb-2" : "px-2 pt-3 pb-2"}`}
+      >
+        <div
+          className="group relative flex h-11 cursor-pointer items-center overflow-hidden rounded-xl border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] px-2 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] transition-all hover:border-white/25"
+          title={
+            isCollapsed ? "Ouvrir la left sidebar" : "Rétracter la left sidebar"
+          }
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            if (!isMobile) {
+              toggleSidebar();
+            }
+          }}
+          onKeyDown={(event) => {
+            if ((event.key === "Enter" || event.key === " ") && !isMobile) {
+              event.preventDefault();
+              toggleSidebar();
+            }
+          }}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/25 font-bold text-[#d6e4ff]">
-            S
+          <div className="flex min-w-0 flex-1 items-center px-1">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/25">
+              <img
+                src="/favicon.png"
+                alt="Logo ScoreMax"
+                className="h-4 w-4 object-contain"
+              />
+            </div>
+            <div
+              className={`ml-2.5 min-w-0 transition-all duration-200 ${
+                isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+              }`}
+            >
+              <p className="truncate font-display text-base font-semibold tracking-tight text-zinc-100">
+                ScoreMax
+              </p>
+            </div>
           </div>
-          <div
-            className={`ml-2.5 min-w-0 transition-all duration-200 ${
-              isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
-            }`}
-          >
-            <p className="truncate font-display text-base font-semibold tracking-tight text-zinc-100">
-              ScoreMax
-            </p>
-            <p className="truncate text-[11px] font-medium text-zinc-400">
-              Workspace
-            </p>
-          </div>
-        </Link>
+        </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 pb-2">
+      <SidebarFooter className={isCollapsed ? "hidden" : "px-2 pt-1 pb-2"}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              className="h-11 rounded-xl border border-white/15 bg-white/[0.06] data-[state=open]:bg-white/[0.12]"
+            >
+              <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                <AvatarFallback className="rounded-lg bg-primary/15 text-primary text-xs">
+                  {profile?.email?.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              {!isCollapsed ? (
+                <>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold text-zinc-100">
+                      {profile?.role === "admin"
+                        ? "Administrateur"
+                        : "Utilisateur"}
+                    </span>
+                    <span className="truncate text-xs text-zinc-400">
+                      {profile?.email}
+                    </span>
+                  </div>
+                  <ChevronRight className="ml-auto size-4 shrink-0 text-zinc-400" />
+                </>
+              ) : null}
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-xl"
+            side={isMobile ? "bottom" : "right"}
+            align="end"
+            sideOffset={8}
+          >
+            <DropdownMenuItem asChild>
+              <Link
+                href="/settings"
+                className="flex w-full items-center cursor-pointer"
+              >
+                <SettingsIcon className="mr-2 h-4 w-4" />
+                <span>Paramètres</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/billing"
+                className="flex w-full items-center cursor-pointer"
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                <span>Facturation</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => signOut()}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Déconnexion</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarFooter>
+
+      <SidebarContent className={isCollapsed ? "hidden" : "px-2 pb-2"}>
         <SidebarGroup>
           <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
             Navigation
@@ -125,7 +211,10 @@ function ModernAppSidebar() {
                       tooltip={item.label}
                       className="h-10 rounded-xl border border-transparent px-2.5 transition-all duration-200 data-[active=true]:border-white/20 data-[active=true]:bg-[linear-gradient(132deg,rgba(214,228,255,0.26)_0%,rgba(214,228,255,0.14)_45%,rgba(255,255,255,0.05)_100%)] data-[active=true]:text-zinc-50"
                     >
-                      <Link href={item.href} className="flex items-center gap-2 w-full">
+                      <Link
+                        href={item.href}
+                        className="flex items-center gap-2 w-full"
+                      >
                         <Icon className="shrink-0" />
                         <span className="truncate">{item.label}</span>
                       </Link>
@@ -158,7 +247,10 @@ function ModernAppSidebar() {
                           tooltip={item.label}
                           className="h-10 rounded-xl border border-transparent px-2.5 transition-all duration-200 data-[active=true]:border-white/20 data-[active=true]:bg-[linear-gradient(132deg,rgba(214,228,255,0.26)_0%,rgba(214,228,255,0.14)_45%,rgba(255,255,255,0.05)_100%)] data-[active=true]:text-zinc-50"
                         >
-                          <Link href={item.href} className="flex items-center gap-2 w-full">
+                          <Link
+                            href={item.href}
+                            className="flex items-center gap-2 w-full"
+                          >
                             <Icon className="shrink-0" />
                             <span className="truncate">{item.label}</span>
                           </Link>
@@ -172,59 +264,6 @@ function ModernAppSidebar() {
           </>
         ) : null}
       </SidebarContent>
-
-      <SidebarFooter className="px-2 pt-2 pb-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="h-11 rounded-xl border border-white/15 bg-white/[0.06] data-[state=open]:bg-white/[0.12]"
-            >
-              <Avatar className="h-8 w-8 rounded-lg shrink-0">
-                <AvatarFallback className="rounded-lg bg-primary/15 text-primary text-xs">
-                  {profile?.email?.substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              {!isCollapsed ? (
-                <>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold text-zinc-100">
-                      {profile?.role === "admin" ? "Administrateur" : "Utilisateur"}
-                    </span>
-                    <span className="truncate text-xs text-zinc-400">{profile?.email}</span>
-                  </div>
-                  <ChevronRight className="ml-auto size-4 shrink-0 text-zinc-400" />
-                </>
-              ) : null}
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-xl"
-            side={isMobile ? "bottom" : "right"}
-            align="end"
-            sideOffset={8}
-          >
-            <DropdownMenuItem asChild>
-              <Link href="/settings" className="flex w-full items-center cursor-pointer">
-                <SettingsIcon className="mr-2 h-4 w-4" />
-                <span>Paramètres</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/billing" className="flex w-full items-center cursor-pointer">
-                <CreditCard className="mr-2 h-4 w-4" />
-                <span>Facturation</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer" onClick={() => signOut()}>
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Déconnexion</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>
@@ -254,7 +293,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <ModernAppSidebar />
         <SidebarInset className="bg-background">
           <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/70 bg-background/80 px-4 backdrop-blur-xl md:h-16 md:px-6">
-            <SidebarTrigger className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10" />
+            <SidebarTrigger className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 md:hidden" />
             <div className="flex-1" />
           </header>
           <div className="flex-1 overflow-y-auto p-4 md:p-8 pt-6">

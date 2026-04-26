@@ -1,10 +1,9 @@
 import * as React from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   BriefcaseBusiness,
-  Globe2,
   Heart,
   ScanFace,
   Smartphone,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useOnboardingScanStatus } from "@/hooks/use-supabase";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { AUTH_CONFIG } from "@/config/auth";
@@ -90,16 +90,6 @@ const steps: OnboardingStep[] = [
     icon: ScanFace,
   },
   {
-    title: "Compare-toi aux différentes zones du monde",
-    category: "Classement mondial",
-    claim:
-      "Si tu le souhaites, tu peux situer ton score par zone géographique.",
-    source: "Comparaisons ScoreMax",
-    description:
-      "France, Europe, Amérique, Asie: visualise ton positionnement selon les standards locaux.",
-    icon: Globe2,
-  },
-  {
     title: "Télécharge ensuite l'app iPhone",
     category: "App Store",
     claim: "Retrouve ton suivi et ta progression directement sur mobile.",
@@ -165,30 +155,39 @@ export default function Onboarding() {
   const CurrentIcon = currentStep.icon;
   const isLastStep = stepIndex === steps.length - 1;
 
+  const {
+    data: scanStatus,
+    isLoading: isScanStatusLoading,
+    isError: isScanStatusError,
+  } = useOnboardingScanStatus({ enabled: isLastStep && !!user?.id });
+
+  const requiredAssetCount = scanStatus?.required_asset_count ?? 8;
+  const completedAssetCount = scanStatus?.completed_asset_count ?? 0;
+  const missingAssetTypes = scanStatus?.missing_asset_types ?? [];
+  const isScanReady = scanStatus?.is_ready ?? false;
+  const canCompleteOnboarding = !isLastStep || isScanReady;
+
   return (
-    <div className="hero-bg-grain relative min-h-[100svh] overflow-hidden bg-[#020202]">
-      <div className="mx-auto flex min-h-[100svh] w-full max-w-xl flex-col justify-center px-4 py-8 sm:px-6">
-        <div className="space-y-8">
-          <div className="flex items-center justify-between gap-3">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.13em] text-[#d6e4ff]"
-            >
-              ScoreMax
-            </Link>
-            <p className="text-xs font-medium text-zinc-400">
-              Étape {stepIndex + 1} / {steps.length}
-            </p>
+    <div className="relative min-h-[100svh] overflow-hidden bg-[linear-gradient(135deg,#c9d9df_0%,#9fb7bf_48%,#6f8d95_100%)]">
+      <div className="mx-auto flex min-h-[100svh] w-full max-w-3xl flex-col justify-center px-4 py-8 sm:px-6">
+        <div className="space-y-6">
+          <div className="flex justify-center">
+            <img
+              src="/favicon.png"
+              alt="Logo ScoreMax"
+              className="h-10 w-10 rounded-xl border border-white/50 bg-white/80 p-1.5 shadow-[0_10px_28px_-18px_rgba(9,20,37,0.65)]"
+            />
           </div>
 
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-            <motion.div
-              key={`step-progress-${stepIndex}`}
-              initial={{ width: 0 }}
-              animate={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="h-full rounded-full bg-gradient-to-r from-[#d6e4ff] via-white to-[#e8f0ff]"
-            />
+          <div className="grid grid-cols-8 gap-1.5">
+            {steps.map((_, index) => (
+              <div
+                key={`step-segment-${index}`}
+                className={`h-2 rounded-full transition-colors duration-200 ${
+                  index <= stepIndex ? "bg-[#121826]" : "bg-white/50"
+                }`}
+              />
+            ))}
           </div>
 
           <AnimatePresence mode="wait">
@@ -198,50 +197,95 @@ export default function Onboarding() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -14 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
-              className="space-y-8"
+              className="space-y-8 rounded-[2rem] border border-white/60 bg-white p-6 shadow-[0_24px_70px_-35px_rgba(9,20,37,0.55)] sm:p-10"
             >
               <div className="space-y-5">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-[#d6e4ff]">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700">
                   <CurrentIcon className="h-6 w-6" />
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                     {currentStep.category}
                   </p>
-                  <h1 className="text-2xl font-display font-bold leading-tight tracking-tight text-zinc-50 sm:text-[2rem]">
+                  <h1 className="text-2xl font-display font-bold leading-tight tracking-tight text-slate-900 sm:text-[2rem]">
                     {currentStep.title}
                   </h1>
-                  <p className="text-sm leading-relaxed text-zinc-300 sm:text-base">
+                  <p className="text-sm leading-relaxed text-slate-600 sm:text-base">
                     {currentStep.description}
                   </p>
                 </div>
 
-                <div className="space-y-3 rounded-2xl border border-white/20 bg-white/10 p-4">
-                  <p className="text-sm font-semibold leading-relaxed text-[#f2f6ff] sm:text-base">
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold leading-relaxed text-slate-900 sm:text-base">
                     {currentStep.claim}
                   </p>
-                  <p className="text-xs leading-relaxed text-zinc-300 sm:text-sm">
+                  <p className="text-xs leading-relaxed text-slate-500 sm:text-sm">
                     {currentStep.source}
                   </p>
                 </div>
+
+                {isLastStep ? (
+                  <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-900">
+                        Statut du scan
+                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                        {completedAssetCount}/{requiredAssetCount}
+                      </p>
+                    </div>
+
+                    {isScanStatusLoading ? (
+                      <p className="text-sm text-slate-600">
+                        Vérification des photos en cours...
+                      </p>
+                    ) : null}
+
+                    {isScanStatusError ? (
+                      <p className="text-sm text-red-600">
+                        Impossible de vérifier les photos pour l'instant. Réessaie dans quelques secondes.
+                      </p>
+                    ) : null}
+
+                    {!isScanStatusLoading && !isScanStatusError ? (
+                      isScanReady ? (
+                        <p className="text-sm font-semibold text-emerald-700">
+                          Scan complet: toutes les photos obligatoires sont prêtes.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-sm text-slate-700">
+                            Photos manquantes:
+                          </p>
+                          <ul className="space-y-1 pl-4 text-sm text-slate-600">
+                            {missingAssetTypes.map((assetType) => (
+                              <li key={assetType} className="list-disc">
+                                {assetType}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   type="button"
-                  variant="ghost"
                   onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
                   disabled={stepIndex === 0 || isSubmitting}
-                  className="rounded-xl border border-white/20 bg-white/5 text-zinc-200 hover:bg-white/15 disabled:opacity-40"
+                  className="rounded-xl bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40"
                 >
                   Retour
                 </Button>
                 <Button
                   type="button"
                   onClick={handleNext}
-                  disabled={isSubmitting}
-                  className="rounded-xl bg-white text-black hover:bg-zinc-200"
+                  disabled={isSubmitting || !canCompleteOnboarding}
+                  className="rounded-xl bg-black text-white hover:bg-zinc-800"
                 >
                   {isLastStep ? "Terminer" : "Continuer"}
                 </Button>

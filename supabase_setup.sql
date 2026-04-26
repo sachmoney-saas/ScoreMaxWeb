@@ -27,19 +27,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   CONSTRAINT scoremax_profiles_role_check CHECK (role IN ('user', 'admin'))
 );
 
-CREATE TABLE IF NOT EXISTS public.oneshot_api_keys (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  key_prefix TEXT NOT NULL,
-  key_hash TEXT NOT NULL,
-  scopes TEXT[] NOT NULL,
-  revoked_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-  last_used_at TIMESTAMP WITH TIME ZONE,
-  CONSTRAINT scoremax_oneshot_api_keys_name_check CHECK (char_length(trim(name)) > 0),
-  CONSTRAINT scoremax_oneshot_api_keys_scopes_check CHECK (cardinality(scopes) > 0)
-);
-
 -- 2) Add missing columns required by current runtime (additive only)
 DO $$
 BEGIN
@@ -150,8 +137,6 @@ BEGIN
 END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS scoremax_profiles_id_idx ON public.profiles (id);
-CREATE UNIQUE INDEX IF NOT EXISTS scoremax_oneshot_api_keys_prefix_idx ON public.oneshot_api_keys (key_prefix);
-CREATE INDEX IF NOT EXISTS scoremax_oneshot_api_keys_created_idx ON public.oneshot_api_keys (created_at DESC);
 
 -- 3) Ensure RLS is active (idempotent)
 ALTER TABLE IF EXISTS public.profiles ENABLE ROW LEVEL SECURITY;
@@ -389,16 +374,1056 @@ BEGIN
   END IF;
 END $$;
 
--- 7) Post-check summary output
+-- 7) Scan asset taxonomy (8 required onboarding photo types)
+CREATE TABLE IF NOT EXISTS public.scan_asset_types (
+  code TEXT PRIMARY KEY,
+  label_fr TEXT NOT NULL,
+  is_required_onboarding BOOLEAN DEFAULT TRUE NOT NULL,
+  sort_order INTEGER NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+INSERT INTO public.scan_asset_types (code, label_fr, is_required_onboarding, sort_order, is_active)
+VALUES
+  ('FACE_FRONT', 'Visage de face', TRUE, 1, TRUE),
+  ('PROFILE_LEFT', 'Profil gauche', TRUE, 2, TRUE),
+  ('PROFILE_RIGHT', 'Profil droit', TRUE, 3, TRUE),
+  ('LOOK_UP', 'Regarder en haut', TRUE, 4, TRUE),
+  ('LOOK_DOWN', 'Regarder en bas', TRUE, 5, TRUE),
+  ('SMILE', 'Sourire', TRUE, 6, TRUE),
+  ('HAIR_BACK', 'Cheveux en arrière', TRUE, 7, TRUE),
+  ('EYE_CLOSEUP', 'Gros plan œil', TRUE, 8, TRUE),
+  ('LEGACY_PHOTO', 'Photo legacy', FALSE, 901, TRUE),
+  ('LEGACY_FRAME', 'Frame legacy', FALSE, 902, TRUE),
+  ('LEGACY_DEPTH', 'Depth legacy', FALSE, 903, TRUE),
+  ('LEGACY_LANDMARKS', 'Landmarks legacy', FALSE, 904, TRUE),
+  ('LEGACY_DEBUG_OVERLAY', 'Debug overlay legacy', FALSE, 905, TRUE)
+ON CONFLICT (code) DO UPDATE
+SET
+  label_fr = EXCLUDED.label_fr,
+  is_required_onboarding = EXCLUDED.is_required_onboarding,
+  sort_order = EXCLUDED.sort_order,
+  is_active = EXCLUDED.is_active,
+  updated_at = NOW();
+
+-- 8) Scan sessions and scan assets metadata (Cloudflare R2 metadata only)
+CREATE TABLE IF NOT EXISTS public.scan_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  source TEXT DEFAULT 'onboarding' NOT NULL,
+  status TEXT DEFAULT 'collecting' NOT NULL,
+  required_asset_count INTEGER DEFAULT 8 NOT NULL,
+  completed_asset_count INTEGER DEFAULT 0 NOT NULL,
+  started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  ready_at TIMESTAMP WITH TIME ZONE,
+  completed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  CONSTRAINT scoremax_scan_sessions_source_check CHECK (source IN ('onboarding', 'manual_rescan', 'automated')),
+  CONSTRAINT scoremax_scan_sessions_status_check CHECK (status IN ('collecting', 'ready', 'processing', 'completed', 'failed', 'abandoned')),
+  CONSTRAINT scoremax_scan_sessions_required_positive CHECK (required_asset_count > 0),
+  CONSTRAINT scoremax_scan_sessions_completed_non_negative CHECK (completed_asset_count >= 0),
+  CONSTRAINT scoremax_scan_sessions_completed_le_required CHECK (completed_asset_count <= required_asset_count)
+);
+
+-- Backfill sessions from legacy scans table when available.
+DO $$
+BEGIN
+  IF to_regclass('public.scans') IS NOT NULL THEN
+    INSERT INTO public.scan_sessions (
+      id,
+      user_id,
+      source,
+      status,
+      required_asset_count,
+      completed_asset_count,
+      started_at,
+      ready_at,
+      completed_at,
+      created_at,
+      updated_at
+    )
+    SELECT
+      s.id,
+      s.user_id,
+      'manual_rescan',
+      CASE
+        WHEN s.status = 'started' THEN 'collecting'
+        WHEN s.status = 'completed' THEN 'completed'
+        WHEN s.status = 'failed' THEN 'failed'
+        WHEN s.status = 'aborted' THEN 'abandoned'
+        ELSE 'collecting'
+      END,
+      8,
+      0,
+      COALESCE(s.capture_started_at, s.created_at, NOW()),
+      CASE WHEN s.status = 'completed' THEN COALESCE(s.capture_ended_at, s.updated_at, NOW()) ELSE NULL END,
+      CASE WHEN s.status = 'completed' THEN COALESCE(s.capture_ended_at, s.updated_at, NOW()) ELSE NULL END,
+      COALESCE(s.created_at, NOW()),
+      COALESCE(s.updated_at, NOW())
+    FROM public.scans s
+    ON CONFLICT (id) DO NOTHING;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS public.scan_assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  asset_type_code TEXT,
+  r2_bucket TEXT,
+  r2_key TEXT,
+  mime_type TEXT,
+  byte_size BIGINT,
+  checksum_sha256 TEXT,
+  upload_status TEXT DEFAULT 'pending' NOT NULL,
+  captured_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  CONSTRAINT scoremax_scan_assets_status_check CHECK (upload_status IN ('pending', 'uploaded', 'validated', 'failed')),
+  CONSTRAINT scoremax_scan_assets_mime_type_check CHECK (mime_type IS NULL OR mime_type IN ('image/jpeg', 'image/png')),
+  CONSTRAINT scoremax_scan_assets_r2_key_not_blank CHECK (r2_key IS NULL OR length(btrim(r2_key)) > 0),
+  CONSTRAINT scoremax_scan_assets_byte_size_positive CHECK (byte_size IS NULL OR byte_size > 0),
+  CONSTRAINT scoremax_scan_assets_checksum_format CHECK (checksum_sha256 IS NULL OR checksum_sha256 ~ '^[0-9a-f]{64}$')
+);
+
+-- Legacy compatibility: existing projects already have public.scan_assets with old columns.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'session_id'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN session_id UUID;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'asset_type_code'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN asset_type_code TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'r2_bucket'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN r2_bucket TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'r2_key'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN r2_key TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'byte_size'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN byte_size BIGINT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'checksum_sha256'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN checksum_sha256 TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'upload_status'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN upload_status TEXT DEFAULT 'pending' NOT NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'captured_at'
+  ) THEN
+    ALTER TABLE public.scan_assets ADD COLUMN captured_at TIMESTAMP WITH TIME ZONE;
+  END IF;
+END $$;
+
+-- Backfill from legacy scan_assets shape.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'bucket'
+  ) THEN
+    UPDATE public.scan_assets
+    SET r2_bucket = bucket
+    WHERE r2_bucket IS NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'object_path'
+  ) THEN
+    UPDATE public.scan_assets
+    SET r2_key = object_path
+    WHERE r2_key IS NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'bytes'
+  ) THEN
+    UPDATE public.scan_assets
+    SET byte_size = bytes
+    WHERE byte_size IS NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'sha256'
+  ) THEN
+    UPDATE public.scan_assets
+    SET checksum_sha256 = sha256
+    WHERE checksum_sha256 IS NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'scan_id'
+  ) THEN
+    UPDATE public.scan_assets
+    SET session_id = scan_id
+    WHERE session_id IS NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'asset_type'
+  ) THEN
+    UPDATE public.scan_assets
+    SET asset_type_code = CASE asset_type
+      WHEN 'photo' THEN 'LEGACY_PHOTO'
+      WHEN 'frame' THEN 'LEGACY_FRAME'
+      WHEN 'depth' THEN 'LEGACY_DEPTH'
+      WHEN 'landmarks' THEN 'LEGACY_LANDMARKS'
+      WHEN 'debug_overlay' THEN 'LEGACY_DEBUG_OVERLAY'
+      ELSE COALESCE(asset_type_code, 'LEGACY_PHOTO')
+    END
+    WHERE asset_type_code IS NULL;
+  END IF;
+
+  UPDATE public.scan_assets
+  SET asset_type_code = 'LEGACY_PHOTO'
+  WHERE asset_type_code IS NULL;
+
+  UPDATE public.scan_assets
+  SET upload_status = 'uploaded'
+  WHERE upload_status = 'pending'
+    AND length(btrim(COALESCE(r2_key, ''))) > 0;
+END $$;
+
+-- Allow legacy columns to become optional for v2 writes while keeping backward compatibility.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'scan_id'
+  ) THEN
+    ALTER TABLE public.scan_assets ALTER COLUMN scan_id DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'asset_type'
+  ) THEN
+    ALTER TABLE public.scan_assets ALTER COLUMN asset_type DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'bucket'
+  ) THEN
+    ALTER TABLE public.scan_assets ALTER COLUMN bucket DROP NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'object_path'
+  ) THEN
+    ALTER TABLE public.scan_assets ALTER COLUMN object_path DROP NOT NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.scan_assets
+      ALTER COLUMN r2_key SET NOT NULL;
+  EXCEPTION WHEN not_null_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER TABLE public.scan_assets
+      ALTER COLUMN asset_type_code SET NOT NULL;
+  EXCEPTION WHEN not_null_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER TABLE public.scan_assets
+      ALTER COLUMN session_id SET NOT NULL;
+  EXCEPTION WHEN not_null_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER TABLE public.scan_assets
+      ALTER COLUMN mime_type SET NOT NULL;
+  EXCEPTION WHEN not_null_violation THEN
+    NULL;
+  END;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_status_check'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    ALTER TABLE public.scan_assets
+      ADD CONSTRAINT scoremax_scan_assets_status_check
+      CHECK (upload_status IN ('pending', 'uploaded', 'validated', 'failed'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_mime_type_check'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    ALTER TABLE public.scan_assets
+      ADD CONSTRAINT scoremax_scan_assets_mime_type_check
+      CHECK (mime_type IS NULL OR mime_type IN ('image/jpeg', 'image/png'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_r2_key_not_blank'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    ALTER TABLE public.scan_assets
+      ADD CONSTRAINT scoremax_scan_assets_r2_key_not_blank
+      CHECK (r2_key IS NULL OR length(btrim(r2_key)) > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_byte_size_positive'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    ALTER TABLE public.scan_assets
+      ADD CONSTRAINT scoremax_scan_assets_byte_size_positive
+      CHECK (byte_size IS NULL OR byte_size > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_checksum_format'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    ALTER TABLE public.scan_assets
+      ADD CONSTRAINT scoremax_scan_assets_checksum_format
+      CHECK (checksum_sha256 IS NULL OR checksum_sha256 ~ '^[0-9a-f]{64}$');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_session_id_fkey'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    BEGIN
+      ALTER TABLE public.scan_assets
+        ADD CONSTRAINT scoremax_scan_assets_session_id_fkey
+        FOREIGN KEY (session_id) REFERENCES public.scan_sessions(id) ON DELETE CASCADE;
+    EXCEPTION WHEN invalid_foreign_key OR datatype_mismatch THEN
+      -- Keep compatibility when existing column type differs on legacy projects.
+      NULL;
+    END;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_asset_type_code_fkey'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    BEGIN
+      ALTER TABLE public.scan_assets
+        ADD CONSTRAINT scoremax_scan_assets_asset_type_code_fkey
+        FOREIGN KEY (asset_type_code) REFERENCES public.scan_asset_types(code);
+    EXCEPTION WHEN invalid_foreign_key OR datatype_mismatch THEN
+      -- Keep compatibility when existing column type differs on legacy projects.
+      NULL;
+    END;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_scan_assets_unique_session_type_key'
+      AND conrelid = 'public.scan_assets'::regclass
+  ) THEN
+    ALTER TABLE public.scan_assets
+      ADD CONSTRAINT scoremax_scan_assets_unique_session_type_key
+      UNIQUE (session_id, asset_type_code, r2_key);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS scoremax_scan_sessions_user_created_idx
+  ON public.scan_sessions (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_scan_sessions_status_idx
+  ON public.scan_sessions (status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_active_onboarding_scan_session_uidx
+  ON public.scan_sessions (user_id)
+  WHERE source = 'onboarding' AND status IN ('collecting', 'ready', 'processing');
+
+CREATE INDEX IF NOT EXISTS scoremax_scan_assets_user_created_idx
+  ON public.scan_assets (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_scan_assets_session_type_status_idx
+  ON public.scan_assets (session_id, asset_type_code, upload_status);
+
+-- 9) Immutable analysis history (supports future re-analyses)
+CREATE TABLE IF NOT EXISTS public.analysis_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  session_id UUID NOT NULL REFERENCES public.scan_sessions(id) ON DELETE RESTRICT,
+  trigger_source TEXT DEFAULT 'onboarding_auto' NOT NULL,
+  status TEXT DEFAULT 'queued' NOT NULL,
+  request_payload JSONB DEFAULT '{}'::jsonb NOT NULL,
+  version INTEGER DEFAULT 1 NOT NULL,
+  parent_analysis_job_id UUID REFERENCES public.analysis_jobs(id) ON DELETE SET NULL,
+  upstream_job_id TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  started_at TIMESTAMP WITH TIME ZONE,
+  completed_at TIMESTAMP WITH TIME ZONE,
+  failed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  CONSTRAINT scoremax_analysis_jobs_status_check CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  CONSTRAINT scoremax_analysis_jobs_trigger_source_check CHECK (trigger_source IN ('onboarding_auto', 'user_rerun', 'admin')),
+  CONSTRAINT scoremax_analysis_jobs_version_positive CHECK (version > 0)
+);
+
+CREATE TABLE IF NOT EXISTS public.analysis_job_assets (
+  analysis_job_id UUID NOT NULL REFERENCES public.analysis_jobs(id) ON DELETE CASCADE,
+  asset_type_code TEXT NOT NULL REFERENCES public.scan_asset_types(code),
+  scan_asset_id UUID NOT NULL REFERENCES public.scan_assets(id) ON DELETE RESTRICT,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  PRIMARY KEY (analysis_job_id, asset_type_code)
+);
+
+CREATE TABLE IF NOT EXISTS public.analysis_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  analysis_job_id UUID NOT NULL REFERENCES public.analysis_jobs(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  worker TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  provider TEXT,
+  result JSONB NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS scoremax_analysis_jobs_user_created_idx
+  ON public.analysis_jobs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_analysis_jobs_session_created_idx
+  ON public.analysis_jobs (session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_analysis_jobs_parent_idx
+  ON public.analysis_jobs (parent_analysis_job_id);
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_analysis_jobs_session_version_uidx
+  ON public.analysis_jobs (session_id, version);
+CREATE INDEX IF NOT EXISTS scoremax_analysis_job_assets_user_idx
+  ON public.analysis_job_assets (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_analysis_results_job_created_idx
+  ON public.analysis_results (analysis_job_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_analysis_results_job_worker_uidx
+  ON public.analysis_results (analysis_job_id, worker);
+
+-- 10) Enable RLS on scan and analysis tables
+ALTER TABLE IF EXISTS public.scan_asset_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.scan_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.scan_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.analysis_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.analysis_job_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.analysis_results ENABLE ROW LEVEL SECURITY;
+
+-- 11) Add RLS policies for scan and analysis domain (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_asset_types' AND policyname = 'scoremax_scan_asset_types_select_all'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_scan_asset_types_select_all" ON public.scan_asset_types FOR SELECT USING (is_active = TRUE)';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'scoremax_is_admin'
+      AND pg_get_function_identity_arguments(p.oid) = 'candidate uuid'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_asset_types' AND policyname = 'scoremax_scan_asset_types_admin_manage'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_scan_asset_types_admin_manage" ON public.scan_asset_types
+      FOR ALL
+      USING (public.scoremax_is_admin(auth.uid()))
+      WITH CHECK (public.scoremax_is_admin(auth.uid()))
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_sessions' AND policyname = 'scoremax_scan_sessions_select_own'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_scan_sessions_select_own" ON public.scan_sessions FOR SELECT USING (auth.uid() = user_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_sessions' AND policyname = 'scoremax_scan_sessions_insert_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_scan_sessions_insert_own" ON public.scan_sessions
+      FOR INSERT
+      WITH CHECK (
+        auth.uid() = user_id
+        AND source IN (''onboarding'', ''manual_rescan'')
+        AND status = ''collecting''
+        AND completed_asset_count = 0
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_sessions' AND policyname = 'scoremax_scan_sessions_update_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_scan_sessions_update_own" ON public.scan_sessions
+      FOR UPDATE
+      USING (
+        auth.uid() = user_id
+        AND status IN (''collecting'', ''processing'')
+      )
+      WITH CHECK (
+        auth.uid() = user_id
+        AND source IN (''onboarding'', ''manual_rescan'')
+        AND status IN (''collecting'', ''processing'')
+        AND completed_asset_count <= required_asset_count
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_sessions' AND policyname = 'scoremax_scan_sessions_select_admin'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_scan_sessions_select_admin" ON public.scan_sessions FOR SELECT USING (public.scoremax_is_admin(auth.uid()))';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_assets' AND policyname = 'scoremax_scan_assets_select_own'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_scan_assets_select_own" ON public.scan_assets FOR SELECT USING (auth.uid() = user_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_assets' AND policyname = 'scoremax_scan_assets_insert_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_scan_assets_insert_own" ON public.scan_assets
+      FOR INSERT
+      WITH CHECK (
+        auth.uid() = user_id
+        AND EXISTS (
+          SELECT 1
+          FROM public.scan_sessions ss
+          WHERE ss.id = session_id
+            AND ss.user_id = auth.uid()
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM public.scan_asset_types sat
+          WHERE sat.code = asset_type_code
+            AND sat.is_active = TRUE
+        )
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_assets' AND policyname = 'scoremax_scan_assets_update_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_scan_assets_update_own" ON public.scan_assets
+      FOR UPDATE
+      USING (
+        auth.uid() = user_id
+        AND upload_status IN (''pending'', ''uploaded'')
+      )
+      WITH CHECK (
+        auth.uid() = user_id
+        AND upload_status IN (''pending'', ''uploaded'')
+        AND mime_type IN (''image/jpeg'', ''image/png'')
+        AND length(btrim(r2_key)) > 0
+        AND EXISTS (
+          SELECT 1
+          FROM public.scan_sessions ss
+          WHERE ss.id = session_id
+            AND ss.user_id = auth.uid()
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM public.scan_asset_types sat
+          WHERE sat.code = asset_type_code
+            AND sat.is_active = TRUE
+        )
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'scan_assets' AND policyname = 'scoremax_scan_assets_select_admin'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_scan_assets_select_admin" ON public.scan_assets FOR SELECT USING (public.scoremax_is_admin(auth.uid()))';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_jobs' AND policyname = 'scoremax_analysis_jobs_select_own'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_analysis_jobs_select_own" ON public.analysis_jobs FOR SELECT USING (auth.uid() = user_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_jobs' AND policyname = 'scoremax_analysis_jobs_update_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_analysis_jobs_update_own" ON public.analysis_jobs
+      FOR UPDATE
+      USING (
+        auth.uid() = user_id
+        AND status IN (''queued'', ''running'')
+      )
+      WITH CHECK (
+        auth.uid() = user_id
+        AND trigger_source IN (''onboarding_auto'', ''user_rerun'', ''admin'')
+        AND status IN (''queued'', ''running'', ''completed'', ''failed'')
+        AND version > 0
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_jobs' AND policyname = 'scoremax_analysis_jobs_insert_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_analysis_jobs_insert_own" ON public.analysis_jobs
+      FOR INSERT
+      WITH CHECK (
+        auth.uid() = user_id
+        AND EXISTS (
+          SELECT 1
+          FROM public.scan_sessions ss
+          WHERE ss.id = session_id
+            AND ss.user_id = auth.uid()
+        )
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_jobs' AND policyname = 'scoremax_analysis_jobs_select_admin'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_analysis_jobs_select_admin" ON public.analysis_jobs FOR SELECT USING (public.scoremax_is_admin(auth.uid()))';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_job_assets' AND policyname = 'scoremax_analysis_job_assets_select_own'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_analysis_job_assets_select_own" ON public.analysis_job_assets FOR SELECT USING (auth.uid() = user_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_job_assets' AND policyname = 'scoremax_analysis_job_assets_insert_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_analysis_job_assets_insert_own" ON public.analysis_job_assets
+      FOR INSERT
+      WITH CHECK (
+        auth.uid() = user_id
+        AND EXISTS (
+          SELECT 1
+          FROM public.analysis_jobs aj
+          WHERE aj.id = analysis_job_id
+            AND aj.user_id = auth.uid()
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM public.scan_assets sa
+          WHERE sa.id = scan_asset_id
+            AND sa.user_id = auth.uid()
+            AND sa.asset_type_code = asset_type_code
+        )
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_job_assets' AND policyname = 'scoremax_analysis_job_assets_select_admin'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_analysis_job_assets_select_admin" ON public.analysis_job_assets FOR SELECT USING (public.scoremax_is_admin(auth.uid()))';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_results' AND policyname = 'scoremax_analysis_results_select_own'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_analysis_results_select_own" ON public.analysis_results FOR SELECT USING (auth.uid() = user_id)';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_results' AND policyname = 'scoremax_analysis_results_insert_own'
+  ) THEN
+    EXECUTE '
+      CREATE POLICY "scoremax_analysis_results_insert_own" ON public.analysis_results
+      FOR INSERT
+      WITH CHECK (
+        auth.uid() = user_id
+        AND EXISTS (
+          SELECT 1
+          FROM public.analysis_jobs aj
+          WHERE aj.id = analysis_job_id
+            AND aj.user_id = auth.uid()
+        )
+      )
+    ';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'analysis_results' AND policyname = 'scoremax_analysis_results_select_admin'
+  ) THEN
+    EXECUTE 'CREATE POLICY "scoremax_analysis_results_select_admin" ON public.analysis_results FOR SELECT USING (public.scoremax_is_admin(auth.uid()))';
+  END IF;
+END $$;
+
+-- 12) Helper functions and trigger for onboarding scan polling
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'ensure_onboarding_scan_session'
+      AND pg_get_function_identity_arguments(p.oid) = ''
+  ) THEN
+    EXECUTE $sql$
+      CREATE FUNCTION public.ensure_onboarding_scan_session()
+      RETURNS UUID
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public
+      AS $body$
+      DECLARE
+        current_user_id UUID;
+        existing_session UUID;
+        required_count INTEGER;
+      BEGIN
+        current_user_id := auth.uid();
+
+        IF current_user_id IS NULL THEN
+          RAISE EXCEPTION 'auth.uid() is required';
+        END IF;
+
+        SELECT COUNT(*)::INTEGER
+        INTO required_count
+        FROM public.scan_asset_types
+        WHERE is_required_onboarding = TRUE
+          AND is_active = TRUE;
+
+        SELECT ss.id
+        INTO existing_session
+        FROM public.scan_sessions ss
+        WHERE ss.user_id = current_user_id
+          AND ss.source = 'onboarding'
+          AND ss.status IN ('collecting', 'ready', 'processing')
+        ORDER BY ss.created_at DESC
+        LIMIT 1;
+
+        IF existing_session IS NOT NULL THEN
+          RETURN existing_session;
+        END IF;
+
+        BEGIN
+          INSERT INTO public.scan_sessions (
+            user_id,
+            source,
+            status,
+            required_asset_count,
+            completed_asset_count,
+            started_at,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            current_user_id,
+            'onboarding',
+            'collecting',
+            GREATEST(required_count, 1),
+            0,
+            NOW(),
+            NOW(),
+            NOW()
+          )
+          RETURNING id INTO existing_session;
+        EXCEPTION
+          WHEN unique_violation THEN
+            SELECT ss.id
+            INTO existing_session
+            FROM public.scan_sessions ss
+            WHERE ss.user_id = current_user_id
+              AND ss.source = 'onboarding'
+              AND ss.status IN ('collecting', 'ready', 'processing')
+            ORDER BY ss.created_at DESC
+            LIMIT 1;
+        END;
+
+        RETURN existing_session;
+      END;
+      $body$;
+    $sql$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'scoremax_refresh_scan_session_progress'
+      AND pg_get_function_identity_arguments(p.oid) = 'target_session uuid'
+  ) THEN
+    EXECUTE $sql$
+      CREATE FUNCTION public.scoremax_refresh_scan_session_progress(target_session UUID)
+      RETURNS VOID
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public
+      AS $body$
+      DECLARE
+        required_count INTEGER := 0;
+        completed_count INTEGER := 0;
+      BEGIN
+        IF target_session IS NULL THEN
+          RETURN;
+        END IF;
+
+        SELECT COUNT(*)::INTEGER
+        INTO required_count
+        FROM public.scan_asset_types
+        WHERE is_required_onboarding = TRUE
+          AND is_active = TRUE;
+
+        SELECT COUNT(DISTINCT sa.asset_type_code)::INTEGER
+        INTO completed_count
+        FROM public.scan_assets sa
+        JOIN public.scan_asset_types sat
+          ON sat.code = sa.asset_type_code
+        WHERE sa.session_id = target_session
+          AND sat.is_required_onboarding = TRUE
+          AND sat.is_active = TRUE
+          AND sa.upload_status IN ('uploaded', 'validated')
+          AND length(btrim(COALESCE(sa.r2_key, ''))) > 0;
+
+        UPDATE public.scan_sessions ss
+        SET required_asset_count = required_count,
+            completed_asset_count = completed_count,
+            status = CASE
+              WHEN ss.status IN ('completed', 'failed', 'abandoned') THEN ss.status
+              WHEN required_count > 0 AND completed_count >= required_count THEN 'ready'
+              ELSE 'collecting'
+            END,
+            ready_at = CASE
+              WHEN required_count > 0 AND completed_count >= required_count
+                THEN COALESCE(ss.ready_at, NOW())
+              ELSE NULL
+            END,
+            updated_at = NOW()
+        WHERE ss.id = target_session;
+      END;
+      $body$;
+    $sql$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'scoremax_refresh_scan_session_progress_trigger'
+      AND pg_get_function_identity_arguments(p.oid) = ''
+  ) THEN
+    EXECUTE $sql$
+      CREATE FUNCTION public.scoremax_refresh_scan_session_progress_trigger()
+      RETURNS TRIGGER
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public
+      AS $body$
+      BEGIN
+        IF TG_OP = 'DELETE' THEN
+          PERFORM public.scoremax_refresh_scan_session_progress(OLD.session_id);
+          RETURN OLD;
+        END IF;
+
+        PERFORM public.scoremax_refresh_scan_session_progress(NEW.session_id);
+        RETURN NEW;
+      END;
+      $body$;
+    $sql$;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.proname = 'get_onboarding_scan_status'
+      AND pg_get_function_identity_arguments(p.oid) = ''
+  ) THEN
+    EXECUTE $sql$
+      CREATE FUNCTION public.get_onboarding_scan_status()
+      RETURNS TABLE (
+        session_id UUID,
+        required_asset_count INTEGER,
+        completed_asset_count INTEGER,
+        is_ready BOOLEAN,
+        missing_asset_types TEXT[]
+      )
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path = public
+      AS $body$
+      DECLARE
+        current_user_id UUID;
+        current_session_id UUID;
+      BEGIN
+        current_user_id := auth.uid();
+
+        IF current_user_id IS NULL THEN
+          RAISE EXCEPTION 'auth.uid() is required';
+        END IF;
+
+        current_session_id := public.ensure_onboarding_scan_session();
+
+        PERFORM public.scoremax_refresh_scan_session_progress(current_session_id);
+
+        RETURN QUERY
+        WITH missing AS (
+          SELECT sat.label_fr
+          FROM public.scan_asset_types sat
+          WHERE sat.is_required_onboarding = TRUE
+            AND sat.is_active = TRUE
+            AND NOT EXISTS (
+              SELECT 1
+              FROM public.scan_assets sa
+              WHERE sa.session_id = current_session_id
+                AND sa.asset_type_code = sat.code
+                AND sa.upload_status IN ('uploaded', 'validated')
+                AND length(btrim(COALESCE(sa.r2_key, ''))) > 0
+            )
+          ORDER BY sat.sort_order
+        )
+        SELECT
+          ss.id AS session_id,
+          ss.required_asset_count,
+          ss.completed_asset_count,
+          (ss.completed_asset_count >= ss.required_asset_count AND ss.required_asset_count > 0) AS is_ready,
+          COALESCE(array_agg(missing.label_fr) FILTER (WHERE missing.label_fr IS NOT NULL), ARRAY[]::TEXT[]) AS missing_asset_types
+        FROM public.scan_sessions ss
+        LEFT JOIN missing ON TRUE
+        WHERE ss.id = current_session_id
+        GROUP BY ss.id, ss.required_asset_count, ss.completed_asset_count;
+      END;
+      $body$;
+    $sql$;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.triggers
+    WHERE event_object_schema = 'public'
+      AND event_object_table = 'scan_assets'
+      AND trigger_name = 'scoremax_on_scan_asset_change'
+  ) THEN
+    EXECUTE '
+      CREATE TRIGGER scoremax_on_scan_asset_change
+      AFTER INSERT OR UPDATE OR DELETE ON public.scan_assets
+      FOR EACH ROW EXECUTE FUNCTION public.scoremax_refresh_scan_session_progress_trigger()
+    ';
+  END IF;
+END $$;
+
+GRANT EXECUTE ON FUNCTION public.ensure_onboarding_scan_session() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_onboarding_scan_status() TO authenticated;
+
+-- 13) Post-check summary output
 SELECT
   policyname,
   cmd,
   permissive
 FROM pg_policies
 WHERE schemaname = 'public'
-  AND tablename = 'profiles'
+  AND (
+    tablename = 'profiles'
+    OR tablename LIKE 'scan_%'
+    OR tablename LIKE 'analysis_%'
+  )
   AND policyname LIKE 'scoremax_%'
-ORDER BY policyname;
+ORDER BY tablename, policyname;
 
 SELECT
   trigger_name,
@@ -408,3 +1433,38 @@ FROM information_schema.triggers
 WHERE event_object_schema = 'auth'
   AND event_object_table = 'users'
   AND trigger_name = 'scoremax_on_auth_user_created';
+
+SELECT
+  trigger_name,
+  event_manipulation,
+  action_statement
+FROM information_schema.triggers
+WHERE event_object_schema = 'public'
+  AND event_object_table = 'scan_assets'
+  AND trigger_name = 'scoremax_on_scan_asset_change';
+
+SELECT
+  code,
+  label_fr,
+  is_required_onboarding,
+  sort_order,
+  is_active
+FROM public.scan_asset_types
+ORDER BY sort_order;
+
+SELECT
+  n.nspname AS schema_name,
+  p.proname AS function_name,
+  pg_get_function_identity_arguments(p.oid) AS args
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN (
+    'scoremax_is_admin',
+    'scoremax_handle_new_user',
+    'ensure_onboarding_scan_session',
+    'scoremax_refresh_scan_session_progress',
+    'scoremax_refresh_scan_session_progress_trigger',
+    'get_onboarding_scan_status'
+  )
+ORDER BY p.proname;

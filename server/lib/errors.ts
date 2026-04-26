@@ -1,12 +1,12 @@
-import type { OneshotErrorCode } from "@shared/oneshot";
+import type { ScoreMaxErrorCode } from "@shared/oneshot";
 
 export class ApiError extends Error {
-  code: OneshotErrorCode;
+  code: ScoreMaxErrorCode;
   status: number;
   details?: unknown;
 
   constructor(params: {
-    code: OneshotErrorCode;
+    code: ScoreMaxErrorCode;
     status: number;
     message: string;
     details?: unknown;
@@ -25,6 +25,19 @@ export function isApiError(error: unknown): error is ApiError {
 export function mapUnknownError(error: unknown): ApiError {
   if (isApiError(error)) {
     return error;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "type" in error &&
+    (error as { type?: string }).type === "entity.too.large"
+  ) {
+    return new ApiError({
+      code: "PAYLOAD_TOO_LARGE",
+      status: 413,
+      message: "Request payload is too large",
+    });
   }
 
   if (error instanceof Error) {

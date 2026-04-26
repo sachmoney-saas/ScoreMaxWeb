@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { Profile, UpdateProfileRequest } from "@shared/schema";
+import { Profile, UpdateProfileRequest, OnboardingScanStatus } from "@shared/schema";
 import { useAuth } from "./use-auth";
 
 /**
@@ -116,7 +116,7 @@ export function useUserGrowth() {
     queryFn: async () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
+
       const { data, error } = await supabase
         .from("profiles")
         .select("created_at")
@@ -147,5 +147,46 @@ export function useUserGrowth() {
       return chartData;
     },
     enabled: isAdmin,
+  });
+}
+
+/**
+ * Hook for polling onboarding scan completeness status.
+ */
+export function useOnboardingScanStatus(options?: { enabled?: boolean }) {
+  const { user } = useAuth();
+
+  return useQuery<OnboardingScanStatus>({
+    queryKey: ["onboarding-scan-status", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_onboarding_scan_status");
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error("Onboarding scan status is unavailable");
+      }
+
+      const [status] = data;
+      return {
+        session_id: status.session_id,
+        required_asset_count: Number(status.required_asset_count ?? 0),
+        completed_asset_count: Number(status.completed_asset_count ?? 0),
+        is_ready: Boolean(status.is_ready),
+        missing_asset_types: status.missing_asset_types ?? [],
+      };
+    },
+    enabled: !!user && (options?.enabled ?? true),
+    refetchInterval: (query) => {
+      const state = query.state.data;
+      if (!state) {
+        return 2500;
+      }
+
+      return state.is_ready ? false : 2500;
+    },
+    staleTime: 0,
   });
 }

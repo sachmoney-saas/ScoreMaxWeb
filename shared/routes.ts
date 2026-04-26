@@ -1,19 +1,10 @@
-import { z } from 'zod';
-import { insertProfileSchema } from './schema';
+import { z } from "zod";
+import { insertProfileSchema } from "./schema";
 import {
   analysesRequestSchema,
-  analysesResponseSchema,
-  createApiKeyRequestSchema,
-  createApiKeyResponseSchema,
-  createJobRequestSchema,
-  createJobResponseSchema,
-  getJobResponseSchema,
-  listApiKeysResponseSchema,
-  oneshotApiErrorSchema,
-  publicUiModeResponseSchema,
-  recentRequestsResponseSchema,
-  revokeApiKeyResponseSchema,
-} from './oneshot';
+  analysesSuccessEnvelopeSchema,
+  scoreMaxErrorEnvelopeSchema,
+} from "./oneshot";
 
 export const errorSchemas = {
   validation: z.object({
@@ -33,120 +24,42 @@ export const errorSchemas = {
 
 export const api = {
   health: {
-    method: 'GET' as const,
-    path: '/api/health',
+    method: "GET" as const,
+    path: "/api/health",
     responses: {
       200: z.object({ status: z.string() }),
     },
   },
   profiles: {
     get: {
-      method: 'GET' as const,
-      path: '/api/profiles/:id',
+      method: "GET" as const,
+      path: "/api/profiles/:id",
       responses: {
         200: insertProfileSchema,
         404: errorSchemas.notFound,
       },
     },
     update: {
-      method: 'PATCH' as const,
-      path: '/api/profiles/:id',
+      method: "PATCH" as const,
+      path: "/api/profiles/:id",
       responses: {
         200: insertProfileSchema,
         400: errorSchemas.validation,
       },
     },
   },
-  oneshot: {
+  scoremax: {
     analyses: {
-      method: 'POST' as const,
-      path: '/v1/analyses',
+      method: "POST" as const,
+      path: "/v1/analyses",
       body: analysesRequestSchema,
       responses: {
-        200: analysesResponseSchema,
-        400: oneshotApiErrorSchema,
-        401: oneshotApiErrorSchema,
-        403: oneshotApiErrorSchema,
-        413: oneshotApiErrorSchema,
-        500: oneshotApiErrorSchema,
-      },
-    },
-    jobs: {
-      create: {
-        method: 'POST' as const,
-        path: '/v1/jobs',
-        body: createJobRequestSchema,
-        responses: {
-          202: createJobResponseSchema,
-          400: oneshotApiErrorSchema,
-          401: oneshotApiErrorSchema,
-          403: oneshotApiErrorSchema,
-          500: oneshotApiErrorSchema,
-        },
-      },
-      get: {
-        method: 'GET' as const,
-        path: '/v1/jobs/:id',
-        responses: {
-          200: getJobResponseSchema,
-          400: oneshotApiErrorSchema,
-          401: oneshotApiErrorSchema,
-          403: oneshotApiErrorSchema,
-          500: oneshotApiErrorSchema,
-        },
-      },
-    },
-    public: {
-      uiMode: {
-        method: 'GET' as const,
-        path: '/v1/public/ui-mode',
-        responses: {
-          200: publicUiModeResponseSchema,
-          500: oneshotApiErrorSchema,
-        },
-      },
-      recentRequests: {
-        method: 'GET' as const,
-        path: '/v1/public/recent-requests',
-        responses: {
-          200: recentRequestsResponseSchema,
-          400: oneshotApiErrorSchema,
-          500: oneshotApiErrorSchema,
-        },
-      },
-    },
-    admin: {
-      apiKeys: {
-        list: {
-          method: 'GET' as const,
-          path: '/v1/admin/api-keys',
-          responses: {
-            200: listApiKeysResponseSchema,
-            403: oneshotApiErrorSchema,
-            500: oneshotApiErrorSchema,
-          },
-        },
-        create: {
-          method: 'POST' as const,
-          path: '/v1/admin/api-keys',
-          body: createApiKeyRequestSchema,
-          responses: {
-            201: createApiKeyResponseSchema,
-            400: oneshotApiErrorSchema,
-            403: oneshotApiErrorSchema,
-            500: oneshotApiErrorSchema,
-          },
-        },
-        revoke: {
-          method: 'POST' as const,
-          path: '/v1/admin/api-keys/:id/revoke',
-          responses: {
-            200: revokeApiKeyResponseSchema,
-            400: oneshotApiErrorSchema,
-            403: oneshotApiErrorSchema,
-            500: oneshotApiErrorSchema,
-          },
-        },
+        200: analysesSuccessEnvelopeSchema,
+        400: scoreMaxErrorEnvelopeSchema,
+        401: scoreMaxErrorEnvelopeSchema,
+        403: scoreMaxErrorEnvelopeSchema,
+        413: scoreMaxErrorEnvelopeSchema,
+        500: scoreMaxErrorEnvelopeSchema,
       },
     },
   },

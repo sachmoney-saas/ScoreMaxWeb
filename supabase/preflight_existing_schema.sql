@@ -100,34 +100,7 @@ WHERE event_object_schema = 'auth'
   AND event_object_table = 'users'
 ORDER BY trigger_name, event_manipulation;
 
--- 7) OneShot API keys table compatibility
-SELECT to_regclass('public.oneshot_api_keys') AS oneshot_api_keys_table;
-
-WITH required_columns(column_name) AS (
-  VALUES
-    ('id'),
-    ('name'),
-    ('key_prefix'),
-    ('key_hash'),
-    ('scopes'),
-    ('revoked_at'),
-    ('created_at'),
-    ('last_used_at')
-)
-SELECT
-  required_columns.column_name,
-  c.data_type,
-  c.is_nullable,
-  c.column_default,
-  CASE WHEN c.column_name IS NULL THEN 'missing' ELSE 'present' END AS status
-FROM required_columns
-LEFT JOIN information_schema.columns c
-  ON c.table_schema = 'public'
- AND c.table_name = 'oneshot_api_keys'
- AND c.column_name = required_columns.column_name
-ORDER BY required_columns.column_name;
-
--- 8) Related helper functions that may be present
+-- 7) Related helper functions that may be present
 SELECT
   n.nspname AS schema_name,
   p.proname AS function_name,
@@ -135,5 +108,107 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public'
-  AND p.proname IN ('handle_new_user', 'scoremax_handle_new_user', 'scoremax_is_admin')
+  AND p.proname IN (
+    'handle_new_user',
+    'scoremax_handle_new_user',
+    'scoremax_is_admin',
+    'ensure_onboarding_scan_session',
+    'scoremax_refresh_scan_session_progress',
+    'scoremax_refresh_scan_session_progress_trigger',
+    'get_onboarding_scan_status'
+  )
 ORDER BY p.proname;
+
+-- 8) Scan + analysis domain objects for onboarding asset polling and history
+WITH required_tables(table_name) AS (
+  VALUES
+    ('scan_asset_types'),
+    ('scan_sessions'),
+    ('scan_assets'),
+    ('analysis_jobs'),
+    ('analysis_job_assets'),
+    ('analysis_results')
+)
+SELECT
+  required_tables.table_name,
+  CASE WHEN c.table_name IS NULL THEN 'missing' ELSE 'present' END AS status
+FROM required_tables
+LEFT JOIN information_schema.tables c
+  ON c.table_schema = 'public'
+ AND c.table_name = required_tables.table_name
+ORDER BY required_tables.table_name;
+
+WITH expected_scan_asset_types(code, label_fr, sort_order) AS (
+  VALUES
+    ('FACE_FRONT', 'Visage de face', 1),
+    ('PROFILE_LEFT', 'Profil gauche', 2),
+    ('PROFILE_RIGHT', 'Profil droit', 3),
+    ('LOOK_UP', 'Regarder en haut', 4),
+    ('LOOK_DOWN', 'Regarder en bas', 5),
+    ('SMILE', 'Sourire', 6),
+    ('HAIR_BACK', 'Cheveux en arrière', 7),
+    ('EYE_CLOSEUP', 'Gros plan œil', 8)
+)
+SELECT
+  expected_scan_asset_types.code,
+  expected_scan_asset_types.label_fr,
+  expected_scan_asset_types.sort_order,
+  CASE
+    WHEN EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'scan_asset_types'
+    ) THEN 'verify_after_patch'
+    ELSE 'table_missing'
+  END AS status
+FROM expected_scan_asset_types
+ORDER BY expected_scan_asset_types.sort_order;
+
+SELECT
+  policyname,
+  cmd,
+  roles,
+  permissive
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('scan_sessions', 'scan_assets', 'analysis_jobs', 'analysis_job_assets', 'analysis_results')
+  AND policyname LIKE 'scoremax_%'
+ORDER BY tablename, policyname;
+
+-- 9) Legacy scan compatibility diagnostics
+SELECT to_regclass('public.scans') AS scans_table;
+
+WITH expected_scan_assets_columns(column_name) AS (
+  VALUES
+    ('scan_id'),
+    ('asset_type'),
+    ('bucket'),
+    ('object_path'),
+    ('session_id'),
+    ('asset_type_code'),
+    ('r2_bucket'),
+    ('r2_key'),
+    ('upload_status')
+)
+SELECT
+  expected_scan_assets_columns.column_name,
+  CASE WHEN c.column_name IS NULL THEN 'missing' ELSE 'present' END AS status
+FROM expected_scan_assets_columns
+LEFT JOIN information_schema.columns c
+  ON c.table_schema = 'public'
+ AND c.table_name = 'scan_assets'
+ AND c.column_name = expected_scan_assets_columns.column_name
+ORDER BY expected_scan_assets_columns.column_name;
+
+SELECT
+  sa.asset_type,
+  COUNT(*) AS asset_count
+FROM public.scan_assets sa
+GROUP BY sa.asset_type
+ORDER BY asset_count DESC, sa.asset_type;
+
+SELECT
+  s.status,
+  COUNT(*) AS scan_count
+FROM public.scans s
+GROUP BY s.status
+ORDER BY scan_count DESC, s.status;
