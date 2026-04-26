@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   role TEXT DEFAULT 'user' NOT NULL,
   is_subscriber BOOLEAN DEFAULT FALSE NOT NULL,
   has_accepted_terms BOOLEAN DEFAULT FALSE NOT NULL,
+  has_completed_onboarding BOOLEAN DEFAULT FALSE NOT NULL,
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
   subscription_status TEXT,
@@ -24,6 +25,19 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   CONSTRAINT scoremax_profiles_role_check CHECK (role IN ('user', 'admin'))
+);
+
+CREATE TABLE IF NOT EXISTS public.oneshot_api_keys (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  key_prefix TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  scopes TEXT[] NOT NULL,
+  revoked_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  last_used_at TIMESTAMP WITH TIME ZONE,
+  CONSTRAINT scoremax_oneshot_api_keys_name_check CHECK (char_length(trim(name)) > 0),
+  CONSTRAINT scoremax_oneshot_api_keys_scopes_check CHECK (cardinality(scopes) > 0)
 );
 
 -- 2) Add missing columns required by current runtime (additive only)
@@ -69,6 +83,13 @@ BEGIN
     WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'has_accepted_terms'
   ) THEN
     ALTER TABLE public.profiles ADD COLUMN has_accepted_terms BOOLEAN DEFAULT FALSE NOT NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'has_completed_onboarding'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN has_completed_onboarding BOOLEAN DEFAULT FALSE NOT NULL;
   END IF;
 
   IF NOT EXISTS (
@@ -129,6 +150,8 @@ BEGIN
 END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS scoremax_profiles_id_idx ON public.profiles (id);
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_oneshot_api_keys_prefix_idx ON public.oneshot_api_keys (key_prefix);
+CREATE INDEX IF NOT EXISTS scoremax_oneshot_api_keys_created_idx ON public.oneshot_api_keys (created_at DESC);
 
 -- 3) Ensure RLS is active (idempotent)
 ALTER TABLE IF EXISTS public.profiles ENABLE ROW LEVEL SECURITY;

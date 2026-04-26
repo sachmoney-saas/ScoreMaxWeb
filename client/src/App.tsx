@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
+import Onboarding from "@/pages/Onboarding";
 import AuthPage from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import AdminPage from "@/pages/Admin";
@@ -20,25 +21,29 @@ import Confidentialite from "@/pages/Confidentialite";
 import { Loader2 } from "lucide-react";
 import { AUTH_CONFIG } from "@/config/auth";
 
+function FullScreenLoader() {
+  return (
+    <div className="flex h-screen w-full items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
 // Protected Route Wrapper
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isLoading } = useAuth();
-
-  React.useEffect(() => {
-    if (!isLoading && !user) {
-      window.location.href = AUTH_CONFIG.LOGIN_PATH;
-    }
-  }, [user, isLoading]);
+  const { user, profile, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
-  if (!user) return null;
+  if (!user) {
+    return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
+  }
+
+  if (!profile?.has_completed_onboarding) {
+    return <Redirect to="/onboarding" />;
+  }
 
   return (
     <AppLayout>
@@ -49,8 +54,33 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   );
 }
 
+function OnboardingRoute() {
+  const { user, profile, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <FullScreenLoader />;
+  }
+
+  if (!user) {
+    return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
+  }
+
+  if (profile?.has_completed_onboarding) {
+    return <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />;
+  }
+
+  return (
+    <ErrorBoundary>
+      <Onboarding />
+    </ErrorBoundary>
+  );
+}
+
 function Router() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const postAuthRedirectPath = profile?.has_completed_onboarding
+    ? AUTH_CONFIG.REDIRECT_PATH
+    : "/onboarding";
 
   return (
     <Switch>
@@ -61,10 +91,14 @@ function Router() {
       <Route path="/confidentialite" component={Confidentialite} />
       
       <Route path={AUTH_CONFIG.LOGIN_PATH}>
-        {user ? <Redirect to={AUTH_CONFIG.REDIRECT_PATH} /> : <AuthPage />}
+        {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
       </Route>
       <Route path={AUTH_CONFIG.REGISTER_PATH}>
-        {user ? <Redirect to={AUTH_CONFIG.REDIRECT_PATH} /> : <AuthPage />}
+        {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
+      </Route>
+
+      <Route path="/onboarding">
+        <OnboardingRoute />
       </Route>
 
       {/* Protected Routes */}

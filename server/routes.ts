@@ -2,25 +2,27 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { api } from "@shared/routes";
 
-import { validateRequest } from "./lib/validate";
-import { updateProfileSchema } from "@shared/schema";
 import { logger } from "./lib/logger";
 import { getSupabaseAdminEnv } from "./lib/env";
 import { createClient } from "@supabase/supabase-js";
+import { createV1PublicRouter } from "./routes/v1-public";
+import { createV1ProtectedRouter } from "./routes/v1-protected";
+import { createV1AdminApiKeysRouter } from "./routes/v1-admin-api-keys";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // All profile operations are handled frontend-side directly via Supabase client.
-  // These routes are kept as lightweight shells if needed for future server-side logic.
-
-  app.get(api.health.path, (req, res) => {
+  app.get(api.health.path, (_req, res) => {
     res.json({ status: "ok" });
   });
 
+  app.use("/v1/public", createV1PublicRouter());
+  app.use("/v1", createV1ProtectedRouter());
+  app.use("/v1/admin/api-keys", createV1AdminApiKeysRouter());
+
   // Debug endpoint to check all profiles (admin only, uses service role)
-  app.get("/api/debug/profiles", async (req, res) => {
+  app.get("/api/debug/profiles", async (_req, res) => {
     try {
       const { supabaseUrl, serviceRoleKey } = getSupabaseAdminEnv();
 
@@ -40,7 +42,7 @@ export async function registerRoutes(
   });
 
   // Debug endpoint to check auth.users vs profiles
-  app.get("/api/debug/auth-users", async (req, res) => {
+  app.get("/api/debug/auth-users", async (_req, res) => {
     try {
       const { supabaseUrl, serviceRoleKey } = getSupabaseAdminEnv();
 
@@ -52,7 +54,6 @@ export async function registerRoutes(
         return res.status(500).json({ message: error.message });
       }
 
-      // Return simplified user info
       const users = data.users.map((u) => ({
         id: u.id,
         email: u.email,

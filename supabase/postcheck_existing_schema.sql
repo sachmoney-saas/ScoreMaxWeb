@@ -31,6 +31,7 @@ WITH required_columns(column_name) AS (
     ('role'),
     ('is_subscriber'),
     ('has_accepted_terms'),
+    ('has_completed_onboarding'),
     ('stripe_customer_id'),
     ('stripe_subscription_id'),
     ('subscription_status'),
@@ -67,7 +68,31 @@ WHERE schemaname = 'public'
   AND policyname LIKE 'scoremax_%'
 ORDER BY policyname;
 
--- 4) ScoreMax helper function and trigger
+-- 4) OneShot API keys table checks
+SELECT to_regclass('public.oneshot_api_keys') AS oneshot_api_keys_table;
+
+WITH required_columns(column_name) AS (
+  VALUES
+    ('id'),
+    ('name'),
+    ('key_prefix'),
+    ('key_hash'),
+    ('scopes'),
+    ('revoked_at'),
+    ('created_at'),
+    ('last_used_at')
+)
+SELECT
+  required_columns.column_name,
+  CASE WHEN c.column_name IS NULL THEN 'missing' ELSE 'present' END AS status
+FROM required_columns
+LEFT JOIN information_schema.columns c
+  ON c.table_schema = 'public'
+ AND c.table_name = 'oneshot_api_keys'
+ AND c.column_name = required_columns.column_name
+ORDER BY required_columns.column_name;
+
+-- 5) ScoreMax helper function and trigger
 SELECT
   n.nspname AS schema_name,
   p.proname AS function_name,

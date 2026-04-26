@@ -34,6 +34,7 @@ WITH required_columns(column_name) AS (
     ('role'),
     ('is_subscriber'),
     ('has_accepted_terms'),
+    ('has_completed_onboarding'),
     ('stripe_customer_id'),
     ('stripe_subscription_id'),
     ('subscription_status'),
@@ -99,7 +100,34 @@ WHERE event_object_schema = 'auth'
   AND event_object_table = 'users'
 ORDER BY trigger_name, event_manipulation;
 
--- 7) Related helper functions that may be present
+-- 7) OneShot API keys table compatibility
+SELECT to_regclass('public.oneshot_api_keys') AS oneshot_api_keys_table;
+
+WITH required_columns(column_name) AS (
+  VALUES
+    ('id'),
+    ('name'),
+    ('key_prefix'),
+    ('key_hash'),
+    ('scopes'),
+    ('revoked_at'),
+    ('created_at'),
+    ('last_used_at')
+)
+SELECT
+  required_columns.column_name,
+  c.data_type,
+  c.is_nullable,
+  c.column_default,
+  CASE WHEN c.column_name IS NULL THEN 'missing' ELSE 'present' END AS status
+FROM required_columns
+LEFT JOIN information_schema.columns c
+  ON c.table_schema = 'public'
+ AND c.table_name = 'oneshot_api_keys'
+ AND c.column_name = required_columns.column_name
+ORDER BY required_columns.column_name;
+
+-- 8) Related helper functions that may be present
 SELECT
   n.nspname AS schema_name,
   p.proname AS function_name,

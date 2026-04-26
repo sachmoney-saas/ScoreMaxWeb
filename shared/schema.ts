@@ -13,6 +13,7 @@ export const profiles = pgTable("profiles", {
   stripe_subscription_id: text("stripe_subscription_id"),
   subscription_status: text("subscription_status"),
   has_accepted_terms: boolean("has_accepted_terms").default(false).notNull(),
+  has_completed_onboarding: boolean("has_completed_onboarding").default(false).notNull(),
   last_active_at: timestamp("last_active_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

@@ -1,21 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-  SidebarFooter,
-  useSidebar,
-} from "@/components/ui/sidebar";
-import {
   LayoutDashboard,
   ShieldCheck,
   Users,
@@ -25,173 +10,223 @@ import {
   CreditCard,
 } from "lucide-react";
 import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarSeparator,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { TermsGuard } from "./TermsGuard";
 
-function AppSidebar() {
+type SidebarNavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  isActive: (location: string) => boolean;
+};
+
+function ModernAppSidebar() {
   const [location] = useLocation();
   const { profile, isAdmin, signOut } = useAuth();
   const { state, isMobile } = useSidebar();
 
   const isCollapsed = state === "collapsed" && !isMobile;
 
-  const isActive = (path: string) => location === path;
+  const mainItems: SidebarNavItem[] = [
+    {
+      href: "/app",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      isActive: (path) => path === "/app",
+    },
+  ];
+
+  const adminItems: SidebarNavItem[] = isAdmin
+    ? [
+        {
+          href: "/admin",
+          label: "Aperçu Admin",
+          icon: ShieldCheck,
+          isActive: (path) => path === "/admin",
+        },
+        {
+          href: "/admin/users",
+          label: "Utilisateurs",
+          icon: Users,
+          isActive: (path) => path === "/admin/users",
+        },
+      ]
+    : [];
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border/40">
-      <SidebarHeader className="h-16 flex items-center justify-center border-b border-border/20 overflow-hidden">
+    <Sidebar
+      collapsible="icon"
+      variant="floating"
+      className="border-r border-transparent"
+    >
+      <SidebarHeader className="px-2 pt-3 pb-2">
         <Link
           href="/app"
-          className="flex items-center justify-center gap-2 px-2 w-full hover:opacity-80 transition-opacity"
+          className="group relative flex h-11 items-center overflow-hidden rounded-xl border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] px-3 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] transition-all hover:border-white/25"
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/25 font-bold text-[#d6e4ff]">
             S
           </div>
-          {!isCollapsed && (
-            <span className="font-display font-bold text-lg truncate animate-in fade-in duration-300">
+          <div
+            className={`ml-2.5 min-w-0 transition-all duration-200 ${
+              isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+            }`}
+          >
+            <p className="truncate font-display text-base font-semibold tracking-tight text-zinc-100">
               ScoreMax
-            </span>
-          )}
+            </p>
+            <p className="truncate text-[11px] font-medium text-zinc-400">
+              Workspace
+            </p>
+          </div>
         </Link>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-2 pb-2">
         <SidebarGroup>
-          <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
-            Application
+          <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+            Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/app")}
-                  tooltip="App"
-                >
-                  <Link href="/app" className="flex items-center gap-2 w-full">
-                    <LayoutDashboard className="shrink-0" />
-                    {!isCollapsed && <span className="truncate">App</span>}
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {mainItems.map((item) => {
+                const Icon = item.icon;
+                const active = item.isActive(location);
+
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.label}
+                      className="h-10 rounded-xl border border-transparent px-2.5 transition-all duration-200 data-[active=true]:border-white/20 data-[active=true]:bg-[linear-gradient(132deg,rgba(214,228,255,0.26)_0%,rgba(214,228,255,0.14)_45%,rgba(255,255,255,0.05)_100%)] data-[active=true]:text-zinc-50"
+                    >
+                      <Link href={item.href} className="flex items-center gap-2 w-full">
+                        <Icon className="shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
-              Administration
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/admin")}
-                    tooltip="Aperçu Admin"
-                  >
-                    <Link
-                      href="/admin"
-                      className="flex items-center gap-2 w-full"
-                    >
-                      <ShieldCheck className="shrink-0" />
-                      {!isCollapsed && (
-                        <span className="truncate">Aperçu Admin</span>
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/admin/users")}
-                    tooltip="Gestion Utilisateurs"
-                  >
-                    <Link
-                      href="/admin/users"
-                      className="flex items-center gap-2 w-full"
-                    >
-                      <Users className="shrink-0" />
-                      {!isCollapsed && (
-                        <span className="truncate">Utilisateurs</span>
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        {adminItems.length > 0 ? (
+          <>
+            <SidebarSeparator className="my-2 bg-white/10" />
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+                Administration
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {adminItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = item.isActive(location);
+
+                    return (
+                      <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={active}
+                          tooltip={item.label}
+                          className="h-10 rounded-xl border border-transparent px-2.5 transition-all duration-200 data-[active=true]:border-white/20 data-[active=true]:bg-[linear-gradient(132deg,rgba(214,228,255,0.26)_0%,rgba(214,228,255,0.14)_45%,rgba(255,255,255,0.05)_100%)] data-[active=true]:text-zinc-50"
+                        >
+                          <Link href={item.href} className="flex items-center gap-2 w-full">
+                            <Icon className="shrink-0" />
+                            <span className="truncate">{item.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        ) : null}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border/20 p-2 overflow-hidden">
+      <SidebarFooter className="px-2 pt-2 pb-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground flex items-center justify-center cursor-pointer"
+              className="h-11 rounded-xl border border-white/15 bg-white/[0.06] data-[state=open]:bg-white/[0.12]"
             >
               <Avatar className="h-8 w-8 rounded-lg shrink-0">
-                <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
+                <AvatarFallback className="rounded-lg bg-primary/15 text-primary text-xs">
                   {profile?.email?.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              {!isCollapsed && (
+              {!isCollapsed ? (
                 <>
-                  <div className="grid flex-1 text-left text-sm leading-tight animate-in fade-in duration-300">
-                    <span className="truncate font-semibold">
-                      {profile?.role === "admin"
-                        ? "Administrateur"
-                        : "Utilisateur"}
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold text-zinc-100">
+                      {profile?.role === "admin" ? "Administrateur" : "Utilisateur"}
                     </span>
-                    <span className="truncate text-xs">{profile?.email}</span>
+                    <span className="truncate text-xs text-zinc-400">{profile?.email}</span>
                   </div>
-                  <ChevronRight className="ml-auto size-4 shrink-0" />
+                  <ChevronRight className="ml-auto size-4 shrink-0 text-zinc-400" />
                 </>
-              )}
+              ) : null}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-            side="bottom"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-xl"
+            side={isMobile ? "bottom" : "right"}
             align="end"
-            sideOffset={4}
+            sideOffset={8}
           >
             <DropdownMenuItem asChild>
-              <Link
-                href="/settings"
-                className="flex w-full items-center cursor-pointer"
-              >
+              <Link href="/settings" className="flex w-full items-center cursor-pointer">
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 <span>Paramètres</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link
-                href="/billing"
-                className="flex w-full items-center cursor-pointer"
-              >
+              <Link href="/billing" className="flex w-full items-center cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4" />
                 <span>Facturation</span>
               </Link>
             </DropdownMenuItem>
-            <div className="my-1 h-px bg-muted" />
-            <DropdownMenuItem
-              className="cursor-pointer"
-              onClick={() => signOut()}
-            >
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="cursor-pointer" onClick={() => signOut()}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Déconnexion</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarFooter>
+
+      <SidebarRail />
     </Sidebar>
   );
 }
@@ -216,18 +251,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
         <TermsGuard />
-        <AppSidebar />
-        <main className="flex-1 overflow-hidden flex flex-col min-w-0 transition-[margin]">
-          <header className="flex h-16 items-center gap-4 border-b border-border/75 bg-background/70 px-6 backdrop-blur-xl transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-            <SidebarTrigger />
-            <div className="flex-1">{/* Breadcrumbs could go here */}</div>
+        <ModernAppSidebar />
+        <SidebarInset className="bg-background">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/70 bg-background/80 px-4 backdrop-blur-xl md:h-16 md:px-6">
+            <SidebarTrigger className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10" />
+            <div className="flex-1" />
           </header>
           <div className="flex-1 overflow-y-auto p-4 md:p-8 pt-6">
             <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
               {children}
             </div>
           </div>
-        </main>
+        </SidebarInset>
       </div>
     </SidebarProvider>
   );

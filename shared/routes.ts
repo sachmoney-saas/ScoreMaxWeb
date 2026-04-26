@@ -1,5 +1,19 @@
 import { z } from 'zod';
-import { insertProfileSchema, profiles } from './schema';
+import { insertProfileSchema } from './schema';
+import {
+  analysesRequestSchema,
+  analysesResponseSchema,
+  createApiKeyRequestSchema,
+  createApiKeyResponseSchema,
+  createJobRequestSchema,
+  createJobResponseSchema,
+  getJobResponseSchema,
+  listApiKeysResponseSchema,
+  oneshotApiErrorSchema,
+  publicUiModeResponseSchema,
+  recentRequestsResponseSchema,
+  revokeApiKeyResponseSchema,
+} from './oneshot';
 
 export const errorSchemas = {
   validation: z.object({
@@ -40,6 +54,99 @@ export const api = {
       responses: {
         200: insertProfileSchema,
         400: errorSchemas.validation,
+      },
+    },
+  },
+  oneshot: {
+    analyses: {
+      method: 'POST' as const,
+      path: '/v1/analyses',
+      body: analysesRequestSchema,
+      responses: {
+        200: analysesResponseSchema,
+        400: oneshotApiErrorSchema,
+        401: oneshotApiErrorSchema,
+        403: oneshotApiErrorSchema,
+        413: oneshotApiErrorSchema,
+        500: oneshotApiErrorSchema,
+      },
+    },
+    jobs: {
+      create: {
+        method: 'POST' as const,
+        path: '/v1/jobs',
+        body: createJobRequestSchema,
+        responses: {
+          202: createJobResponseSchema,
+          400: oneshotApiErrorSchema,
+          401: oneshotApiErrorSchema,
+          403: oneshotApiErrorSchema,
+          500: oneshotApiErrorSchema,
+        },
+      },
+      get: {
+        method: 'GET' as const,
+        path: '/v1/jobs/:id',
+        responses: {
+          200: getJobResponseSchema,
+          400: oneshotApiErrorSchema,
+          401: oneshotApiErrorSchema,
+          403: oneshotApiErrorSchema,
+          500: oneshotApiErrorSchema,
+        },
+      },
+    },
+    public: {
+      uiMode: {
+        method: 'GET' as const,
+        path: '/v1/public/ui-mode',
+        responses: {
+          200: publicUiModeResponseSchema,
+          500: oneshotApiErrorSchema,
+        },
+      },
+      recentRequests: {
+        method: 'GET' as const,
+        path: '/v1/public/recent-requests',
+        responses: {
+          200: recentRequestsResponseSchema,
+          400: oneshotApiErrorSchema,
+          500: oneshotApiErrorSchema,
+        },
+      },
+    },
+    admin: {
+      apiKeys: {
+        list: {
+          method: 'GET' as const,
+          path: '/v1/admin/api-keys',
+          responses: {
+            200: listApiKeysResponseSchema,
+            403: oneshotApiErrorSchema,
+            500: oneshotApiErrorSchema,
+          },
+        },
+        create: {
+          method: 'POST' as const,
+          path: '/v1/admin/api-keys',
+          body: createApiKeyRequestSchema,
+          responses: {
+            201: createApiKeyResponseSchema,
+            400: oneshotApiErrorSchema,
+            403: oneshotApiErrorSchema,
+            500: oneshotApiErrorSchema,
+          },
+        },
+        revoke: {
+          method: 'POST' as const,
+          path: '/v1/admin/api-keys/:id/revoke',
+          responses: {
+            200: revokeApiKeyResponseSchema,
+            400: oneshotApiErrorSchema,
+            403: oneshotApiErrorSchema,
+            500: oneshotApiErrorSchema,
+          },
+        },
       },
     },
   },

@@ -13,6 +13,7 @@ type Profile = {
   role: "user" | "admin";
   is_subscriber: boolean;
   has_accepted_terms: boolean;
+  has_completed_onboarding: boolean;
 };
 
 type AuthContextType = {
@@ -83,9 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { 
           id: user.id, 
           email: user.email ?? null, 
-          role: "user", 
+          role: "user",
           is_subscriber: false,
-          has_accepted_terms: false 
+          has_accepted_terms: false,
+          has_completed_onboarding: false
         } as Profile;
       }
       

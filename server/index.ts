@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { logger } from "./lib/logger";
 import { serverEnv } from "./lib/env";
+import { mapUnknownError } from "./lib/errors";
 import pinoHttp from "pino-http";
 
 const app = express();
@@ -44,12 +45,24 @@ app.use(
 (async () => {
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const apiError = mapUnknownError(err);
 
-    logger.error({ err, status }, message);
-    res.status(status).json({ message });
+    logger.error(
+      {
+        err,
+        code: apiError.code,
+        status: apiError.status,
+        details: apiError.details,
+      },
+      apiError.message,
+    );
+
+    res.status(apiError.status).json({
+      code: apiError.code,
+      message: apiError.message,
+      ...(apiError.details !== undefined ? { details: apiError.details } : {}),
+    });
   });
 
   // importantly only setup vite in development and after
