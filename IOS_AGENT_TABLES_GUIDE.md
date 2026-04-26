@@ -1,13 +1,29 @@
 # ScoreMax — Guide tables Supabase pour l’agent IA iOS
 
-Ce document décrit **le modèle actuel (v2)** utilisé par l’app web et le backend pour l’onboarding scan + analyses.  
-Il est destiné à l’agent IA de l’app iOS pour qu’il comprenne **quoi écrire**, **où l’écrire**, et **quand l’onboarding est considéré prêt**.
+Ce document décrit **le modèle actuel (v2)** et le **contrat de rôles entre les apps**.  
+Il est destiné à l’agent IA iOS pour qu’il comprenne précisément qui fait quoi entre web/iOS, **quoi écrire en base partagée**, et comment l’état onboarding est validé côté web.
 
 ---
 
-## 1) Vue d’ensemble du domaine
+## 1) Architecture produit et rôles (web centrique)
 
-Le flux scan/onboarding est structuré autour de 6 tables métier :
+Le **centre du produit est l’application web**.
+
+Répartition des rôles:
+- **Application web**
+  - pilote l’onboarding global;
+  - demande explicitement à l’utilisateur d’aller sur l’app iOS pour capturer les photos;
+  - suit la progression en temps réel via la DB partagée (polling `get_onboarding_scan_status()`);
+  - déclenche les appels d’analyse vers l’API ScoreMax (via backend web).
+- **Application iOS**
+  - a un rôle spécialisé: **prendre les photos**;
+  - upload les médias dans R2 et écrit les métadonnées dans Supabase;
+  - redirige l’utilisateur vers l’application web une fois la capture terminée.
+- **Base Supabase partagée**
+  - source de vérité commune web + iOS;
+  - permet de savoir si chaque photo est prise/valide ou manquante.
+
+Le domaine scan/onboarding est structuré autour de 6 tables métier :
 
 1. `public.scan_asset_types` → taxonomie des types de photos (dont les 8 obligatoires onboarding)
 2. `public.scan_sessions` → session de capture (état global d’avancement)
@@ -214,28 +230,30 @@ Conséquence iOS:
 
 ---
 
-## 5) Séquence recommandée pour l’app iOS
+## 5) Séquence réelle cross-app (web ↔ iOS)
 
-1. Auth utilisateur Supabase.
-2. Récupérer le statut onboarding via RPC `get_onboarding_scan_status()`.
-3. Pour chaque type requis:
-   - uploader l’image sur R2,
-   - écrire/mettre à jour la ligne `scan_assets` avec:
-     - `session_id`, `user_id`, `asset_type_code`,
-     - `r2_key`, `mime_type`, `upload_status='uploaded'`,
-     - métadonnées optionnelles (`byte_size`, `checksum_sha256`, `captured_at`).
-4. Poller `get_onboarding_scan_status()` jusqu’à `is_ready = true`.
-5. Débloquer la fin d’onboarding côté app.
+1. L’utilisateur suit l’onboarding sur le **web**.
+2. Le web affiche l’instruction: aller sur l’app iOS pour capturer les photos demandées.
+3. Sur iOS (capture only):
+   - authentifier l’utilisateur;
+   - prendre les photos;
+   - uploader vers R2;
+   - écrire/mettre à jour `scan_assets` avec `session_id`, `user_id`, `asset_type_code`, `r2_key`, `mime_type`, `upload_status='uploaded'` (+ métadonnées optionnelles).
+4. iOS redirige l’utilisateur vers le **web**.
+5. Le web reprend la main et poll `get_onboarding_scan_status()` toutes les ~2.5s jusqu’à `is_ready = true`.
+6. Une fois prêt, le web débloque la fin d’onboarding puis orchestre les analyses via son backend/API ScoreMax.
 
 ---
 
 ## 6) Invariants à respecter côté agent iOS
 
 - Ne pas utiliser de schéma legacy (`scans`, `scan_id`, `asset_type`, `bucket`, `object_path`).
+- L’app iOS ne pilote pas l’onboarding web: elle capture et publie uniquement les métadonnées de scan.
 - `mime_type` doit être `image/jpeg` ou `image/png`.
 - `r2_key` non vide si `upload_status` est `uploaded`/`validated`.
 - Pour compter vers la complétude: un type requis actif doit avoir au moins un asset valide.
-- Le backend peut garder plusieurs runs d’analyse (historique immuable) via `analysis_jobs` versionnés.
+- Après capture, renvoyer l’utilisateur vers le web pour la suite du flux produit.
+- Le backend web orchestre les appels d’analyse et peut garder plusieurs runs d’analyse (historique immuable) via `analysis_jobs` versionnés.
 
 ---
 
