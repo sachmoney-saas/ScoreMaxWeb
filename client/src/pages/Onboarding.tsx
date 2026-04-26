@@ -244,14 +244,16 @@ export default function Onboarding() {
 
                     {isScanStatusError ? (
                       <p className="text-sm text-red-600">
-                        Impossible de vérifier les photos pour l'instant. Réessaie dans quelques secondes.
+                        Impossible de vérifier les photos pour l'instant.
+                        Réessaie dans quelques secondes.
                       </p>
                     ) : null}
 
                     {!isScanStatusLoading && !isScanStatusError ? (
                       isScanReady ? (
                         <p className="text-sm font-semibold text-emerald-700">
-                          Scan complet: toutes les photos obligatoires sont prêtes.
+                          Scan complet: toutes les photos obligatoires sont
+                          prêtes.
                         </p>
                       ) : (
                         <div className="space-y-2">

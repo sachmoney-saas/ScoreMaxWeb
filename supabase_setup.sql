@@ -394,12 +394,7 @@ VALUES
   ('LOOK_DOWN', 'Regarder en bas', TRUE, 5, TRUE),
   ('SMILE', 'Sourire', TRUE, 6, TRUE),
   ('HAIR_BACK', 'Cheveux en arrière', TRUE, 7, TRUE),
-  ('EYE_CLOSEUP', 'Gros plan œil', TRUE, 8, TRUE),
-  ('LEGACY_PHOTO', 'Photo legacy', FALSE, 901, TRUE),
-  ('LEGACY_FRAME', 'Frame legacy', FALSE, 902, TRUE),
-  ('LEGACY_DEPTH', 'Depth legacy', FALSE, 903, TRUE),
-  ('LEGACY_LANDMARKS', 'Landmarks legacy', FALSE, 904, TRUE),
-  ('LEGACY_DEBUG_OVERLAY', 'Debug overlay legacy', FALSE, 905, TRUE)
+  ('EYE_CLOSEUP', 'Gros plan œil', TRUE, 8, TRUE)
 ON CONFLICT (code) DO UPDATE
 SET
   label_fr = EXCLUDED.label_fr,
@@ -428,46 +423,6 @@ CREATE TABLE IF NOT EXISTS public.scan_sessions (
   CONSTRAINT scoremax_scan_sessions_completed_le_required CHECK (completed_asset_count <= required_asset_count)
 );
 
--- Backfill sessions from legacy scans table when available.
-DO $$
-BEGIN
-  IF to_regclass('public.scans') IS NOT NULL THEN
-    INSERT INTO public.scan_sessions (
-      id,
-      user_id,
-      source,
-      status,
-      required_asset_count,
-      completed_asset_count,
-      started_at,
-      ready_at,
-      completed_at,
-      created_at,
-      updated_at
-    )
-    SELECT
-      s.id,
-      s.user_id,
-      'manual_rescan',
-      CASE
-        WHEN s.status = 'started' THEN 'collecting'
-        WHEN s.status = 'completed' THEN 'completed'
-        WHEN s.status = 'failed' THEN 'failed'
-        WHEN s.status = 'aborted' THEN 'abandoned'
-        ELSE 'collecting'
-      END,
-      8,
-      0,
-      COALESCE(s.capture_started_at, s.created_at, NOW()),
-      CASE WHEN s.status = 'completed' THEN COALESCE(s.capture_ended_at, s.updated_at, NOW()) ELSE NULL END,
-      CASE WHEN s.status = 'completed' THEN COALESCE(s.capture_ended_at, s.updated_at, NOW()) ELSE NULL END,
-      COALESCE(s.created_at, NOW()),
-      COALESCE(s.updated_at, NOW())
-    FROM public.scans s
-    ON CONFLICT (id) DO NOTHING;
-  END IF;
-END $$;
-
 CREATE TABLE IF NOT EXISTS public.scan_assets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID,
@@ -488,172 +443,6 @@ CREATE TABLE IF NOT EXISTS public.scan_assets (
   CONSTRAINT scoremax_scan_assets_byte_size_positive CHECK (byte_size IS NULL OR byte_size > 0),
   CONSTRAINT scoremax_scan_assets_checksum_format CHECK (checksum_sha256 IS NULL OR checksum_sha256 ~ '^[0-9a-f]{64}$')
 );
-
--- Legacy compatibility: existing projects already have public.scan_assets with old columns.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'session_id'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN session_id UUID;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'asset_type_code'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN asset_type_code TEXT;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'r2_bucket'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN r2_bucket TEXT;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'r2_key'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN r2_key TEXT;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'byte_size'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN byte_size BIGINT;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'checksum_sha256'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN checksum_sha256 TEXT;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'upload_status'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN upload_status TEXT DEFAULT 'pending' NOT NULL;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'captured_at'
-  ) THEN
-    ALTER TABLE public.scan_assets ADD COLUMN captured_at TIMESTAMP WITH TIME ZONE;
-  END IF;
-END $$;
-
--- Backfill from legacy scan_assets shape.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'bucket'
-  ) THEN
-    UPDATE public.scan_assets
-    SET r2_bucket = bucket
-    WHERE r2_bucket IS NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'object_path'
-  ) THEN
-    UPDATE public.scan_assets
-    SET r2_key = object_path
-    WHERE r2_key IS NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'bytes'
-  ) THEN
-    UPDATE public.scan_assets
-    SET byte_size = bytes
-    WHERE byte_size IS NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'sha256'
-  ) THEN
-    UPDATE public.scan_assets
-    SET checksum_sha256 = sha256
-    WHERE checksum_sha256 IS NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'scan_id'
-  ) THEN
-    UPDATE public.scan_assets
-    SET session_id = scan_id
-    WHERE session_id IS NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'asset_type'
-  ) THEN
-    UPDATE public.scan_assets
-    SET asset_type_code = CASE asset_type
-      WHEN 'photo' THEN 'LEGACY_PHOTO'
-      WHEN 'frame' THEN 'LEGACY_FRAME'
-      WHEN 'depth' THEN 'LEGACY_DEPTH'
-      WHEN 'landmarks' THEN 'LEGACY_LANDMARKS'
-      WHEN 'debug_overlay' THEN 'LEGACY_DEBUG_OVERLAY'
-      ELSE COALESCE(asset_type_code, 'LEGACY_PHOTO')
-    END
-    WHERE asset_type_code IS NULL;
-  END IF;
-
-  UPDATE public.scan_assets
-  SET asset_type_code = 'LEGACY_PHOTO'
-  WHERE asset_type_code IS NULL;
-
-  UPDATE public.scan_assets
-  SET upload_status = 'uploaded'
-  WHERE upload_status = 'pending'
-    AND length(btrim(COALESCE(r2_key, ''))) > 0;
-END $$;
-
--- Allow legacy columns to become optional for v2 writes while keeping backward compatibility.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'scan_id'
-  ) THEN
-    ALTER TABLE public.scan_assets ALTER COLUMN scan_id DROP NOT NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'asset_type'
-  ) THEN
-    ALTER TABLE public.scan_assets ALTER COLUMN asset_type DROP NOT NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'bucket'
-  ) THEN
-    ALTER TABLE public.scan_assets ALTER COLUMN bucket DROP NOT NULL;
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'scan_assets' AND column_name = 'object_path'
-  ) THEN
-    ALTER TABLE public.scan_assets ALTER COLUMN object_path DROP NOT NULL;
-  END IF;
-END $$;
 
 DO $$
 BEGIN
@@ -757,7 +546,7 @@ BEGIN
         ADD CONSTRAINT scoremax_scan_assets_session_id_fkey
         FOREIGN KEY (session_id) REFERENCES public.scan_sessions(id) ON DELETE CASCADE;
     EXCEPTION WHEN invalid_foreign_key OR datatype_mismatch THEN
-      -- Keep compatibility when existing column type differs on legacy projects.
+      -- Keep compatibility when existing column type differs.
       NULL;
     END;
   END IF;
@@ -773,7 +562,7 @@ BEGIN
         ADD CONSTRAINT scoremax_scan_assets_asset_type_code_fkey
         FOREIGN KEY (asset_type_code) REFERENCES public.scan_asset_types(code);
     EXCEPTION WHEN invalid_foreign_key OR datatype_mismatch THEN
-      -- Keep compatibility when existing column type differs on legacy projects.
+      -- Keep compatibility when existing column type differs.
       NULL;
     END;
   END IF;

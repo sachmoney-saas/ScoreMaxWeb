@@ -159,12 +159,56 @@ WHERE schemaname = 'public'
   AND policyname LIKE 'scoremax_%'
 ORDER BY tablename, policyname;
 
--- 6) Legacy backfill verification for scan assets
+-- 6) Strict v2 scan_assets verification
+WITH expected_scan_assets_columns(column_name) AS (
+  VALUES
+    ('id'),
+    ('session_id'),
+    ('user_id'),
+    ('asset_type_code'),
+    ('r2_bucket'),
+    ('r2_key'),
+    ('mime_type'),
+    ('byte_size'),
+    ('checksum_sha256'),
+    ('upload_status'),
+    ('captured_at'),
+    ('created_at'),
+    ('updated_at')
+)
+SELECT
+  expected_scan_assets_columns.column_name,
+  CASE WHEN c.column_name IS NULL THEN 'missing' ELSE 'present' END AS status
+FROM expected_scan_assets_columns
+LEFT JOIN information_schema.columns c
+  ON c.table_schema = 'public'
+ AND c.table_name = 'scan_assets'
+ AND c.column_name = expected_scan_assets_columns.column_name
+ORDER BY expected_scan_assets_columns.column_name;
+
+WITH forbidden_scan_assets_columns(column_name) AS (
+  VALUES
+    ('scan_id'),
+    ('asset_type'),
+    ('bucket'),
+    ('object_path')
+)
+SELECT
+  forbidden_scan_assets_columns.column_name,
+  CASE WHEN c.column_name IS NULL THEN 'absent_ok' ELSE 'still_present' END AS status
+FROM forbidden_scan_assets_columns
+LEFT JOIN information_schema.columns c
+  ON c.table_schema = 'public'
+ AND c.table_name = 'scan_assets'
+ AND c.column_name = forbidden_scan_assets_columns.column_name
+ORDER BY forbidden_scan_assets_columns.column_name;
+
 SELECT
   COUNT(*) AS total_scan_assets,
   COUNT(*) FILTER (WHERE session_id IS NULL) AS missing_session_id,
   COUNT(*) FILTER (WHERE asset_type_code IS NULL) AS missing_asset_type_code,
   COUNT(*) FILTER (WHERE r2_key IS NULL OR length(btrim(r2_key)) = 0) AS missing_r2_key,
+  COUNT(*) FILTER (WHERE mime_type NOT IN ('image/jpeg', 'image/png')) AS invalid_mime_type,
   COUNT(*) FILTER (WHERE upload_status NOT IN ('pending', 'uploaded', 'validated', 'failed')) AS invalid_upload_status
 FROM public.scan_assets;
 
