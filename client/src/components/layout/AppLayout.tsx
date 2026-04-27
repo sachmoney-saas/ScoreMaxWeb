@@ -1,13 +1,20 @@
+import { WaveBackground } from "@/components/background/WaveBackground";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  useAnalysisHistory,
+  useDeleteAnalysisJob,
+} from "@/hooks/use-supabase";
+import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
 import { Link, useLocation } from "wouter";
 import {
-  LayoutDashboard,
   ShieldCheck,
   Users,
   LogOut,
   ChevronRight,
   Settings as SettingsIcon,
   CreditCard,
+  MoreHorizontal,
+  Trash2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -35,7 +42,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { TermsGuard } from "./TermsGuard";
 
 type SidebarNavItem = {
   href: string;
@@ -46,19 +52,13 @@ type SidebarNavItem = {
 
 function ModernAppSidebar() {
   const [location] = useLocation();
-  const { profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut } = useAuth();
+  const { data: analysisHistory = [], isLoading: isHistoryLoading } =
+    useAnalysisHistory({ enabled: !!user?.id });
+  const deleteAnalysisMutation = useDeleteAnalysisJob();
   const { state, isMobile, toggleSidebar } = useSidebar();
 
   const isCollapsed = state === "collapsed" && !isMobile;
-
-  const mainItems: SidebarNavItem[] = [
-    {
-      href: "/app",
-      label: "Dashboard",
-      icon: LayoutDashboard,
-      isActive: (path) => path === "/app",
-    },
-  ];
 
   const adminItems: SidebarNavItem[] = isAdmin
     ? [
@@ -81,7 +81,7 @@ function ModernAppSidebar() {
     <Sidebar
       collapsible="icon"
       variant="floating"
-      className="relative z-40 border-r border-transparent [--sidebar-width:18rem]"
+      className="relative z-40 border-r border-transparent [--sidebar-width:22rem]"
     >
       <SidebarHeader
         className={`${isCollapsed ? "px-1.5 pt-3 pb-2" : "px-2 pt-3 pb-2"}`}
@@ -195,33 +195,81 @@ function ModernAppSidebar() {
       <SidebarContent className={isCollapsed ? "hidden" : "px-2 pb-2"}>
         <SidebarGroup>
           <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-            Navigation
+            Historique
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {mainItems.map((item) => {
-                const Icon = item.icon;
-                const active = item.isActive(location);
+            <SidebarMenu className="space-y-2">
+              {isHistoryLoading ? (
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-zinc-400">
+                  Chargement des analyses...
+                </div>
+              ) : null}
 
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.label}
-                      className="h-10 rounded-xl border border-transparent px-2.5 transition-all duration-200 data-[active=true]:border-white/20 data-[active=true]:bg-[linear-gradient(132deg,rgba(214,228,255,0.26)_0%,rgba(214,228,255,0.14)_45%,rgba(255,255,255,0.05)_100%)] data-[active=true]:text-zinc-50"
-                    >
-                      <Link
-                        href={item.href}
-                        className="flex items-center gap-2 w-full"
-                      >
-                        <Icon className="shrink-0" />
-                        <span className="truncate">{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+              {!isHistoryLoading && analysisHistory.length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-zinc-400">
+                  Aucune analyse pour le moment.
+                </div>
+              ) : null}
+
+              {analysisHistory.map((analysis) => (
+                <SidebarMenuItem key={analysis.id}>
+                  <div className="group flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.055] p-2 transition hover:border-white/20 hover:bg-white/[0.085]">
+                    <Link href="/app" className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+                        {analysis.has_thumbnail && user?.id ? (
+                          <img
+                            src={buildAnalysisThumbnailUrl({
+                              userId: user.id,
+                              jobId: analysis.id,
+                            })}
+                            alt="Photo de face"
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
+                            —
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-zinc-100">
+                          Analyse #{analysis.version}
+                        </p>
+                        <p className="truncate text-xs text-zinc-400">
+                          {new Intl.DateTimeFormat("fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }).format(new Date(analysis.completed_at ?? analysis.created_at))}
+                        </p>
+                      </div>
+                    </Link>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
+                          aria-label="Options de l'analyse"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="right" align="start" className="rounded-xl">
+                        <DropdownMenuItem
+                          className="cursor-pointer text-red-500 focus:text-red-500"
+                          disabled={deleteAnalysisMutation.isPending}
+                          onClick={() => deleteAnalysisMutation.mutate(analysis.id)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span>Supprimer</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -275,8 +323,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
+      <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-[#9aaeb5]">
+        <WaveBackground />
+        <div className="relative z-10 flex flex-col items-center gap-4">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           <p className="text-muted-foreground font-medium animate-pulse">
             Chargement de la plateforme...
@@ -288,16 +337,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <TermsGuard />
+      <div className="relative flex h-screen w-full overflow-hidden bg-[#9aaeb5]">
+        <WaveBackground />
         <ModernAppSidebar />
-        <SidebarInset className="bg-background">
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/70 bg-background/80 px-4 backdrop-blur-xl md:h-16 md:px-6">
-            <SidebarTrigger className="h-8 w-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 md:hidden" />
-            <div className="flex-1" />
-          </header>
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 pt-6">
-            <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <SidebarInset className="flex min-h-0 flex-col overflow-hidden bg-transparent">
+          <SidebarTrigger className="absolute left-4 top-4 z-30 h-8 w-8 rounded-lg border border-white/10 bg-white/10 backdrop-blur-xl hover:bg-white/15 md:hidden" />
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8">
+            <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500 text-foreground">
               {children}
             </div>
           </div>

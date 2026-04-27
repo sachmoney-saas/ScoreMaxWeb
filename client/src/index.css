@@ -31,9 +31,9 @@
   --muted-foreground: 225 18% 72%;
   --muted-border: hsl(235 16% 24% / 0.9);
 
-  --accent: 266 84% 66%;
-  --accent-foreground: 230 44% 98%;
-  --accent-border: hsl(266 76% 56% / 0.75);
+  --accent: 236 18% 18%;
+  --accent-foreground: 220 26% 96%;
+  --accent-border: hsl(236 16% 28% / 0.85);
 
   --destructive: 0 76% 55%;
   --destructive-foreground: 220 26% 96%;
@@ -47,7 +47,7 @@
   --radius: 0.75rem;
 
   --chart-1: 0 0% 100%;
-  --chart-2: 274 83% 67%;
+  --chart-2: 220 12% 74%;
   --chart-3: 196 82% 62%;
   --chart-4: 152 66% 52%;
   --chart-5: 38 90% 61%;
@@ -196,7 +196,7 @@
   }
 
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-muted-foreground;
   }
 
   .hero-title-sunset {

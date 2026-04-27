@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { api } from "@shared/routes";
 
 import { createV1AnalysesRouter } from "./routes/v1-analyses";
+import { createV1OnboardingRouter } from "./routes/v1-onboarding";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -13,6 +14,7 @@ export async function registerRoutes(
   });
 
   app.use("/v1", createV1AnalysesRouter());
+  app.use("/v1", createV1OnboardingRouter());
 
   return httpServer;
 }

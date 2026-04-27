@@ -12,6 +12,7 @@ import Landing from "@/pages/Landing";
 import Onboarding from "@/pages/Onboarding";
 import AuthPage from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
+import AgeDetails from "@/pages/AgeDetails";
 import AdminPage from "@/pages/Admin";
 import Settings from "@/pages/Settings";
 import Billing from "@/pages/Billing";
@@ -30,7 +31,11 @@ function FullScreenLoader() {
 }
 
 // Protected Route Wrapper
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function ProtectedRoute({
+  component: Component,
+}: {
+  component: React.ComponentType;
+}) {
   const { user, profile, isLoading } = useAuth();
 
   if (isLoading) {
@@ -39,6 +44,10 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
   if (!user) {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
+  }
+
+  if (!profile) {
+    return <Redirect to="/onboarding" />;
   }
 
   if (!profile?.has_completed_onboarding) {
@@ -89,7 +98,7 @@ function Router() {
       <Route path="/mentions-legales" component={MentionsLegales} />
       <Route path="/cgu" component={CGU} />
       <Route path="/confidentialite" component={Confidentialite} />
-      
+
       <Route path={AUTH_CONFIG.LOGIN_PATH}>
         {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
       </Route>
@@ -102,6 +111,10 @@ function Router() {
       </Route>
 
       {/* Protected Routes */}
+      <Route path="/app/age">
+        <ProtectedRoute component={AgeDetails} />
+      </Route>
+
       <Route path="/app">
         <ProtectedRoute component={Dashboard} />
       </Route>
@@ -121,7 +134,7 @@ function Router() {
       <Route path="/admin/users">
         <ProtectedRoute component={AdminPage} />
       </Route>
-      
+
       {/* Fallback */}
       <Route component={NotFound} />
     </Switch>

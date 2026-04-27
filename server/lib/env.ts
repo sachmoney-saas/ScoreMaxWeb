@@ -57,3 +57,13 @@ export function getScoreMaxEnv(): {
     timeoutMs: parseTimeoutMs(readEnv("SCOREMAX_API_TIMEOUT_MS")),
   };
 }
+
+export function getSupabaseAdminEnv(): {
+  url: string;
+  serviceRoleKey: string;
+} {
+  return {
+    url: requireEnv("SUPABASE_URL"),
+    serviceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  };
+}

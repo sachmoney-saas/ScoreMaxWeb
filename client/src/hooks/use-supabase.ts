@@ -1,7 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { Profile, UpdateProfileRequest, OnboardingScanStatus } from "@shared/schema";
+import {
+  Profile,
+  UpdateProfileRequest,
+  OnboardingScanStatus,
+} from "@shared/schema";
 import { useAuth } from "./use-auth";
+import {
+  deleteAnalysisJob,
+  fetchAnalysisHistory,
+  fetchLatestFaceAnalysis,
+  type AnalysisHistoryItem,
+  type LatestAnalysisResponse,
+} from "@/lib/face-analysis";
 
 /**
  * Hook for fetching and managing the current user's profile
@@ -28,7 +39,13 @@ export function useProfile() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: UpdateProfileRequest }) => {
+    mutationFn: async ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: UpdateProfileRequest;
+    }) => {
       const { data, error } = await supabase
         .from("profiles")
         .update(updates)
@@ -47,10 +64,7 @@ export function useProfile() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", id);
+      const { error } = await supabase.from("profiles").delete().eq("id", id);
 
       if (error) throw error;
     },
@@ -80,18 +94,39 @@ export function useAdminMetrics() {
     queryKey: ["admin-metrics"],
     queryFn: async () => {
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const thisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).toISOString();
-      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const today = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      ).toISOString();
+      const thisWeek = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - now.getDay(),
+      ).toISOString();
+      const thisMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toISOString();
 
       const [
         { count: todayCount },
         { count: weekCount },
-        { count: monthCount }
+        { count: monthCount },
       ] = await Promise.all([
-        supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", today),
-        supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", thisWeek),
-        supabase.from("profiles").select("*", { count: "exact", head: true }).gte("created_at", thisMonth),
+        supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", today),
+        supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", thisWeek),
+        supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", thisMonth),
       ]);
 
       return {
@@ -127,7 +162,7 @@ export function useUserGrowth() {
 
       // Group by date
       const counts: Record<string, number> = {};
-      data?.forEach(profile => {
+      data?.forEach((profile) => {
         const date = new Date(profile.created_at).toLocaleDateString();
         counts[date] = (counts[date] || 0) + 1;
       });
@@ -139,7 +174,10 @@ export function useUserGrowth() {
         d.setDate(d.getDate() - i);
         const dateStr = d.toLocaleDateString();
         chartData.push({
-          date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          date: d.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          }),
           count: counts[dateStr] || 0,
         });
       }
@@ -186,6 +224,72 @@ export function useOnboardingScanStatus(options?: { enabled?: boolean }) {
       }
 
       return state.is_ready ? false : 2500;
+    },
+    staleTime: 0,
+  });
+}
+
+/**
+ * Hook for loading the latest persisted face analysis orchestration result.
+ */
+export function useAnalysisHistory(options?: { enabled?: boolean }) {
+  const { user } = useAuth();
+
+  return useQuery<AnalysisHistoryItem[]>({
+    queryKey: ["analysis-history", user?.id],
+    queryFn: async () => {
+      if (!user?.id) {
+        return [];
+      }
+
+      return fetchAnalysisHistory(user.id);
+    },
+    enabled: !!user?.id && (options?.enabled ?? true),
+    staleTime: 0,
+  });
+}
+
+export function useDeleteAnalysisJob() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (jobId: string) => {
+      if (!user?.id) {
+        throw new Error("User is required to delete an analysis");
+      }
+
+      await deleteAnalysisJob({ userId: user.id, jobId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["analysis-history", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["latest-face-analysis", user?.id] });
+    },
+  });
+}
+
+export function useLatestFaceAnalysis(options?: { enabled?: boolean }) {
+  const { user } = useAuth();
+
+  return useQuery<LatestAnalysisResponse | null>({
+    queryKey: ["latest-face-analysis", user?.id],
+    queryFn: async () => {
+      if (!user?.id) {
+        return null;
+      }
+
+      return fetchLatestFaceAnalysis(user.id);
+    },
+    enabled: !!user?.id && (options?.enabled ?? true),
+    refetchInterval: (query) => {
+      const state = query.state.data;
+      if (!state?.job) {
+        return false;
+      }
+
+      return state.job.status === "queued" || state.job.status === "running"
+        ? 2500
+        : false;
     },
     staleTime: 0,
   });

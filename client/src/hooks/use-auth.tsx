@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
@@ -42,61 +48,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoadingSession(false);
+    } = supabase.auth.onAuthStateChange(
+      (event: AuthChangeEvent, session: Session | null) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoadingSession(false);
 
-      if (event === "SIGNED_OUT") {
-        queryClient.clear();
-        window.location.href = AUTH_CONFIG.LOGIN_PATH;
-      }
+        if (event === "SIGNED_OUT") {
+          queryClient.clear();
+          window.location.href = AUTH_CONFIG.LOGIN_PATH;
+        }
 
-      if (session?.user) {
-        // Update last active timestamp
-        supabase
-          .from("profiles")
-          .update({ last_active_at: new Date().toISOString() })
-          .eq("id", session.user.id)
-          .then(({ error }) => {
-            if (error) console.error("Error updating last active:", error);
-          });
-      }
-    });
+        if (session?.user) {
+          // Update last active timestamp
+          supabase
+            .from("profiles")
+            .update({ last_active_at: new Date().toISOString() })
+            .eq("id", session.user.id)
+            .then(({ error }) => {
+              if (error) console.error("Error updating last active:", error);
+            });
+        }
+      },
+    );
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const { data: profile, isLoading: isLoadingProfile } = useQuery<Profile | null>({
-    queryKey: ["profile", user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+  const { data: profile, isLoading: isLoadingProfile } =
+    useQuery<Profile | null>({
+      queryKey: ["profile", user?.id],
+      queryFn: async () => {
+        if (!user) return null;
+        const queryKey = ["profile", user.id] as const;
+        const cachedProfile =
+          queryClient.getQueryData<Profile>(queryKey) ?? null;
 
-      if (error) {
-        console.warn("Profile not found in database, might be still creating...", error);
-        // On ne retourne pas une erreur bloquante tout de suite, on laisse une chance au trigger
-        return { 
-          id: user.id, 
-          email: user.email ?? null, 
-          role: "user",
-          is_subscriber: false,
-          has_accepted_terms: false,
-          has_completed_onboarding: false
-        } as Profile;
-      }
-      
-      console.log("Profile fetched:", data); // Debug log
-      return data as Profile;
-    },
-    enabled: !!user,
-    staleTime: 0, // Ensure we get fresh data
-  });
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+
+        if (error) {
+          console.warn(
+            "Profile fetch failed, using cached profile if available.",
+            error,
+          );
+          return cachedProfile;
+        }
+
+        console.log("Profile fetched:", data); // Debug log
+        return data as Profile;
+      },
+      enabled: !!user,
+      retry: 2,
+      retryDelay: 400,
+      staleTime: 0, // Ensure we get fresh data
+    });
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
