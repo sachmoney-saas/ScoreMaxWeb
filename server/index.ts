@@ -14,6 +14,10 @@ const httpServer = createServer(app);
 app.use(express.json({ limit: serverEnv.SCOREMAX_PAYLOAD_LIMIT }));
 app.use(express.urlencoded({ extended: false }));
 
+app.get(["/health", "/healthz"], (_req, res) => {
+  res.status(200).json({ ok: true });
+});
+
 app.use(
   pinoHttp({
     logger,
@@ -82,15 +86,10 @@ app.use(
   // Serve the app on the port from PORT, defaulting to 5000.
   // This serves both the API and the client.
   const port = serverEnv.PORT;
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      logger.info(`serving on port ${port}`);
+  httpServer.listen(port, "0.0.0.0", () => {
+    logger.info(`serving on port ${port}`);
+    setImmediate(() => {
       void recoverAnalysisJobsOnStartup();
-    },
-  );
+    });
+  });
 })();

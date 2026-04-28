@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
-import { SiGoogle } from "react-icons/si";
+import { SiApple, SiGoogle } from "react-icons/si";
 import { translateSupabaseError } from "@/lib/error-translator";
 
 export default function AuthPage() {
@@ -77,11 +77,11 @@ export default function AuthPage() {
     }
   };
 
-  const handleGoogleAuth = async () => {
+  const handleOAuthSignIn = async (provider: "apple" | "google") => {
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider,
         options: {
           redirectTo: `${window.location.origin}/app`,
         },
@@ -121,17 +121,30 @@ export default function AuthPage() {
             </div>
 
             <div className="mt-6 space-y-4">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-12 w-full rounded-2xl border-black/10 bg-white text-base font-semibold text-[#111827] shadow-none hover:bg-[#f7f7f7]"
-                onClick={handleGoogleAuth}
-                disabled={isLoading}
-                data-testid="button-google-auth"
-              >
-                <SiGoogle className="mr-2 h-5 w-5" />
-                {isLogin ? "Se connecter avec Google" : "S'inscrire avec Google"}
-              </Button>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 rounded-2xl border-black/10 bg-white text-sm font-semibold text-[#111827] shadow-none hover:bg-[#f7f7f7]"
+                  onClick={() => handleOAuthSignIn("google")}
+                  disabled={isLoading}
+                  data-testid="button-google-auth"
+                >
+                  <SiGoogle className="mr-2 h-5 w-5" />
+                  Google
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 rounded-2xl border-black/10 bg-white text-sm font-semibold text-[#111827] shadow-none hover:bg-[#f7f7f7]"
+                  onClick={() => handleOAuthSignIn("apple")}
+                  disabled={isLoading}
+                  data-testid="button-apple-auth"
+                >
+                  <SiApple className="mr-2 h-5 w-5" />
+                  Apple
+                </Button>
+              </div>
 
               <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-zinc-400">
                 <div className="h-px flex-1 bg-black/10" />
