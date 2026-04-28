@@ -88,8 +88,8 @@ app.use(
   const port = serverEnv.PORT;
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info(`serving on port ${port}`);
-    setImmediate(() => {
-      void recoverAnalysisJobsOnStartup();
-    });
+    setTimeout(() => {
+      void recoverAnalysisJobsOnStartup({ dispatchQueuedJobs: false });
+    }, 10_000).unref();
   });
 })();

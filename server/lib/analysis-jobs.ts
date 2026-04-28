@@ -184,7 +184,8 @@ export async function processPersistedAnalysisJob(jobId: string): Promise<void> 
   }
 }
 
-export async function recoverAnalysisJobsOnStartup(): Promise<void> {
+export async function recoverAnalysisJobsOnStartup(params?: { dispatchQueuedJobs?: boolean }): Promise<void> {
+  const shouldDispatchQueuedJobs = params?.dispatchQueuedJobs ?? true;
   const { data: runningJobs, error: runningError } = await supabaseAdmin
     .from("analysis_jobs")
     .select("id")
@@ -229,6 +230,10 @@ export async function recoverAnalysisJobsOnStartup(): Promise<void> {
     },
     "Recovering analysis jobs",
   );
+
+  if (!shouldDispatchQueuedJobs) {
+    return;
+  }
 
   for (const job of queuedJobs ?? []) {
     dispatchAnalysisJob(job.id as string);
