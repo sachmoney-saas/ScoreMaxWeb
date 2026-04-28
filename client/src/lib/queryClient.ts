@@ -1,11 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { AUTH_CONFIG } from "@/config/auth";
 
 async function throwIfResNotOk(res: Response) {
   if (res.status === 401 || res.status === 403) {
     // Session expired or unauthorized - clear cache and redirect
     if (typeof window !== "undefined") {
       queryClient.clear();
-      window.location.href = "/auth";
+      window.location.href = AUTH_CONFIG.LOGIN_PATH;
     }
     return;
   }
