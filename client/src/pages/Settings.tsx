@@ -23,6 +23,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const settingsPanelClassName = "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
+
 export default function Settings() {
   const { user, profile, signOut } = useAuth();
   const { updateProfile, deleteProfile, isDeleting } = useProfile();
@@ -79,15 +81,15 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Paramètres</h1>
-        <p className="text-muted-foreground">Gérez votre compte et vos préférences.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Paramètres</h1>
+        <p className="text-zinc-300">Gérez votre compte et vos préférences.</p>
       </div>
 
       <div className="grid gap-6">
-        <Card className="border-border/60">
+        <Card className={settingsPanelClassName}>
           <CardHeader>
             <CardTitle>Informations Personnelles</CardTitle>
-            <CardDescription>Mettez à jour vos informations de profil.</CardDescription>
+            <CardDescription className="text-zinc-300">Mettez à jour vos informations de profil.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -100,7 +102,7 @@ export default function Settings() {
                       <FormItem>
                         <FormLabel>Nom Complet</FormLabel>
                         <FormControl>
-                          <Input placeholder="Jean Dupont" {...field} className="h-11" />
+                          <Input placeholder="Jean Dupont" {...field} className="h-11 border-white/15 bg-white/10 text-white placeholder:text-zinc-500" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -108,8 +110,8 @@ export default function Settings() {
                   />
                   <div className="space-y-2">
                     <Label>Adresse Email</Label>
-                    <Input value={user?.email || ""} disabled className="h-11 bg-muted" />
-                    <p className="text-xs text-muted-foreground">L'email ne peut pas être modifié.</p>
+                    <Input value={user?.email || ""} disabled className="h-11 border-white/10 bg-white/5 text-zinc-300 disabled:opacity-100" />
+                    <p className="text-xs text-zinc-400">L'email ne peut pas être modifié.</p>
                   </div>
                 </div>
                 <Button type="submit" disabled={form.formState.isSubmitting} className="shadow-sm">
@@ -122,17 +124,17 @@ export default function Settings() {
         </Card>
 
         {profile?.role === "admin" && (
-          <Card className="border-border/60">
+          <Card className={settingsPanelClassName}>
             <CardHeader>
               <CardTitle>Statut du Compte</CardTitle>
-              <CardDescription>Consultez vos permissions d'accès.</CardDescription>
+              <CardDescription className="text-zinc-300">Consultez vos permissions d'accès.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-4 p-4 border rounded-lg bg-primary/5 border-primary/10">
-                <Shield className="h-8 w-8 text-primary" />
+              <div className="flex items-center gap-4 rounded-2xl border border-white/15 bg-white/10 p-4">
+                <Shield className="h-8 w-8 text-zinc-100" />
                 <div>
-                  <p className="font-medium">Rôle : Administrateur</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="font-medium text-white">Rôle : Administrateur</p>
+                  <p className="text-sm text-zinc-300">
                     Vous avez un accès administratif complet à la plateforme.
                   </p>
                 </div>
@@ -141,22 +143,22 @@ export default function Settings() {
           </Card>
         )}
 
-        <Card className="border-destructive/20 bg-destructive/5">
+        <Card className={settingsPanelClassName}>
           <CardHeader>
-            <CardTitle className="text-destructive flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-red-300">
               <AlertTriangle className="h-5 w-5" />
               Zone de Danger
             </CardTitle>
-            <CardDescription>Actions irréversibles sur votre compte.</CardDescription>
+            <CardDescription className="text-zinc-300">Actions irréversibles sur votre compte.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-start gap-4 p-4 border border-destructive/20 rounded-lg bg-background">
+            <div className="flex items-start gap-4 rounded-2xl border border-red-300/20 bg-red-500/10 p-4">
               <div className="space-y-2 flex-1">
-                <h4 className="font-semibold text-foreground">Supprimer le compte</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <h4 className="font-semibold text-white">Supprimer le compte</h4>
+                <p className="text-sm leading-relaxed text-zinc-300">
                   Conformément au <strong>RGPD</strong>, vous disposez d'un droit à l'effacement. La suppression de votre compte entraînera la suppression définitive de toutes vos données personnelles de nos serveurs.
                 </p>
-                <div className="flex items-center gap-2 p-2 rounded-md bg-secondary/50 border border-border/40 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 p-2 text-xs text-zinc-300">
                   <Info className="h-4 w-4 shrink-0" />
                   <span>Cette action est immédiate et irréversible.</span>
                 </div>

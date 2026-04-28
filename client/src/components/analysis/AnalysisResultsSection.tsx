@@ -44,6 +44,30 @@ const EMPTY_RESULT: PersistedWorkerAnalysisResult = {
   rawRuns: [],
 };
 
+const WORKER_DISPLAY_ORDER = [
+  "age",
+  "coloring",
+  "skin",
+  "bodyfat",
+  "jaw",
+  "eye_brows",
+  "cheeks",
+  "smile",
+  "hair",
+  "skin_tint",
+  "neck",
+  "lips",
+  "chin",
+  "nose",
+  "ear",
+  "eyes",
+  "symmetry_shape",
+] as const;
+
+const workerDisplayOrderIndex = new Map<string, number>(
+  WORKER_DISPLAY_ORDER.map((worker, index) => [worker, index]),
+);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -68,18 +92,17 @@ function normalizeWorkerResult(
   };
 }
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) {
-    return "Date inconnue";
-  }
+function sortWorkerResults(results: NormalizedWorkerResult[]): NormalizedWorkerResult[] {
+  return [...results].sort((resultA, resultB) => {
+    const orderA = workerDisplayOrderIndex.get(resultA.worker) ?? Number.MAX_SAFE_INTEGER;
+    const orderB = workerDisplayOrderIndex.get(resultB.worker) ?? Number.MAX_SAFE_INTEGER;
 
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    return resultA.worker.localeCompare(resultB.worker, "fr");
+  });
 }
 
 function formatNumber(value: number): string {
@@ -147,7 +170,7 @@ function AggregateGrid({ worker, aggregates }: { worker: string; aggregates: Rec
 
   return (
     <div className="grid gap-2">
-      {entries.slice(0, 6).map((entry) => (
+      {entries.slice(0, 3).map((entry) => (
         <div
           key={entry.key}
           className="rounded-xl border border-white/15 bg-white/10 p-3 text-zinc-50 backdrop-blur-sm"
@@ -167,53 +190,63 @@ function AggregateGrid({ worker, aggregates }: { worker: string; aggregates: Rec
           ) : null}
         </div>
       ))}
-      {entries.length > 6 ? (
+      {entries.length > 3 ? (
         <p className="text-xs text-zinc-400">
-          +{entries.length - 6} signal{entries.length - 6 > 1 ? "s" : ""} supplémentaire{entries.length - 6 > 1 ? "s" : ""}
+          +{entries.length - 3} signal{entries.length - 3 > 1 ? "s" : ""} supplémentaire{entries.length - 3 > 1 ? "s" : ""}
         </p>
       ) : null}
     </div>
   );
 }
 
-function AgeResultCard({ result }: { result: NormalizedWorkerResult }) {
+function AgeResultCard({
+  result,
+  href,
+}: {
+  result: NormalizedWorkerResult;
+  href: string;
+}) {
   const estimatedAge = extractEstimatedAge(result.outputAggregates);
   const displayedAge = estimatedAge === null ? "—" : Math.round(estimatedAge);
 
-  return (
-    <Link href="/app/age" className="group block h-full">
-      <Card className="relative h-full overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] transition duration-300 group-hover:-translate-y-1 group-hover:border-white/35">
-        <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full border border-white/15" />
-        <div className="pointer-events-none absolute right-8 top-8 h-20 w-20 rounded-full border border-white/10" />
-        <CardContent className="relative flex min-h-72 flex-col justify-between p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                Âge estimé
-              </p>
-              <h2 className="mt-2 font-display text-6xl font-bold tracking-[-0.08em] text-white sm:text-7xl">
-                {displayedAge}
-                <span className="ml-2 text-xl tracking-normal text-zinc-300">ans</span>
-              </h2>
-            </div>
-            <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 transition group-hover:bg-white/15">
-              <ArrowUpRight className="h-4 w-4" />
-            </span>
+  const card = (
+    <Card className="relative h-full overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] transition duration-300 group-hover:-translate-y-1 group-hover:border-white/35">
+      <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full border border-white/15" />
+      <div className="pointer-events-none absolute right-8 top-8 h-20 w-20 rounded-full border border-white/10" />
+      <CardContent className="relative flex min-h-48 flex-col justify-between p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+              Âge estimé
+            </p>
+            <h2 className="mt-2 font-display text-6xl font-bold tracking-[-0.08em] text-white sm:text-7xl">
+              {displayedAge}
+              <span className="ml-2 text-xl tracking-normal text-zinc-300">ans</span>
+            </h2>
           </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 transition group-hover:bg-white/15">
+            <ArrowUpRight className="h-4 w-4" />
+          </span>
+        </div>
 
-          <div className="space-y-4">
-            <div className="h-px bg-gradient-to-r from-white/5 via-white/30 to-white/5" />
-            <div className="flex items-end justify-between gap-4">
-              <p className="max-w-52 text-sm leading-relaxed text-zinc-300">
-                Une lecture de ton âge apparent basée sur les marqueurs visuels détectés.
-              </p>
-              <p className="text-right text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                Comprendre<br />l'estimation
-              </p>
-            </div>
+        <div className="space-y-4">
+          <div className="h-px bg-gradient-to-r from-white/5 via-white/30 to-white/5" />
+          <div className="flex items-end justify-between gap-4">
+            <p className="max-w-52 text-sm leading-relaxed text-zinc-300">
+              Une lecture de ton âge apparent basée sur les marqueurs visuels détectés.
+            </p>
+            <p className="text-right text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+              Voir tous<br />les détails
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <Link href={href} className="group block h-full">
+      {card}
     </Link>
   );
 }
@@ -258,7 +291,7 @@ function GlobalScoreCard({ score }: { score: GlobalFaceScore }) {
   const rank = getScoreRank(score.score);
 
   return (
-    <Card className="relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] md:col-span-2 xl:col-span-3">
+    <Card className="relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]">
       <CardContent className="relative flex flex-col items-center justify-center gap-3 p-8 text-center">
         <div className="flex items-end justify-center gap-3">
           <h2 className="font-display text-6xl font-bold tracking-[-0.08em] text-white sm:text-7xl">
@@ -277,22 +310,31 @@ function GlobalScoreCard({ score }: { score: GlobalFaceScore }) {
   );
 }
 
-function WorkerResultCard({ result }: { result: NormalizedWorkerResult }) {
+function WorkerResultCard({
+  result,
+  href,
+}: {
+  result: NormalizedWorkerResult;
+  href: string;
+}) {
   return (
-    <Card className="relative h-full overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]">
-      <CardHeader className="relative pb-4">
-        <CardTitle className="text-lg text-zinc-50">
-          {getWorkerDisplayLabel(result.worker)}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="relative space-y-4">
-        <AggregateGrid worker={result.worker} aggregates={result.outputAggregates} />
-        <div className="flex items-center justify-between border-t border-white/15 pt-3 text-xs text-zinc-400">
-          <span>Worker: {result.worker}</span>
-          <span>{formatDate(result.createdAt)}</span>
-        </div>
-      </CardContent>
-    </Card>
+    <Link href={href} className="group block h-full">
+      <Card className="relative h-full overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] transition duration-300 group-hover:-translate-y-1 group-hover:border-white/35">
+        <CardContent className="relative space-y-4 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                {getWorkerDisplayLabel(result.worker)}
+              </p>
+            </div>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 transition group-hover:bg-white/15">
+              <ArrowUpRight className="h-4 w-4" />
+            </span>
+          </div>
+          <AggregateGrid worker={result.worker} aggregates={result.outputAggregates} />
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -300,9 +342,9 @@ function AnalysisSkeleton() {
   return (
     <div className="space-y-4">
       <Skeleton className="h-40 w-full rounded-2xl" />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="flex flex-col gap-4">
         {[1, 2, 3, 4, 5, 6].map((item) => (
-          <Skeleton key={item} className="h-64 w-full rounded-2xl" />
+          <Skeleton key={item} className="h-48 w-full rounded-2xl" />
         ))}
       </div>
     </div>
@@ -335,8 +377,10 @@ export function AnalysisResultsSection({
     );
   }
 
-  const results = analysis.results.map(normalizeWorkerResult);
+  const results = sortWorkerResults(analysis.results.map(normalizeWorkerResult));
   const globalScore = calculateGlobalFaceScore(results);
+  const buildWorkerHref = (worker: string) =>
+    `/app/analyses/${analysis.job.id}/workers/${encodeURIComponent(worker)}`;
 
   return (
     <section className="space-y-5">
@@ -357,18 +401,20 @@ export function AnalysisResultsSection({
         </TabsList>
 
         <TabsContent value="overview" className="mt-0">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="flex flex-col gap-4">
             {globalScore ? <GlobalScoreCard score={globalScore} /> : null}
             {results.map((result) =>
               isAgeWorker(result.worker) ? (
                 <AgeResultCard
                   key={`${result.worker}-${result.promptVersion}`}
                   result={result}
+                  href={buildWorkerHref(result.worker)}
                 />
               ) : (
                 <WorkerResultCard
                   key={`${result.worker}-${result.promptVersion}`}
                   result={result}
+                  href={buildWorkerHref(result.worker)}
                 />
               ),
             )}
@@ -376,8 +422,8 @@ export function AnalysisResultsSection({
         </TabsContent>
 
         <TabsContent value="recommendations" className="mt-0">
-          <Card className="border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
-            <CardContent className="p-6 text-sm text-slate-700">
+          <Card className="relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]">
+            <CardContent className="relative p-6 text-sm text-zinc-300">
               Les recommandations personnalisées arriveront ici avec les prochaines interprétations ScoreMax.
             </CardContent>
           </Card>

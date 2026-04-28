@@ -77,6 +77,8 @@ type AdminProfile = Profile & {
 type RoleFilter = "all" | "user" | "admin";
 type OnboardingFilter = "all" | "completed" | "pending";
 
+const adminPanelClassName = "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
+
 function formatDate(value: string | Date | null | undefined, pattern: string) {
   return value ? format(new Date(value), pattern, { locale: fr }) : "—";
 }
@@ -370,7 +372,7 @@ function AnalysisFailureLogsPage() {
             />
           </div>
 
-          <Card className="border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] text-zinc-50 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] backdrop-blur-xl">
+          <Card className={adminPanelClassName}>
             <CardHeader className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="space-y-1">
                 <CardTitle>Recherches échouées</CardTitle>
@@ -558,7 +560,7 @@ function AdminStats({ metrics, profiles }: { metrics?: { today: number; week: nu
 
 function StatCard({ title, value, icon, description }: { title: string; value: string | number; icon: React.ReactNode; description: string }) {
   return (
-    <Card className="border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] text-zinc-50 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] backdrop-blur-xl">
+    <Card className={adminPanelClassName}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         {icon}
@@ -573,7 +575,7 @@ function StatCard({ title, value, icon, description }: { title: string; value: s
 
 function GrowthChart({ data }: { data: Array<{ date: string; count: number }> }) {
   return (
-    <Card className="border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] text-zinc-50 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] backdrop-blur-xl">
+    <Card className={adminPanelClassName}>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="space-y-1">
           <CardTitle>Croissance utilisateurs</CardTitle>
@@ -606,14 +608,14 @@ function GrowthChart({ data }: { data: Array<{ date: string; count: number }> })
 
 function RecentUsers({ profiles }: { profiles: AdminProfile[] }) {
   return (
-    <Card className="border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] text-zinc-50 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] backdrop-blur-xl">
+    <Card className={adminPanelClassName}>
       <CardHeader>
         <CardTitle>Derniers inscrits</CardTitle>
         <CardDescription className="text-zinc-400">Les derniers comptes créés sur ScoreMax.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {profiles.map((profile) => (
-          <div key={getProfileId(profile)} className="rounded-2xl border border-white/10 bg-black/25 p-4 text-zinc-50">
+          <div key={getProfileId(profile)} className="rounded-2xl border border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] p-4 text-zinc-50 shadow-[0_18px_55px_-45px_rgba(0,0,0,0.95)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-semibold">{profile.full_name || "Sans nom"}</p>
@@ -650,7 +652,7 @@ type UserManagementProps = {
 
 function UserManagement(props: UserManagementProps) {
   return (
-    <Card className="border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] text-zinc-50 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] backdrop-blur-xl">
+    <Card className={adminPanelClassName}>
       <CardHeader className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="space-y-1">
           <CardTitle>Utilisateurs</CardTitle>

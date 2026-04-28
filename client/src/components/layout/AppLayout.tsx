@@ -133,7 +133,7 @@ function ModernAppSidebar() {
     <Sidebar
       collapsible="icon"
       variant="sidebar"
-      className="relative z-40 border-r border-white/10 [--sidebar-width:22rem] [&_[data-sidebar=sidebar]]:bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)]"
+      className="relative z-40 border-r border-white/10 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] [--sidebar-width:22rem] [&_[data-sidebar=sidebar]]:bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)]"
     >
       <SidebarHeader className="px-2 pt-3 pb-2">
         <div
@@ -217,35 +217,35 @@ function ModernAppSidebar() {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-xl"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-2xl border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.96)_0%,rgba(20,31,39,0.94)_48%,rgba(185,204,209,0.22)_100%)] p-1.5 text-zinc-100 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] backdrop-blur-xl"
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={8}
           >
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="rounded-xl text-zinc-100 focus:bg-white/10 focus:text-white">
               <Link
                 href="/settings"
-                className="flex w-full items-center cursor-pointer"
+                className="flex w-full cursor-pointer items-center"
               >
-                <SettingsIcon className="mr-2 h-4 w-4" />
+                <SettingsIcon className="mr-2 h-4 w-4 text-zinc-400" />
                 <span>Paramètres</span>
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="rounded-xl text-zinc-100 focus:bg-white/10 focus:text-white">
               <Link
                 href="/billing"
-                className="flex w-full items-center cursor-pointer"
+                className="flex w-full cursor-pointer items-center"
               >
-                <CreditCard className="mr-2 h-4 w-4" />
+                <CreditCard className="mr-2 h-4 w-4 text-zinc-400" />
                 <span>Facturation</span>
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="bg-white/10" />
             <DropdownMenuItem
-              className="cursor-pointer"
+              className="cursor-pointer rounded-xl text-zinc-100 focus:bg-white/10 focus:text-white"
               onClick={() => signOut()}
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut className="mr-2 h-4 w-4 text-zinc-400" />
               <span>Déconnexion</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -284,11 +284,17 @@ function ModernAppSidebar() {
                 const dateLabel = formatAnalysisHistoryDate(
                   analysis.completed_at ?? analysis.created_at,
                 );
+                const analysisHref = `/app/analyses/${analysis.id}`;
+                const isActiveAnalysis = location === analysisHref;
 
                 return (
                   <SidebarMenuItem key={analysis.id}>
-                  <div className="group flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.055] p-2 transition hover:border-white/20 hover:bg-white/[0.085]">
-                    <Link href="/app" className="flex min-w-0 flex-1 items-center gap-2.5">
+                  <div className={`group flex items-center gap-2.5 rounded-xl border p-2 transition hover:border-white/20 hover:bg-white/[0.085] ${
+                    isActiveAnalysis
+                      ? "border-white/25 bg-white/[0.12]"
+                      : "border-white/10 bg-white/[0.055]"
+                  }`}>
+                    <Link href={analysisHref} className="flex min-w-0 flex-1 items-center gap-2.5">
                       <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
                         {analysis.has_thumbnail && user?.id ? (
                           <img

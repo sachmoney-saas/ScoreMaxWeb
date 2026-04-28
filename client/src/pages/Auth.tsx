@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { useLocation, Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { translateSupabaseError } from "@/lib/error-translator";
 
@@ -17,7 +14,6 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [acceptedTOS, setAcceptedTOS] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -103,110 +99,126 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md border-border/80 bg-card/92 shadow-[0_34px_95px_-62px_rgba(101,94,235,0.7)] backdrop-blur">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-display font-bold text-center">
-            {isLogin ? "Bon retour parmi nous" : "Créer un compte"}
-          </CardTitle>
-          <CardDescription className="text-center">
-            {isLogin ? "Entrez vos identifiants pour vous connecter" : "Entrez votre email pour commencer"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <Button 
-              type="button"
-              variant="outline" 
-              className="w-full h-11 text-base font-semibold"
-              onClick={handleGoogleAuth}
-              disabled={isLoading}
-              data-testid="button-google-auth"
-            >
-              <SiGoogle className="mr-2 h-5 w-5" />
-              {isLogin ? "Se connecter avec Google" : "S'inscrire avec Google"}
-            </Button>
+    <main className="relative isolate flex min-h-[100svh] items-center overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 py-4 text-white">
+      <div className="pointer-events-none absolute -left-24 top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-96 w-96 rounded-full bg-[#b9ccd1]/20 blur-3xl" />
 
-            <Separator className="my-4" />
+      <div className="relative mx-auto w-full max-w-md">
+        <section className="max-h-[calc(100svh-2rem)] overflow-hidden rounded-[2rem] border border-white/70 bg-[#f1f1f1] p-3 text-[#111827] shadow-[0_45px_120px_-80px_rgba(0,0,0,0.98)]">
+          <div className="rounded-[1.5rem] border border-black/10 bg-white p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] sm:p-7">
+            <div className="space-y-2 text-center sm:text-left">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                {isLogin ? "Connexion" : "Inscription"}
+              </p>
+              <h2 className="font-display text-4xl font-bold tracking-tight text-[#111827]">
+                {isLogin ? "Bon retour" : "Créer ton compte"}
+              </h2>
+              <p className="text-sm leading-relaxed text-zinc-500">
+                {isLogin
+                  ? "Accède à ton espace ScoreMax et reprends ton analyse là où tu l'as laissée."
+                  : "Lance ta première analyse et découvre tes axes d'amélioration personnalisés."}
+              </p>
+            </div>
 
-            <form onSubmit={handleAuth} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="nom@exemple.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="h-11"
-                  data-testid="input-email"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Mot de passe</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="h-11 pr-10"
-                    data-testid="input-password"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground no-default-hover-elevate no-default-active-elevate"
-                    onClick={() => setShowPassword(!showPassword)}
-                    data-testid="button-toggle-password"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                {!isLogin && password && (
-                  <div className="space-y-1.5 mt-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Robustesse:</span>
-                      <span className="font-medium">{strength.label}</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full transition-all duration-300 ${strength.color}`} 
-                        style={ { width: `${(strength.score / 5) * 100}%` } }
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <Button 
-                type="submit" 
-                className="w-full h-11 text-base font-semibold shadow-[0_20px_55px_-35px_rgba(110,102,255,0.72)]"
+            <div className="mt-6 space-y-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 w-full rounded-2xl border-black/10 bg-white text-base font-semibold text-[#111827] shadow-none hover:bg-[#f7f7f7]"
+                onClick={handleGoogleAuth}
                 disabled={isLoading}
-                data-testid="button-auth-submit"
+                data-testid="button-google-auth"
               >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLogin ? "Se connecter" : "S'inscrire"}
+                <SiGoogle className="mr-2 h-5 w-5" />
+                {isLogin ? "Se connecter avec Google" : "S'inscrire avec Google"}
               </Button>
-            </form>
+
+              <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-zinc-400">
+                <div className="h-px flex-1 bg-black/10" />
+                ou par email
+                <div className="h-px flex-1 bg-black/10" />
+              </div>
+
+              <form onSubmit={handleAuth} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-semibold text-[#111827]">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="nom@exemple.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="h-12 rounded-2xl border-black/10 bg-[#f7f7f7] px-4 text-[#111827] placeholder:text-zinc-400 focus-visible:ring-black/20"
+                    data-testid="input-email"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-semibold text-[#111827]">Mot de passe</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="h-12 rounded-2xl border-black/10 bg-[#f7f7f7] px-4 pr-12 text-[#111827] focus-visible:ring-black/20"
+                      data-testid="input-password"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full text-zinc-500 hover:bg-black/5 hover:text-[#111827] no-default-hover-elevate no-default-active-elevate"
+                      onClick={() => setShowPassword(!showPassword)}
+                      data-testid="button-toggle-password"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  {!isLogin && password ? (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-zinc-500">Robustesse</span>
+                        <span className="font-semibold text-[#111827]">{strength.label}</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/10">
+                        <div
+                          className={`h-full transition-all duration-300 ${strength.color}`}
+                          style={ { width: `${(strength.score / 5) * 100}%` } }
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <Button
+                  type="submit"
+                  className="h-12 w-full rounded-2xl bg-[#111827] text-base font-semibold text-white shadow-[0_24px_60px_-38px_rgba(0,0,0,0.95)] hover:bg-black"
+                  disabled={isLoading}
+                  data-testid="button-auth-submit"
+                >
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {isLogin ? "Se connecter" : "S'inscrire"}
+                  {!isLoading ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
+                </Button>
+              </form>
+            </div>
+
+            <p className="mt-5 text-center text-sm text-zinc-500">
+              {isLogin ? "Pas encore de compte ?" : "Déjà un compte ?"}{" "}
+              <button
+                type="button"
+                onClick={() => setLocation(isLogin ? "/register" : "/login")}
+                className="font-semibold text-[#111827] underline-offset-4 hover:underline"
+              >
+                {isLogin ? "S'inscrire" : "Se connecter"}
+              </button>
+            </p>
           </div>
-        </CardContent>
-        <CardFooter className="flex justify-center">
-          <Button 
-            variant="ghost" 
-            onClick={() => setLocation(isLogin ? "/register" : "/login")}
-            className="text-muted-foreground hover:text-primary transition-colors h-auto p-0 hover:bg-transparent"
-          >
-            {isLogin ? "Pas encore de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
+        </section>
+      </div>
+    </main>
   );
 }

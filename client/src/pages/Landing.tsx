@@ -474,16 +474,16 @@ export default function Landing() {
       {/* Complete Analysis Section */}
       <section
         id="complete-analysis"
-        className="relative overflow-hidden px-4 pb-0 pt-20 md:pt-28"
+        className="relative flex min-h-[100svh] overflow-hidden bg-[#9aaeb5] px-4 pt-20 md:pt-28"
       >
-        <WaveBackground position="absolute" />
-        <div className="relative z-10 w-full lg:max-w-[75%] mx-auto">
+        <WaveBackground position="absolute" className="!h-full !w-full" />
+        <div className="relative z-10 flex min-h-[calc(100svh-5rem)] w-full flex-col justify-end lg:max-w-[75%] mx-auto md:min-h-[calc(100svh-7rem)]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, amount: 0.2 }}
-            className="relative z-30 flex flex-col items-center text-center gap-10"
+            className="relative z-30 flex flex-1 flex-col items-center justify-between gap-10 text-center"
           >
             <motion.h2
               variants={itemVariants}

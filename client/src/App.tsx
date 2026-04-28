@@ -13,6 +13,8 @@ import Onboarding from "@/pages/Onboarding";
 import AuthPage from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import NewAnalysis from "@/pages/NewAnalysis";
+import AnalysisDetails from "@/pages/AnalysisDetails";
+import WorkerDetails from "@/pages/WorkerDetails";
 import AgeDetails from "@/pages/AgeDetails";
 import AdminPage from "@/pages/Admin";
 import Settings from "@/pages/Settings";
@@ -118,6 +120,14 @@ function Router() {
 
       <Route path="/app/new-analysis">
         <ProtectedRoute component={NewAnalysis} />
+      </Route>
+
+      <Route path="/app/analyses/:jobId/workers/:worker">
+        <ProtectedRoute component={WorkerDetails} />
+      </Route>
+
+      <Route path="/app/analyses/:jobId">
+        <ProtectedRoute component={AnalysisDetails} />
       </Route>
 
       <Route path="/app">

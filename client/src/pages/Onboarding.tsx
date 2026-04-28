@@ -30,6 +30,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboardingScanStatus } from "@/hooks/use-supabase";
 import { supabase } from "@/lib/supabase";
@@ -407,6 +415,7 @@ export default function Onboarding() {
   );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = React.useState(false);
   const [uploadingAssetCode, setUploadingAssetCode] = React.useState<string | null>(
     null,
   );
@@ -766,96 +775,121 @@ export default function Onboarding() {
 
                 {isLastStep ? (
                   <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">
-                        Statut du scan
-                      </p>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                        {completedAssetCount}/{requiredAssetCount}
-                      </p>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          En attente des éléments d'analyse issus de l'application
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {completedAssetCount}/{requiredAssetCount} éléments reçus
+                        </p>
+                      </div>
+                      {isScanStatusLoading ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-500" />
+                      ) : null}
                     </div>
-
-                    {isScanStatusLoading ? (
-                      <p className="text-sm text-slate-600">
-                        Vérification des photos en cours...
-                      </p>
-                    ) : null}
 
                     {isScanStatusError ? (
                       <p className="text-sm text-red-600">
-                        Impossible de vérifier les photos pour l'instant.
+                        Impossible de vérifier les éléments pour l'instant.
                         Réessaie dans quelques secondes.
                       </p>
                     ) : null}
 
-                    {!isScanStatusLoading && !isScanStatusError ? (
-                      isScanReady ? (
-                        <p className="text-sm font-semibold text-emerald-700">
-                          Scan complet: toutes les photos obligatoires sont
-                          prêtes.
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          <p className="text-sm text-slate-700">
-                            Photos manquantes:
-                          </p>
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {REQUIRED_SCAN_ASSETS.map((assetType) => {
-                              const isMissing = missingAssetLabels.has(
-                                assetType.label_fr,
-                              );
-                              const isUploading =
-                                uploadingAssetCode === assetType.code;
+                    {!isScanStatusLoading && !isScanStatusError && isScanReady ? (
+                      <p className="text-sm font-semibold text-emerald-700">
+                        Tous les éléments d'analyse sont prêts.
+                      </p>
+                    ) : null}
 
-                              return (
-                                <label
-                                  key={assetType.code}
-                                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition ${
-                                    isMissing
-                                      ? "border-dashed border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                                      : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                  } ${uploadingAssetCode ? "pointer-events-none opacity-70" : ""}`}
-                                >
-                                  <input
-                                    type="file"
-                                    accept="image/jpeg,image/png"
-                                    className="sr-only"
-                                    disabled={!isMissing || !!uploadingAssetCode}
-                                    onChange={(event) => {
-                                      const file = event.currentTarget.files?.[0] ?? null;
-                                      void handleManualAssetUpload(
-                                        assetType.code,
-                                        file,
-                                      );
-                                      event.currentTarget.value = "";
-                                    }}
-                                  />
-                                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                                    {isUploading ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <ImagePlus className="h-4 w-4" />
-                                    )}
-                                  </span>
-                                  <span className="min-w-0 flex-1">
-                                    <span className="block font-medium">
-                                      {assetType.label_fr}
+                    {!isScanReady ? (
+                      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto w-fit p-0 text-xs font-semibold text-slate-500 underline-offset-4 hover:bg-transparent hover:text-slate-900 hover:underline"
+                          >
+                            Ajouter manuellement des photos
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-h-[85svh] overflow-y-auto rounded-3xl border-slate-200 bg-white text-slate-900 sm:max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Ajouter les éléments d'analyse</DialogTitle>
+                            <DialogDescription>
+                              Utilise cette option uniquement si les photos ne sont pas encore remontées depuis l'application.
+                            </DialogDescription>
+                          </DialogHeader>
+
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                              <p className="text-sm font-semibold text-slate-900">
+                                Progression
+                              </p>
+                              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                {completedAssetCount}/{requiredAssetCount}
+                              </p>
+                            </div>
+
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {REQUIRED_SCAN_ASSETS.map((assetType) => {
+                                const isMissing = missingAssetLabels.has(
+                                  assetType.label_fr,
+                                );
+                                const isUploading =
+                                  uploadingAssetCode === assetType.code;
+
+                                return (
+                                  <label
+                                    key={assetType.code}
+                                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition ${
+                                      isMissing
+                                        ? "border-dashed border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                                        : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                    } ${uploadingAssetCode ? "pointer-events-none opacity-70" : ""}`}
+                                  >
+                                    <input
+                                      type="file"
+                                      accept="image/jpeg,image/png"
+                                      className="sr-only"
+                                      disabled={!isMissing || !!uploadingAssetCode}
+                                      onChange={(event) => {
+                                        const file = event.currentTarget.files?.[0] ?? null;
+                                        void handleManualAssetUpload(
+                                          assetType.code,
+                                          file,
+                                        );
+                                        event.currentTarget.value = "";
+                                      }}
+                                    />
+                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                                      {isUploading ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <ImagePlus className="h-4 w-4" />
+                                      )}
                                     </span>
-                                    <span className="block text-xs text-slate-500">
-                                      {isMissing ? "Déposer ou choisir" : "Ajoutée"}
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block font-medium">
+                                        {assetType.label_fr}
+                                      </span>
+                                      <span className="block text-xs text-slate-500">
+                                        {isMissing ? "Déposer ou choisir" : "Ajoutée"}
+                                      </span>
                                     </span>
-                                  </span>
-                                </label>
-                              );
-                            })}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            {uploadMessage ? (
+                              <p className="text-sm text-slate-600">
+                                {uploadMessage}
+                              </p>
+                            ) : null}
                           </div>
-                          {uploadMessage ? (
-                            <p className="text-sm text-slate-600">
-                              {uploadMessage}
-                            </p>
-                          ) : null}
-                        </div>
-                      )
+                        </DialogContent>
+                      </Dialog>
                     ) : null}
                   </div>
                 ) : null}

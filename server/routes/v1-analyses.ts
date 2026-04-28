@@ -426,7 +426,7 @@ export function createV1AnalysesRouter(): Router {
   );
 
   router.get(
-    "/analyses/:jobId",
+    "/analyses/:jobId([0-9a-fA-F-]{36})",
     validateQuery(latestAnalysisQuerySchema),
     async (req, res, next) => {
       try {
@@ -444,7 +444,7 @@ export function createV1AnalysesRouter(): Router {
 
         if (jobError || !job) {
           throw new ApiError({
-            code: "ANALYSIS_NOT_FOUND",
+            code: "VALIDATION_ERROR",
             status: 404,
             message: "Analysis not found",
             details: jobError,
