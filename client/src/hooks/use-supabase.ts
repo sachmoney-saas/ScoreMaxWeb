@@ -7,11 +7,26 @@ import {
 } from "@shared/schema";
 import { useAuth } from "./use-auth";
 import {
+  deleteAdminAnalysisFailure,
+  fetchAdminAnalysisFailures,
+  type AdminAnalysisFailure,
+  type DeleteAdminAnalysisFailureResponse,
+} from "@/lib/admin-analysis";
+import {
+  createManualAnalysisSession,
   deleteAnalysisJob,
+  fetchAnalysisDetail,
   fetchAnalysisHistory,
+  fetchAnalysisJobStatus,
   fetchLatestFaceAnalysis,
+  fetchManualAnalysisSessionStatus,
+  launchManualAnalysis,
+  type AnalysisDetailResponse,
   type AnalysisHistoryItem,
+  type AnalysisJobStatusResponse,
   type LatestAnalysisResponse,
+  type ManualAnalysisSessionResponse,
+  type ManualAnalysisSessionStatus,
 } from "@/lib/face-analysis";
 
 /**
@@ -245,6 +260,12 @@ export function useAnalysisHistory(options?: { enabled?: boolean }) {
       return fetchAnalysisHistory(user.id);
     },
     enabled: !!user?.id && (options?.enabled ?? true),
+    refetchInterval: (query) => {
+      const history = query.state.data ?? [];
+      return history.some((item) => item.status === "queued" || item.status === "running")
+        ? 2500
+        : false;
+    },
     staleTime: 0,
   });
 }
@@ -264,7 +285,35 @@ export function useDeleteAnalysisJob() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["analysis-history", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["latest-face-analysis", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["analysis-detail", user?.id] });
     },
+  });
+}
+
+export function useAnalysisDetail(jobId: string | undefined, options?: { enabled?: boolean }) {
+  const { user } = useAuth();
+
+  return useQuery<AnalysisDetailResponse | null>({
+    queryKey: ["analysis-detail", user?.id, jobId],
+    queryFn: async () => {
+      if (!user?.id || !jobId) {
+        return null;
+      }
+
+      return fetchAnalysisDetail({ userId: user.id, jobId });
+    },
+    enabled: !!user?.id && !!jobId && (options?.enabled ?? true),
+    refetchInterval: (query) => {
+      const state = query.state.data;
+      if (!state?.job) {
+        return false;
+      }
+
+      return state.job.status === "queued" || state.job.status === "running"
+        ? 2500
+        : false;
+    },
+    staleTime: 0,
   });
 }
 
@@ -289,6 +338,123 @@ export function useLatestFaceAnalysis(options?: { enabled?: boolean }) {
 
       return state.job.status === "queued" || state.job.status === "running"
         ? 2500
+        : false;
+    },
+    staleTime: 0,
+  });
+}
+
+async function getAccessToken(): Promise<string> {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error || !data.session?.access_token) {
+    throw error ?? new Error("Session Supabase introuvable");
+  }
+
+  return data.session.access_token;
+}
+
+export function useAdminAnalysisFailures(options?: { enabled?: boolean }) {
+  const { isAdmin } = useAuth();
+
+  return useQuery<AdminAnalysisFailure[]>({
+    queryKey: ["admin-analysis-failures"],
+    queryFn: async () => fetchAdminAnalysisFailures(await getAccessToken()),
+    enabled: isAdmin && (options?.enabled ?? true),
+    staleTime: 0,
+  });
+}
+
+export function useDeleteAdminAnalysisFailure() {
+  const queryClient = useQueryClient();
+
+  return useMutation<DeleteAdminAnalysisFailureResponse, Error, string>({
+    mutationFn: async (jobId: string) =>
+      deleteAdminAnalysisFailure({ accessToken: await getAccessToken(), jobId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-analysis-failures"] });
+    },
+  });
+}
+
+export function useCreateManualAnalysisSession() {
+  return useMutation<ManualAnalysisSessionResponse>({
+    mutationFn: async () => createManualAnalysisSession(await getAccessToken()),
+  });
+}
+
+export function useManualAnalysisSessionStatus(
+  sessionId: string | null,
+  options?: { enabled?: boolean },
+) {
+  const { user } = useAuth();
+
+  return useQuery<ManualAnalysisSessionStatus | null>({
+    queryKey: ["manual-analysis-session-status", user?.id, sessionId],
+    queryFn: async () => {
+      if (!sessionId) {
+        return null;
+      }
+
+      return fetchManualAnalysisSessionStatus({
+        accessToken: await getAccessToken(),
+        sessionId,
+      });
+    },
+    enabled: !!user?.id && !!sessionId && (options?.enabled ?? true),
+    refetchInterval: (query) => {
+      const state = query.state.data;
+      if (!state) {
+        return 2500;
+      }
+
+      return state.is_ready ? false : 2500;
+    },
+    staleTime: 0,
+  });
+}
+
+export function useLaunchManualAnalysis() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation<AnalysisJobStatusResponse, Error, string>({
+    mutationFn: async (sessionId: string) =>
+      launchManualAnalysis({ accessToken: await getAccessToken(), sessionId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["analysis-history", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["latest-face-analysis", user?.id] });
+    },
+  });
+}
+
+export function useAnalysisJobStatus(
+  jobId: string | null,
+  options?: { enabled?: boolean },
+) {
+  const { user } = useAuth();
+
+  return useQuery<AnalysisJobStatusResponse | null>({
+    queryKey: ["analysis-job-status", user?.id, jobId],
+    queryFn: async () => {
+      if (!jobId) {
+        return null;
+      }
+
+      return fetchAnalysisJobStatus({
+        accessToken: await getAccessToken(),
+        jobId,
+      });
+    },
+    enabled: !!user?.id && !!jobId && (options?.enabled ?? true),
+    refetchInterval: (query) => {
+      const state = query.state.data;
+      if (!state?.job) {
+        return false;
+      }
+
+      return state.job.status === "queued" || state.job.status === "running"
+        ? 1500
         : false;
     },
     staleTime: 0,

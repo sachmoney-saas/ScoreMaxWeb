@@ -4,17 +4,31 @@
 
 - `jaw`
 
-## Expected output fields
+## Expected output fields v1
 
-- `frontal_geometry.jaw_shape_frontal`: value
-- `frontal_geometry.jaw_width`: integer
-- `frontal_geometry.jaw_to_cheek_ratio`: integer
-- `frontal_geometry.jaw_to_face_proportion`: integer
-- `profile_architecture.jaw_shape_side`: value
-- `profile_architecture.jaw_height_ramus`: integer
-- `profile_architecture.jawline_length`: integer
-- `definition_and_contrast.jawline_definition`: integer
-- `definition_and_contrast.jawline_contrast_neck`: integer
-- `symmetry_and_flare.jaw_symmetry`: integer
-- `symmetry_and_flare.jaw_flare_symmetry`: integer
-- `overall_jaw_score`: integer
+```json
+{
+  "frontal_geometry.jaw_shape_frontal": "value",
+  "frontal_geometry.jaw_width.score": "number",
+  "frontal_geometry.jaw_width.argument": "concise summary text",
+  "frontal_geometry.jaw_to_cheek_ratio.score": "number",
+  "frontal_geometry.jaw_to_cheek_ratio.argument": "concise summary text",
+  "frontal_geometry.jaw_to_face_proportion.score": "number",
+  "frontal_geometry.jaw_to_face_proportion.argument": "concise summary text",
+  "profile_architecture.jaw_shape_side": "value",
+  "profile_architecture.jaw_height_ramus.score": "number",
+  "profile_architecture.jaw_height_ramus.argument": "concise summary text",
+  "profile_architecture.jawline_length.score": "number",
+  "profile_architecture.jawline_length.argument": "concise summary text",
+  "definition_and_contrast.jawline_definition.score": "number",
+  "definition_and_contrast.jawline_definition.argument": "concise summary text",
+  "definition_and_contrast.jawline_contrast_neck.score": "number",
+  "definition_and_contrast.jawline_contrast_neck.argument": "concise summary text",
+  "symmetry_and_flare.jaw_symmetry.score": "number",
+  "symmetry_and_flare.jaw_symmetry.argument": "concise summary text",
+  "symmetry_and_flare.jaw_flare_symmetry.score": "number",
+  "symmetry_and_flare.jaw_flare_symmetry.argument": "concise summary text",
+  "overall_jaw_score.score": "number",
+  "overall_jaw_score.argument": "concise summary text"
+}
+```

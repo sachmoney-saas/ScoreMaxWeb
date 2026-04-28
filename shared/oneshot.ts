@@ -70,7 +70,6 @@ const rawRunSchema = z.object({
 const resultsByWorkerSchema = z.object({
   worker: z.string(),
   promptVersion: z.string(),
-  provider: z.string(),
   requestedRuns: z.number().int(),
   completedRuns: z.number().int(),
   outputAggregates: z.record(z.unknown()),

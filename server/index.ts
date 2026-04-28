@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { recoverAnalysisJobsOnStartup } from "./lib/analysis-jobs";
 import { logger } from "./lib/logger";
 import { serverEnv } from "./lib/env";
 import { mapUnknownError } from "./lib/errors";
@@ -89,6 +90,7 @@ app.use(
     },
     () => {
       logger.info(`serving on port ${port}`);
+      void recoverAnalysisJobsOnStartup();
     },
   );
 })();

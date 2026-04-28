@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
 import type { OnboardingScanAssetCode } from "@shared/schema";
-import type { AnalysesRequest, AnalysesResponse } from "@shared/oneshot";
+import type { AnalysesRequest } from "@shared/oneshot";
 
 export type ScanAssetRecord = {
   id: string;
@@ -13,18 +13,72 @@ export type ScanAssetRecord = {
   mime_type: "image/jpeg" | "image/png";
 };
 
+export const requiredScanAssetCodes: OnboardingScanAssetCode[] = [
+  "FACE_FRONT",
+  "PROFILE_LEFT",
+  "PROFILE_RIGHT",
+  "LOOK_UP",
+  "LOOK_DOWN",
+  "SMILE",
+  "HAIR_BACK",
+  "EYE_CLOSEUP",
+];
+
+export const scanAssetLabels: Record<OnboardingScanAssetCode, string> = {
+  FACE_FRONT: "Visage de face",
+  PROFILE_LEFT: "Profil gauche",
+  PROFILE_RIGHT: "Profil droit",
+  LOOK_UP: "Regard vers le haut",
+  LOOK_DOWN: "Regard vers le bas",
+  SMILE: "Sourire",
+  HAIR_BACK: "Cheveux arrière",
+  EYE_CLOSEUP: "Gros plan des yeux",
+};
+
+export type ManualAnalysisSessionResponse = {
+  session: {
+    id: string;
+    source: "manual_rescan";
+    status: "collecting" | "ready" | "processing" | "completed" | "failed" | "abandoned";
+    required_asset_count: number;
+    completed_asset_count: number;
+  };
+  required_asset_codes: OnboardingScanAssetCode[];
+};
+
+export type ManualAnalysisSessionStatus = {
+  session_id: string;
+  required_asset_count: number;
+  completed_asset_count: number;
+  is_ready: boolean;
+  missing_asset_types: OnboardingScanAssetCode[];
+};
+
+export type AnalysisJobStatusResponse = {
+  job: {
+    id: string;
+    status: "queued" | "running" | "completed" | "failed";
+    error_code: string | null;
+    error_message: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    failed_at: string | null;
+    session_id: string;
+    version: number;
+  };
+};
+
 export type FaceAnalysisStatus =
   | { state: "idle" }
   | { state: "loading"; message: string }
-  | { state: "success"; result: AnalysisRunResponse }
+  | { state: "success"; result: AnalysisJobStatusResponse }
   | { state: "error"; message: string };
 
-export type AnalysisRunResponse = {
+export type AnalysisLaunchResponse = {
   job: {
     id: string;
     status: "queued" | "running" | "completed" | "failed";
   };
-  analysis: AnalysesResponse;
 };
 
 export type RawAnalysisRun = {
@@ -54,13 +108,18 @@ export type AnalysisHistoryItem = {
   created_at: string;
   completed_at: string | null;
   has_thumbnail: boolean;
+  results: Array<{
+    worker: string;
+    result: Record<string, unknown>;
+  }>;
 };
 
-export type LatestAnalysisResponse = {
+export type PersistedAnalysisDetailResponse = {
   job: {
     id: string;
     status: "queued" | "running" | "completed" | "failed";
     trigger_source: "onboarding_auto" | "user_rerun" | "admin";
+    version: number;
     started_at: string | null;
     completed_at: string | null;
     failed_at: string | null;
@@ -75,6 +134,9 @@ export type LatestAnalysisResponse = {
     created_at: string;
   }>;
 };
+
+export type LatestAnalysisResponse = PersistedAnalysisDetailResponse;
+export type AnalysisDetailResponse = PersistedAnalysisDetailResponse;
 
 const workerImageMap: Record<string, OnboardingScanAssetCode> = {
   age: "FACE_FRONT",
@@ -115,6 +177,48 @@ async function blobToBase64(blob: Blob): Promise<string> {
   }
 
   return btoa(binary);
+}
+
+export async function uploadScanAsset(params: {
+  userId: string;
+  sessionId: string;
+  assetTypeCode: OnboardingScanAssetCode;
+  file: File;
+}): Promise<void> {
+  if (!["image/jpeg", "image/png"].includes(params.file.type)) {
+    throw new Error("Seuls les fichiers JPG et PNG sont acceptés.");
+  }
+
+  const extension = params.file.type === "image/png" ? "png" : "jpg";
+  const storagePath = `${params.userId}/${params.sessionId}/${params.assetTypeCode}-${Date.now()}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("scan-assets")
+    .upload(storagePath, params.file, {
+      cacheControl: "3600",
+      contentType: params.file.type,
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const { error: insertError } = await supabase.from("scan_assets").insert({
+    session_id: params.sessionId,
+    user_id: params.userId,
+    asset_type_code: params.assetTypeCode,
+    r2_bucket: "scan-assets",
+    r2_key: storagePath,
+    mime_type: params.file.type,
+    byte_size: params.file.size,
+    upload_status: "uploaded",
+    captured_at: new Date().toISOString(),
+  });
+
+  if (insertError) {
+    throw insertError;
+  }
 }
 
 export async function fetchOnboardingScanAssets(
@@ -184,11 +288,11 @@ export async function runFaceAnalysis(params: {
   requestId: string;
   sessionId: string;
   userId: string;
-}): Promise<AnalysisRunResponse> {
+}): Promise<AnalysisLaunchResponse> {
   const payload = await buildFaceAnalysisRequest(params);
   const response = await apiRequest("POST", "/v1/analyses", payload);
   const json = (await response.json()) as {
-    data: AnalysisRunResponse;
+    data: AnalysisLaunchResponse;
   };
 
   return json.data;
@@ -206,6 +310,21 @@ export async function fetchAnalysisHistory(
   };
 
   return json.data ?? [];
+}
+
+export async function fetchAnalysisDetail(params: {
+  userId: string;
+  jobId: string;
+}): Promise<AnalysisDetailResponse> {
+  const response = await apiRequest(
+    "GET",
+    `/v1/analyses/${params.jobId}?userId=${encodeURIComponent(params.userId)}`,
+  );
+  const json = (await response.json()) as {
+    data: AnalysisDetailResponse;
+  };
+
+  return json.data;
 }
 
 export async function deleteAnalysisJob(params: {
@@ -237,4 +356,68 @@ export async function fetchLatestFaceAnalysis(
   };
 
   return json.data ?? null;
+}
+
+export async function createManualAnalysisSession(
+  accessToken: string,
+): Promise<ManualAnalysisSessionResponse> {
+  const response = await apiRequest("POST", "/v1/analyses/manual-session", undefined, {
+    Authorization: `Bearer ${accessToken}`,
+  });
+  const json = (await response.json()) as {
+    data: ManualAnalysisSessionResponse;
+  };
+
+  return json.data;
+}
+
+export async function fetchManualAnalysisSessionStatus(params: {
+  accessToken: string;
+  sessionId: string;
+}): Promise<ManualAnalysisSessionStatus> {
+  const response = await apiRequest(
+    "GET",
+    `/v1/analyses/manual-session/${params.sessionId}/status`,
+    undefined,
+    { Authorization: `Bearer ${params.accessToken}` },
+  );
+  const json = (await response.json()) as {
+    data: ManualAnalysisSessionStatus;
+  };
+
+  return json.data;
+}
+
+export async function launchManualAnalysis(params: {
+  accessToken: string;
+  sessionId: string;
+}): Promise<AnalysisJobStatusResponse> {
+  const response = await apiRequest(
+    "POST",
+    `/v1/analyses/manual-session/${params.sessionId}/launch`,
+    undefined,
+    { Authorization: `Bearer ${params.accessToken}` },
+  );
+  const json = (await response.json()) as {
+    data: AnalysisJobStatusResponse;
+  };
+
+  return json.data;
+}
+
+export async function fetchAnalysisJobStatus(params: {
+  accessToken: string;
+  jobId: string;
+}): Promise<AnalysisJobStatusResponse> {
+  const response = await apiRequest(
+    "GET",
+    `/v1/analyses/jobs/${params.jobId}`,
+    undefined,
+    { Authorization: `Bearer ${params.accessToken}` },
+  );
+  const json = (await response.json()) as {
+    data: AnalysisJobStatusResponse;
+  };
+
+  return json.data;
 }

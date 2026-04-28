@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Link } from "wouter";
+import { WaveBackground } from "@/components/background/WaveBackground";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
@@ -384,7 +385,7 @@ export default function Landing() {
       <FloatingHeader />
 
       {/* Hero Section */}
-      <section className="hero-bg-grain relative isolate overflow-hidden min-h-[100svh] px-4 pt-28 pb-6 bg-[#020202]">
+      <section className="relative isolate min-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-6 pt-28">
         <div className="relative mx-auto flex min-h-[calc(100svh-8.5rem)] w-full lg:max-w-[75%] flex-col justify-between md:min-h-[calc(100svh-9.5rem)]">
           <motion.div
             variants={containerVariants}
@@ -473,9 +474,10 @@ export default function Landing() {
       {/* Complete Analysis Section */}
       <section
         id="complete-analysis"
-        className="pt-20 md:pt-28 pb-0 px-4 bg-[linear-gradient(180deg,#000000_0%,#070d17_18%,#10233a_46%,#1a3559_72%,#c7dbf7_100%)]"
+        className="relative overflow-hidden px-4 pb-0 pt-20 md:pt-28"
       >
-        <div className="w-full lg:max-w-[75%] mx-auto">
+        <WaveBackground position="absolute" />
+        <div className="relative z-10 w-full lg:max-w-[75%] mx-auto">
           <motion.div
             variants={containerVariants}
             initial="hidden"
@@ -505,7 +507,7 @@ export default function Landing() {
       {/* Appearance Impact Section */}
       <section
         id="appearance-impact"
-        className="py-20 md:py-28 px-4 bg-gradient-to-b from-[#101114] via-[#0c0d0f] to-[#090909]"
+        className="bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 py-20 md:py-28"
       >
         <div className="w-full lg:max-w-[75%] mx-auto">
           <motion.div
@@ -568,7 +570,7 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-border/80 bg-secondary/40">
+      <footer className="border-t border-white/10 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] py-12">
         <div className="w-full lg:max-w-[75%] mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2">

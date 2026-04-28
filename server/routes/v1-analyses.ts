@@ -1,9 +1,20 @@
 import { Router } from "express";
 import { z } from "zod";
 import { analysesRequestSchema, type AnalysesRequest } from "@shared/oneshot";
-import { runScoreMaxAnalyses } from "../lib/scoremax-client";
-import { ApiError, mapUnknownError } from "../lib/errors";
+import type { OnboardingScanAssetCode } from "@shared/schema";
+import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
+import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-jobs";
+import { ApiError } from "../lib/errors";
 import { validateBody, validateQuery } from "../lib/validate";
+import {
+  buildPayload,
+  createAnalysisJob,
+  loadRequiredAssets,
+  refreshScanSessionProgress,
+  requiredAssetCodes,
+  type ScanSessionRow,
+} from "../lib/analysis-orchestration";
+import { requireUserId } from "../lib/auth";
 import { supabaseAdmin } from "../lib/supabase-admin";
 
 const analysesMetadataSchema = z.object({
@@ -20,6 +31,10 @@ const analysisJobParamsSchema = z.object({
   jobId: z.string().uuid(),
 });
 
+const manualSessionParamsSchema = z.object({
+  sessionId: z.string().uuid(),
+});
+
 type AnalysisJobAssetRow = {
   analysis_job_id: string;
   asset_type_code: string;
@@ -33,20 +48,247 @@ type ScanAssetThumbnailRow = {
   mime_type: "image/jpeg" | "image/png";
 };
 
+async function loadManualSession(params: {
+  sessionId: string;
+  userId: string;
+}): Promise<ScanSessionRow> {
+  const { data, error } = await supabaseAdmin
+    .from("scan_sessions")
+    .select("id, user_id, source, status, required_asset_count, completed_asset_count")
+    .eq("id", params.sessionId)
+    .eq("user_id", params.userId)
+    .eq("source", "manual_rescan")
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new ApiError({
+      code: "VALIDATION_ERROR",
+      status: 404,
+      message: "Manual analysis session not found",
+      details: error,
+    });
+  }
+
+  return data as ScanSessionRow;
+}
+
+async function getManualSessionStatus(params: {
+  sessionId: string;
+  userId: string;
+}) {
+  const session = await loadManualSession(params);
+  await refreshScanSessionProgress(session.id);
+
+  const { data: refreshedSession, error: refreshedSessionError } = await supabaseAdmin
+    .from("scan_sessions")
+    .select("id, required_asset_count, completed_asset_count")
+    .eq("id", session.id)
+    .eq("user_id", params.userId)
+    .single();
+
+  if (refreshedSessionError || !refreshedSession) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to load manual analysis session status",
+      details: refreshedSessionError,
+    });
+  }
+
+  const { data: uploadedAssets, error: uploadedAssetsError } = await supabaseAdmin
+    .from("scan_assets")
+    .select("asset_type_code")
+    .eq("session_id", session.id)
+    .eq("user_id", params.userId)
+    .in("asset_type_code", requiredAssetCodes)
+    .in("upload_status", ["uploaded", "validated"]);
+
+  if (uploadedAssetsError) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to load uploaded scan assets",
+      details: uploadedAssetsError,
+    });
+  }
+
+  const uploadedAssetCodes = new Set(
+    (uploadedAssets ?? [])
+      .map((asset) => asset.asset_type_code as OnboardingScanAssetCode | null)
+      .filter((code): code is OnboardingScanAssetCode => typeof code === "string"),
+  );
+  const missingAssetTypes = requiredAssetCodes.filter(
+    (code) => !uploadedAssetCodes.has(code),
+  );
+
+  return {
+    session_id: session.id,
+    required_asset_count: Number(refreshedSession.required_asset_count ?? 0),
+    completed_asset_count: Number(refreshedSession.completed_asset_count ?? 0),
+    is_ready: missingAssetTypes.length === 0,
+    missing_asset_types: missingAssetTypes,
+  };
+}
+
 export function createV1AnalysesRouter(): Router {
   const router = Router();
+
+  router.post("/analyses/manual-session", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const { data: session, error } = await supabaseAdmin
+        .from("scan_sessions")
+        .insert({
+          user_id: userId,
+          source: "manual_rescan",
+          status: "collecting",
+          required_asset_count: requiredAssetCodes.length,
+          completed_asset_count: 0,
+        })
+        .select("id, source, status, required_asset_count, completed_asset_count")
+        .single();
+
+      if (error || !session) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to create manual analysis session",
+          details: error,
+        });
+      }
+
+      res.status(201).json({
+        ok: true,
+        httpStatus: 201,
+        data: {
+          session,
+          required_asset_codes: requiredAssetCodes,
+        },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/analyses/manual-session/:sessionId/status", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const params = manualSessionParamsSchema.parse(req.params);
+      const status = await getManualSessionStatus({
+        sessionId: params.sessionId,
+        userId,
+      });
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: status,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/analyses/manual-session/:sessionId/launch", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const params = manualSessionParamsSchema.parse(req.params);
+      const session = await loadManualSession({ sessionId: params.sessionId, userId });
+      const status = await getManualSessionStatus({ sessionId: session.id, userId });
+
+      if (!status.is_ready) {
+        throw new ApiError({
+          code: "VALIDATION_ERROR",
+          status: 400,
+          message: "Manual analysis session is incomplete",
+          details: { missingAssetCodes: status.missing_asset_types },
+        });
+      }
+
+      const assets = await loadRequiredAssets({ userId, sessionId: session.id });
+      const payload = await buildPayload({
+        userId,
+        sessionId: session.id,
+        assets,
+        source: "manual_rescan",
+      });
+      const jobId = await createAnalysisJob({
+        userId,
+        sessionId: session.id,
+        payload,
+        triggerSource: "user_rerun",
+      });
+      await persistAnalysisJobAssets({
+        jobId,
+        userId,
+        sessionId: session.id,
+        payload,
+      });
+
+      await supabaseAdmin
+        .from("scan_sessions")
+        .update({ status: "processing" })
+        .eq("id", session.id)
+        .eq("user_id", userId);
+
+      dispatchAnalysisJob(jobId);
+
+      res.status(202).json({
+        ok: true,
+        httpStatus: 202,
+        data: {
+          job: {
+            id: jobId,
+            status: "queued",
+          },
+        },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/analyses/jobs/:jobId", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const params = analysisJobParamsSchema.parse(req.params);
+      const { data: job, error } = await supabaseAdmin
+        .from("analysis_jobs")
+        .select("id, status, error_code, error_message, started_at, completed_at, failed_at, session_id, version")
+        .eq("id", params.jobId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error || !job) {
+        throw new ApiError({
+          code: "VALIDATION_ERROR",
+          status: 404,
+          message: "Analysis job not found",
+          details: error,
+        });
+      }
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { job },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post(
     "/analyses",
     validateBody(analysesRequestSchema),
     async (req, res, next) => {
-      let analysisJobId: string | null = null;
-
       try {
         const payload = req.body as AnalysesRequest;
-        const metadata = analysesMetadataSchema.safeParse(
-          payload.metadata ?? {},
-        );
+        const metadata = analysesMetadataSchema.safeParse(payload.metadata ?? {});
         if (!metadata.success) {
           throw new ApiError({
             code: "VALIDATION_ERROR",
@@ -57,125 +299,33 @@ export function createV1AnalysesRouter(): Router {
         }
 
         const { userId, sessionId, source } = metadata.data;
+        const jobId = await createAnalysisJob({
+          userId,
+          sessionId,
+          payload,
+          triggerSource: source === "onboarding" ? "onboarding_auto" : "user_rerun",
+        });
+        await persistAnalysisJobAssets({
+          jobId,
+          userId,
+          sessionId,
+          payload,
+        });
 
-        const { data: createdJob, error: createJobError } = await supabaseAdmin
-          .from("analysis_jobs")
-          .insert({
-            user_id: userId,
-            session_id: sessionId,
-            trigger_source:
-              source === "onboarding" ? "onboarding_auto" : "user_rerun",
-            status: "queued",
-            request_payload: payload as unknown as Record<string, unknown>,
-          })
-          .select("id, status, created_at")
-          .single();
+        dispatchAnalysisJob(jobId);
 
-        if (createJobError || !createdJob) {
-          throw new ApiError({
-            code: "INTERNAL_SERVER_ERROR",
-            status: 500,
-            message: "Unable to create analysis job",
-            details: createJobError,
-          });
-        }
-
-        analysisJobId = createdJob.id;
-
-        await supabaseAdmin
-          .from("analysis_jobs")
-          .update({
-            status: "running",
-            started_at: new Date().toISOString(),
-          })
-          .eq("id", analysisJobId);
-
-        const referencedAssetCodes = Array.from(
-          new Set(payload.analyses.map((analysis) => analysis.imageId)),
-        );
-
-        const { data: scanAssets } = await supabaseAdmin
-          .from("scan_assets")
-          .select("id, asset_type_code")
-          .eq("session_id", sessionId)
-          .eq("user_id", userId)
-          .in("asset_type_code", referencedAssetCodes);
-
-        if (scanAssets && scanAssets.length > 0) {
-          const jobAssetRows = scanAssets.map((asset) => ({
-            analysis_job_id: analysisJobId,
-            asset_type_code: asset.asset_type_code,
-            scan_asset_id: asset.id,
-            user_id: userId,
-          }));
-
-          await supabaseAdmin.from("analysis_job_assets").upsert(jobAssetRows, {
-            onConflict: "analysis_job_id,asset_type_code",
-          });
-        }
-
-        const data = await runScoreMaxAnalyses(payload);
-
-        const resultRows = data.resultsByWorker.map((workerResult) => ({
-          analysis_job_id: analysisJobId,
-          user_id: userId,
-          worker: workerResult.worker,
-          prompt_version: workerResult.promptVersion,
-          provider: workerResult.provider,
-          result: workerResult as unknown as Record<string, unknown>,
-        }));
-
-        if (resultRows.length > 0) {
-          const { error: insertResultError } = await supabaseAdmin
-            .from("analysis_results")
-            .insert(resultRows);
-
-          if (insertResultError) {
-            throw new ApiError({
-              code: "INTERNAL_SERVER_ERROR",
-              status: 500,
-              message: "Unable to persist analysis results",
-              details: insertResultError,
-            });
-          }
-        }
-
-        await supabaseAdmin
-          .from("analysis_jobs")
-          .update({
-            status: "completed",
-            completed_at: new Date().toISOString(),
-            error_code: null,
-            error_message: null,
-          })
-          .eq("id", analysisJobId);
-
-        res.status(200).json({
+        res.status(202).json({
           ok: true,
-          httpStatus: 200,
+          httpStatus: 202,
           data: {
             job: {
-              id: analysisJobId,
-              status: "completed",
+              id: jobId,
+              status: "queued",
             },
-            analysis: data,
           },
           error: null,
         });
       } catch (error) {
-        if (analysisJobId) {
-          const mapped = mapUnknownError(error);
-          await supabaseAdmin
-            .from("analysis_jobs")
-            .update({
-              status: "failed",
-              failed_at: new Date().toISOString(),
-              error_code: mapped.code,
-              error_message: mapped.message,
-            })
-            .eq("id", analysisJobId);
-        }
-
         next(error);
       }
     },
@@ -206,6 +356,7 @@ export function createV1AnalysesRouter(): Router {
 
         const jobIds = (jobs ?? []).map((job) => job.id as string);
         const thumbnailAssetByJobId = new Map<string, string>();
+        const resultsByJobId = new Map<string, Array<{ worker: string; result: Record<string, unknown> }>>();
 
         if (jobIds.length > 0) {
           const { data: jobAssets, error: jobAssetsError } = await supabaseAdmin
@@ -227,6 +378,31 @@ export function createV1AnalysesRouter(): Router {
           for (const asset of (jobAssets ?? []) as AnalysisJobAssetRow[]) {
             thumbnailAssetByJobId.set(asset.analysis_job_id, asset.scan_asset_id);
           }
+
+          const { data: results, error: resultsError } = await supabaseAdmin
+            .from("analysis_results")
+            .select("analysis_job_id, worker, result")
+            .in("analysis_job_id", jobIds)
+            .eq("user_id", userId);
+
+          if (resultsError) {
+            throw new ApiError({
+              code: "INTERNAL_SERVER_ERROR",
+              status: 500,
+              message: "Unable to load analysis history results",
+              details: resultsError,
+            });
+          }
+
+          for (const result of results ?? []) {
+            const jobId = result.analysis_job_id as string;
+            const jobResults = resultsByJobId.get(jobId) ?? [];
+            jobResults.push({
+              worker: result.worker as string,
+              result: result.result as Record<string, unknown>,
+            });
+            resultsByJobId.set(jobId, jobResults);
+          }
         }
 
         res.status(200).json({
@@ -239,7 +415,65 @@ export function createV1AnalysesRouter(): Router {
             created_at: job.created_at,
             completed_at: job.completed_at,
             has_thumbnail: thumbnailAssetByJobId.has(job.id as string),
+            results: resultsByJobId.get(job.id as string) ?? [],
           })),
+          error: null,
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    "/analyses/:jobId",
+    validateQuery(latestAnalysisQuerySchema),
+    async (req, res, next) => {
+      try {
+        const params = analysisJobParamsSchema.parse(req.params);
+        const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
+
+        const { data: job, error: jobError } = await supabaseAdmin
+          .from("analysis_jobs")
+          .select(
+            "id, status, trigger_source, version, started_at, completed_at, failed_at, error_code, error_message, created_at",
+          )
+          .eq("id", params.jobId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (jobError || !job) {
+          throw new ApiError({
+            code: "ANALYSIS_NOT_FOUND",
+            status: 404,
+            message: "Analysis not found",
+            details: jobError,
+          });
+        }
+
+        const { data: results, error: resultsError } = await supabaseAdmin
+          .from("analysis_results")
+          .select("worker, prompt_version, result, created_at")
+          .eq("analysis_job_id", params.jobId)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true });
+
+        if (resultsError) {
+          throw new ApiError({
+            code: "INTERNAL_SERVER_ERROR",
+            status: 500,
+            message: "Unable to load analysis results",
+            details: resultsError,
+          });
+        }
+
+        res.status(200).json({
+          ok: true,
+          httpStatus: 200,
+          data: {
+            job,
+            results: results ?? [],
+          },
           error: null,
         });
       } catch (error) {
@@ -337,71 +571,16 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
-        const { data: job, error: jobError } = await supabaseAdmin
-          .from("analysis_jobs")
-          .select("id")
-          .eq("id", params.jobId)
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (jobError || !job) {
-          throw new ApiError({
-            code: "VALIDATION_ERROR",
-            status: 404,
-            message: "Analysis job not found",
-            details: jobError,
-          });
-        }
-
-        const { error: resultsError } = await supabaseAdmin
-          .from("analysis_results")
-          .delete()
-          .eq("analysis_job_id", params.jobId)
-          .eq("user_id", userId);
-
-        if (resultsError) {
-          throw new ApiError({
-            code: "INTERNAL_SERVER_ERROR",
-            status: 500,
-            message: "Unable to delete analysis results",
-            details: resultsError,
-          });
-        }
-
-        const { error: assetsError } = await supabaseAdmin
-          .from("analysis_job_assets")
-          .delete()
-          .eq("analysis_job_id", params.jobId)
-          .eq("user_id", userId);
-
-        if (assetsError) {
-          throw new ApiError({
-            code: "INTERNAL_SERVER_ERROR",
-            status: 500,
-            message: "Unable to delete analysis assets",
-            details: assetsError,
-          });
-        }
-
-        const { error: deleteJobError } = await supabaseAdmin
-          .from("analysis_jobs")
-          .delete()
-          .eq("id", params.jobId)
-          .eq("user_id", userId);
-
-        if (deleteJobError) {
-          throw new ApiError({
-            code: "INTERNAL_SERVER_ERROR",
-            status: 500,
-            message: "Unable to delete analysis job",
-            details: deleteJobError,
-          });
-        }
+        const deleted = await deleteAnalysisJobAndAssets({
+          jobId: params.jobId,
+          userId,
+          deleteSessionIfOrphaned: true,
+        });
 
         res.status(200).json({
           ok: true,
           httpStatus: 200,
-          data: { id: params.jobId },
+          data: deleted,
           error: null,
         });
       } catch (error) {
@@ -425,6 +604,7 @@ export function createV1AnalysesRouter(): Router {
             "id, status, trigger_source, started_at, completed_at, failed_at, error_code, error_message, created_at",
           )
           .eq("user_id", userId)
+          .neq("status", "failed")
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();

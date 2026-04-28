@@ -5,15 +5,19 @@ import {
   useDeleteAnalysisJob,
 } from "@/hooks/use-supabase";
 import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
+import { calculateGlobalFaceScore } from "@/lib/face-analysis-score";
 import { Link, useLocation } from "wouter";
 import {
+  AlertTriangle,
   ShieldCheck,
   Users,
   LogOut,
+  Loader2,
   ChevronRight,
   Settings as SettingsIcon,
   CreditCard,
   MoreHorizontal,
+  Plus,
   Trash2,
 } from "lucide-react";
 import {
@@ -29,7 +33,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
@@ -42,6 +45,17 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type SidebarNavItem = {
   href: string;
@@ -49,6 +63,38 @@ type SidebarNavItem = {
   icon: React.ComponentType<{ className?: string }>;
   isActive: (location: string) => boolean;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getHistoryGlobalScoreLabel(
+  results: Array<{ worker: string; result: Record<string, unknown> }>,
+): string {
+  const score = calculateGlobalFaceScore(
+    results.map((row) => {
+      const outputAggregates = isRecord(row.result.outputAggregates)
+        ? row.result.outputAggregates
+        : {};
+
+      return {
+        worker: row.worker,
+        outputAggregates,
+      };
+    }),
+  );
+
+  return score ? `${score.score}/100` : "—/100";
+}
+
+function formatAnalysisHistoryDate(value: string): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 function ModernAppSidebar() {
   const [location] = useLocation();
@@ -74,23 +120,27 @@ function ModernAppSidebar() {
           icon: Users,
           isActive: (path) => path === "/admin/users",
         },
+        {
+          href: "/admin/analysis-failures",
+          label: "Logs analyses",
+          icon: AlertTriangle,
+          isActive: (path) => path === "/admin/analysis-failures",
+        },
       ]
     : [];
 
   return (
     <Sidebar
       collapsible="icon"
-      variant="floating"
-      className="relative z-40 border-r border-transparent [--sidebar-width:22rem]"
+      variant="sidebar"
+      className="relative z-40 border-r border-white/10 [--sidebar-width:22rem] [&_[data-sidebar=sidebar]]:bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)]"
     >
-      <SidebarHeader
-        className={`${isCollapsed ? "px-1.5 pt-3 pb-2" : "px-2 pt-3 pb-2"}`}
-      >
+      <SidebarHeader className="px-2 pt-3 pb-2">
         <div
-          className="group relative flex h-11 cursor-pointer items-center overflow-hidden rounded-xl border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] px-2 shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] transition-all hover:border-white/25"
-          title={
-            isCollapsed ? "Ouvrir la left sidebar" : "Rétracter la left sidebar"
-          }
+          className={`group relative flex h-11 cursor-pointer items-center overflow-hidden rounded-xl border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] transition-all hover:border-white/25 ${
+            isCollapsed ? "justify-center px-0" : "px-2"
+          }`}
+          title={isCollapsed ? "Ouvrir la left sidebar" : "Rétracter la left sidebar"}
           role="button"
           tabIndex={0}
           onClick={() => {
@@ -105,17 +155,27 @@ function ModernAppSidebar() {
             }
           }}
         >
-          <div className="flex min-w-0 flex-1 items-center px-1">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-black/25">
+          <div
+            className={`flex min-w-0 items-center ${
+              isCollapsed ? "w-full justify-center px-0" : "flex-1 px-1"
+            }`}
+          >
+            <div
+              className={`flex shrink-0 items-center justify-center ${
+                isCollapsed
+                  ? "aspect-square h-8 rounded-lg bg-black/20 p-1"
+                  : "h-7 w-7 rounded-lg border border-white/15 bg-black/25"
+              }`}
+            >
               <img
                 src="/favicon.png"
                 alt="Logo ScoreMax"
-                className="h-4 w-4 object-contain"
+                className={`${isCollapsed ? "h-full w-full" : "h-4 w-4"} object-contain`}
               />
             </div>
             <div
-              className={`ml-2.5 min-w-0 transition-all duration-200 ${
-                isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+              className={`min-w-0 transition-all duration-200 ${
+                isCollapsed ? "ml-0 w-0 opacity-0" : "ml-2.5 w-auto opacity-100"
               }`}
             >
               <p className="truncate font-display text-base font-semibold tracking-tight text-zinc-100">
@@ -195,9 +255,16 @@ function ModernAppSidebar() {
       <SidebarContent className={isCollapsed ? "hidden" : "px-2 pb-2"}>
         <SidebarGroup>
           <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-            Historique
+            Mes analyses
           </SidebarGroupLabel>
           <SidebarGroupContent>
+            <Link
+              href="/app/new-analysis"
+              className="mb-3 flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.09] px-3 text-sm font-semibold text-zinc-100 transition hover:border-white/25 hover:bg-white/[0.14]"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nouvelle analyse
+            </Link>
             <SidebarMenu className="space-y-2">
               {isHistoryLoading ? (
                 <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-zinc-400">
@@ -211,11 +278,18 @@ function ModernAppSidebar() {
                 </div>
               ) : null}
 
-              {analysisHistory.map((analysis) => (
-                <SidebarMenuItem key={analysis.id}>
+              {analysisHistory.map((analysis) => {
+                const isAnalysisLoading = analysis.status === "queued" || analysis.status === "running";
+                const scoreLabel = getHistoryGlobalScoreLabel(analysis.results);
+                const dateLabel = formatAnalysisHistoryDate(
+                  analysis.completed_at ?? analysis.created_at,
+                );
+
+                return (
+                  <SidebarMenuItem key={analysis.id}>
                   <div className="group flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.055] p-2 transition hover:border-white/20 hover:bg-white/[0.085]">
                     <Link href="/app" className="flex min-w-0 flex-1 items-center gap-2.5">
-                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+                      <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
                         {analysis.has_thumbnail && user?.id ? (
                           <img
                             src={buildAnalysisThumbnailUrl({
@@ -226,50 +300,79 @@ function ModernAppSidebar() {
                             className="h-full w-full object-cover"
                             loading="lazy"
                           />
+                        ) : isAnalysisLoading ? (
+                          <div className="flex h-full w-full items-center justify-center bg-black/30 text-zinc-300">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          </div>
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
                             —
                           </div>
                         )}
+                        {analysis.has_thumbnail && isAnalysisLoading ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-white backdrop-blur-[1px]">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-zinc-100">
-                          Analyse #{analysis.version}
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
+                          {isAnalysisLoading
+                            ? analysis.status === "queued" ? "En file d'attente" : "Analyse en cours"
+                            : scoreLabel}
                         </p>
-                        <p className="truncate text-xs text-zinc-400">
-                          {new Intl.DateTimeFormat("fr-FR", {
-                            day: "2-digit",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }).format(new Date(analysis.completed_at ?? analysis.created_at))}
+                        <p className="shrink-0 text-xs text-zinc-400">
+                          {dateLabel}
                         </p>
                       </div>
                     </Link>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
-                          aria-label="Options de l'analyse"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent side="right" align="start" className="rounded-xl">
-                        <DropdownMenuItem
-                          className="cursor-pointer text-red-500 focus:text-red-500"
-                          disabled={deleteAnalysisMutation.isPending}
-                          onClick={() => deleteAnalysisMutation.mutate(analysis.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          <span>Supprimer</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <AlertDialog>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-zinc-100"
+                            aria-label="Options de l'analyse"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right" align="start" className="rounded-xl">
+                          <AlertDialogTrigger asChild>
+                            <DropdownMenuItem
+                              className="cursor-pointer text-red-500 focus:text-red-500"
+                              disabled={deleteAnalysisMutation.isPending}
+                              onSelect={(event) => event.preventDefault()}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              <span>Supprimer</span>
+                            </DropdownMenuItem>
+                          </AlertDialogTrigger>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Supprimer cette analyse ?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Cette action supprimera définitivement l'analyse, ses résultats et les images associées qui ne sont utilisées par aucune autre analyse. Les images partagées seront conservées.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Annuler</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-red-600 text-white hover:bg-red-700"
+                            disabled={deleteAnalysisMutation.isPending}
+                            onClick={() => deleteAnalysisMutation.mutate(analysis.id)}
+                          >
+                            Supprimer
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
-                </SidebarMenuItem>
-              ))}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -313,7 +416,6 @@ function ModernAppSidebar() {
         ) : null}
       </SidebarContent>
 
-      <SidebarRail />
     </Sidebar>
   );
 }

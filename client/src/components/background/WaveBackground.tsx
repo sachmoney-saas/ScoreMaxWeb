@@ -2,9 +2,10 @@ import * as React from "react";
 
 type WaveBackgroundProps = {
   className?: string;
+  position?: "fixed" | "absolute";
 };
 
-export function WaveBackground({ className = "" }: WaveBackgroundProps) {
+export function WaveBackground({ className = "", position = "fixed" }: WaveBackgroundProps) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
   React.useEffect(() => {
@@ -247,7 +248,7 @@ export function WaveBackground({ className = "" }: WaveBackgroundProps) {
   return (
     <canvas
       ref={canvasRef}
-      className={`fixed inset-0 h-dvh w-dvw bg-[#9aaeb5] ${className}`}
+      className={`${position} inset-0 h-full w-full bg-[#9aaeb5] ${className}`}
       aria-hidden="true"
     />
   );

@@ -48,6 +48,7 @@ function extractEstimatedAge(aggregates: Record<string, unknown>): number | null
     "ageEstimate",
     "age_estimate",
     "age_analysis.best_estimated_age",
+    "age_analysis.best_estimated_age.score",
   ]) {
     const parsed = parseAgeCandidate(aggregates[key]);
     if (parsed !== null) {
@@ -157,7 +158,7 @@ export default function AgeDetails() {
         </div>
       </section>
 
-      <Card className="border-white/20 bg-white/75 shadow-[0_24px_70px_-50px_rgba(0,0,0,0.65)] backdrop-blur-xl">
+      <Card className="border-slate-200 bg-white/95 text-slate-950 shadow-[0_24px_70px_-50px_rgba(0,0,0,0.65)] backdrop-blur-xl">
         <CardContent className="p-6">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             Interprétations

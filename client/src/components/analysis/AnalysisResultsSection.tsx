@@ -13,7 +13,14 @@ import type {
   LatestAnalysisResponse,
   PersistedWorkerAnalysisResult,
 } from "@/lib/face-analysis";
-import { ArrowUpRight, ScanFace } from "lucide-react";
+import {
+  buildAggregateDisplayEntries,
+  getWorkerDisplayLabel,
+} from "@/lib/face-analysis-display";
+import { calculateGlobalFaceScore } from "@/lib/face-analysis-score";
+import type { GlobalFaceScore } from "@/lib/face-analysis-score";
+import { AnalysisProcessingState } from "@/components/analysis/AnalysisProcessingState";
+import { ArrowUpRight } from "lucide-react";
 
 type AnalysisResultsSectionProps = {
   analysis: LatestAnalysisResponse | null | undefined;
@@ -61,14 +68,6 @@ function normalizeWorkerResult(
   };
 }
 
-function formatWorkerLabel(worker: string): string {
-  return worker
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function formatDate(value: string | null | undefined): string {
   if (!value) {
     return "Date inconnue";
@@ -83,40 +82,10 @@ function formatDate(value: string | null | undefined): string {
   }).format(new Date(value));
 }
 
-function formatAggregateLabel(key: string): string {
-  return key
-    .replace(/_/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase();
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-function AggregateValue({ value }: { value: unknown }) {
-  if (value === null || value === undefined) {
-    return <span className="text-muted-foreground">Non renseigné</span>;
-  }
-
-  if (typeof value === "number") {
-    return <span>{Number.isInteger(value) ? value : value.toFixed(2)}</span>;
-  }
-
-  if (typeof value === "boolean") {
-    return <span>{value ? "Oui" : "Non"}</span>;
-  }
-
-  if (typeof value === "string") {
-    return <span>{value}</span>;
-  }
-
-  if (Array.isArray(value)) {
-    return <span>{value.length} élément{value.length > 1 ? "s" : ""}</span>;
-  }
-
-  if (isRecord(value)) {
-    return <span>{Object.keys(value).length} champ{Object.keys(value).length > 1 ? "s" : ""}</span>;
-  }
-
-  return <span>{String(value)}</span>;
-}
 
 function parseAgeCandidate(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -150,6 +119,7 @@ function extractEstimatedAge(aggregates: Record<string, unknown>): number | null
     "ageEstimate",
     "age_estimate",
     "age_analysis.best_estimated_age",
+    "age_analysis.best_estimated_age.score",
   ]) {
     const parsed = parseAgeCandidate(aggregates[key]);
     if (parsed !== null) {
@@ -164,12 +134,12 @@ function isAgeWorker(worker: string): boolean {
   return worker.toLowerCase() === "age";
 }
 
-function AggregateGrid({ aggregates }: { aggregates: Record<string, unknown> }) {
-  const entries = Object.entries(aggregates);
+function AggregateGrid({ worker, aggregates }: { worker: string; aggregates: Record<string, unknown> }) {
+  const entries = buildAggregateDisplayEntries(worker, aggregates);
 
   if (entries.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border/70 bg-secondary/20 p-3 text-sm text-muted-foreground">
+      <div className="rounded-xl border border-dashed border-white/20 bg-white/10 p-3 text-sm text-zinc-400">
         Aucun agrégat structuré disponible pour ce worker.
       </div>
     );
@@ -177,21 +147,28 @@ function AggregateGrid({ aggregates }: { aggregates: Record<string, unknown> }) 
 
   return (
     <div className="grid gap-2">
-      {entries.slice(0, 6).map(([key, value]) => (
+      {entries.slice(0, 6).map((entry) => (
         <div
-          key={key}
-          className="rounded-xl border border-border/60 bg-background/70 p-3"
+          key={entry.key}
+          className="rounded-xl border border-white/15 bg-white/10 p-3 text-zinc-50 backdrop-blur-sm"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            {formatAggregateLabel(key)}
-          </p>
-          <p className="mt-1 text-sm font-medium text-foreground break-words">
-            <AggregateValue value={value} />
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+              {entry.label}
+            </p>
+            <p className="shrink-0 text-sm font-semibold text-zinc-50">
+              {entry.value}
+            </p>
+          </div>
+          {entry.description ? (
+            <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+              {entry.description}
+            </p>
+          ) : null}
         </div>
       ))}
       {entries.length > 6 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-zinc-400">
           +{entries.length - 6} signal{entries.length - 6 > 1 ? "s" : ""} supplémentaire{entries.length - 6 > 1 ? "s" : ""}
         </p>
       ) : null}
@@ -241,17 +218,76 @@ function AgeResultCard({ result }: { result: NormalizedWorkerResult }) {
   );
 }
 
+type ScoreRank = {
+  icon: string;
+  title: string;
+};
+
+function getScoreRank(score: number): ScoreRank {
+  if (score < 25) {
+    return { icon: "🟠", title: "Sub-human Bottom Percentile (PSL 1-2)" };
+  }
+  if (score < 35) {
+    return { icon: "🟠", title: "Sub-5 / Low-Tier Sub-Normie (PSL 3)" };
+  }
+  if (score < 45) {
+    return { icon: "🟡", title: "LTN (Low-Tier Normie) / Invisible" };
+  }
+  if (score < 55) {
+    return { icon: "🟡", title: "MTN (Mid-Tier Normie) / Ultimate NPC (PSL 4.5)" };
+  }
+  if (score < 60) {
+    return { icon: "🟢", title: "True Normie / Baseline (PSL 5)" };
+  }
+  if (score < 70) {
+    return { icon: "🔵", title: "HTN (High-Tier Normie) / Local Chad (PSL 5.5)" };
+  }
+  if (score < 80) {
+    return { icon: "🔵", title: "Chadlite / Stacylite / Mogger (PSL 6)" };
+  }
+  if (score < 85) {
+    return { icon: "🟣", title: "Model-Tier Chad (PSL 7)" };
+  }
+  if (score < 95) {
+    return { icon: "⚫", title: "Genetic Freak Gigachad PSL God (PSL 8)" };
+  }
+  return { icon: "👑", title: "Alien Tier Ascended (PSL 9+)" };
+}
+
+function GlobalScoreCard({ score }: { score: GlobalFaceScore }) {
+  const rank = getScoreRank(score.score);
+
+  return (
+    <Card className="relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] md:col-span-2 xl:col-span-3">
+      <CardContent className="relative flex flex-col items-center justify-center gap-3 p-8 text-center">
+        <div className="flex items-end justify-center gap-3">
+          <h2 className="font-display text-6xl font-bold tracking-[-0.08em] text-white sm:text-7xl">
+            {score.score}
+          </h2>
+          <span className="pb-2 text-xl font-semibold text-zinc-300">/100</span>
+        </div>
+        <div className="flex items-center justify-center gap-3 text-zinc-50">
+          <span className="text-3xl" aria-hidden="true">{rank.icon}</span>
+          <p className="text-lg font-semibold leading-tight md:text-2xl">
+            {rank.title}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function WorkerResultCard({ result }: { result: NormalizedWorkerResult }) {
   return (
-    <Card className="overflow-hidden border-border/60 bg-card/70 shadow-sm">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg">
-          {formatWorkerLabel(result.worker)}
+    <Card className="relative h-full overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]">
+      <CardHeader className="relative pb-4">
+        <CardTitle className="text-lg text-zinc-50">
+          {getWorkerDisplayLabel(result.worker)}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <AggregateGrid aggregates={result.outputAggregates} />
-        <div className="flex items-center justify-between border-t border-border/60 pt-3 text-xs text-muted-foreground">
+      <CardContent className="relative space-y-4">
+        <AggregateGrid worker={result.worker} aggregates={result.outputAggregates} />
+        <div className="flex items-center justify-between border-t border-white/15 pt-3 text-xs text-zinc-400">
           <span>Worker: {result.worker}</span>
           <span>{formatDate(result.createdAt)}</span>
         </div>
@@ -282,22 +318,25 @@ export function AnalysisResultsSection({
   }
 
   if (!analysis) {
+    return null;
+  }
+
+  const isAnalysisLoading = analysis.job.status === "queued" || analysis.job.status === "running";
+
+  if (isAnalysisLoading) {
     return (
-      <Card className="border-border/60 bg-card/70 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ScanFace className="h-5 w-5" />
-            Résultats ScoreMax
-          </CardTitle>
-          <CardDescription>
-            Termine ton onboarding pour générer ta première analyse complète.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <AnalysisProcessingState
+        message={
+          analysis.job.status === "queued"
+            ? "Analyse en file d'attente..."
+            : "Analyse ScoreMax en cours..."
+        }
+      />
     );
   }
 
   const results = analysis.results.map(normalizeWorkerResult);
+  const globalScore = calculateGlobalFaceScore(results);
 
   return (
     <section className="space-y-5">
@@ -305,13 +344,13 @@ export function AnalysisResultsSection({
         <TabsList className="h-auto rounded-2xl border border-white/15 bg-white/10 p-1.5 backdrop-blur-xl">
           <TabsTrigger
             value="overview"
-            className="rounded-xl px-5 py-2.5 text-sm text-zinc-600 data-[state=active]:bg-slate-950 data-[state=active]:text-white data-[state=active]:shadow-none"
+            className="rounded-xl px-5 py-2.5 text-sm text-black data-[state=active]:bg-slate-950 data-[state=active]:text-white data-[state=active]:shadow-none"
           >
             Overview
           </TabsTrigger>
           <TabsTrigger
             value="recommendations"
-            className="rounded-xl px-5 py-2.5 text-sm text-zinc-600 data-[state=active]:bg-slate-950 data-[state=active]:text-white data-[state=active]:shadow-none"
+            className="rounded-xl px-5 py-2.5 text-sm text-black data-[state=active]:bg-slate-950 data-[state=active]:text-white data-[state=active]:shadow-none"
           >
             Recommandations
           </TabsTrigger>
@@ -319,6 +358,7 @@ export function AnalysisResultsSection({
 
         <TabsContent value="overview" className="mt-0">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {globalScore ? <GlobalScoreCard score={globalScore} /> : null}
             {results.map((result) =>
               isAgeWorker(result.worker) ? (
                 <AgeResultCard
@@ -336,7 +376,7 @@ export function AnalysisResultsSection({
         </TabsContent>
 
         <TabsContent value="recommendations" className="mt-0">
-          <Card className="border-white/15 bg-white/10 shadow-sm backdrop-blur-xl">
+          <Card className="border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
             <CardContent className="p-6 text-sm text-slate-700">
               Les recommandations personnalisées arriveront ici avec les prochaines interprétations ScoreMax.
             </CardContent>

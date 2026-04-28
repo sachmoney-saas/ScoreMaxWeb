@@ -12,6 +12,7 @@ import Landing from "@/pages/Landing";
 import Onboarding from "@/pages/Onboarding";
 import AuthPage from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
+import NewAnalysis from "@/pages/NewAnalysis";
 import AgeDetails from "@/pages/AgeDetails";
 import AdminPage from "@/pages/Admin";
 import Settings from "@/pages/Settings";
@@ -115,6 +116,10 @@ function Router() {
         <ProtectedRoute component={AgeDetails} />
       </Route>
 
+      <Route path="/app/new-analysis">
+        <ProtectedRoute component={NewAnalysis} />
+      </Route>
+
       <Route path="/app">
         <ProtectedRoute component={Dashboard} />
       </Route>
@@ -132,6 +137,9 @@ function Router() {
         <ProtectedRoute component={AdminPage} />
       </Route>
       <Route path="/admin/users">
+        <ProtectedRoute component={AdminPage} />
+      </Route>
+      <Route path="/admin/analysis-failures">
         <ProtectedRoute component={AdminPage} />
       </Route>
 

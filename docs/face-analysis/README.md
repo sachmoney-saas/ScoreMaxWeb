@@ -45,16 +45,36 @@ The server contract is defined in `shared/oneshot.ts` and proxied through `serve
   "resultsByWorker": [
     {
       "worker": "age",
-      "promptVersion": "latest",
+      "promptVersion": "v1",
       "provider": "scoremax",
       "requestedRuns": 1,
       "completedRuns": 1,
-      "outputAggregates": {},
+      "outputAggregates": {
+        "age_analysis.best_estimated_age": 27,
+        "age_analysis.age_argument": "Concise summary text",
+        "skin_quality_and_plumpness.periorbital_freshness.score": 8,
+        "skin_quality_and_plumpness.periorbital_freshness.argument": "Concise summary text"
+      },
       "rawRuns": []
     }
   ]
 }
 ```
+
+## Output format v1
+
+Each worker writes its structured values into `outputAggregates` using flattened dot-path keys. Most measurable traits now emit a pair of fields:
+
+- `{path}.score`: numeric score
+- `{path}.argument`: concise text explaining the score
+
+Categorical fields remain direct `{path}: "value"`. Worker-level summary outputs follow the same convention when they are scored.
+
+## Client display labels
+
+The API keys above are technical contract keys and must stay stable in storage/API responses. Client-facing labels, value translations, ordering, and short interpretations are maintained in `client/src/lib/face-analysis-display.ts` and applied when rendering analysis results.
+
+French (`fr`) is the default display locale today. The display metadata is locale-ready so additional languages can be added without renaming `outputAggregates` keys or changing stored/API payloads.
 
 ## Worker references
 

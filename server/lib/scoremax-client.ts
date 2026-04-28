@@ -11,6 +11,10 @@ import { ApiError } from "./errors";
 type ScoreMaxErrorPayload = {
   code?: string;
   message?: string;
+  error?: {
+    code?: string;
+    message?: string;
+  };
 };
 
 function buildUrl(path: string): string {
@@ -19,21 +23,22 @@ function buildUrl(path: string): string {
 }
 
 async function parseErrorPayload(response: Response): Promise<ScoreMaxErrorPayload> {
-  try {
-    const json = (await response.json()) as unknown;
-    if (json && typeof json === "object") {
-      return json as ScoreMaxErrorPayload;
-    }
-  } catch {
-    // ignore
+  const text = await response.text();
+  if (!text) {
+    return {};
   }
 
   try {
-    const text = await response.text();
-    return text ? { message: text } : {};
+    const json = JSON.parse(text) as unknown;
+    if (json && typeof json === "object") {
+      const payload = json as ScoreMaxErrorPayload;
+      return payload.error ?? payload;
+    }
   } catch {
-    return {};
+    // fall back to raw text
   }
+
+  return { message: text };
 }
 
 function coerceErrorCode(code?: string): ScoreMaxErrorCode {
@@ -69,7 +74,17 @@ export async function runScoreMaxAnalyses(
     }
 
     const json = (await response.json()) as unknown;
-    return analysesResponseSchema.parse(json);
+    const parsed = analysesResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new ApiError({
+        code: "INTERNAL_SERVER_ERROR",
+        status: 502,
+        message: "Invalid ScoreMax API response format",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    return parsed.data;
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
