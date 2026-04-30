@@ -366,6 +366,217 @@ const heroBottomCards: HeroBottomCard[] = [
   },
 ];
 
+function ScoreProgressSection() {
+  const currentScore = 6.42;
+  const potentialScore = 7.35;
+  const chartWidth = 860;
+  const chartHeight = 360;
+  const plotLeft = 62;
+  const plotRight = 24;
+  const plotTop = 56;
+  const plotBottom = 66;
+  const plotWidth = chartWidth - plotLeft - plotRight;
+  const plotHeight = chartHeight - plotTop - plotBottom;
+  const xMin = 0;
+  const xMax = 10;
+
+  const xToPixel = (x: number) =>
+    plotLeft + ((x - xMin) / (xMax - xMin)) * plotWidth;
+  const yToPixel = (y: number) => plotTop + (1 - y) * plotHeight;
+  const gaussian = (x: number) => {
+    const peak = Math.exp(-Math.pow(x - 5.05, 2) / (2 * Math.pow(0.86, 2)));
+    // Keep realistic non-zero tails on both sides.
+    const leftTail = 0.085 / (1 + Math.exp((x - 2.35) * 2.1));
+    const rightTail = 0.075 / (1 + Math.exp((7.25 - x) * 1.8));
+    const shoulder = 0.018 * Math.exp(-Math.pow(x - 8.9, 2) / (2 * Math.pow(1.05, 2)));
+    return Math.min(1, peak + leftTail + rightTail + shoulder);
+  };
+
+  const curvePoints = Array.from({ length: 120 }, (_, index) => {
+    const x = xMin + (index / 119) * (xMax - xMin);
+    return `${xToPixel(x).toFixed(2)},${yToPixel(gaussian(x)).toFixed(2)}`;
+  }).join(" ");
+
+  const currentX = xToPixel(currentScore);
+  const potentialX = xToPixel(potentialScore);
+
+  return (
+    <section className="bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.17),transparent_36%),radial-gradient(circle_at_78%_72%,rgba(185,204,209,0.16),transparent_44%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.3)_100%)] px-4 py-16 md:py-24">
+      <div className="mx-auto w-full max-w-5xl">
+        <div className="rounded-[2.2rem] border border-white/15 bg-black/30 p-6 shadow-[0_24px_90px_-58px_rgba(0,0,0,0.85)] backdrop-blur-sm md:p-10">
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="font-display text-4xl leading-tight tracking-tight text-white md:text-6xl">
+              Your score isn't fixed
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-zinc-400 md:text-3xl">
+              Small, consistent changes compound over time. Track your progress and
+              watch your score move.
+            </p>
+          </div>
+
+          <div className="mt-14 flex items-end justify-center gap-6 text-center md:gap-12">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
+                Today
+              </p>
+              <p className="mt-4 font-display text-6xl tracking-tight text-zinc-500 md:text-7xl">
+                {currentScore.toFixed(2)}
+              </p>
+            </div>
+            <div className="pb-4 text-5xl text-zinc-600 md:text-6xl">→</div>
+            <div>
+              <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-400">
+                Potential
+              </p>
+              <p className="mt-4 font-display text-6xl tracking-tight text-white md:text-7xl">
+                {potentialScore.toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-10 overflow-x-auto">
+            <svg
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              className="mx-auto min-w-[760px] text-[#aab2bd]"
+              role="img"
+              aria-label="Score distribution chart"
+            >
+              {[0.2, 0.4, 0.6, 0.8, 1].map((value) => (
+                <line
+                  key={`grid-${value}`}
+                  x1={plotLeft}
+                  y1={yToPixel(value)}
+                  x2={plotLeft + plotWidth}
+                  y2={yToPixel(value)}
+                  stroke="#384253"
+                  strokeWidth="1"
+                />
+              ))}
+
+              <line
+                x1={plotLeft}
+                y1={plotTop + plotHeight}
+                x2={plotLeft + plotWidth}
+                y2={plotTop + plotHeight}
+                stroke="#556377"
+                strokeWidth="1"
+              />
+
+              <polyline
+                points={curvePoints}
+                fill="none"
+                stroke="#96a3b4"
+                strokeWidth="2.8"
+              />
+
+              <line
+                x1={currentX}
+                y1={plotTop}
+                x2={currentX}
+                y2={plotTop + plotHeight}
+                stroke="#a8b492"
+                strokeWidth="3"
+              />
+              <line
+                x1={potentialX}
+                y1={plotTop}
+                x2={potentialX}
+                y2={plotTop + plotHeight}
+                stroke="#9cc5a9"
+                strokeWidth="1.6"
+                strokeDasharray="5 5"
+              />
+
+              <rect
+                x={currentX - 56}
+                y={plotTop - 30}
+                width="116"
+                height="26"
+                rx="13"
+                fill="#2f3b2d"
+                stroke="#8ea27e"
+              />
+              <text
+                x={currentX + 2}
+                y={plotTop - 13}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#c0d0b3"
+                fontWeight="600"
+              >
+                6.42 · Top 17.0%
+              </text>
+
+              <text
+                x={(currentX + potentialX) / 2 + 6}
+                y={plotTop + plotHeight - 2}
+                transform={`rotate(-90 ${(currentX + potentialX) / 2 + 6} ${plotTop + plotHeight - 2})`}
+                fontSize="28"
+                fill="#a6c0ab"
+                fontWeight="500"
+                letterSpacing="0.06em"
+              >
+                IMPROVEMENT
+              </text>
+
+              {[0, 10, 20, 30, 40].map((tick, index) => (
+                <text
+                  key={`ytick-${tick}`}
+                  x={plotLeft - 10}
+                  y={yToPixel(index / 4) + 4}
+                  textAnchor="end"
+                  fontSize="12"
+                  fill="#7f8ea1"
+                >
+                  {tick}
+                </text>
+              ))}
+
+              <text
+                x={22}
+                y={plotTop + plotHeight / 2}
+                transform={`rotate(-90 22 ${plotTop + plotHeight / 2})`}
+                textAnchor="middle"
+                fontSize="12"
+                fill="#7f8ea1"
+                letterSpacing="0.08em"
+                fontWeight="500"
+              >
+                POPULATION DENSITY
+              </text>
+
+              {Array.from({ length: 11 }, (_, index) => (
+                <text
+                  key={`tick-${index}`}
+                  x={xToPixel(index)}
+                  y={plotTop + plotHeight + 22}
+                  textAnchor="middle"
+                  fontSize="14"
+                  fill="#8f9caf"
+                >
+                  {index}
+                </text>
+              ))}
+
+              <text
+                x={plotLeft + plotWidth / 2}
+                y={chartHeight - 10}
+                textAnchor="middle"
+                fontSize="12"
+                fill="#8d9bad"
+                letterSpacing="0.15em"
+                fontWeight="600"
+              >
+                OVERALL SCORE
+              </text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Landing() {
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -398,22 +609,9 @@ export default function Landing() {
                 variants={itemVariants}
                 className="font-display text-5xl md:text-7xl font-bold leading-[1.1] tracking-tight text-balance"
               >
-                Glow-Up
-                <span className="block">Sans Chirurgie</span>
+                Ceux qui t'ont dit que l'apparence
+                <span className="block">ne comptait pas t'ont mentis</span>
               </motion.h1>
-
-              <motion.h2
-                variants={itemVariants}
-                className="mx-auto max-w-2xl text-base md:text-xl font-normal leading-snug tracking-tight text-zinc-400"
-              >
-                <a
-                  href="#appearance-impact"
-                  className="transition-colors hover:text-zinc-300"
-                >
-                  Ceux qui t'ont dit que l'apparence
-                  <span className="block">ne comptait pas t'ont mentis</span>
-                </a>
-              </motion.h2>
             </div>
           </motion.div>
 
@@ -423,32 +621,32 @@ export default function Landing() {
             animate="visible"
             className="relative z-10 mt-8 rounded-[2rem] border border-white/70 bg-[#f1f1f1] p-3 shadow-[0_45px_120px_-80px_rgba(0,0,0,0.98)]"
           >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               {heroBottomCards.map((card) => (
                 <article
                   key={card.title}
-                  className="overflow-hidden rounded-[1.3rem] border border-black/10 bg-white"
+                  className="overflow-hidden rounded-2xl border border-black/10 bg-white"
                 >
                   <div
-                    className={`relative h-40 overflow-hidden ${card.toneClass}`}
+                    className={`relative h-20 overflow-hidden sm:h-24 md:h-28 lg:h-32 ${card.toneClass}`}
                   >
                     {card.overlayImageUrl ? (
                       <img
                         src={card.overlayImageUrl}
                         alt={card.overlayImageAlt ?? card.title}
                         loading="lazy"
-                        className={card.overlayImageClass}
+                        className={`${card.overlayImageClass ?? ""} scale-[1.03]`}
                       />
                     ) : null}
 
                     <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-white/12 to-transparent" />
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 px-4 py-4">
-                    <p className="text-lg font-semibold tracking-tight text-[#1b1b1b]">
+                  <div className="flex min-h-[54px] items-center justify-between gap-2 px-2.5 py-2 sm:min-h-[60px] sm:px-3 sm:py-2.5 md:min-h-[68px] md:px-4 md:py-3">
+                    <p className="line-clamp-2 text-[11px] font-semibold leading-tight tracking-tight text-[#1b1b1b] sm:text-xs md:text-sm lg:text-base">
                       {card.title}
                     </p>
-                    <ArrowRight className="h-5 w-5 shrink-0 text-[#1b1b1b]" />
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#1b1b1b] sm:h-4 sm:w-4 md:h-5 md:w-5" />
                   </div>
                 </article>
               ))}
@@ -474,7 +672,7 @@ export default function Landing() {
       {/* Complete Analysis Section */}
       <section
         id="complete-analysis"
-        className="relative flex min-h-[100svh] overflow-hidden bg-[#9aaeb5] px-4 pt-20 md:pt-28"
+        className="relative flex min-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pt-20 md:pt-28"
       >
         <WaveBackground position="absolute" className="!h-full !w-full" />
         <div className="relative z-10 flex min-h-[calc(100svh-5rem)] w-full flex-col justify-end lg:max-w-[75%] mx-auto md:min-h-[calc(100svh-7rem)]">
@@ -504,10 +702,12 @@ export default function Landing() {
         </div>
       </section>
 
+      <ScoreProgressSection />
+
       {/* Appearance Impact Section */}
       <section
         id="appearance-impact"
-        className="bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 py-20 md:py-28"
+        className="bg-[radial-gradient(circle_at_72%_24%,rgba(255,255,255,0.14),transparent_34%),radial-gradient(circle_at_24%_82%,rgba(185,204,209,0.13),transparent_40%),linear-gradient(145deg,rgba(10,16,22,0.93)_0%,rgba(20,31,39,0.89)_48%,rgba(185,204,209,0.29)_100%)] px-4 py-20 md:py-28"
       >
         <div className="w-full lg:max-w-[75%] mx-auto">
           <motion.div
@@ -569,8 +769,105 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Who This Is For Section */}
+      <section className="bg-[radial-gradient(circle_at_50%_42%,rgba(120,145,168,0.16),transparent_42%),linear-gradient(180deg,rgba(6,10,16,0.96)_0%,rgba(4,7,12,0.98)_100%)] px-4 py-24 md:py-32">
+        <div className="mx-auto w-full max-w-4xl text-center">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.25 }}
+            className="space-y-7"
+          >
+            <motion.div
+              variants={itemVariants}
+              className="mx-auto h-px w-8 bg-white/20"
+            />
+
+            <motion.p
+              variants={itemVariants}
+              className="text-[11px] font-semibold uppercase tracking-[0.34em] text-zinc-500"
+            >
+              A note on who this is for
+            </motion.p>
+
+            <motion.h2
+              variants={itemVariants}
+              className="font-display text-4xl font-bold leading-tight tracking-tight text-white md:text-6xl"
+            >
+              This isn't for everyone
+            </motion.h2>
+
+            <motion.p
+              variants={itemVariants}
+              className="mx-auto max-w-3xl text-lg leading-relaxed text-zinc-400 md:text-3xl"
+            >
+              Most people see their score and do nothing. They let the number
+              define them. The ones who actually transform treat it as a
+              starting point - and commit to the process.
+            </motion.p>
+
+            <motion.p
+              variants={itemVariants}
+              className="text-base leading-relaxed text-zinc-500 md:text-xl"
+            >
+              ScoreMax is built for them.
+            </motion.p>
+
+            <motion.div
+              variants={itemVariants}
+              className="mx-auto h-px w-8 bg-white/20"
+            />
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Final CTA Section */}
+      <section className="bg-[radial-gradient(circle_at_50%_30%,rgba(170,188,208,0.2),transparent_42%),linear-gradient(180deg,rgba(216,223,232,0.98)_0%,rgba(202,211,223,0.96)_100%)] px-4 py-24 md:py-32">
+        <div className="mx-auto w-full max-w-5xl text-center">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.22 }}
+            className="space-y-8"
+          >
+            <motion.h2
+              variants={itemVariants}
+              className="mx-auto max-w-4xl font-display text-4xl font-bold leading-tight tracking-tight text-[#141822] md:text-7xl"
+            >
+              Your transformation starts with a first analysis
+            </motion.h2>
+
+            <motion.p
+              variants={itemVariants}
+              className="mx-auto max-w-3xl text-lg leading-relaxed text-[#5f6c7e] md:text-3xl"
+            >
+              450,000+ people have already started their journey.
+              The only question left is - will you?
+            </motion.p>
+
+            <motion.div variants={itemVariants} className="pt-2">
+              <Link href="/register">
+                <Button className="h-16 rounded-full bg-[#0f1219] px-10 text-lg font-semibold text-white shadow-[0_28px_65px_-35px_rgba(0,0,0,0.65)] hover:bg-black">
+                  Begin Your First Analysis
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </Link>
+            </motion.div>
+
+            <motion.p
+              variants={itemVariants}
+              className="text-base leading-relaxed text-[#8d98a8] md:text-xl"
+            >
+              Your future self will thank you.
+            </motion.p>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Footer */}
-      <footer className="border-t border-white/10 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] py-12">
+      <footer className="border-t border-white/10 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.12),transparent_36%),radial-gradient(circle_at_18%_78%,rgba(185,204,209,0.11),transparent_42%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.26)_100%)] py-12">
         <div className="w-full lg:max-w-[75%] mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2">

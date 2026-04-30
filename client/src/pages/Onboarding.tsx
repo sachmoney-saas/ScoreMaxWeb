@@ -67,6 +67,301 @@ type OnboardingAnalysisJob = {
   error_message?: string | null;
 };
 
+function OnboardingBeforeAfterComparison() {
+  const [splitPercent, setSplitPercent] = React.useState(58);
+
+  return (
+    <div className="space-y-4">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-black/20 shadow-[0_28px_65px_-52px_rgba(0,0,0,0.9)]">
+        <img
+          src="/model2.png"
+          alt="Avant optimisation"
+          loading="lazy"
+          className="block h-auto w-full select-none object-cover"
+        />
+
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 overflow-hidden"
+          style={{ width: `${100 - splitPercent}%` }}
+        >
+          <img
+            src="/model1.png"
+            alt="Apres optimisation"
+            loading="lazy"
+            className="absolute inset-y-0 right-0 h-full w-auto min-w-full max-w-none object-cover"
+          />
+        </div>
+
+        <div
+          className="pointer-events-none absolute inset-y-0 z-10 w-[2px] bg-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.15)]"
+          style={{ left: `${splitPercent}%` }}
+        />
+
+        <span className="pointer-events-none absolute top-3 left-3 rounded-full border border-white/35 bg-black/35 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
+          Avant
+        </span>
+        <span className="pointer-events-none absolute top-3 right-3 rounded-full border border-white/35 bg-black/35 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
+          Apres
+        </span>
+      </div>
+
+      <input
+        type="range"
+        min={20}
+        max={80}
+        value={splitPercent}
+        onChange={(event) => setSplitPercent(Number(event.currentTarget.value))}
+        aria-label="Comparer avant et apres"
+        className="h-2 w-full cursor-ew-resize appearance-none rounded-full bg-slate-200 accent-slate-900"
+      />
+    </div>
+  );
+}
+
+function OnboardingSocialProofShowcase() {
+  const [splitPercent, setSplitPercent] = React.useState(56);
+  const currentScore = 6.42;
+  const potentialScore = 7.35;
+  const chartWidth = 700;
+  const chartHeight = 300;
+  const plotLeft = 62;
+  const plotRight = 20;
+  const plotTop = 52;
+  const plotBottom = 58;
+  const plotWidth = chartWidth - plotLeft - plotRight;
+  const plotHeight = chartHeight - plotTop - plotBottom;
+  const xMin = 0;
+  const xMax = 10;
+
+  const xToPixel = (x: number) =>
+    plotLeft + ((x - xMin) / (xMax - xMin)) * plotWidth;
+  const yToPixel = (y: number) => plotTop + (1 - y) * plotHeight;
+  const gaussian = (x: number) => {
+    const peak = Math.exp(-Math.pow(x - 5.05, 2) / (2 * Math.pow(0.86, 2)));
+    const leftTail = 0.085 / (1 + Math.exp((x - 2.35) * 2.1));
+    const rightTail = 0.075 / (1 + Math.exp((7.25 - x) * 1.8));
+    const shoulder =
+      0.018 * Math.exp(-Math.pow(x - 8.9, 2) / (2 * Math.pow(1.05, 2)));
+    return Math.min(1, peak + leftTail + rightTail + shoulder);
+  };
+
+  const curvePoints = Array.from({ length: 120 }, (_, index) => {
+    const x = xMin + (index / 119) * (xMax - xMin);
+    return `${xToPixel(x).toFixed(2)},${yToPixel(gaussian(x)).toFixed(2)}`;
+  }).join(" ");
+
+  const currentX = xToPixel(currentScore);
+  const potentialX = xToPixel(potentialScore);
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="grid gap-4 lg:grid-cols-[260px_1fr] lg:items-start">
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-2.5">
+          <div className="relative overflow-hidden rounded-lg border border-slate-200">
+            <img
+              src="/model2.png"
+              alt="Avant optimisation"
+              loading="lazy"
+              className="block h-auto w-full select-none object-cover"
+            />
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0 overflow-hidden"
+              style={{ width: `${100 - splitPercent}%` }}
+            >
+              <img
+                src="/model1.png"
+                alt="Apres optimisation"
+                loading="lazy"
+                className="absolute inset-y-0 right-0 h-full w-auto min-w-full max-w-none object-cover"
+              />
+            </div>
+            <div
+              className="pointer-events-none absolute inset-y-0 z-10 w-[2px] bg-white/90"
+              style={{ left: `${splitPercent}%` }}
+            />
+            <span className="pointer-events-none absolute top-2 left-2 rounded-full border border-white/35 bg-black/35 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white">
+              Avant
+            </span>
+            <span className="pointer-events-none absolute top-2 right-2 rounded-full border border-white/35 bg-black/35 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white">
+              Apres
+            </span>
+          </div>
+          <input
+            type="range"
+            min={20}
+            max={80}
+            value={splitPercent}
+            onChange={(event) => setSplitPercent(Number(event.currentTarget.value))}
+            aria-label="Comparer avant et apres"
+            className="h-2 w-full cursor-ew-resize appearance-none rounded-full bg-slate-200 accent-slate-900"
+          />
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+          <div className="mx-auto max-w-xl text-center">
+            <h3 className="font-display text-3xl leading-tight tracking-tight text-slate-900 sm:text-4xl">
+              Your score isn't fixed
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500 sm:text-base">
+              Small, consistent changes compound over time. Track your progress
+              and watch your score move.
+            </p>
+          </div>
+
+          <div className="mt-6 flex items-end justify-center gap-5 text-center sm:gap-9">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Today
+              </p>
+              <p className="mt-2 font-display text-5xl tracking-tight text-slate-400 sm:text-6xl">
+                {currentScore.toFixed(2)}
+              </p>
+            </div>
+            <div className="pb-3 text-4xl text-slate-300 sm:text-5xl">→</div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Potential
+              </p>
+              <p className="mt-2 font-display text-5xl tracking-tight text-slate-900 sm:text-6xl">
+                {potentialScore.toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 overflow-x-auto">
+            <svg
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              className="mx-auto min-w-[620px]"
+              role="img"
+              aria-label="Score distribution chart"
+            >
+              {[0.2, 0.4, 0.6, 0.8, 1].map((value) => (
+                <line
+                  key={`grid-${value}`}
+                  x1={plotLeft}
+                  y1={yToPixel(value)}
+                  x2={plotLeft + plotWidth}
+                  y2={yToPixel(value)}
+                  stroke="#dde3ec"
+                  strokeWidth="1"
+                />
+              ))}
+              <line
+                x1={plotLeft}
+                y1={plotTop + plotHeight}
+                x2={plotLeft + plotWidth}
+                y2={plotTop + plotHeight}
+                stroke="#cad2dd"
+                strokeWidth="1"
+              />
+              <polyline
+                points={curvePoints}
+                fill="none"
+                stroke="#aab5c3"
+                strokeWidth="2.5"
+              />
+              <line
+                x1={currentX}
+                y1={plotTop}
+                x2={currentX}
+                y2={plotTop + plotHeight}
+                stroke="#a8b492"
+                strokeWidth="3"
+              />
+              <line
+                x1={potentialX}
+                y1={plotTop}
+                x2={potentialX}
+                y2={plotTop + plotHeight}
+                stroke="#9cc5a9"
+                strokeWidth="1.6"
+                strokeDasharray="5 5"
+              />
+              <rect
+                x={currentX - 56}
+                y={plotTop - 30}
+                width="116"
+                height="24"
+                rx="12"
+                fill="#eef2e6"
+                stroke="#b7c09f"
+              />
+              <text
+                x={currentX + 2}
+                y={plotTop - 14}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#9aa775"
+                fontWeight="600"
+              >
+                6.42 · Top 17.0%
+              </text>
+              <text
+                x={(currentX + potentialX) / 2 + 4}
+                y={plotTop + plotHeight - 2}
+                transform={`rotate(-90 ${(currentX + potentialX) / 2 + 4} ${plotTop + plotHeight - 2})`}
+                fontSize="24"
+                fill="#a6c0ab"
+                fontWeight="500"
+                letterSpacing="0.06em"
+              >
+                IMPROVEMENT
+              </text>
+              {[0, 10, 20, 30, 40].map((tick, index) => (
+                <text
+                  key={`ytick-${tick}`}
+                  x={plotLeft - 10}
+                  y={yToPixel(index / 4) + 4}
+                  textAnchor="end"
+                  fontSize="11"
+                  fill="#9aa7b8"
+                >
+                  {tick}
+                </text>
+              ))}
+              <text
+                x={22}
+                y={plotTop + plotHeight / 2}
+                transform={`rotate(-90 22 ${plotTop + plotHeight / 2})`}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#9aa7b8"
+                letterSpacing="0.08em"
+                fontWeight="500"
+              >
+                POPULATION DENSITY
+              </text>
+              {Array.from({ length: 11 }, (_, index) => (
+                <text
+                  key={`tick-${index}`}
+                  x={xToPixel(index)}
+                  y={plotTop + plotHeight + 20}
+                  textAnchor="middle"
+                  fontSize="13"
+                  fill="#8f9caf"
+                >
+                  {index}
+                </text>
+              ))}
+              <text
+                x={plotLeft + plotWidth / 2}
+                y={chartHeight - 10}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#9faabb"
+                letterSpacing="0.15em"
+                fontWeight="600"
+              >
+                OVERALL SCORE
+              </text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const REQUIRED_SCAN_ASSETS: RequiredScanAsset[] = [
   { code: "FACE_FRONT", label_fr: "Visage de face" },
   { code: "PROFILE_LEFT", label_fr: "Profil gauche" },
@@ -436,6 +731,8 @@ export default function Onboarding() {
 
   const currentStep = steps[stepIndex];
   const CurrentIcon = currentStep.icon;
+  const isDatingStep = currentStep.category === "Rencontres";
+  const isSocialStep = currentStep.category === "Vie sociale";
   const isLastStep = stepIndex === steps.length - 1;
   const isAnalysisRunning = isLastStep && isSubmitting;
 
@@ -737,19 +1034,27 @@ export default function Onboarding() {
                   <h1 className="text-2xl font-display font-bold leading-tight tracking-tight text-slate-900 sm:text-[2rem]">
                     {currentStep.title}
                   </h1>
-                  <p className="text-sm leading-relaxed text-slate-600 sm:text-base">
-                    {currentStep.description}
-                  </p>
+                  {isDatingStep ? (
+                    <OnboardingBeforeAfterComparison />
+                  ) : isSocialStep ? (
+                    <OnboardingSocialProofShowcase />
+                  ) : (
+                    <p className="text-sm leading-relaxed text-slate-600 sm:text-base">
+                      {currentStep.description}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-semibold leading-relaxed text-slate-900 sm:text-base">
-                    {currentStep.claim}
-                  </p>
-                  <p className="text-xs leading-relaxed text-slate-500 sm:text-sm">
-                    {currentStep.source}
-                  </p>
-                </div>
+                {!isDatingStep && !isSocialStep ? (
+                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-semibold leading-relaxed text-slate-900 sm:text-base">
+                      {currentStep.claim}
+                    </p>
+                    <p className="text-xs leading-relaxed text-slate-500 sm:text-sm">
+                      {currentStep.source}
+                    </p>
+                  </div>
+                ) : null}
 
                 {isLastStep ? (
                   <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
