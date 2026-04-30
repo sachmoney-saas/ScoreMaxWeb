@@ -13,6 +13,7 @@ import {
   Users,
   MoreVertical,
 } from "lucide-react";
+import type { OnboardingScanAssetCode } from "@shared/schema";
 import { AnalysisProcessingState } from "@/components/analysis/AnalysisProcessingState";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboardingScanStatus } from "@/hooks/use-supabase";
+import { uploadScanAsset } from "@/lib/face-analysis";
 import { supabase } from "@/lib/supabase";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AUTH_CONFIG } from "@/config/auth";
@@ -596,36 +598,12 @@ export default function Onboarding() {
       setUploadMessage(null);
 
       try {
-        const extension = file.type === "image/png" ? "png" : "jpg";
-        const storagePath = `${user.id}/${onboardingSessionId}/${assetTypeCode}-${Date.now()}.${extension}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("scan-assets")
-          .upload(storagePath, file, {
-            cacheControl: "3600",
-            contentType: file.type,
-            upsert: true,
-          });
-
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const { error: insertError } = await supabase.from("scan_assets").insert({
-          session_id: onboardingSessionId,
-          user_id: user.id,
-          asset_type_code: assetTypeCode,
-          r2_bucket: "scan-assets",
-          r2_key: storagePath,
-          mime_type: file.type,
-          byte_size: file.size,
-          upload_status: "uploaded",
-          captured_at: new Date().toISOString(),
+        await uploadScanAsset({
+          userId: user.id,
+          sessionId: onboardingSessionId,
+          assetTypeCode: assetTypeCode as OnboardingScanAssetCode,
+          file,
         });
-
-        if (insertError) {
-          throw insertError;
-        }
 
         await queryClient.invalidateQueries({
           queryKey: ["onboarding-scan-status", user.id],

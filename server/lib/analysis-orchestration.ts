@@ -1,6 +1,7 @@
 import { analysesRequestSchema } from "@shared/oneshot";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import { ApiError } from "./errors";
+import { downloadR2Object, getDefaultR2Bucket } from "./r2-storage";
 import { supabaseAdmin } from "./supabase-admin";
 
 export const requiredAssetCodes: OnboardingScanAssetCode[] = [
@@ -122,12 +123,14 @@ async function blobToBase64(blob: Blob): Promise<string> {
 async function buildAnalysisImages(assets: ScanAssetRow[]) {
   return Promise.all(
     assets.map(async (asset) => {
-      const bucketName = asset.r2_bucket || "scan-assets";
-      const { data, error } = await supabaseAdmin.storage
-        .from(bucketName)
-        .download(asset.r2_key);
-
-      if (error || !data) {
+      const bucketName = asset.r2_bucket || getDefaultR2Bucket();
+      let data: Blob;
+      try {
+        data = await downloadR2Object({
+          bucket: bucketName,
+          key: asset.r2_key,
+        });
+      } catch (error) {
         throw new ApiError({
           code: "IMAGE_NOT_FOUND",
           status: 400,

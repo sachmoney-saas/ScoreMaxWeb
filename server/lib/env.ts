@@ -67,3 +67,17 @@ export function getSupabaseAdminEnv(): {
     serviceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
   };
 }
+
+export function getR2Env(): {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+} {
+  return {
+    accountId: requireEnv("R2_ACCOUNT_ID"),
+    accessKeyId: requireEnv("R2_ACCESS_KEY_ID"),
+    secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
+    bucket: requireEnv("R2_BUCKET"),
+  };
+}

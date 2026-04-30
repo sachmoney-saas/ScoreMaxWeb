@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
+import { clientEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import type { AnalysesRequest } from "@shared/oneshot";
@@ -179,6 +180,16 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
+function buildPublicR2Url(key: string): string {
+  const baseUrl = clientEnv.VITE_R2_PUBLIC_BASE_URL;
+  if (!baseUrl) {
+    throw new Error("VITE_R2_PUBLIC_BASE_URL est requis pour lire les assets R2.");
+  }
+
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+  return `${normalizedBase}/${key}`;
+}
+
 export async function uploadScanAsset(params: {
   userId: string;
   sessionId: string;
@@ -190,26 +201,54 @@ export async function uploadScanAsset(params: {
   }
 
   const extension = params.file.type === "image/png" ? "png" : "jpg";
-  const storagePath = `${params.userId}/${params.sessionId}/${params.assetTypeCode}-${Date.now()}.${extension}`;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) {
+    throw new Error("Session Supabase introuvable");
+  }
 
-  const { error: uploadError } = await supabase.storage
-    .from("scan-assets")
-    .upload(storagePath, params.file, {
-      cacheControl: "3600",
-      contentType: params.file.type,
-      upsert: true,
-    });
+  const signedUploadResponse = await apiRequest(
+    "POST",
+    "/v1/analyses/scan-assets/signed-upload",
+    {
+      sessionId: params.sessionId,
+      assetTypeCode: params.assetTypeCode,
+      mimeType: params.file.type,
+    },
+    {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  );
+  const signedUploadPayload = (await signedUploadResponse.json()) as {
+    data?: {
+      bucket: string;
+      key: string;
+      upload_url: string;
+    };
+  };
+  const uploadData = signedUploadPayload.data;
+  if (!uploadData) {
+    throw new Error("Impossible de préparer l'upload sur R2.");
+  }
 
-  if (uploadError) {
-    throw uploadError;
+  const uploadResponse = await fetch(uploadData.upload_url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": params.file.type,
+    },
+    body: params.file,
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error("Upload Cloudflare R2 échoué.");
   }
 
   const { error: insertError } = await supabase.from("scan_assets").insert({
     session_id: params.sessionId,
     user_id: params.userId,
     asset_type_code: params.assetTypeCode,
-    r2_bucket: "scan-assets",
-    r2_key: storagePath,
+    r2_bucket: uploadData.bucket,
+    r2_key: uploadData.key,
     mime_type: params.file.type,
     byte_size: params.file.size,
     upload_status: "uploaded",
@@ -252,17 +291,11 @@ export async function buildFaceAnalysisRequest(params: {
 
   const images = await Promise.all(
     assets.map(async (asset) => {
-      const bucketName = asset.r2_bucket || "scan-assets";
-      const { data, error } = await supabase.storage
-        .from(bucketName)
-        .download(asset.r2_key);
-
-      if (error || !data) {
-        throw (
-          error ??
-          new Error(`Unable to download asset ${asset.asset_type_code}`)
-        );
+      const response = await fetch(buildPublicR2Url(asset.r2_key));
+      if (!response.ok) {
+        throw new Error(`Unable to download asset ${asset.asset_type_code}`);
       }
+      const data = await response.blob();
 
       return {
         imageId: asset.asset_type_code,

@@ -15,6 +15,11 @@ import {
   type ScanSessionRow,
 } from "../lib/analysis-orchestration";
 import { requireUserId } from "../lib/auth";
+import {
+  downloadR2Object,
+  getDefaultR2Bucket,
+  getR2SignedUploadUrl,
+} from "../lib/r2-storage";
 import { supabaseAdmin } from "../lib/supabase-admin";
 
 const analysesMetadataSchema = z.object({
@@ -33,6 +38,20 @@ const analysisJobParamsSchema = z.object({
 
 const manualSessionParamsSchema = z.object({
   sessionId: z.string().uuid(),
+});
+
+const signedUploadBodySchema = z.object({
+  sessionId: z.string().uuid(),
+  assetTypeCode: z
+    .string()
+    .refine(
+      (value): value is OnboardingScanAssetCode =>
+        (requiredAssetCodes as string[]).includes(value),
+      {
+        message: "Invalid asset type code",
+      },
+    ),
+  mimeType: z.enum(["image/jpeg", "image/png"]),
 });
 
 type AnalysisJobAssetRow = {
@@ -163,6 +182,34 @@ export function createV1AnalysesRouter(): Router {
         data: {
           session,
           required_asset_codes: requiredAssetCodes,
+        },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/analyses/scan-assets/signed-upload", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const body = signedUploadBodySchema.parse(req.body);
+      const extension = body.mimeType === "image/png" ? "png" : "jpg";
+      const key = `${userId}/scans/${body.sessionId}/${body.assetTypeCode.toLowerCase()}-${Date.now()}.${extension}`;
+      const bucket = getDefaultR2Bucket();
+      const uploadUrl = await getR2SignedUploadUrl({
+        bucket,
+        key,
+        contentType: body.mimeType,
+      });
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: {
+          bucket,
+          key,
+          upload_url: uploadUrl,
         },
         error: null,
       });
@@ -540,11 +587,13 @@ export function createV1AnalysesRouter(): Router {
         }
 
         const asset = scanAsset as ScanAssetThumbnailRow;
-        const { data: image, error: downloadError } = await supabaseAdmin.storage
-          .from(asset.r2_bucket || "scan-assets")
-          .download(asset.r2_key);
-
-        if (downloadError || !image) {
+        let image: Blob;
+        try {
+          image = await downloadR2Object({
+            bucket: asset.r2_bucket || getDefaultR2Bucket(),
+            key: asset.r2_key,
+          });
+        } catch (downloadError) {
           throw new ApiError({
             code: "IMAGE_NOT_FOUND",
             status: 404,

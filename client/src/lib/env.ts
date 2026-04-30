@@ -23,8 +23,10 @@ if (missingRequired.length > 0) {
 
 export const clientEnv: Record<RequiredClientKey, string> & {
   VITE_STRIPE_PUBLIC_KEY: string;
+  VITE_R2_PUBLIC_BASE_URL: string;
 } = {
   VITE_SUPABASE_URL: readClientEnv("VITE_SUPABASE_URL"),
   VITE_SUPABASE_ANON_KEY: readClientEnv("VITE_SUPABASE_ANON_KEY"),
   VITE_STRIPE_PUBLIC_KEY: readClientEnv("VITE_STRIPE_PUBLIC_KEY"),
+  VITE_R2_PUBLIC_BASE_URL: readClientEnv("VITE_R2_PUBLIC_BASE_URL"),
 };

@@ -1,4 +1,5 @@
 import { ApiError } from "./errors";
+import { deleteR2Objects, getDefaultR2Bucket } from "./r2-storage";
 import { supabaseAdmin } from "./supabase-admin";
 
 type AnalysisJobCleanupRow = {
@@ -50,7 +51,7 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 }
 
 function getStorageBucket(asset: Pick<ScanAssetCleanupRow, "r2_bucket">): string {
-  return asset.r2_bucket || "scan-assets";
+  return asset.r2_bucket || getDefaultR2Bucket();
 }
 
 async function removeStorageObjects(refs: StorageObjectRef[]): Promise<StorageRemovalResult> {
@@ -81,9 +82,9 @@ async function removeStorageObjects(refs: StorageObjectRef[]): Promise<StorageRe
     const paths = Array.from(pathsByAssetId.keys());
 
     for (const pathBatch of chunkArray<string>(paths, 1000)) {
-      const { error } = await supabaseAdmin.storage.from(bucket).remove(pathBatch);
-
-      if (error) {
+      try {
+        await deleteR2Objects({ bucket, keys: pathBatch });
+      } catch {
         failedObjectCount += pathBatch.length;
         continue;
       }
