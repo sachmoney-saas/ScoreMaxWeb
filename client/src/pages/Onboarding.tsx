@@ -2,10 +2,10 @@ import * as React from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowRight,
   BriefcaseBusiness,
-  Heart,
+  Download,
   ImagePlus,
+  Infinity as InfinityIcon,
   Loader2,
   LogOut,
   ScanFace,
@@ -45,19 +45,26 @@ import { uploadScanAsset } from "@/lib/face-analysis";
 import { supabase } from "@/lib/supabase";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AUTH_CONFIG } from "@/config/auth";
+import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
+
+type OnboardingEvidenceBlock = {
+  claim: string;
+  source: string;
+};
 
 type OnboardingStep = {
   title: string;
   category: string;
-  claim: string;
-  source: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }>;
+  /** Blocs citation + source ; vide = pas d’encadré gris (ex. introduction). */
+  evidence: OnboardingEvidenceBlock[];
 };
 
 type RequiredScanAsset = {
   code: string;
   label_fr: string;
+  label_en: string;
 };
 
 type OnboardingAnalysisJob = {
@@ -67,42 +74,87 @@ type OnboardingAnalysisJob = {
   error_message?: string | null;
 };
 
-function OnboardingBeforeAfterComparison() {
-  const [splitPercent, setSplitPercent] = React.useState(58);
+/** Comparatif Rencontres — chargées en cache dès l’entrée dans l’onboarding. */
+const ONBOARDING_PRELOAD_IMAGE_URLS = ["/model1.png", "/model2.png"] as const;
+
+function OnboardingBeforeAfterComparison({ language }: { language: AppLanguage }) {
+  const [splitPercent, setSplitPercent] = React.useState(50);
+
+  /** Largeur d’image en % du panneau pour retrouver le même cadrage qu’un plein cadre (pas deux couches pleine taille). */
+  const leftPanelImgWidthPct = 100 / (splitPercent / 100);
+  const rightShare = (100 - splitPercent) / 100;
+  const rightPanelImgWidthPct =
+    rightShare > 0 ? 100 / rightShare : 100;
 
   return (
-    <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-black/20 shadow-[0_28px_65px_-52px_rgba(0,0,0,0.9)]">
-        <img
-          src="/model2.png"
-          alt="Avant optimisation"
-          loading="lazy"
-          className="block h-auto w-full select-none object-cover"
-        />
-
+    <div className="space-y-2 sm:space-y-3">
+      {/* Hauteur plafonnée par viewport pour garder l'étape lisible sans scroll excessif */}
+      <div
+        className="relative isolate aspect-[4/5] w-full max-h-[min(28svh,240px)] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_28px_65px_-52px_rgba(9,20,37,0.18)] sm:aspect-[4/3] sm:max-h-[min(34svh,320px)] md:max-h-[min(38svh,400px)] lg:max-h-[min(42svh,480px)]"
+      >
+        {/* Panneau gauche : uniquement l’avant — aucune image droite en dessous */}
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 overflow-hidden"
+          className="pointer-events-none absolute inset-y-0 left-0 z-[1] overflow-hidden"
+          style={{ width: `${splitPercent}%` }}
+        >
+          <img
+            src="/model2.png"
+            alt="Avant optimisation"
+            loading="lazy"
+            className="absolute top-0 left-0 h-full max-w-none select-none object-cover object-center"
+            style={{ width: `${leftPanelImgWidthPct}%` }}
+          />
+          <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1.5 sm:bottom-4 sm:left-4">
+            <div className="flex items-baseline gap-1 rounded-2xl border border-white/25 bg-gradient-to-br from-black/70 to-black/50 px-3 py-2 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.55)] backdrop-blur-md">
+              <span className="font-display text-xl font-bold tabular-nums leading-none text-white sm:text-2xl">
+                2
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85 sm:text-xs">
+                match
+              </span>
+            </div>
+            <div className="flex h-9 min-h-9 w-max items-center justify-center rounded-lg border border-white/20 bg-black/45 px-3 text-[10px] font-semibold uppercase tracking-[0.06em] leading-none text-white/95 shadow-sm backdrop-blur-sm sm:h-10 sm:min-h-10 sm:text-[11px]">
+              0 Bodycount
+            </div>
+          </div>
+        </div>
+
+        {/* Panneau droit : uniquement l’après */}
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 z-[1] overflow-hidden"
           style={{ width: `${100 - splitPercent}%` }}
         >
           <img
             src="/model1.png"
-            alt="Apres optimisation"
+            alt="Après optimisation"
             loading="lazy"
-            className="absolute inset-y-0 right-0 h-full w-auto min-w-full max-w-none object-cover"
+            className="absolute top-0 right-0 h-full max-w-none select-none object-cover object-center"
+            style={{ width: `${rightPanelImgWidthPct}%` }}
           />
+          <div className="absolute right-3 bottom-3 flex flex-col items-end gap-1.5 sm:right-4 sm:bottom-4">
+            <div className="flex items-baseline gap-1 rounded-2xl border border-white/25 bg-gradient-to-br from-[#fe3c72]/95 to-[#fd267d]/90 px-3 py-2 shadow-[0_8px_24px_-4px_rgba(253,38,125,0.45)] backdrop-blur-sm">
+              <span className="font-display text-xl font-bold tabular-nums leading-none text-white sm:text-2xl">
+                142
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90 sm:text-xs">
+                match
+              </span>
+            </div>
+            <div className="flex h-9 min-h-9 w-max items-center gap-1.5 rounded-lg border border-white/25 bg-[#fd267d]/85 px-3 text-[10px] font-semibold uppercase tracking-[0.06em] leading-none text-white shadow-sm backdrop-blur-sm sm:h-10 sm:min-h-10 sm:text-[11px]">
+              <InfinityIcon
+                className="h-[18px] w-[30px] shrink-0 stroke-[2.25] text-white"
+                strokeWidth={2.25}
+                aria-hidden
+              />
+              <span>bodycount</span>
+            </div>
+          </div>
         </div>
 
         <div
-          className="pointer-events-none absolute inset-y-0 z-10 w-[2px] bg-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.15)]"
+          className="pointer-events-none absolute inset-y-0 z-10 w-[2px] -translate-x-1/2 bg-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.15)]"
           style={{ left: `${splitPercent}%` }}
         />
-
-        <span className="pointer-events-none absolute top-3 left-3 rounded-full border border-white/35 bg-black/35 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
-          Avant
-        </span>
-        <span className="pointer-events-none absolute top-3 right-3 rounded-full border border-white/35 bg-black/35 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
-          Apres
-        </span>
       </div>
 
       <input
@@ -111,23 +163,25 @@ function OnboardingBeforeAfterComparison() {
         max={80}
         value={splitPercent}
         onChange={(event) => setSplitPercent(Number(event.currentTarget.value))}
-        aria-label="Comparer avant et apres"
-        className="h-2 w-full cursor-ew-resize appearance-none rounded-full bg-slate-200 accent-slate-900"
+        aria-label={i18n(language, {
+          en: "Compare before and after",
+          fr: "Comparer avant et apres",
+        })}
+        className="h-1.5 w-full shrink-0 cursor-ew-resize appearance-none rounded-full bg-slate-200 accent-slate-900 sm:h-2"
       />
     </div>
   );
 }
 
-function OnboardingSocialProofShowcase() {
-  const [splitPercent, setSplitPercent] = React.useState(56);
+function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) {
   const currentScore = 6.42;
   const potentialScore = 7.35;
-  const chartWidth = 700;
-  const chartHeight = 300;
-  const plotLeft = 62;
-  const plotRight = 20;
-  const plotTop = 52;
-  const plotBottom = 58;
+  const chartWidth = 560;
+  const chartHeight = 260;
+  const plotLeft = 52;
+  const plotRight = 18;
+  const plotTop = 42;
+  const plotBottom = 48;
   const plotWidth = chartWidth - plotLeft - plotRight;
   const plotHeight = chartHeight - plotTop - plotBottom;
   const xMin = 0;
@@ -154,64 +208,27 @@ function OnboardingSocialProofShowcase() {
   const potentialX = xToPixel(potentialScore);
 
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div className="grid gap-4 lg:grid-cols-[260px_1fr] lg:items-start">
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-2.5">
-          <div className="relative overflow-hidden rounded-lg border border-slate-200">
-            <img
-              src="/model2.png"
-              alt="Avant optimisation"
-              loading="lazy"
-              className="block h-auto w-full select-none object-cover"
-            />
-            <div
-              className="pointer-events-none absolute inset-y-0 right-0 overflow-hidden"
-              style={{ width: `${100 - splitPercent}%` }}
-            >
-              <img
-                src="/model1.png"
-                alt="Apres optimisation"
-                loading="lazy"
-                className="absolute inset-y-0 right-0 h-full w-auto min-w-full max-w-none object-cover"
-              />
-            </div>
-            <div
-              className="pointer-events-none absolute inset-y-0 z-10 w-[2px] bg-white/90"
-              style={{ left: `${splitPercent}%` }}
-            />
-            <span className="pointer-events-none absolute top-2 left-2 rounded-full border border-white/35 bg-black/35 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white">
-              Avant
-            </span>
-            <span className="pointer-events-none absolute top-2 right-2 rounded-full border border-white/35 bg-black/35 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white">
-              Apres
-            </span>
-          </div>
-          <input
-            type="range"
-            min={20}
-            max={80}
-            value={splitPercent}
-            onChange={(event) => setSplitPercent(Number(event.currentTarget.value))}
-            aria-label="Comparer avant et apres"
-            className="h-2 w-full cursor-ew-resize appearance-none rounded-full bg-slate-200 accent-slate-900"
-          />
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+    <div className="min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
           <div className="mx-auto max-w-xl text-center">
             <h3 className="font-display text-3xl leading-tight tracking-tight text-slate-900 sm:text-4xl">
-              Your score isn't fixed
+              {i18n(language, {
+                en: "Your score isn't fixed",
+                fr: "Ton score n'est pas figé",
+              })}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-500 sm:text-base">
-              Small, consistent changes compound over time. Track your progress
-              and watch your score move.
+              {i18n(language, {
+                en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
+                fr: "De petits changements réguliers se cumulent avec le temps. Suis ta progression et regarde ton score évoluer.",
+              })}
             </p>
           </div>
 
           <div className="mt-6 flex items-end justify-center gap-5 text-center sm:gap-9">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                Today
+                {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
               </p>
               <p className="mt-2 font-display text-5xl tracking-tight text-slate-400 sm:text-6xl">
                 {currentScore.toFixed(2)}
@@ -220,7 +237,7 @@ function OnboardingSocialProofShowcase() {
             <div className="pb-3 text-4xl text-slate-300 sm:text-5xl">→</div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Potential
+                {i18n(language, { en: "Potential", fr: "Potentiel" })}
               </p>
               <p className="mt-2 font-display text-5xl tracking-tight text-slate-900 sm:text-6xl">
                 {potentialScore.toFixed(2)}
@@ -228,10 +245,11 @@ function OnboardingSocialProofShowcase() {
             </div>
           </div>
 
-          <div className="mt-5 overflow-x-auto">
+          <div className="mt-5 w-full min-w-0">
             <svg
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="mx-auto min-w-[620px]"
+              className="mx-auto block h-auto w-full max-w-full"
+              preserveAspectRatio="xMidYMid meet"
               role="img"
               aria-label="Score distribution chart"
             >
@@ -300,12 +318,12 @@ function OnboardingSocialProofShowcase() {
                 x={(currentX + potentialX) / 2 + 4}
                 y={plotTop + plotHeight - 2}
                 transform={`rotate(-90 ${(currentX + potentialX) / 2 + 4} ${plotTop + plotHeight - 2})`}
-                fontSize="24"
+                fontSize="18"
                 fill="#a6c0ab"
                 fontWeight="500"
                 letterSpacing="0.06em"
               >
-                IMPROVEMENT
+                {i18n(language, { en: "IMPROVEMENT", fr: "PROGRESSION" })}
               </text>
               {[0, 10, 20, 30, 40].map((tick, index) => (
                 <text
@@ -329,7 +347,7 @@ function OnboardingSocialProofShowcase() {
                 letterSpacing="0.08em"
                 fontWeight="500"
               >
-                POPULATION DENSITY
+                {i18n(language, { en: "POPULATION DENSITY", fr: "DENSITE DE POPULATION" })}
               </text>
               {Array.from({ length: 11 }, (_, index) => (
                 <text
@@ -337,7 +355,7 @@ function OnboardingSocialProofShowcase() {
                   x={xToPixel(index)}
                   y={plotTop + plotHeight + 20}
                   textAnchor="middle"
-                  fontSize="13"
+                  fontSize="11"
                   fill="#8f9caf"
                 >
                   {index}
@@ -352,101 +370,185 @@ function OnboardingSocialProofShowcase() {
                 letterSpacing="0.15em"
                 fontWeight="600"
               >
-                OVERALL SCORE
+                {i18n(language, { en: "OVERALL SCORE", fr: "SCORE GLOBAL" })}
               </text>
             </svg>
           </div>
-        </div>
       </div>
     </div>
   );
 }
 
 const REQUIRED_SCAN_ASSETS: RequiredScanAsset[] = [
-  { code: "FACE_FRONT", label_fr: "Visage de face" },
-  { code: "PROFILE_LEFT", label_fr: "Profil gauche" },
-  { code: "PROFILE_RIGHT", label_fr: "Profil droit" },
-  { code: "LOOK_UP", label_fr: "Regarder en haut" },
-  { code: "LOOK_DOWN", label_fr: "Regarder en bas" },
-  { code: "SMILE", label_fr: "Sourire" },
-  { code: "HAIR_BACK", label_fr: "Cheveux en arrière" },
-  { code: "EYE_CLOSEUP", label_fr: "Gros plan œil" },
+  { code: "FACE_FRONT", label_fr: "Visage de face", label_en: "Front face" },
+  { code: "PROFILE_LEFT", label_fr: "Profil gauche", label_en: "Left profile" },
+  { code: "PROFILE_RIGHT", label_fr: "Profil droit", label_en: "Right profile" },
+  { code: "LOOK_UP", label_fr: "Regarder en haut", label_en: "Look up" },
+  { code: "LOOK_DOWN", label_fr: "Regarder en bas", label_en: "Look down" },
+  { code: "SMILE", label_fr: "Sourire", label_en: "Smile" },
+  { code: "HAIR_BACK", label_fr: "Cheveux en arrière", label_en: "Hair back" },
+  { code: "EYE_CLOSEUP", label_fr: "Gros plan œil", label_en: "Eye close-up" },
 ];
 
-const steps: OnboardingStep[] = [
+function getOnboardingSteps(language: AppLanguage): OnboardingStep[] {
+  const tr = (en: string, fr: string) => i18n(language, { en, fr });
+  return [
   {
-    title: "Ton apparence influence directement tes revenus",
-    category: "Finances",
-    claim: "Les personnes attirantes gagnent 10-15% de plus.",
-    source:
-      "Hamermesh, D. S., and J. E. Biddle. (1994). The American Economic Review.",
+    title: tr("Appearance matters and you already know it", "L'apparence compte et tu le sais déjà"),
+    category: tr("Introduction", "Introduction"),
+    description: "",
+    evidence: [],
+  },
+  {
+    title: tr("Finances: income, hiring and sales", "Finances : revenus, embauche et vente"),
+    category: tr("Finances", "Finances"),
     description:
-      "Le beauty privilege se traduit concrètement dans la rémunération et les opportunités de carrière.",
+      tr(
+        "The beauty premium translates directly into compensation, career opportunities, and transactional outcomes.",
+        "Le beauty privilege se traduit concrètement dans la rémunération, les opportunités de carrière et les interactions transactionnelles.",
+      ),
     icon: BriefcaseBusiness,
+    evidence: [
+      {
+        claim: tr("Attractive people earn 10-15% more.", "Les personnes attirantes gagnent 10-15% de plus."),
+        source:
+          "Hamermesh, D. S., and J. E. Biddle. (1994). The American Economic Review.",
+      },
+      {
+        claim: tr("Attractive candidates are perceived as more qualified.", "Les candidats attirants sont perçus comme plus qualifiés."),
+        source:
+          "Puleo, R. (2006). Journal of Undergraduate Psychological Research.",
+      },
+      {
+        claim:
+          tr(
+            "Attractive waiters receive $1,261 more in tips per year. Customers are 55% more likely to buy from attractive salespeople.",
+            "Les serveurs attirants reçoivent $1261 de pourboires en plus par an. Les clients ont 55% plus de chances d'acheter à des vendeurs attirants.",
+          ),
+        source:
+          "Parrett, M. (2015). Journal of Economic Psychology. Reingen, P. H., and Kernan, J. B. (1993). Journal of Consumer Psychology.",
+      },
+    ],
   },
   {
-    title: "Les entretiens sont aussi influencés par l'apparence",
-    category: "Finances",
-    claim: "Les candidats attirants sont perçus comme plus qualifiés.",
-    source:
-      "Puleo, R. (2006). Journal of Undergraduate Psychological Research.",
+    title: tr("Influence: network, leadership and visibility", "Influence : réseau, leadership et visibilité"),
+    category: tr("Influence", "Influence"),
     description:
-      "La première impression visuelle impacte l'évaluation avant même l'analyse en profondeur.",
+      tr(
+        "At work and on social media, multiple studies link appearance to status, promotion, and engagement advantages.",
+        "Au travail et sur les réseaux sociaux, plusieurs études associent l'apparence à des avantages de statut, de promotion et d'engagement.",
+      ),
     icon: Users,
+    evidence: [
+      {
+        claim:
+          tr(
+            "Better networking — Attractive people build denser social networks.",
+            "Meilleur réseautage — Les personnes attirantes construisent des réseaux sociaux plus denses.",
+          ),
+        source:
+          "O'Connor, K. M., and Gladstone, E. (2018). Social Networks.",
+      },
+      {
+        claim:
+          tr(
+            "More leadership — Attractive politicians receive more votes.",
+            "Plus de leadership — Les politiciens attirants obtiennent plus de votes.",
+          ),
+        source: "Jaeger et al. (2021). Social Psychology.",
+      },
+      {
+        claim:
+          tr(
+            "More promotions — Attractive people are more likely to be promoted.",
+            "Plus de promotions — Les personnes attirantes ont plus de chances d'être promues.",
+          ),
+        source:
+          "Morrow, P. C., McElroy, J. C., Stamper, B. G., and Wilson, M. A. (1990). Journal of Management.",
+      },
+      {
+        claim:
+          tr(
+            "More followers — Attractive people get more favorable engagement on social platforms.",
+            "Plus de followers — Les personnes attirantes obtiennent un engagement plus favorable sur les réseaux sociaux.",
+          ),
+        source:
+          "Gladstone, E. C., and O'Connor, K. (2013). Academy of Management Proceedings; Strey, S. (2019). MSc dissertation; Lund University.",
+      },
+    ],
   },
   {
-    title: "L'apparence agit même sur les performances commerciales",
-    category: "Finances",
-    claim:
-      "Les serveurs attirants reçoivent $1261 de pourboires en plus par an. Les clients ont 55% plus de chances d'acheter à des vendeurs attirants.",
-    source:
-      "Parrett, M. (2015). Journal of Economic Psychology. Reingen, P. H., and Kernan, J. B. (1993). Journal of Consumer Psychology.",
+    title: tr("In dating, visuals drive the first decision", "En rencontres, le visuel domine la première décision"),
+    category: tr("Dating", "Rencontres"),
     description:
-      "Dans les interactions transactionnelles, l'effet halo augmente la confiance et le passage à l'action.",
-    icon: ArrowRight,
+      tr(
+        "Your image is the primary entry filter: improving presentation changes opportunity quality.",
+        "Ton image est le filtre principal d'entrée: optimiser ta présentation change la qualité des opportunités.",
+      ),
+    evidence: [
+      {
+        claim:
+          tr(
+            "On dating apps, appearance matters about 9 times more than your bio.",
+            "Sur les apps de rencontre, l'apparence compte environ 9 fois plus que la bio.",
+          ),
+        source:
+          "Witmer, J., Rosenbusch, H., and Meral, E. O. (2025). Computers in Human Behavior Reports.",
+      },
+    ],
   },
   {
-    title: "En rencontres, le visuel domine la première décision",
-    category: "Rencontres",
-    claim:
-      "Sur les apps de rencontre, l'apparence compte environ 9 fois plus que la bio.",
-    source:
-      "Witmer, J., Rosenbusch, H., and Meral, E. O. (2025). Computers in Human Behavior Reports.",
+    title: tr("The halo effect also transforms your social life", "L'effet halo transforme aussi ta vie sociale"),
+    category: tr("Social life", "Vie sociale"),
     description:
-      "Ton image est le filtre principal d'entrée: optimiser ta présentation change la qualité des opportunités.",
-    icon: Heart,
-  },
-  {
-    title: "L'effet halo transforme aussi ta vie sociale",
-    category: "Vie sociale",
-    claim:
-      "Les personnes attirantes sont perçues comme plus morales et plus dignes de confiance.",
-    source:
-      "Shinners, E. (2009). UW-L Journal of Undergraduate Research; Klebl et al. (2022). Journal of Nonverbal Behavior.",
-    description:
-      "Confiance, crédibilité, leadership: l'apparence influence ces perceptions dans de nombreux contextes.",
+      tr(
+        "Trust, credibility, leadership: appearance influences these perceptions across many contexts.",
+        "Confiance, crédibilité, leadership: l'apparence influence ces perceptions dans de nombreux contextes.",
+      ),
     icon: Users,
+    evidence: [
+      {
+        claim:
+          tr(
+            "Attractive people are perceived as more moral and more trustworthy.",
+            "Les personnes attirantes sont perçues comme plus morales et plus dignes de confiance.",
+          ),
+        source:
+          "Shinners, E. (2009). UW-L Journal of Undergraduate Research; Klebl et al. (2022). Journal of Nonverbal Behavior.",
+      },
+    ],
   },
   {
-    title: "Teste-toi et découvre ton potentiel",
-    category: "ScoreMax",
-    claim:
-      "ScoreMax analyse ton visage pour te donner un diagnostic clair et actionnable.",
-    source: "Analyse IA ScoreMax",
-    description:
-      "Tu identifies précisément tes points forts et tes axes d'amélioration pour un glow-up mesurable.",
+    title: "",
+    category: tr("AI analysis", "Analyse IA"),
+    description: "",
     icon: ScanFace,
+    evidence: [
+      {
+        claim: tr(
+          "Uses infrared sensors for the most precise facial analysis possible (iPhone X and newer).",
+          "Permet d'utiliser les capteurs infrarouge pour l'analyse faciale la plus précise possible (iPhone X et +).",
+        ),
+        source: "",
+      },
+      {
+        claim: tr(
+          "Most competitors rely on simple photos, which is far less precise.",
+          "Nos concurrents utilisent de simples photos : ce n'est pas précis.",
+        ),
+        source: "",
+      },
+      {
+        claim: tr(
+          "Anti-cheat live capture verifies it's really you, not a static photo upload.",
+          "Nous empêchons la triche : la capture est faite en direct sur toi et empêche l'usage de simples photos.",
+        ),
+        source: "",
+      },
+    ],
   },
-  {
-    title: "Lance ton analyse ScoreMax",
-    category: "Analyse IA",
-    claim: "Tes photos sont prêtes à être analysées par ScoreMax.",
-    source: "ScoreMax Face Analysis",
-    description:
-      "Une fois les photos obligatoires ajoutées, l'analyse démarre et prépare ton diagnostic personnalisé.",
-    icon: ScanFace,
-  },
-];
+  ];
+}
 
 function OnboardingWaveBackground() {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
@@ -703,6 +805,8 @@ function OnboardingWaveBackground() {
 }
 
 export default function Onboarding() {
+  const language = useAppLanguage();
+  const isFrench = language === "fr";
   const [, setLocation] = useLocation();
   const { user, profile } = useAuth();
   const [stepIndex, setStepIndex] = React.useState(0);
@@ -719,6 +823,14 @@ export default function Onboarding() {
   const [uploadMessage, setUploadMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    for (const src of ONBOARDING_PRELOAD_IMAGE_URLS) {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = src;
+    }
+  }, []);
+
+  React.useEffect(() => {
     if (!user) {
       setLocation(AUTH_CONFIG.LOGIN_PATH);
       return;
@@ -729,10 +841,13 @@ export default function Onboarding() {
     }
   }, [profile?.has_completed_onboarding, setLocation, user]);
 
+  const steps = React.useMemo(() => getOnboardingSteps(language), [language]);
   const currentStep = steps[stepIndex];
-  const CurrentIcon = currentStep.icon;
-  const isDatingStep = currentStep.category === "Rencontres";
-  const isSocialStep = currentStep.category === "Vie sociale";
+  const isDatingStep =
+    currentStep.category === "Rencontres" || currentStep.category === "Dating";
+  const isSocialStep =
+    currentStep.category === "Vie sociale" || currentStep.category === "Social life";
+  const isIntroStep = currentStep.category === "Introduction";
   const isLastStep = stepIndex === steps.length - 1;
   const isAnalysisRunning = isLastStep && isSubmitting;
 
@@ -756,14 +871,24 @@ export default function Onboarding() {
     }
 
     setIsSubmitting(true);
-    setAnalysisMessage("Préparation des photos pour l'analyse...");
+    setAnalysisMessage(
+      i18n(language, {
+        en: "Preparing photos for analysis...",
+        fr: "Préparation des photos pour l'analyse...",
+      }),
+    );
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
 
       if (!accessToken) {
-        throw new Error("Session Supabase introuvable");
+        throw new Error(
+          i18n(language, {
+            en: "Supabase session not found",
+            fr: "Session Supabase introuvable",
+          }),
+        );
       }
 
       const headers = { Authorization: `Bearer ${accessToken}` };
@@ -779,10 +904,20 @@ export default function Onboarding() {
       const jobId = startPayload.data?.job?.id;
 
       if (!jobId) {
-        throw new Error("Job d'analyse introuvable");
+        throw new Error(
+          i18n(language, {
+            en: "Analysis job not found",
+            fr: "Job d'analyse introuvable",
+          }),
+        );
       }
 
-      setAnalysisMessage("Analyse ScoreMax lancée...");
+      setAnalysisMessage(
+        i18n(language, {
+          en: "ScoreMax analysis started...",
+          fr: "Analyse ScoreMax lancée...",
+        }),
+      );
 
       for (let attempt = 0; attempt < 120; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
@@ -799,26 +934,51 @@ export default function Onboarding() {
         const job = statusPayload.data?.job;
 
         if (!job) {
-          throw new Error("Statut d'analyse introuvable");
+          throw new Error(
+            i18n(language, {
+              en: "Analysis status not found",
+              fr: "Statut d'analyse introuvable",
+            }),
+          );
         }
 
         if (job.status === "queued") {
-          setAnalysisMessage("Analyse en file d'attente...");
+          setAnalysisMessage(
+            i18n(language, {
+              en: "Analysis queued...",
+              fr: "Analyse en file d'attente...",
+            }),
+          );
           continue;
         }
 
         if (job.status === "running") {
-          setAnalysisMessage("Analyse ScoreMax en cours...");
+          setAnalysisMessage(
+            i18n(language, {
+              en: "ScoreMax analysis in progress...",
+              fr: "Analyse ScoreMax en cours...",
+            }),
+          );
           continue;
         }
 
         if (job.status === "failed") {
           throw new Error(
-            job.error_message || job.error_code || "Analyse ScoreMax échouée",
+            job.error_message ||
+              job.error_code ||
+              i18n(language, {
+                en: "ScoreMax analysis failed",
+                fr: "Analyse ScoreMax échouée",
+              }),
           );
         }
 
-        setAnalysisMessage("Analyse terminée, redirection vers votre dashboard...");
+        setAnalysisMessage(
+          i18n(language, {
+            en: "Analysis complete, redirecting to your dashboard...",
+            fr: "Analyse terminée, redirection vers votre dashboard...",
+          }),
+        );
         await queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
         await queryClient.invalidateQueries({
           queryKey: ["latest-face-analysis", user.id],
@@ -827,17 +987,25 @@ export default function Onboarding() {
         return;
       }
 
-      throw new Error("Analyse trop longue, réessaie dans quelques instants");
+      throw new Error(
+        i18n(language, {
+          en: "Analysis is taking too long, please retry in a few moments",
+          fr: "Analyse trop longue, réessaie dans quelques instants",
+        }),
+      );
     } catch (error) {
       console.error("Unable to complete onboarding:", error);
       setAnalysisMessage(
         error instanceof Error
           ? error.message
-          : "Impossible de lancer l'analyse pour le moment.",
+          : i18n(language, {
+              en: "Unable to start analysis right now.",
+              fr: "Impossible de lancer l'analyse pour le moment.",
+            }),
       );
       setIsSubmitting(false);
     }
-  }, [isSubmitting, setLocation, user?.id]);
+  }, [isSubmitting, language, setLocation, user?.id]);
 
   const handleLogout = React.useCallback(async () => {
     await supabase.auth.signOut();
@@ -870,15 +1038,18 @@ export default function Onboarding() {
       queryClient.clear();
       setLocation(AUTH_CONFIG.LOGIN_PATH);
     } catch (error) {
-      console.error("Erreur lors de la suppression du compte:", error);
+      console.error("Error while deleting account:", error);
       alert(
-        "Impossible de supprimer le compte pour le moment. Réessaye plus tard.",
+        i18n(language, {
+          en: "Unable to delete account right now. Try again later.",
+          fr: "Impossible de supprimer le compte pour le moment. Réessaye plus tard.",
+        }),
       );
     } finally {
       setIsDeletingAccount(false);
       setIsDeleteDialogOpen(false);
     }
-  }, [user?.id, setLocation]);
+  }, [language, setLocation, user?.id]);
 
   const handleManualAssetUpload = React.useCallback(
     async (assetTypeCode: string, file: File | null) => {
@@ -887,7 +1058,12 @@ export default function Onboarding() {
       }
 
       if (!["image/jpeg", "image/png"].includes(file.type)) {
-        setUploadMessage("Utilise une image JPG ou PNG.");
+        setUploadMessage(
+          i18n(language, {
+            en: "Use a JPG or PNG image.",
+            fr: "Utilise une image JPG ou PNG.",
+          }),
+        );
         return;
       }
 
@@ -905,15 +1081,25 @@ export default function Onboarding() {
         await queryClient.invalidateQueries({
           queryKey: ["onboarding-scan-status", user.id],
         });
-        setUploadMessage("Photo ajoutée.");
+        setUploadMessage(
+          i18n(language, {
+            en: "Photo added.",
+            fr: "Photo ajoutée.",
+          }),
+        );
       } catch (error) {
         console.error("Unable to upload onboarding asset:", error);
-        setUploadMessage("Impossible d'ajouter cette photo.");
+        setUploadMessage(
+          i18n(language, {
+            en: "Unable to add this photo.",
+            fr: "Impossible d'ajouter cette photo.",
+          }),
+        );
       } finally {
         setUploadingAssetCode(null);
       }
     },
-    [onboardingSessionId, uploadingAssetCode, user?.id],
+    [language, onboardingSessionId, uploadingAssetCode, user?.id],
   );
 
   const handleNext = React.useCallback(() => {
@@ -944,14 +1130,14 @@ export default function Onboarding() {
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
-              <span>Se déconnecter</span>
+              <span>{i18n(language, { en: "Log out", fr: "Se déconnecter" })}</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setIsDeleteDialogOpen(true)}
               className="text-red-600 focus:text-red-600"
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              <span>Supprimer le compte</span>
+              <span>{i18n(language, { en: "Delete account", fr: "Supprimer le compte" })}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -964,21 +1150,24 @@ export default function Onboarding() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer le compte</AlertDialogTitle>
+            <AlertDialogTitle>{i18n(language, { en: "Delete account", fr: "Supprimer le compte" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est définitive. Ton compte et toutes tes données
-              seront supprimés immédiatement. Tu ne pourras pas revenir en
-              arrière.
+              {i18n(language, {
+                en: "This action is permanent. Your account and all your data will be deleted immediately. This cannot be undone.",
+                fr: "Cette action est définitive. Ton compte et toutes tes données seront supprimés immédiatement. Tu ne pourras pas revenir en arrière.",
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex gap-2">
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>{i18n(language, { en: "Cancel", fr: "Annuler" })}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteAccount}
               disabled={isDeletingAccount}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isDeletingAccount ? "Suppression..." : "Supprimer"}
+              {isDeletingAccount
+                ? i18n(language, { en: "Deleting...", fr: "Suppression..." })
+                : i18n(language, { en: "Delete", fr: "Supprimer" })}
             </AlertDialogAction>
           </div>
         </AlertDialogContent>
@@ -1017,187 +1206,246 @@ export default function Onboarding() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -14 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
-              className="rounded-[2rem] border border-white/60 bg-white p-5 shadow-[0_24px_70px_-35px_rgba(9,20,37,0.55)] sm:p-8"
+              className={`rounded-[2rem] border border-white/60 bg-white p-5 shadow-[0_24px_70px_-35px_rgba(9,20,37,0.55)] sm:p-8 ${
+                isIntroStep ? "min-h-[360px] sm:min-h-[420px]" : ""
+              } ${isLastStep ? "mx-auto w-full max-w-[430px]" : ""}`}
             >
               {isAnalysisRunning ? (
                 <AnalysisProcessingState message={analysisMessage} />
               ) : (
-                <div className="space-y-5">
-                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700">
-                  <CurrentIcon className="h-6 w-6" />
-                </div>
-
-                <div className="space-y-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {currentStep.category}
-                  </p>
-                  <h1 className="text-2xl font-display font-bold leading-tight tracking-tight text-slate-900 sm:text-[2rem]">
-                    {currentStep.title}
-                  </h1>
-                  {isDatingStep ? (
-                    <OnboardingBeforeAfterComparison />
-                  ) : isSocialStep ? (
-                    <OnboardingSocialProofShowcase />
+                <div
+                  className={`min-w-0 space-y-5 ${
+                    isIntroStep
+                      ? "flex min-h-[200px] flex-col items-center justify-center text-center sm:min-h-[240px]"
+                      : ""
+                  }`}
+                >
+                  {isSocialStep ? (
+                    <OnboardingSocialProofShowcase language={language} />
                   ) : (
-                    <p className="text-sm leading-relaxed text-slate-600 sm:text-base">
-                      {currentStep.description}
-                    </p>
+                    <>
+                      <div
+                        className={
+                          isDatingStep
+                            ? "space-y-2 text-center sm:space-y-3"
+                            : isIntroStep
+                              ? "text-center"
+                              : "space-y-3 text-center"
+                        }
+                      >
+                        <motion.h1
+                          initial={
+                            isIntroStep
+                              ? { opacity: 0, scale: 0.84, y: 20 }
+                              : undefined
+                          }
+                          animate={
+                            isIntroStep
+                              ? { opacity: 1, scale: 1.03, y: 0 }
+                              : undefined
+                          }
+                          transition={
+                            isIntroStep
+                              ? { duration: 2.9, ease: [0.16, 1, 0.3, 1] }
+                              : undefined
+                          }
+                          className={
+                            isDatingStep
+                              ? "mx-auto max-w-[18ch] text-xl font-display font-bold leading-snug tracking-tight text-slate-900 sm:text-2xl md:text-[2rem]"
+                              : isIntroStep
+                                ? "mx-auto max-w-[16ch] text-center text-[2.15rem] font-display font-extrabold leading-[0.96] tracking-[-0.022em] text-slate-900 sm:text-[2.95rem] md:text-[3.35rem]"
+                              : "mx-auto max-w-[22ch] text-2xl font-display font-bold leading-tight tracking-tight text-slate-900 sm:text-[2rem]"
+                          }
+                        >
+                          {isIntroStep ? (
+                            <>
+                              <span className="block">
+                                {i18n(language, { en: "Appearance matters", fr: "L'apparence compte" })}
+                              </span>
+                              <span className="block">
+                                {i18n(language, { en: "and you already know it", fr: "et tu le sais déjà" })}
+                              </span>
+                            </>
+                          ) : (
+                            currentStep.title
+                          )}
+                        </motion.h1>
+                        {isIntroStep ? (
+                          <h2 className="mx-auto mt-14 text-center text-sm font-semibold tracking-[0.09em] text-slate-500 sm:mt-16 sm:text-base">
+                            {i18n(language, {
+                              en: "Finance, Influence, Dating...",
+                              fr: "Finance, Influence, Rencontres...",
+                            })}
+                          </h2>
+                        ) : null}
+                        {isDatingStep ? (
+                          <OnboardingBeforeAfterComparison language={language} />
+                        ) : !isIntroStep ? (
+                          <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-slate-600 sm:text-base">
+                            {currentStep.description}
+                          </p>
+                        ) : null}
+                      </div>
+                    </>
                   )}
-                </div>
 
-                {!isDatingStep && !isSocialStep ? (
-                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-sm font-semibold leading-relaxed text-slate-900 sm:text-base">
-                      {currentStep.claim}
-                    </p>
-                    <p className="text-xs leading-relaxed text-slate-500 sm:text-sm">
-                      {currentStep.source}
-                    </p>
+                {!isDatingStep &&
+                !isSocialStep &&
+                !isLastStep &&
+                currentStep.evidence.length > 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    {currentStep.evidence.map((block, index) => (
+                      <div
+                        key={`onboarding-evidence-${index}`}
+                        className={
+                          index > 0
+                            ? "mt-3 border-t border-slate-200 pt-3"
+                            : undefined
+                        }
+                      >
+                        <p className="text-sm font-semibold leading-relaxed text-slate-900 sm:text-base">
+                          {block.claim}
+                        </p>
+                        {block.source ? (
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                            {block.source}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
                   </div>
                 ) : null}
 
                 {isLastStep ? (
-                  <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          En attente des éléments d'analyse issus de l'application
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {completedAssetCount}/{requiredAssetCount} éléments reçus
-                        </p>
-                      </div>
-                      {isScanStatusLoading ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-500" />
-                      ) : null}
-                    </div>
-
-                    {isScanStatusError ? (
-                      <p className="text-sm text-red-600">
-                        Impossible de vérifier les éléments pour l'instant.
-                        Réessaie dans quelques secondes.
+                  <div className="mx-auto w-full max-w-sm">
+                    <div className="flex flex-col text-center">
+                      <p className="mt-3 text-[1.45rem] font-extrabold text-slate-900 sm:text-[1.75rem]">
+                        {i18n(language, {
+                          en: "Start your first analysis",
+                          fr: "Lance ta première analyse",
+                        })}
                       </p>
-                    ) : null}
-
-                    {!isScanStatusLoading && !isScanStatusError && isScanReady ? (
-                      <p className="text-sm font-semibold text-emerald-700">
-                        Tous les éléments d'analyse sont prêts.
-                      </p>
-                    ) : null}
-
-                    {!isScanReady ? (
-                      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-auto w-fit p-0 text-xs font-semibold text-slate-500 underline-offset-4 hover:bg-transparent hover:text-slate-900 hover:underline"
+                      <div className="mt-3 w-full space-y-2.5 text-left">
+                        {currentStep.evidence.map((block, index) => (
+                          <div
+                            key={`app-card-argument-${index}`}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2.5"
                           >
-                            Ajouter manuellement des photos
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-h-[85svh] overflow-y-auto rounded-3xl border-slate-200 bg-white text-slate-900 sm:max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>Ajouter les éléments d'analyse</DialogTitle>
-                            <DialogDescription>
-                              Utilise cette option uniquement si les photos ne sont pas encore remontées depuis l'application.
-                            </DialogDescription>
-                          </DialogHeader>
-
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                              <p className="text-sm font-semibold text-slate-900">
-                                Progression
-                              </p>
-                              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                                {completedAssetCount}/{requiredAssetCount}
+                            <div className="flex items-start gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-500" />
+                              <p className="text-xs leading-relaxed text-slate-700 sm:text-sm">
+                                {index === 0 ? (
+                                  <>
+                                    {i18n(language, {
+                                      en: "Uses infrared sensors for the most precise facial analysis possible (",
+                                      fr: "Permet d'utiliser les capteurs infrarouge pour l'analyse faciale la plus précise possible (",
+                                    })}
+                                    <em>
+                                      {i18n(language, {
+                                        en: "iPhone X and newer",
+                                        fr: "iPhone X et +",
+                                      })}
+                                    </em>
+                                    )
+                                  </>
+                                ) : (
+                                  block.claim
+                                )}
                               </p>
                             </div>
-
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {REQUIRED_SCAN_ASSETS.map((assetType) => {
-                                const isMissing = missingAssetLabels.has(
-                                  assetType.label_fr,
-                                );
-                                const isUploading =
-                                  uploadingAssetCode === assetType.code;
-
-                                return (
-                                  <label
-                                    key={assetType.code}
-                                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition ${
-                                      isMissing
-                                        ? "border-dashed border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                                        : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                    } ${uploadingAssetCode ? "pointer-events-none opacity-70" : ""}`}
-                                  >
-                                    <input
-                                      type="file"
-                                      accept="image/jpeg,image/png"
-                                      className="sr-only"
-                                      disabled={!isMissing || !!uploadingAssetCode}
-                                      onChange={(event) => {
-                                        const file = event.currentTarget.files?.[0] ?? null;
-                                        void handleManualAssetUpload(
-                                          assetType.code,
-                                          file,
-                                        );
-                                        event.currentTarget.value = "";
-                                      }}
-                                    />
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                                      {isUploading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <ImagePlus className="h-4 w-4" />
-                                      )}
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block font-medium">
-                                        {assetType.label_fr}
-                                      </span>
-                                      <span className="block text-xs text-slate-500">
-                                        {isMissing ? "Déposer ou choisir" : "Ajoutée"}
-                                      </span>
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                            {uploadMessage ? (
-                              <p className="text-sm text-slate-600">
-                                {uploadMessage}
-                              </p>
-                            ) : null}
                           </div>
-                        </DialogContent>
-                      </Dialog>
-                    ) : null}
+                        ))}
+                      </div>
+                      <div className="mt-4 flex justify-center">
+                        <a
+                          href="https://apps.apple.com"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex w-full max-w-[360px] items-center justify-center gap-2 rounded-2xl bg-black p-3 text-white shadow-[0_16px_30px_-18px_rgba(0,0,0,0.95)] transition hover:bg-[#050505]"
+                        >
+                          <img
+                            src="/favicon.png"
+                            alt="ScoreMax"
+                            className="h-10 w-10 rounded-lg bg-black object-contain"
+                          />
+                          <span className="text-sm font-semibold tracking-tight sm:text-base">
+                            {i18n(language, {
+                              en: "ScoreMax 3D Infrared Scan",
+                              fr: "ScoreMax Scan 3D Infrarouge",
+                            })}
+                          </span>
+                          <Download className="h-5 w-5 shrink-0" />
+                        </a>
+                      </div>
+                      {canCompleteOnboarding ? (
+                        <button
+                          type="button"
+                          onClick={handleNext}
+                          disabled={isSubmitting}
+                          className="mx-auto mt-4 flex min-h-[68px] w-full max-w-[360px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_-16px_rgba(5,150,105,0.85)] transition hover:bg-emerald-700 disabled:opacity-60 sm:min-h-[76px]"
+                        >
+                          {i18n(language, { en: "Start", fr: "Commencer" })}
+                        </button>
+                      ) : (
+                        <div className="mx-auto mt-4 flex min-h-[68px] w-full max-w-[360px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 sm:min-h-[76px]">
+                          <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                          <span>
+                            {i18n(language, {
+                              en: "Waiting for analysis",
+                              fr: "En attente de l'analyse",
+                            })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : null}
+
               </div>
               )}
 
               {!isAnalysisRunning ? (
-                <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8">
-                <Button
-                  type="button"
-                  onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
-                  disabled={stepIndex === 0 || isSubmitting}
-                  className="rounded-xl bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40"
-                >
-                  Retour
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleNext}
-                  disabled={isSubmitting || !canCompleteOnboarding}
-                  className="rounded-xl bg-black text-white hover:bg-zinc-800"
-                >
-                  {isLastStep ? "Terminer" : "Continuer"}
-                </Button>
-              </div>
+                isIntroStep ? (
+                  <div className="mt-6 flex justify-center sm:mt-8">
+                    <Button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={isSubmitting || !canCompleteOnboarding}
+                      className="w-full max-w-sm rounded-xl bg-black text-white hover:bg-zinc-800"
+                    >
+                      {i18n(language, { en: "Continue", fr: "Continuer" })}
+                    </Button>
+                  </div>
+                ) : isLastStep ? null : (
+                  <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8">
+                    <Button
+                      type="button"
+                      onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
+                      disabled={stepIndex === 0 || isSubmitting}
+                      className="rounded-xl bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40"
+                    >
+                      {i18n(language, { en: "Back", fr: "Retour" })}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={isSubmitting || (isLastStep && !canCompleteOnboarding)}
+                      className={`rounded-xl text-white ${
+                        isLastStep && !canCompleteOnboarding
+                          ? "bg-slate-700 hover:bg-slate-700"
+                          : "bg-black hover:bg-zinc-800"
+                      }`}
+                    >
+                      {isLastStep ? (
+                        canCompleteOnboarding
+                          ? i18n(language, { en: "Start", fr: "Commencer" })
+                          : i18n(language, { en: "Start", fr: "Commencer" })
+                      ) : (
+                        i18n(language, { en: "Continue", fr: "Continuer" })
+                      )}
+                    </Button>
+                  </div>
+                )
               ) : null}
 
               {!isAnalysisRunning && analysisMessage ? (

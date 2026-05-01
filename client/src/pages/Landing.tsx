@@ -6,8 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
-function FloatingHeader() {
+function FloatingHeader({ language }: { language: AppLanguage }) {
   const { user } = useAuth();
   const [hasScrolled, setHasScrolled] = React.useState(false);
 
@@ -67,7 +68,7 @@ function FloatingHeader() {
                   size="sm"
                   className="rounded-full hidden sm:flex"
                 >
-                  Connexion
+                  {i18n(language, { en: "Login", fr: "Connexion" })}
                 </Button>
               </Link>
               <Link href="/register">
@@ -75,7 +76,7 @@ function FloatingHeader() {
                   size="sm"
                   className="rounded-full px-6 shadow-lg shadow-primary/20"
                 >
-                  Démarrer
+                  {i18n(language, { en: "Get Started", fr: "Démarrer" })}
                 </Button>
               </Link>
             </>
@@ -237,25 +238,24 @@ const appearanceImpactCategories: AppearanceImpactCategory[] = [
     label: "Education",
     items: [
       {
-        title: "Meilleure prise en charge",
+        title: "Attentes des enseignants plus elevees",
         description:
-          "Les medecins manquent 3.67 fois plus de diagnostics pour les patients juges peu attirants.",
+          "Les enseignants attribuent aux eleves juges plus attirants des attentes de reussite, d'intelligence et d'integration sociale nettement plus elevees qu'aux autres.",
         source:
-          "Tsiga, E., Panagopoulou, E., and Benos, A. (2016). European Journal for Person Centered Healthcare.",
+          "Clifford, M. M., and Walster, E. (1973). Sociology of Education.",
       },
       {
-        title: "Mode de vie plus sain",
+        title: "Illusion de meilleure scolarite",
         description:
-          "Les activites qui te rendent plus attirant sont souvent bonnes pour toi.",
+          "Les eleves physiquement attirants sont souvent juges plus doues ou plus travailleurs, independamment de leurs resultats reels et avant meme un contact pedagogique approfondi.",
         source:
-          "Arnocky, S., and Davis, A. C. (2024). Frontiers in Psychology.",
+          "Ritts, V., Patterson, M. L., and Tubbs, M. E. (1992). Review of Educational Research.",
       },
       {
-        title: "Vies plus longues",
+        title: "Notes sensibles a l'apparence",
         description:
-          "Les personnes attirantes vivent plus longtemps (peut-etre en partie grace aux raisons ci-dessus).",
-        source:
-          "Henderson, J.J.A., and Anglin, J.M. (2003). Evolution and Human Behavior.",
+          "En enseignement presentiel, la beaute percue est associee a de meilleures notes surtout quand l'interaction avec l'enseignant est frequente, ce qui evoque un biais d'evaluation plutot qu'un simple hasard.",
+        source: "Mehic, A. (2022). Economics Letters.",
       },
     ],
   },
@@ -339,6 +339,182 @@ const appearanceImpactCategories: AppearanceImpactCategory[] = [
   },
 ];
 
+const appearanceImpactEnglishContent: Record<
+  AppearanceImpactCategory["key"],
+  {
+    label: string;
+    items: Record<string, { title: string; description: string }>;
+  }
+> = {
+  finances: {
+    label: "Finances",
+    items: {
+      "Salaire plus eleve": {
+        title: "Higher income",
+        description: "Attractive people earn 10-15% more.",
+      },
+      "Entretiens d'embauche facilites": {
+        title: "Easier hiring outcomes",
+        description: "Attractive candidates are perceived as more qualified.",
+      },
+      "Pourboires plus eleves": {
+        title: "Higher tips",
+        description: "Attractive waiters receive $1,261 more in yearly tips.",
+      },
+      "Plus de ventes": {
+        title: "More sales",
+        description:
+          "Customers are 55% more likely to buy from attractive salespeople.",
+      },
+    },
+  },
+  dating: {
+    label: "Dating",
+    items: {
+      "Plus de matchs": {
+        title: "More matches",
+        description:
+          "On dating apps, appearance matters about 9 times more than your bio.",
+      },
+      "Plus de deuxiemes rendez-vous": {
+        title: "More second dates",
+        description:
+          "In speed-dating studies, appearance consistently predicts success.",
+      },
+      "Partenaires plus desirables": {
+        title: "More desirable partners",
+        description:
+          "People usually end up with someone in their own appearance league.",
+      },
+      "Plus important qu'on ne le pense": {
+        title: "More important than people think",
+        description:
+          "People underestimate how much appearance influences romantic choices.",
+      },
+    },
+  },
+  socializing: {
+    label: "Social life",
+    items: {
+      "Plus drole": {
+        title: "Seen as funnier",
+        description:
+          "Attractive people are judged funnier in video than in audio-only.",
+      },
+      "Plus sain": {
+        title: "Seen as healthier",
+        description:
+          "Attractive people are perceived as being in better health.",
+      },
+      "Plus intelligent": {
+        title: "Seen as smarter",
+        description: "Attractive people are judged as more intelligent.",
+      },
+      "Mieux percu": {
+        title: "Better perceived overall",
+        description:
+          "Attractive people are perceived as more moral and trustworthy.",
+      },
+    },
+  },
+  health: {
+    label: "Health",
+    items: {
+      "Meilleure prise en charge": {
+        title: "Better care quality",
+        description:
+          "Doctors miss 3.67x more diagnoses for patients judged less attractive.",
+      },
+      "Mode de vie plus sain": {
+        title: "Healthier lifestyle",
+        description:
+          "Activities that make you more attractive are often good for your health.",
+      },
+      "Vies plus longues": {
+        title: "Longer lives",
+        description:
+          "Attractive people tend to live longer (possibly partly due to factors above).",
+      },
+    },
+  },
+  education: {
+    label: "Education",
+    items: {
+      "Attentes des enseignants plus elevees": {
+        title: "Higher teacher expectations",
+        description:
+          "Teachers attribute higher expected achievement, intelligence, and social integration to more attractive students.",
+      },
+      "Illusion de meilleure scolarite": {
+        title: "Illusion of better school performance",
+        description:
+          "Attractive students are often judged as more capable or diligent, independently of real outcomes.",
+      },
+      "Notes sensibles a l'apparence": {
+        title: "Grades sensitive to appearance",
+        description:
+          "In in-person teaching, perceived beauty is associated with better grades, especially when teacher interaction is frequent.",
+      },
+    },
+  },
+  law: {
+    label: "Justice",
+    items: {
+      "Moins d'arrestations": {
+        title: "Fewer arrests",
+        description: "Attractive people are less likely to be arrested.",
+      },
+      "Moins de condamnations": {
+        title: "Fewer convictions",
+        description: "Attractive people are less likely to be convicted.",
+      },
+      "Peines plus legeres": {
+        title: "Lighter sentences",
+        description:
+          "When convicted, attractive people tend to receive lighter sentences.",
+      },
+    },
+  },
+  influence: {
+    label: "Influence",
+    items: {
+      "Meilleur reseautage": {
+        title: "Better networking",
+        description:
+          "Attractive people build denser and more effective social networks.",
+      },
+      "Plus de leadership": {
+        title: "More leadership",
+        description: "Attractive politicians receive more votes.",
+      },
+      "Plus de promotions": {
+        title: "More promotions",
+        description: "Attractive people are more likely to get promoted.",
+      },
+      "Plus de followers": {
+        title: "More followers",
+        description:
+          "Attractive people get more favorable engagement on social media.",
+      },
+    },
+  },
+  happiness: {
+    label: "Happiness",
+    items: {
+      "Bien-etre plus eleve": {
+        title: "Higher well-being",
+        description:
+          "Attractive people report higher levels of subjective well-being.",
+      },
+      "Moins de troubles mentaux": {
+        title: "Fewer mental health disorders",
+        description:
+          "People with better mental health are, on average, perceived as more attractive.",
+      },
+    },
+  },
+};
+
 type HeroBottomCard = {
   title: string;
   toneClass: string;
@@ -366,15 +542,15 @@ const heroBottomCards: HeroBottomCard[] = [
   },
 ];
 
-function ScoreProgressSection() {
+function ScoreProgressSection({ language }: { language: AppLanguage }) {
   const currentScore = 6.42;
   const potentialScore = 7.35;
-  const chartWidth = 860;
-  const chartHeight = 360;
-  const plotLeft = 62;
-  const plotRight = 24;
-  const plotTop = 56;
-  const plotBottom = 66;
+  const chartWidth = 620;
+  const chartHeight = 280;
+  const plotLeft = 48;
+  const plotRight = 14;
+  const plotTop = 44;
+  const plotBottom = 52;
   const plotWidth = chartWidth - plotLeft - plotRight;
   const plotHeight = chartHeight - plotTop - plotBottom;
   const xMin = 0;
@@ -417,7 +593,7 @@ function ScoreProgressSection() {
           <div className="mt-14 flex items-end justify-center gap-6 text-center md:gap-12">
             <div>
               <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
-                Today
+                {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
               </p>
               <p className="mt-4 font-display text-6xl tracking-tight text-zinc-500 md:text-7xl">
                 {currentScore.toFixed(2)}
@@ -426,7 +602,7 @@ function ScoreProgressSection() {
             <div className="pb-4 text-5xl text-zinc-600 md:text-6xl">→</div>
             <div>
               <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-400">
-                Potential
+                {i18n(language, { en: "Potential", fr: "Potentiel" })}
               </p>
               <p className="mt-4 font-display text-6xl tracking-tight text-white md:text-7xl">
                 {potentialScore.toFixed(2)}
@@ -434,10 +610,11 @@ function ScoreProgressSection() {
             </div>
           </div>
 
-          <div className="mt-10 overflow-x-auto">
+          <div className="mt-10 w-full min-w-0">
             <svg
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="mx-auto min-w-[760px] text-[#aab2bd]"
+              className="mx-auto block h-auto w-full max-w-full text-[#aab2bd]"
+              preserveAspectRatio="xMidYMid meet"
               role="img"
               aria-label="Score distribution chart"
             >
@@ -511,12 +688,12 @@ function ScoreProgressSection() {
                 x={(currentX + potentialX) / 2 + 6}
                 y={plotTop + plotHeight - 2}
                 transform={`rotate(-90 ${(currentX + potentialX) / 2 + 6} ${plotTop + plotHeight - 2})`}
-                fontSize="28"
+                fontSize="20"
                 fill="#a6c0ab"
                 fontWeight="500"
                 letterSpacing="0.06em"
               >
-                IMPROVEMENT
+                {i18n(language, { en: "IMPROVEMENT", fr: "PROGRESSION" })}
               </text>
 
               {[0, 10, 20, 30, 40].map((tick, index) => (
@@ -542,7 +719,7 @@ function ScoreProgressSection() {
                 letterSpacing="0.08em"
                 fontWeight="500"
               >
-                POPULATION DENSITY
+                {i18n(language, { en: "POPULATION DENSITY", fr: "DENSITE DE POPULATION" })}
               </text>
 
               {Array.from({ length: 11 }, (_, index) => (
@@ -551,7 +728,7 @@ function ScoreProgressSection() {
                   x={xToPixel(index)}
                   y={plotTop + plotHeight + 22}
                   textAnchor="middle"
-                  fontSize="14"
+                  fontSize="11"
                   fill="#8f9caf"
                 >
                   {index}
@@ -567,7 +744,7 @@ function ScoreProgressSection() {
                 letterSpacing="0.15em"
                 fontWeight="600"
               >
-                OVERALL SCORE
+                {i18n(language, { en: "OVERALL SCORE", fr: "SCORE GLOBAL" })}
               </text>
             </svg>
           </div>
@@ -578,6 +755,56 @@ function ScoreProgressSection() {
 }
 
 export default function Landing() {
+  const language = useAppLanguage();
+  const localizedHeroBottomCards = React.useMemo(
+    () =>
+      heroBottomCards.map((card) => ({
+        ...card,
+        title:
+          card.title === "La Réalité du Beauty Privilege"
+            ? i18n(language, {
+                en: "The Reality of Beauty Privilege",
+                fr: "La Réalité du Beauty Privilege",
+              })
+            : card.title === "Analyser mon visage"
+              ? i18n(language, {
+                  en: "Analyze my face",
+                  fr: "Analyser mon visage",
+                })
+              : card.title === "Classement Mondial"
+                ? i18n(language, {
+                    en: "Global Ranking",
+                    fr: "Classement Mondial",
+                  })
+                : card.title,
+      })),
+    [language],
+  );
+  const localizedAppearanceImpactCategories = React.useMemo(
+    () =>
+      appearanceImpactCategories.map((category) => ({
+        ...category,
+        label:
+          language === "en"
+            ? appearanceImpactEnglishContent[category.key].label
+            : category.label,
+        items:
+          language === "en"
+            ? category.items.map((item) => {
+                const translated =
+                  appearanceImpactEnglishContent[category.key].items[item.title];
+                return translated
+                  ? {
+                      ...item,
+                      title: translated.title,
+                      description: translated.description,
+                    }
+                  : item;
+              })
+            : category.items,
+      })),
+    [language],
+  );
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -593,7 +820,7 @@ export default function Landing() {
 
   return (
     <div className="landing-grain min-h-screen bg-background relative">
-      <FloatingHeader />
+      <FloatingHeader language={language} />
 
       {/* Hero Section */}
       <section className="relative isolate min-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-6 pt-28">
@@ -609,8 +836,16 @@ export default function Landing() {
                 variants={itemVariants}
                 className="font-display text-5xl md:text-7xl font-bold leading-[1.1] tracking-tight text-balance"
               >
-                Ceux qui t'ont dit que l'apparence
-                <span className="block">ne comptait pas t'ont mentis</span>
+                {i18n(language, {
+                  en: "Anyone who told you appearance",
+                  fr: "Ceux qui t'ont dit que l'apparence",
+                })}
+                <span className="block">
+                  {i18n(language, {
+                    en: "doesn't matter lied to you",
+                    fr: "ne comptait pas t'ont mentis",
+                  })}
+                </span>
               </motion.h1>
             </div>
           </motion.div>
@@ -622,7 +857,7 @@ export default function Landing() {
             className="relative z-10 mt-8 rounded-[2rem] border border-white/70 bg-[#f1f1f1] p-3 shadow-[0_45px_120px_-80px_rgba(0,0,0,0.98)]"
           >
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              {heroBottomCards.map((card) => (
+              {localizedHeroBottomCards.map((card) => (
                 <article
                   key={card.title}
                   className="overflow-hidden rounded-2xl border border-black/10 bg-white"
@@ -655,7 +890,10 @@ export default function Landing() {
 
           <motion.a
             href="#complete-analysis"
-            aria-label="Descendre vers la section suivante"
+            aria-label={i18n(language, {
+              en: "Scroll to next section",
+              fr: "Descendre vers la section suivante",
+            })}
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: [0, 5, 0] }}
             transition={{
@@ -702,7 +940,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <ScoreProgressSection />
+      <ScoreProgressSection language={language} />
 
       {/* Appearance Impact Section */}
       <section
@@ -721,15 +959,23 @@ export default function Landing() {
               variants={itemVariants}
               className="text-center font-display text-3xl md:text-5xl font-bold leading-[1.1] tracking-tight text-balance"
             >
-              Ceux qui t'ont dit que l'apparence
-              <span className="block">ne comptait pas t'ont mentis</span>
+              {i18n(language, {
+                en: "Anyone who told you appearance",
+                fr: "Ceux qui t'ont dit que l'apparence",
+              })}
+              <span className="block">
+                {i18n(language, {
+                  en: "doesn't matter lied to you",
+                  fr: "ne comptait pas t'ont mentis",
+                })}
+              </span>
             </motion.h2>
 
             <motion.div variants={itemVariants} className="w-full">
               <Tabs defaultValue="finances" className="w-full">
                 <div className="overflow-x-auto pb-3">
                   <TabsList className="h-auto min-w-full w-max rounded-2xl border border-white/10 bg-black/35 p-1.5 backdrop-blur-sm">
-                    {appearanceImpactCategories.map((category) => (
+                    {localizedAppearanceImpactCategories.map((category) => (
                       <TabsTrigger
                         key={category.key}
                         value={category.key}
@@ -741,7 +987,7 @@ export default function Landing() {
                   </TabsList>
                 </div>
 
-                {appearanceImpactCategories.map((category) => (
+                {localizedAppearanceImpactCategories.map((category) => (
                   <TabsContent key={category.key} value={category.key}>
                     <div className="grid gap-4 md:grid-cols-2">
                       {category.items.map((item) => (
@@ -749,7 +995,7 @@ export default function Landing() {
                           key={`${category.key}-${item.title}`}
                           className="rounded-2xl border border-white/10 bg-black/30 p-4 md:p-5"
                         >
-                          <h3 className="font-display text-lg md:text-xl font-semibold tracking-tight text-foreground">
+              <h3 className="font-display text-lg md:text-xl font-semibold tracking-tight text-foreground">
                             {item.title}
                           </h3>
                           <p className="mt-2 text-sm md:text-base leading-relaxed text-foreground/90">
@@ -788,30 +1034,40 @@ export default function Landing() {
               variants={itemVariants}
               className="text-[11px] font-semibold uppercase tracking-[0.34em] text-zinc-500"
             >
-              A note on who this is for
+              {i18n(language, {
+                en: "A note on who this is for",
+                fr: "Une note sur le profil visé",
+              })}
             </motion.p>
 
             <motion.h2
               variants={itemVariants}
               className="font-display text-4xl font-bold leading-tight tracking-tight text-white md:text-6xl"
             >
-              This isn't for everyone
+              {i18n(language, {
+                en: "This isn't for everyone",
+                fr: "Ce n'est pas pour tout le monde",
+              })}
             </motion.h2>
 
             <motion.p
               variants={itemVariants}
               className="mx-auto max-w-3xl text-lg leading-relaxed text-zinc-400 md:text-3xl"
             >
-              Most people see their score and do nothing. They let the number
-              define them. The ones who actually transform treat it as a
-              starting point - and commit to the process.
+              {i18n(language, {
+                en: "Most people see their score and do nothing. They let the number define them. The ones who actually transform treat it as a starting point - and commit to the process.",
+                fr: "La plupart voient leur score et ne font rien. Ils laissent ce nombre les définir. Ceux qui se transforment vraiment le prennent comme un point de départ et s'engagent dans le processus.",
+              })}
             </motion.p>
 
             <motion.p
               variants={itemVariants}
               className="text-base leading-relaxed text-zinc-500 md:text-xl"
             >
-              ScoreMax is built for them.
+              {i18n(language, {
+                en: "ScoreMax is built for them.",
+                fr: "ScoreMax est conçu pour eux.",
+              })}
             </motion.p>
 
             <motion.div
@@ -836,21 +1092,29 @@ export default function Landing() {
               variants={itemVariants}
               className="mx-auto max-w-4xl font-display text-4xl font-bold leading-tight tracking-tight text-[#141822] md:text-7xl"
             >
-              Your transformation starts with a first analysis
+              {i18n(language, {
+                en: "Your transformation starts with a first analysis",
+                fr: "Ta transformation commence par une première analyse",
+              })}
             </motion.h2>
 
             <motion.p
               variants={itemVariants}
               className="mx-auto max-w-3xl text-lg leading-relaxed text-[#5f6c7e] md:text-3xl"
             >
-              450,000+ people have already started their journey.
-              The only question left is - will you?
+              {i18n(language, {
+                en: "450,000+ people have already started their journey. The only question left is - will you?",
+                fr: "450 000+ personnes ont déjà commencé leur parcours. La seule question restante : et toi ?",
+              })}
             </motion.p>
 
             <motion.div variants={itemVariants} className="pt-2">
               <Link href="/register">
                 <Button className="h-16 rounded-full bg-[#0f1219] px-10 text-lg font-semibold text-white shadow-[0_28px_65px_-35px_rgba(0,0,0,0.65)] hover:bg-black">
-                  Begin Your First Analysis
+                  {i18n(language, {
+                    en: "Begin Your First Analysis",
+                    fr: "Commence ta première analyse",
+                  })}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
@@ -860,7 +1124,10 @@ export default function Landing() {
               variants={itemVariants}
               className="text-base leading-relaxed text-[#8d98a8] md:text-xl"
             >
-              Your future self will thank you.
+              {i18n(language, {
+                en: "Your future self will thank you.",
+                fr: "Ton futur toi te remerciera.",
+              })}
             </motion.p>
           </motion.div>
         </div>
@@ -889,24 +1156,36 @@ export default function Landing() {
                 href="/mentions-legales"
                 className="hover:text-primary transition-colors"
               >
-                Mentions Légales
+                {i18n(language, {
+                  en: "Legal Notice",
+                  fr: "Mentions Légales",
+                })}
               </Link>
               <Link
                 href="/cgu"
                 className="hover:text-primary transition-colors"
               >
-                CGU
+                {i18n(language, {
+                  en: "Terms",
+                  fr: "CGU",
+                })}
               </Link>
               <Link
                 href="/confidentialite"
                 className="hover:text-primary transition-colors"
               >
-                Confidentialité
+                {i18n(language, {
+                  en: "Privacy",
+                  fr: "Confidentialité",
+                })}
               </Link>
             </nav>
 
             <p className="text-sm text-muted-foreground">
-              © 2026 ScoreMax. Tous droits réservés.
+              {i18n(language, {
+                en: "© 2026 ScoreMax. All rights reserved.",
+                fr: "© 2026 ScoreMax. Tous droits réservés.",
+              })}
             </p>
           </div>
         </div>
