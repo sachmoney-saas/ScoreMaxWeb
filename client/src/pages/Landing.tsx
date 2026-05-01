@@ -515,34 +515,42 @@ const appearanceImpactEnglishContent: Record<
   },
 };
 
-type HeroBottomCard = {
-  title: string;
-  toneClass: string;
-  overlayImageUrl?: string;
-  overlayImageAlt?: string;
-  overlayImageClass?: string;
-};
-
-const heroBottomCards: HeroBottomCard[] = [
-  {
-    title: "La Réalité du Beauty Privilege",
-    toneClass: "bg-[#dbeafe]",
-  },
-  {
-    title: "Analyser mon visage",
-    toneClass: "bg-[#d6e4ff]",
-  },
-  {
-    title: "Classement Mondial",
-    toneClass: "bg-[#dff3ff]",
-    overlayImageUrl: "/map1.png",
-    overlayImageAlt: "Globe noir et blanc",
-    overlayImageClass:
-      "absolute left-1/2 top-[2%] z-10 w-[92%] -translate-x-1/2 opacity-95 grayscale contrast-125 [clip-path:inset(0_0_20%_0)]",
-  },
-];
-
 function ScoreProgressSection({ language }: { language: AppLanguage }) {
+  const measureRef = React.useRef<HTMLDivElement>(null);
+  const [naturalHeight, setNaturalHeight] = React.useState(0);
+  const [scale, setScale] = React.useState(1);
+
+  const updateFit = React.useCallback(() => {
+    const el = measureRef.current;
+    if (!el) return;
+    const natural = el.scrollHeight;
+    if (natural <= 0) return;
+    const maxH = window.visualViewport?.height ?? window.innerHeight;
+    setNaturalHeight(natural);
+    setScale(Math.min(1, maxH / natural));
+  }, []);
+
+  React.useLayoutEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) updateFit();
+    };
+    run();
+    void document.fonts?.ready?.then(run);
+    const el = measureRef.current;
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", run);
+    window.addEventListener("resize", run);
+    const ro = new ResizeObserver(run);
+    if (el) ro.observe(el);
+    return () => {
+      cancelled = true;
+      vv?.removeEventListener("resize", run);
+      window.removeEventListener("resize", run);
+      ro.disconnect();
+    };
+  }, [updateFit, language]);
+
   const currentScore = 6.42;
   const potentialScore = 7.35;
   const chartWidth = 620;
@@ -576,48 +584,64 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
   const currentX = xToPixel(currentScore);
   const potentialX = xToPixel(potentialScore);
 
+  const shellHeight =
+    naturalHeight > 0 ? Math.ceil(naturalHeight * scale) : undefined;
+
   return (
-    <section className="bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.17),transparent_36%),radial-gradient(circle_at_78%_72%,rgba(185,204,209,0.16),transparent_44%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.3)_100%)] px-4 py-16 md:py-24">
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="rounded-[2.2rem] border border-white/15 bg-black/30 p-6 shadow-[0_24px_90px_-58px_rgba(0,0,0,0.85)] backdrop-blur-sm md:p-10">
-          <div className="mx-auto max-w-3xl text-center">
-            <h2 className="font-display text-4xl leading-tight tracking-tight text-white md:text-6xl">
-              Your score isn't fixed
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-zinc-400 md:text-3xl">
-              Small, consistent changes compound over time. Track your progress and
-              watch your score move.
-            </p>
-          </div>
+    <section className="max-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.17),transparent_36%),radial-gradient(circle_at_78%_72%,rgba(185,204,209,0.16),transparent_44%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.3)_100%)] px-4">
+      <div
+        className="mx-auto w-full max-w-5xl"
+        style={{
+          height: shellHeight,
+        }}
+      >
+        <div
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: "top center",
+            willChange: "transform",
+          }}
+        >
+          <div ref={measureRef} className="py-16 md:py-24">
+            <div className="rounded-[2.2rem] border border-white/15 bg-black/30 p-6 shadow-[0_24px_90px_-58px_rgba(0,0,0,0.85)] backdrop-blur-sm md:p-10">
+              <div className="mx-auto max-w-3xl text-center">
+                <h2 className="font-display text-4xl leading-tight tracking-tight text-white md:text-6xl">
+                  Your score isn't fixed
+                </h2>
+                <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-zinc-400 md:text-3xl">
+                  Small, consistent changes compound over time. Track your progress and
+                  watch your score move.
+                </p>
+              </div>
 
-          <div className="mt-14 flex items-end justify-center gap-6 text-center md:gap-12">
-            <div>
-              <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
-                {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
-              </p>
-              <p className="mt-4 font-display text-6xl tracking-tight text-zinc-500 md:text-7xl">
-                {currentScore.toFixed(2)}
-              </p>
-            </div>
-            <div className="pb-4 text-5xl text-zinc-600 md:text-6xl">→</div>
-            <div>
-              <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-400">
-                {i18n(language, { en: "Potential", fr: "Potentiel" })}
-              </p>
-              <p className="mt-4 font-display text-6xl tracking-tight text-white md:text-7xl">
-                {potentialScore.toFixed(2)}
-              </p>
-            </div>
-          </div>
+              <div className="mt-14 flex items-end justify-center gap-6 text-center md:gap-12">
+                <div>
+                  <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
+                    {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
+                  </p>
+                  <p className="mt-4 font-display text-6xl tracking-tight text-zinc-500 md:text-7xl">
+                    {currentScore.toFixed(2)}
+                  </p>
+                </div>
+                <div className="pb-4 text-5xl text-zinc-600 md:text-6xl">→</div>
+                <div>
+                  <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-400">
+                    {i18n(language, { en: "Potential", fr: "Potentiel" })}
+                  </p>
+                  <p className="mt-4 font-display text-6xl tracking-tight text-white md:text-7xl">
+                    {potentialScore.toFixed(2)}
+                  </p>
+                </div>
+              </div>
 
-          <div className="mt-10 w-full min-w-0">
-            <svg
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="mx-auto block h-auto w-full max-w-full text-[#aab2bd]"
-              preserveAspectRatio="xMidYMid meet"
-              role="img"
-              aria-label="Score distribution chart"
-            >
+              <div className="mt-10 w-full min-w-0">
+                <svg
+                  viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                  className="mx-auto block h-auto w-full max-w-full text-[#aab2bd]"
+                  preserveAspectRatio="xMidYMid meet"
+                  role="img"
+                  aria-label="Score distribution chart"
+                >
               {[0.2, 0.4, 0.6, 0.8, 1].map((value) => (
                 <line
                   key={`grid-${value}`}
@@ -746,7 +770,9 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
               >
                 {i18n(language, { en: "OVERALL SCORE", fr: "SCORE GLOBAL" })}
               </text>
-            </svg>
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -756,30 +782,6 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
 
 export default function Landing() {
   const language = useAppLanguage();
-  const localizedHeroBottomCards = React.useMemo(
-    () =>
-      heroBottomCards.map((card) => ({
-        ...card,
-        title:
-          card.title === "La Réalité du Beauty Privilege"
-            ? i18n(language, {
-                en: "The Reality of Beauty Privilege",
-                fr: "La Réalité du Beauty Privilege",
-              })
-            : card.title === "Analyser mon visage"
-              ? i18n(language, {
-                  en: "Analyze my face",
-                  fr: "Analyser mon visage",
-                })
-              : card.title === "Classement Mondial"
-                ? i18n(language, {
-                    en: "Global Ranking",
-                    fr: "Classement Mondial",
-                  })
-                : card.title,
-      })),
-    [language],
-  );
   const localizedAppearanceImpactCategories = React.useMemo(
     () =>
       appearanceImpactCategories.map((category) => ({
@@ -837,54 +839,16 @@ export default function Landing() {
                 className="font-display text-5xl md:text-7xl font-bold leading-[1.1] tracking-tight text-balance"
               >
                 {i18n(language, {
-                  en: "Anyone who told you appearance",
-                  fr: "Ceux qui t'ont dit que l'apparence",
+                  en: "Beauty can be",
+                  fr: "La beauté peut être",
                 })}
                 <span className="block">
                   {i18n(language, {
-                    en: "doesn't matter lied to you",
-                    fr: "ne comptait pas t'ont mentis",
+                    en: "measured and improved",
+                    fr: "mesurée et améliorée",
                   })}
                 </span>
               </motion.h1>
-            </div>
-          </motion.div>
-
-          <motion.div
-            variants={itemVariants}
-            initial="hidden"
-            animate="visible"
-            className="relative z-10 mt-8 rounded-[2rem] border border-white/70 bg-[#f1f1f1] p-3 shadow-[0_45px_120px_-80px_rgba(0,0,0,0.98)]"
-          >
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              {localizedHeroBottomCards.map((card) => (
-                <article
-                  key={card.title}
-                  className="overflow-hidden rounded-2xl border border-black/10 bg-white"
-                >
-                  <div
-                    className={`relative h-20 overflow-hidden sm:h-24 md:h-28 lg:h-32 ${card.toneClass}`}
-                  >
-                    {card.overlayImageUrl ? (
-                      <img
-                        src={card.overlayImageUrl}
-                        alt={card.overlayImageAlt ?? card.title}
-                        loading="lazy"
-                        className={`${card.overlayImageClass ?? ""} scale-[1.03]`}
-                      />
-                    ) : null}
-
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-white/12 to-transparent" />
-                  </div>
-
-                  <div className="flex min-h-[54px] items-center justify-between gap-2 px-2.5 py-2 sm:min-h-[60px] sm:px-3 sm:py-2.5 md:min-h-[68px] md:px-4 md:py-3">
-                    <p className="line-clamp-2 text-[11px] font-semibold leading-tight tracking-tight text-[#1b1b1b] sm:text-xs md:text-sm lg:text-base">
-                      {card.title}
-                    </p>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#1b1b1b] sm:h-4 sm:w-4 md:h-5 md:w-5" />
-                  </div>
-                </article>
-              ))}
             </div>
           </motion.div>
 
@@ -960,13 +924,13 @@ export default function Landing() {
               className="text-center font-display text-3xl md:text-5xl font-bold leading-[1.1] tracking-tight text-balance"
             >
               {i18n(language, {
-                en: "Anyone who told you appearance",
-                fr: "Ceux qui t'ont dit que l'apparence",
+                en: "Beauty can be",
+                fr: "La beauté peut être",
               })}
               <span className="block">
                 {i18n(language, {
-                  en: "doesn't matter lied to you",
-                  fr: "ne comptait pas t'ont mentis",
+                  en: "measured and improved",
+                  fr: "mesurée et améliorée",
                 })}
               </span>
             </motion.h2>

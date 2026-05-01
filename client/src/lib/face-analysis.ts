@@ -55,6 +55,17 @@ export type ManualAnalysisSessionStatus = {
   missing_asset_types: OnboardingScanAssetCode[];
 };
 
+export type RecentScanStatus = {
+  window_minutes: number;
+  required_count: number;
+  received_count: number;
+  missing_asset_types: OnboardingScanAssetCode[];
+  received_asset_types: OnboardingScanAssetCode[];
+  latest_session_id: string | null;
+  latest_captured_at: string | null;
+  is_ready: boolean;
+};
+
 export type AnalysisJobStatusResponse = {
   job: {
     id: string;
@@ -389,6 +400,48 @@ export async function fetchLatestFaceAnalysis(
   };
 
   return json.data ?? null;
+}
+
+/**
+ * Polls the rolling-window scan status to detect assets the iPhone app
+ * uploaded recently (default 60 minutes). Used by the "Nouvelle analyse"
+ * page to surface a "Lancer" CTA without requiring a session id.
+ */
+export async function fetchRecentScanStatus(
+  windowMinutes: number = 60,
+): Promise<RecentScanStatus> {
+  const { data, error } = await supabase.rpc("get_recent_scan_status", {
+    p_window_minutes: windowMinutes,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    return {
+      window_minutes: windowMinutes,
+      required_count: 0,
+      received_count: 0,
+      missing_asset_types: [],
+      received_asset_types: [],
+      latest_session_id: null,
+      latest_captured_at: null,
+      is_ready: false,
+    };
+  }
+
+  return {
+    window_minutes: Number(row.window_minutes ?? windowMinutes),
+    required_count: Number(row.required_count ?? 0),
+    received_count: Number(row.received_count ?? 0),
+    missing_asset_types: (row.missing_asset_types ?? []) as OnboardingScanAssetCode[],
+    received_asset_types: (row.received_asset_types ?? []) as OnboardingScanAssetCode[],
+    latest_session_id: row.latest_session_id ?? null,
+    latest_captured_at: row.latest_captured_at ?? null,
+    is_ready: Boolean(row.is_ready),
+  };
 }
 
 export async function createManualAnalysisSession(

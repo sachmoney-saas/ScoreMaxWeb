@@ -8,6 +8,10 @@ import {
   buildAggregateDisplayEntries,
   getWorkerDisplayLabel,
 } from "@/lib/face-analysis-display";
+import { useAppLanguage } from "@/lib/i18n";
+import { ColoringWorkerView } from "@/components/analysis/workers/ColoringWorkerView";
+import { SkinWorkerView } from "@/components/analysis/workers/SkinWorkerView";
+import { BodyfatWorkerView } from "@/components/analysis/workers/BodyfatWorkerView";
 import { ArrowLeft } from "lucide-react";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,6 +49,7 @@ function WorkerDetailsSkeleton() {
 export default function WorkerDetails() {
   const params = useParams<{ jobId: string; worker: string }>();
   const worker = params.worker ? decodeURIComponent(params.worker) : "";
+  const language = useAppLanguage();
   const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId);
 
   if (isLoading) {
@@ -96,7 +101,13 @@ export default function WorkerDetails() {
         </CardContent>
       </Card>
 
-      {entries.length === 0 ? (
+      {worker === "coloring" ? (
+        <ColoringWorkerView aggregates={outputAggregates} language={language} />
+      ) : worker === "skin" ? (
+        <SkinWorkerView aggregates={outputAggregates} language={language} />
+      ) : worker === "bodyfat" ? (
+        <BodyfatWorkerView aggregates={outputAggregates} language={language} />
+      ) : entries.length === 0 ? (
         <Card className={workerDetailCardClassName}>
           <CardContent className="p-6 text-sm text-zinc-300">
             Aucun détail structuré disponible pour ce worker.

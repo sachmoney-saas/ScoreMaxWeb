@@ -90,7 +90,7 @@ function OnboardingBeforeAfterComparison({ language }: { language: AppLanguage }
     <div className="space-y-2 sm:space-y-3">
       {/* Hauteur plafonnée par viewport pour garder l'étape lisible sans scroll excessif */}
       <div
-        className="relative isolate aspect-[4/5] w-full max-h-[min(28svh,240px)] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_28px_65px_-52px_rgba(9,20,37,0.18)] sm:aspect-[4/3] sm:max-h-[min(34svh,320px)] md:max-h-[min(38svh,400px)] lg:max-h-[min(42svh,480px)]"
+        className="relative isolate aspect-[4/5] w-full max-h-[min(32svh,280px)] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_28px_65px_-52px_rgba(9,20,37,0.18)] sm:aspect-[4/3] sm:max-h-[min(38svh,360px)] md:max-h-[min(44svh,450px)] lg:max-h-[min(50svh,540px)]"
       >
         {/* Panneau gauche : uniquement l’avant — aucune image droite en dessous */}
         <div
@@ -208,8 +208,8 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
   const potentialX = xToPixel(potentialScore);
 
   return (
-    <div className="min-w-0 space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+    <div className="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+      <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3.5">
           <div className="mx-auto max-w-xl text-center">
             <h3 className="font-display text-3xl leading-tight tracking-tight text-slate-900 sm:text-4xl">
               {i18n(language, {
@@ -217,7 +217,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 fr: "Ton score n'est pas figé",
               })}
             </h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-500 sm:text-base">
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-500 sm:mt-2 sm:text-base">
               {i18n(language, {
                 en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
                 fr: "De petits changements réguliers se cumulent avec le temps. Suis ta progression et regarde ton score évoluer.",
@@ -225,7 +225,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
             </p>
           </div>
 
-          <div className="mt-6 flex items-end justify-center gap-5 text-center sm:gap-9">
+          <div className="mt-5 flex items-end justify-center gap-5 text-center sm:mt-6 sm:gap-9">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                 {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
@@ -245,7 +245,8 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
             </div>
           </div>
 
-          <div className="mt-5 w-full min-w-0">
+          <div className="mt-4 flex w-full min-w-0 justify-center sm:mt-5">
+            <div className="w-[90%] max-w-[504px]">
             <svg
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
               className="mx-auto block h-auto w-full max-w-full"
@@ -373,6 +374,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 {i18n(language, { en: "OVERALL SCORE", fr: "SCORE GLOBAL" })}
               </text>
             </svg>
+            </div>
           </div>
       </div>
     </div>

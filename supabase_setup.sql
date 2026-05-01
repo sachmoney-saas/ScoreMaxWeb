@@ -1196,8 +1196,110 @@ BEGIN
   END IF;
 END $$;
 
+-- get_recent_scan_status: returns the user's latest scan progress within
+-- a rolling time window (default 60 minutes) regardless of scan_session.
+-- Used by the "Nouvelle analyse" page to detect freshly captured assets
+-- pushed by the iPhone app and let the user launch an analysis from them.
+CREATE OR REPLACE FUNCTION public.get_recent_scan_status(
+  p_window_minutes INTEGER DEFAULT 60
+) RETURNS TABLE (
+  window_minutes INTEGER,
+  required_count INTEGER,
+  received_count INTEGER,
+  missing_asset_types TEXT[],
+  received_asset_types TEXT[],
+  latest_session_id UUID,
+  latest_captured_at TIMESTAMPTZ,
+  is_ready BOOLEAN
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $body$
+DECLARE
+  current_user_id UUID;
+  effective_window INTEGER;
+  window_start TIMESTAMPTZ;
+BEGIN
+  current_user_id := auth.uid();
+
+  IF current_user_id IS NULL THEN
+    RAISE EXCEPTION 'auth.uid() is required';
+  END IF;
+
+  effective_window := GREATEST(COALESCE(p_window_minutes, 60), 1);
+  window_start := NOW() - make_interval(mins => effective_window);
+
+  RETURN QUERY
+  WITH required_codes AS (
+    SELECT sat.code
+    FROM public.scan_asset_types sat
+    WHERE sat.is_active = TRUE
+      AND sat.is_required_onboarding = TRUE
+  ),
+  recent_assets AS (
+    SELECT
+      sa.asset_type_code,
+      sa.session_id,
+      sa.created_at,
+      sa.captured_at,
+      ROW_NUMBER() OVER (
+        PARTITION BY sa.asset_type_code
+        ORDER BY sa.created_at DESC
+      ) AS rn
+    FROM public.scan_assets sa
+    WHERE sa.user_id = current_user_id
+      AND sa.created_at >= window_start
+      AND sa.upload_status IN ('uploaded', 'validated')
+      AND length(btrim(COALESCE(sa.r2_key, ''))) > 0
+  ),
+  latest_per_type AS (
+    SELECT ra.*
+    FROM recent_assets ra
+    JOIN required_codes rc ON rc.code = ra.asset_type_code
+    WHERE ra.rn = 1
+  ),
+  picked_session AS (
+    SELECT lpt.session_id
+    FROM latest_per_type lpt
+    ORDER BY lpt.created_at DESC
+    LIMIT 1
+  ),
+  required_array AS (
+    SELECT COALESCE(array_agg(rc.code ORDER BY rc.code), ARRAY[]::TEXT[]) AS codes
+    FROM required_codes rc
+  ),
+  received_array AS (
+    SELECT COALESCE(
+      array_agg(lpt.asset_type_code ORDER BY lpt.asset_type_code),
+      ARRAY[]::TEXT[]
+    ) AS codes
+    FROM latest_per_type lpt
+  )
+  SELECT
+    effective_window AS window_minutes,
+    COALESCE(array_length(ra.codes, 1), 0) AS required_count,
+    COALESCE(array_length(rec.codes, 1), 0) AS received_count,
+    ARRAY(
+      SELECT unnest(ra.codes)
+      EXCEPT
+      SELECT unnest(rec.codes)
+    )::TEXT[] AS missing_asset_types,
+    rec.codes AS received_asset_types,
+    (SELECT session_id FROM picked_session) AS latest_session_id,
+    (SELECT MAX(COALESCE(lpt.captured_at, lpt.created_at)) FROM latest_per_type lpt) AS latest_captured_at,
+    (
+      COALESCE(array_length(ra.codes, 1), 0) > 0
+      AND COALESCE(array_length(rec.codes, 1), 0) >= COALESCE(array_length(ra.codes, 1), 0)
+    ) AS is_ready
+  FROM required_array ra
+  CROSS JOIN received_array rec;
+END;
+$body$;
+
 GRANT EXECUTE ON FUNCTION public.ensure_onboarding_scan_session() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_onboarding_scan_status() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_recent_scan_status(INTEGER) TO authenticated;
 
 -- 13) Post-check summary output
 SELECT

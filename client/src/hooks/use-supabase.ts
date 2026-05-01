@@ -20,6 +20,7 @@ import {
   fetchAnalysisJobStatus,
   fetchLatestFaceAnalysis,
   fetchManualAnalysisSessionStatus,
+  fetchRecentScanStatus,
   launchManualAnalysis,
   type AnalysisDetailResponse,
   type AnalysisHistoryItem,
@@ -27,6 +28,7 @@ import {
   type LatestAnalysisResponse,
   type ManualAnalysisSessionResponse,
   type ManualAnalysisSessionStatus,
+  type RecentScanStatus,
 } from "@/lib/face-analysis";
 
 /**
@@ -380,6 +382,38 @@ export function useDeleteAdminAnalysisFailure() {
 export function useCreateManualAnalysisSession() {
   return useMutation<ManualAnalysisSessionResponse>({
     mutationFn: async () => createManualAnalysisSession(await getAccessToken()),
+  });
+}
+
+/**
+ * Polls assets the iPhone app uploaded for this user within the last
+ * `windowMinutes` minutes (default 60). Stops polling once is_ready.
+ */
+export function useRecentScanStatus(options?: {
+  windowMinutes?: number;
+  enabled?: boolean;
+}) {
+  const { user } = useAuth();
+  const windowMinutes = options?.windowMinutes ?? 60;
+
+  return useQuery<RecentScanStatus | null>({
+    queryKey: ["recent-scan-status", user?.id, windowMinutes],
+    queryFn: async () => {
+      if (!user?.id) {
+        return null;
+      }
+
+      return fetchRecentScanStatus(windowMinutes);
+    },
+    enabled: !!user?.id && (options?.enabled ?? true),
+    refetchInterval: (query) => {
+      const state = query.state.data;
+      if (state?.is_ready) {
+        return false;
+      }
+      return 2500;
+    },
+    staleTime: 0,
   });
 }
 
