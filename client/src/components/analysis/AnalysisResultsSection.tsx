@@ -13,13 +13,12 @@ import type {
   LatestAnalysisResponse,
   PersistedWorkerAnalysisResult,
 } from "@/lib/face-analysis";
-import {
-  buildAggregateDisplayEntries,
-  getWorkerDisplayLabel,
-} from "@/lib/face-analysis-display";
+import { getWorkerDisplayLabel } from "@/lib/face-analysis-display";
 import { calculateGlobalFaceScore } from "@/lib/face-analysis-score";
 import type { GlobalFaceScore } from "@/lib/face-analysis-score";
 import { AnalysisProcessingState } from "@/components/analysis/AnalysisProcessingState";
+import { WorkerPreviewContent } from "@/components/analysis/WorkerPreviewContent";
+import { useAppLanguage } from "@/lib/i18n";
 import { ArrowUpRight } from "lucide-react";
 
 type AnalysisResultsSectionProps = {
@@ -157,48 +156,6 @@ function isAgeWorker(worker: string): boolean {
   return worker.toLowerCase() === "age";
 }
 
-function AggregateGrid({ worker, aggregates }: { worker: string; aggregates: Record<string, unknown> }) {
-  const entries = buildAggregateDisplayEntries(worker, aggregates);
-
-  if (entries.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-white/20 bg-white/10 p-3 text-sm text-zinc-400">
-        Aucun agrégat structuré disponible pour ce worker.
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-2">
-      {entries.slice(0, 3).map((entry) => (
-        <div
-          key={entry.key}
-          className="rounded-xl border border-white/15 bg-white/10 p-3 text-zinc-50 backdrop-blur-sm"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
-              {entry.label}
-            </p>
-            <p className="shrink-0 text-sm font-semibold text-zinc-50">
-              {entry.value}
-            </p>
-          </div>
-          {entry.description ? (
-            <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-              {entry.description}
-            </p>
-          ) : null}
-        </div>
-      ))}
-      {entries.length > 3 ? (
-        <p className="text-xs text-zinc-400">
-          +{entries.length - 3} signal{entries.length - 3 > 1 ? "s" : ""} supplémentaire{entries.length - 3 > 1 ? "s" : ""}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 function AgeResultCard({
   result,
   href,
@@ -313,9 +270,11 @@ function GlobalScoreCard({ score }: { score: GlobalFaceScore }) {
 function WorkerResultCard({
   result,
   href,
+  language,
 }: {
   result: NormalizedWorkerResult;
   href: string;
+  language: ReturnType<typeof useAppLanguage>;
 }) {
   return (
     <Link href={href} className="group block h-full">
@@ -331,7 +290,11 @@ function WorkerResultCard({
               <ArrowUpRight className="h-4 w-4" />
             </span>
           </div>
-          <AggregateGrid worker={result.worker} aggregates={result.outputAggregates} />
+          <WorkerPreviewContent
+            worker={result.worker}
+            aggregates={result.outputAggregates}
+            language={language}
+          />
         </CardContent>
       </Card>
     </Link>
@@ -355,6 +318,8 @@ export function AnalysisResultsSection({
   analysis,
   isLoading,
 }: AnalysisResultsSectionProps) {
+  const language = useAppLanguage();
+
   if (isLoading) {
     return <AnalysisSkeleton />;
   }
@@ -415,6 +380,7 @@ export function AnalysisResultsSection({
                   key={`${result.worker}-${result.promptVersion}`}
                   result={result}
                   href={buildWorkerHref(result.worker)}
+                  language={language}
                 />
               ),
             )}
