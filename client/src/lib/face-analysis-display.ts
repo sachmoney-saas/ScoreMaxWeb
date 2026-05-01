@@ -154,6 +154,65 @@ const commonEnumLabels: Record<string, LocalizedText> = {
 };
 
 const displayMeta: Record<string, WorkerDisplayMeta> = {
+  age: {
+    label: text("Âge apparent", "Apparent age"),
+    aggregates: {
+      "age_analysis.best_estimated_age": {
+        label: text("Âge estimé", "Estimated age"),
+        description: text(
+          "Lecture de l'âge apparent à partir des marqueurs visuels détectés.",
+          "Apparent age reading derived from detected visual markers.",
+        ),
+        kind: "score",
+        priority: 10,
+      },
+      "age_analysis.age_argument": {
+        label: text("Synthèse de l'âge", "Age summary"),
+        kind: "enum",
+        priority: 20,
+      },
+      "facial_neoteny_and_fat.juvenile_fat_retention_roundness": {
+        label: text("Rondeur du visage", "Juvenile fat retention"),
+        kind: "score",
+        priority: 30,
+      },
+      "facial_neoteny_and_fat.lower_face_softness": {
+        label: text("Douceur du bas du visage", "Lower face softness"),
+        kind: "score",
+        priority: 40,
+      },
+      "skin_quality_and_plumpness.epidermal_plumpness_baby_skin": {
+        label: text("Élasticité de la peau", "Epidermal plumpness"),
+        kind: "score",
+        priority: 50,
+      },
+      "skin_quality_and_plumpness.periorbital_freshness": {
+        label: text("Fraîcheur du contour des yeux", "Periorbital freshness"),
+        kind: "score",
+        priority: 60,
+      },
+      "hair_maturation.terminal_facial_hair_presence": {
+        label: text("Pilosité faciale adulte", "Terminal facial hair"),
+        kind: "score",
+        priority: 70,
+      },
+      "hair_maturation.scalp_hairline_maturation": {
+        label: text("Maturation de la ligne capillaire", "Hairline maturation"),
+        kind: "score",
+        priority: 80,
+      },
+      "structural_neoteny.lip_plumpness": {
+        label: text("Volume des lèvres", "Lip plumpness"),
+        kind: "score",
+        priority: 90,
+      },
+      "structural_neoteny.cartilage_proportion": {
+        label: text("Proportion des cartilages", "Cartilage proportion"),
+        kind: "score",
+        priority: 100,
+      },
+    },
+  },
   symmetry_shape: {
     label: text("Symétrie et forme", "Symmetry and shape"),
     aggregates: {

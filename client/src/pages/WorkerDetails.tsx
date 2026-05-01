@@ -13,6 +13,7 @@ import { ColoringWorkerView } from "@/components/analysis/workers/ColoringWorker
 import { SkinWorkerView } from "@/components/analysis/workers/SkinWorkerView";
 import { BodyfatWorkerView } from "@/components/analysis/workers/BodyfatWorkerView";
 import { SymmetryShapeWorkerView } from "@/components/analysis/workers/SymmetryShapeWorkerView";
+import { AgeWorkerView } from "@/components/analysis/workers/AgeWorkerView";
 import { ArrowLeft } from "lucide-react";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -102,7 +103,9 @@ export default function WorkerDetails() {
         </CardContent>
       </Card>
 
-      {worker === "coloring" ? (
+      {worker === "age" ? (
+        <AgeWorkerView aggregates={outputAggregates} language={language} />
+      ) : worker === "coloring" ? (
         <ColoringWorkerView aggregates={outputAggregates} language={language} />
       ) : worker === "skin" ? (
         <SkinWorkerView aggregates={outputAggregates} language={language} />
