@@ -61,13 +61,14 @@ const EMPTY_RESULT: PersistedWorkerAnalysisResult = {
   rawRuns: [],
 };
 
-/** Active tab: crisp inner border + outer halo (same family as focus-visible ring). */
+/** Inactive: muted; active: pill sombre + une seule bordure argent épaisse (pas ring/offset). */
 const ANALYSIS_TAB_TRIGGER_CLASS = cn(
-  "rounded-xl border border-transparent px-5 py-2.5 text-sm text-black transition-all",
-  "ring-0 ring-offset-0 focus-visible:outline-none",
-  "focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white/[0.07]",
-  "data-[state=active]:border-white data-[state=active]:bg-slate-950 data-[state=active]:text-white data-[state=active]:shadow-none",
-  "data-[state=active]:ring-2 data-[state=active]:ring-white/45 data-[state=active]:ring-offset-2 data-[state=active]:ring-offset-white/[0.07]",
+  "rounded-xl border-[3px] border-transparent px-5 py-2.5 text-sm font-medium text-zinc-400 transition-all",
+  "hover:text-zinc-200",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
+  "data-[state=active]:border-zinc-300 data-[state=active]:bg-slate-950 data-[state=active]:text-white",
+  "data-[state=active]:shadow-[0_2px_14px_-6px_rgba(0,0,0,0.55),0_0_18px_-10px_rgba(255,255,255,0.12)]",
+  "data-[state=active]:hover:text-white",
 );
 
 const WORKER_DISPLAY_ORDER = [
@@ -82,9 +83,9 @@ const WORKER_DISPLAY_ORDER = [
   "hair",
   "eye_brows",
   "cheeks",
+  "neck",
   "eyes",
   "nose",
-  "neck",
   "ear",
   "skin_tint",
   "symmetry_shape",
@@ -586,7 +587,14 @@ function buildWorkerScoreboard(
   const sortedDesc = [...entries].sort((a, b) => b.score - a.score);
   const sortedAsc = [...entries].sort((a, b) => a.score - b.score);
 
-  const strengths = sortedDesc.slice(0, KEY_TAKEAWAY_LIMIT);
+  const strengths = sortedDesc.slice(0, KEY_TAKEAWAY_LIMIT).map((entry) =>
+    entry.worker === "bodyfat"
+      ? {
+          ...entry,
+          label: locale === "fr" ? "Masse grasse" : "Body fat",
+        }
+      : entry,
+  );
   const strengthKeys = new Set(strengths.map((entry) => entry.worker));
   const weaknesses = sortedAsc
     .filter((entry) => !strengthKeys.has(entry.worker))
@@ -645,12 +653,7 @@ function TakeawayList({
       )}
     >
       <p
-        className={cn(
-          "text-center font-bold uppercase tracking-[0.2em]",
-          roomyRows
-            ? `text-[9px] sm:text-[10px] ${accent.heading}`
-            : `text-[10px] sm:text-[11px] ${accent.heading}`,
-        )}
+        className={`text-center text-[10px] font-bold uppercase tracking-[0.2em] sm:text-[11px] ${accent.heading}`}
       >
         {title}
       </p>
@@ -668,13 +671,12 @@ function TakeawayList({
                 onClick={() => scrollToWorkerCard(entry.worker)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-2 text-left transition hover:border-white/25 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
-                  roomyRows && "gap-2 py-1.5 px-2 sm:px-2.5",
+                  roomyRows && "gap-2 py-2 px-2 sm:px-2.5",
                 )}
               >
                 <span
                   className={cn(
-                    "flex shrink-0 items-center justify-center rounded-md font-display font-bold tabular-nums ring-1",
-                    roomyRows ? "h-5 w-5 text-[9px]" : "h-6 w-6 text-[10px]",
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-display text-[10px] font-bold tabular-nums ring-1",
                     accent.chip,
                   )}
                   style={{
@@ -689,27 +691,17 @@ function TakeawayList({
                   className={cn(
                     "min-w-0 flex-1 font-display font-semibold text-white",
                     roomyRows
-                      ? "overflow-x-auto whitespace-nowrap text-[11px] leading-tight sm:text-xs [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      ? "overflow-x-auto whitespace-nowrap text-xs leading-tight sm:text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                       : "truncate text-xs sm:text-sm",
                   )}
                 >
                   {entry.label}
                 </span>
                 <span
-                  className={cn(
-                    "shrink-0 font-display font-bold tabular-nums",
-                    roomyRows
-                      ? `text-[11px] sm:text-xs ${accent.score}`
-                      : `text-xs sm:text-sm ${accent.score}`,
-                  )}
+                  className={`shrink-0 font-display text-xs font-bold tabular-nums sm:text-sm ${accent.score}`}
                 >
                   {entry.score.toFixed(2)}
-                  <span
-                    className={cn(
-                      "ml-0.5 font-semibold text-zinc-500",
-                      roomyRows ? "text-[8px]" : "text-[9px]",
-                    )}
-                  >
+                  <span className="ml-0.5 text-[9px] font-semibold text-zinc-500">
                     /10
                   </span>
                 </span>
@@ -822,9 +814,17 @@ function GlobalScoreCard({
               className="h-40 w-40 sm:h-44 sm:w-44"
             />
             <div
-              className="mx-auto mt-5 max-w-xl rounded-2xl border border-white/80 bg-gradient-to-br from-white via-white to-zinc-100 px-4 py-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-2px_12px_rgba(15,23,42,0.06),0_16px_42px_-22px_rgba(0,0,0,0.65),0_0_0_1px_rgba(15,23,42,0.06)]"
+              className={cn(
+                "relative mx-auto mt-5 max-w-xl overflow-hidden rounded-2xl px-4 py-2.5 text-center",
+                "border border-white/70 ring-1 ring-black/[0.06]",
+                "bg-[linear-gradient(152deg,#ffffff_0%,#fafafa_14%,#f4f4f5_38%,#e4e4e7_68%,#cfcfd4_100%)]",
+                "shadow-[inset_0_2px_4px_rgba(255,255,255,0.92),inset_0_-4px_12px_rgba(24,24,27,0.12),0_10px_28px_-12px_rgba(0,0,0,0.55),0_4px_12px_-6px_rgba(0,0,0,0.18)]",
+                "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-[linear-gradient(118deg,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(0,0,0,0.04)_100%)] before:content-['']",
+              )}
             >
-              <p className="font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base">
+              <p
+                className="relative font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base [text-shadow:0_1px_0_rgba(255,255,255,0.65)]"
+              >
                 {rank.title}
               </p>
             </div>
@@ -995,6 +995,7 @@ export function AnalysisResultsSection({
   const noseResult = results.find((r) => r.worker === "nose");
   const neckResult = results.find((r) => r.worker === "neck");
   const earResult = results.find((r) => r.worker === "ear");
+  const skinTintResult = results.find((r) => r.worker === "skin_tint");
   const resultsAfterPinnedPairs = results.filter(
     (r) =>
       !isAgeWorker(r.worker) &&
@@ -1011,7 +1012,8 @@ export function AnalysisResultsSection({
       r.worker !== "eyes" &&
       r.worker !== "nose" &&
       r.worker !== "neck" &&
-      r.worker !== "ear",
+      r.worker !== "ear" &&
+      r.worker !== "skin_tint",
   );
 
   const { strengthSet: takeawayStrengthWorkers, weaknessSet: takeawayWeaknessWorkers } =
@@ -1033,7 +1035,12 @@ export function AnalysisResultsSection({
   return (
     <section className="space-y-5">
       <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList className="h-auto rounded-2xl border border-white/20 bg-white/[0.07] p-1.5 backdrop-blur-xl">
+        <TabsList
+          className={cn(
+            analysisSurfaceCardClassName,
+            "inline-flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl p-1.5 sm:flex-nowrap",
+          )}
+        >
           <TabsTrigger value="overview" className={ANALYSIS_TAB_TRIGGER_CLASS}>
             Overview
           </TabsTrigger>
@@ -1244,13 +1251,42 @@ export function AnalysisResultsSection({
                 scoreHighlight={workerPreviewScoreHighlight(browsResult.worker)}
               />
             ) : null}
-            {cheeksResult ? (
+            {cheeksResult && neckResult ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+                <div className="min-w-0">
+                  <WorkerResultCard
+                    key={`${cheeksResult.worker}-${cheeksResult.promptVersion}`}
+                    result={cheeksResult}
+                    href={buildWorkerHref(cheeksResult.worker)}
+                    language={language}
+                    scoreHighlight={workerPreviewScoreHighlight(cheeksResult.worker)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <WorkerResultCard
+                    key={`${neckResult.worker}-${neckResult.promptVersion}`}
+                    result={neckResult}
+                    href={buildWorkerHref(neckResult.worker)}
+                    language={language}
+                    scoreHighlight={workerPreviewScoreHighlight(neckResult.worker)}
+                  />
+                </div>
+              </div>
+            ) : cheeksResult ? (
               <WorkerResultCard
                 key={`${cheeksResult.worker}-${cheeksResult.promptVersion}`}
                 result={cheeksResult}
                 href={buildWorkerHref(cheeksResult.worker)}
                 language={language}
                 scoreHighlight={workerPreviewScoreHighlight(cheeksResult.worker)}
+              />
+            ) : neckResult ? (
+              <WorkerResultCard
+                key={`${neckResult.worker}-${neckResult.promptVersion}`}
+                result={neckResult}
+                href={buildWorkerHref(neckResult.worker)}
+                language={language}
+                scoreHighlight={workerPreviewScoreHighlight(neckResult.worker)}
               />
             ) : null}
             {eyesResult && noseResult ? (
@@ -1291,17 +1327,8 @@ export function AnalysisResultsSection({
                 scoreHighlight={workerPreviewScoreHighlight(noseResult.worker)}
               />
             ) : null}
-            {neckResult && earResult ? (
+            {earResult && skinTintResult ? (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-                <div className="min-w-0">
-                  <WorkerResultCard
-                    key={`${neckResult.worker}-${neckResult.promptVersion}`}
-                    result={neckResult}
-                    href={buildWorkerHref(neckResult.worker)}
-                    language={language}
-                    scoreHighlight={workerPreviewScoreHighlight(neckResult.worker)}
-                  />
-                </div>
                 <div className="min-w-0">
                   <WorkerResultCard
                     key={`${earResult.worker}-${earResult.promptVersion}`}
@@ -1311,15 +1338,16 @@ export function AnalysisResultsSection({
                     scoreHighlight={workerPreviewScoreHighlight(earResult.worker)}
                   />
                 </div>
+                <div className="min-w-0">
+                  <WorkerResultCard
+                    key={`${skinTintResult.worker}-${skinTintResult.promptVersion}`}
+                    result={skinTintResult}
+                    href={buildWorkerHref(skinTintResult.worker)}
+                    language={language}
+                    scoreHighlight={workerPreviewScoreHighlight(skinTintResult.worker)}
+                  />
+                </div>
               </div>
-            ) : neckResult ? (
-              <WorkerResultCard
-                key={`${neckResult.worker}-${neckResult.promptVersion}`}
-                result={neckResult}
-                href={buildWorkerHref(neckResult.worker)}
-                language={language}
-                scoreHighlight={workerPreviewScoreHighlight(neckResult.worker)}
-              />
             ) : earResult ? (
               <WorkerResultCard
                 key={`${earResult.worker}-${earResult.promptVersion}`}
@@ -1327,6 +1355,14 @@ export function AnalysisResultsSection({
                 href={buildWorkerHref(earResult.worker)}
                 language={language}
                 scoreHighlight={workerPreviewScoreHighlight(earResult.worker)}
+              />
+            ) : skinTintResult ? (
+              <WorkerResultCard
+                key={`${skinTintResult.worker}-${skinTintResult.promptVersion}`}
+                result={skinTintResult}
+                href={buildWorkerHref(skinTintResult.worker)}
+                language={language}
+                scoreHighlight={workerPreviewScoreHighlight(skinTintResult.worker)}
               />
             ) : null}
             {resultsAfterPinnedPairs.map((result) => (

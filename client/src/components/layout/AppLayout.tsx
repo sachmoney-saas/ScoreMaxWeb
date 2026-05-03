@@ -180,7 +180,8 @@ function ModernAppSidebar() {
       collapsible="icon"
       variant="sidebar"
       className={cn(
-        "relative z-40 border-r border-white/10 [--sidebar-width:22rem]",
+        /* Mobile Sheet: keep z-50 so panel stacks above overlay; desktop rail: z-40 above chrome */
+        "z-50 border-r border-white/10 md:z-40",
         SIDEBAR_SURFACE_CLASS,
         "[&_[data-sidebar=sidebar]]:bg-transparent",
       )}
@@ -241,7 +242,7 @@ function ModernAppSidebar() {
           <DropdownMenuTrigger asChild className="w-full">
             <SidebarMenuButton
               size="lg"
-              className="h-11 w-full rounded-xl border border-white/15 bg-white/[0.06] data-[state=open]:bg-white/[0.12]"
+              className="h-11 w-full rounded-xl border border-white/15 bg-white/[0.06] px-3 transition-all duration-200 hover:border-white/25 hover:bg-white/[0.12] hover:text-zinc-100 data-[state=open]:border-white/25 data-[state=open]:bg-white/[0.12] data-[state=open]:text-zinc-100 data-[state=open]:hover:border-white/25 data-[state=open]:hover:bg-white/[0.12] data-[state=open]:hover:text-zinc-100"
             >
               <Avatar className="h-8 w-8 rounded-lg shrink-0">
                 <AvatarFallback className="rounded-lg bg-primary/15 text-primary text-xs">
@@ -560,7 +561,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider
+      style={
+        {
+          /* Must match rail width: gap uses inherited var; panel had 22rem locally → overlap vs 16rem default */
+          "--sidebar-width": "22rem",
+        } as React.CSSProperties
+      }
+    >
       <div className="relative flex h-screen w-full overflow-hidden bg-[#9aaeb5]">
         <WaveBackground />
         <ModernAppSidebar />

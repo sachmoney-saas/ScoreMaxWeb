@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * ------------------------------------------------------------------------- */
 
 export const workerSectionCardClassName =
-  "relative overflow-hidden border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.16),transparent_36%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.22)_100%)] text-zinc-50 shadow-[0_24px_80px_-55px_rgba(0,0,0,0.95)]";
+  "relative overflow-hidden border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.14),transparent_36%),linear-gradient(145deg,rgba(10,16,22,0.85)_0%,rgba(20,31,39,0.81)_48%,rgba(185,204,209,0.2)_100%)] text-zinc-50 shadow-[0_24px_80px_-55px_rgba(0,0,0,0.95)] backdrop-blur-sm";
 
 /**
  * Premium analysis “surface” — matches Overview worker cards, global score, and
@@ -24,14 +24,13 @@ export const workerSectionCardClassName =
  * family as the rest of the SaaS analysis chrome.
  */
 export const analysisSurfaceCardClassName =
-  "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
+  "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.83)_0%,rgba(20,31,39,0.79)_48%,rgba(185,204,209,0.25)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] backdrop-blur-sm";
 
 /**
- * Translucent glass for recommendation surfaces — matches Overview tab triggers
- * (`TabsList`) so the WaveBackground reads through instead of a flat slate slab.
+ * Translucent glass for recommendation surfaces — WaveBackground reads through.
  */
 export const analysisGlassPanelClassName =
-  "rounded-2xl border border-white/20 bg-white/[0.07] backdrop-blur-xl text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.82)]";
+  "rounded-2xl border border-white/20 bg-white/[0.063] backdrop-blur-xl text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.82)]";
 
 /* ----------------------------------------------------------------------------
  * Aggregate readers
