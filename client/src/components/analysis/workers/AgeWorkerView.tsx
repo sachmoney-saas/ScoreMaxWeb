@@ -158,24 +158,31 @@ function NeotenyComposite({
   if (signals.length < 4) return null;
   const avg =
     signals.reduce((s, x) => s + x.score, 0) / signals.length;
-  const size = 220;
-  const cx = size / 2;
-  const cy = size / 2;
-  const radius = 90;
-  const n = signals.length;
 
-  const polar = (i: number, value: number) => {
-    const angle = -Math.PI / 2 + (2 * Math.PI * i) / n;
-    const r = (Math.max(0, Math.min(value, 10)) / 10) * radius;
-    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  /** Same letterboxing as `SkinRadarChart` so axis labels are not clipped. */
+  const viewPadX = 62;
+  const viewPadY = 50;
+  const size = 400;
+  const center = size / 2;
+  const maxRadius = 146;
+  const n = signals.length;
+  const hubR = 30;
+
+  const polar = (index: number, value: number) => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
+    const r = (Math.max(0, Math.min(value, 10)) / 10) * maxRadius;
+    return {
+      x: center + r * Math.cos(angle),
+      y: center + r * Math.sin(angle),
+    };
   };
 
-  const labelPolar = (i: number) => {
-    const angle = -Math.PI / 2 + (2 * Math.PI * i) / n;
-    const r = radius + 22;
+  const labelPolar = (index: number) => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
+    const r = maxRadius + 26;
     return {
-      x: cx + r * Math.cos(angle),
-      y: cy + r * Math.sin(angle),
+      x: center + r * Math.cos(angle),
+      y: center + r * Math.sin(angle),
       anchor:
         Math.cos(angle) > 0.2
           ? "start"
@@ -185,30 +192,30 @@ function NeotenyComposite({
     } as const;
   };
 
-  const points = signals.map((s, i) => polar(i, s.score));
-  const polygon = points.map((p) => `${p.x},${p.y}`).join(" ");
-  const rings = [0.33, 0.66, 1];
+  const valuePoints = signals.map((s, i) => polar(i, s.score));
+  const polygon = valuePoints.map((p) => `${p.x},${p.y}`).join(" ");
+  const ringValues = [2.5, 5, 7.5, 10];
 
   return (
     <svg
-      viewBox={`0 0 ${size} ${size}`}
-      className="mx-auto block h-auto w-full max-w-[280px]"
+      viewBox={`-${viewPadX} -${viewPadY} ${size + 2 * viewPadX} ${size + 2 * viewPadY}`}
+      className="mx-auto block h-auto w-full max-w-[420px] overflow-visible"
       role="img"
       aria-label="Youthfulness signals"
     >
       <defs>
-        <radialGradient id="ageRadarFill" cx="50%" cy="50%" r="60%">
-          <stop offset="0%" stopColor="#e9f1f4" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#9aaeb5" stopOpacity="0.18" />
-        </radialGradient>
+        <linearGradient id="ageNeotenyRadarFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#9aaeb5" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#d6e4ff" stopOpacity="0.25" />
+        </linearGradient>
       </defs>
 
-      {rings.map((g) => (
+      {ringValues.map((value) => (
         <circle
-          key={g}
-          cx={cx}
-          cy={cy}
-          r={g * radius}
+          key={`ring-${value}`}
+          cx={center}
+          cy={center}
+          r={(value / 10) * maxRadius}
           fill="none"
           stroke="rgba(255,255,255,0.08)"
           strokeWidth="1"
@@ -216,14 +223,14 @@ function NeotenyComposite({
       ))}
 
       {signals.map((_, i) => {
-        const e = polar(i, 10);
+        const end = polar(i, 10);
         return (
           <line
-            key={i}
-            x1={cx}
-            y1={cy}
-            x2={e.x}
-            y2={e.y}
+            key={`spoke-${i}`}
+            x1={center}
+            y1={center}
+            x2={end.x}
+            y2={end.y}
             stroke="rgba(255,255,255,0.07)"
             strokeWidth="1"
           />
@@ -232,38 +239,38 @@ function NeotenyComposite({
 
       <polygon
         points={polygon}
-        fill="url(#ageRadarFill)"
+        fill="url(#ageNeotenyRadarFill)"
         stroke="#cfdde2"
         strokeWidth="1.6"
         strokeLinejoin="round"
       />
 
-      {points.map((p, i) => (
+      {valuePoints.map((p, i) => (
         <circle
-          key={i}
+          key={`pt-${i}`}
           cx={p.x}
           cy={p.y}
-          r={3}
+          r={3.4}
           fill="#ffffff"
           stroke="#9aaeb5"
-          strokeWidth="1.4"
+          strokeWidth="1.5"
         />
       ))}
 
-      {/* center average */}
       <circle
-        cx={cx}
-        cy={cy}
-        r={26}
+        cx={center}
+        cy={center}
+        r={hubR}
         fill="rgba(0,0,0,0.4)"
         stroke="rgba(255,255,255,0.18)"
         strokeWidth="1"
       />
       <text
-        x={cx}
-        y={cy - 2}
+        x={center}
+        y={center - 3}
         textAnchor="middle"
-        fontSize="18"
+        dominantBaseline="middle"
+        fontSize="20"
         fontWeight="700"
         fill="#ffffff"
         className="font-display"
@@ -271,10 +278,11 @@ function NeotenyComposite({
         {avg.toFixed(1)}
       </text>
       <text
-        x={cx}
-        y={cy + 12}
+        x={center}
+        y={center + 14}
         textAnchor="middle"
-        fontSize="8"
+        dominantBaseline="middle"
+        fontSize="9"
         fontWeight="600"
         letterSpacing="0.1em"
         fill="#a0a8b3"
@@ -291,7 +299,7 @@ function NeotenyComposite({
             y={lp.y}
             textAnchor={lp.anchor}
             dominantBaseline="middle"
-            fontSize="9"
+            fontSize="11"
             fontWeight="600"
             fill="#aab2bd"
             letterSpacing="0.04em"
@@ -433,9 +441,9 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
       {/* Maturity timeline */}
       {age !== null ? (
         <Card className={workerSectionCardClassName}>
-          <CardContent className="p-6 sm:p-8">
-            <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:items-center">
-              <div className="space-y-3">
+          <CardContent className="p-5 sm:p-6">
+            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:items-start lg:gap-5">
+              <div className="min-w-0 space-y-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                   {i18n(language, {
                     en: "Maturity timeline",
@@ -448,12 +456,6 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
                     fr: "Ta position sur le spectre",
                   })}
                 </h3>
-                <p className="text-sm leading-relaxed text-zinc-400">
-                  {i18n(language, {
-                    en: "From juvenile features to mature ones, your apparent age positions you on a continuous timeline. Markers indicate canonical life stages.",
-                    fr: "Des traits juvéniles aux traits matures, ton âge apparent te place sur une frise continue. Les marqueurs indiquent les étapes canoniques.",
-                  })}
-                </p>
               </div>
               <MaturityTimeline age={age} language={language} />
             </div>
@@ -464,9 +466,9 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
       {/* Neoteny composite */}
       {radarSignals.length >= 4 ? (
         <Card className={workerSectionCardClassName}>
-          <CardContent className="p-6 sm:p-8">
-            <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-              <div className="space-y-3">
+          <CardContent className="p-5 sm:p-6">
+            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:items-start lg:gap-5">
+              <div className="min-w-0 space-y-3">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                   {i18n(language, {
                     en: "Youthfulness signals",
@@ -479,12 +481,6 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
                     fr: "Ce qui tire ton âge apparent",
                   })}
                 </h3>
-                <p className="text-sm leading-relaxed text-zinc-400">
-                  {i18n(language, {
-                    en: "Eight independent signals contribute to your reading. The closer a vertex is to the outer edge, the stronger the youthful read on that signal.",
-                    fr: "Huit signaux indépendants nourrissent la lecture. Plus un sommet s'approche du bord extérieur, plus le marqueur est juvénile.",
-                  })}
-                </p>
               </div>
               <NeotenyComposite signals={radarSignals} />
             </div>

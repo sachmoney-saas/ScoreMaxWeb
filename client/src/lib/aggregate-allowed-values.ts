@@ -21,13 +21,13 @@ export type AggregateValueRegistry = Record<
 
 export const AGGREGATE_VALUE_REGISTRY: AggregateValueRegistry = {
   eyes: {
-    "morphology_and_tilt.eye_shape": [
-      "almond",
-      "round",
-      "hooded",
+    "morphology_and_tilt.canthal_tilt": [
+      "negative",
+      "neutral",
+      "positive",
       "downturned",
+      "downward",
     ],
-    "morphology_and_tilt.canthal_tilt": ["negative", "neutral", "positive"],
     "eyelids_and_sclera.epicanthic_fold": ["present", "absent"],
     "details_and_color.limbal_ring_visibility": [
       "absent",

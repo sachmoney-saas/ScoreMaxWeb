@@ -27,13 +27,15 @@ import { SkinTintWorkerView } from "@/components/analysis/workers/SkinTintWorker
 import { NeckWorkerView } from "@/components/analysis/workers/NeckWorkerView";
 import { EarWorkerView } from "@/components/analysis/workers/EarWorkerView";
 import { RecommendationsSection } from "@/components/analysis/RecommendationsSection";
+import {
+  analysisBackNavButtonClassName,
+  analysisSurfaceCardClassName,
+} from "@/components/analysis/workers/_shared";
 import { ArrowLeft } from "lucide-react";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
-const workerDetailCardClassName = "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
 
 function isNumericDisplayValue(value: string): boolean {
   return !Number.isNaN(Number(value.replace(",", ".")));
@@ -81,13 +83,13 @@ export default function WorkerDetails() {
   if (isError || !analysis || !row) {
     return (
       <div className="space-y-5">
-        <Button asChild variant="ghost" className="rounded-full border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] text-white shadow-[0_18px_45px_-35px_rgba(0,0,0,0.95)] hover:bg-white/15">
+        <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
           <Link href={params.jobId ? `/app/analyses/${params.jobId}` : "/app"}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            <ArrowLeft className="h-4 w-4 shrink-0" />
             Retour à l'analyse
           </Link>
         </Button>
-        <Card className={workerDetailCardClassName}>
+        <Card className={analysisSurfaceCardClassName}>
           <CardContent className="p-6">
             <h1 className="font-display text-2xl font-bold">Worker introuvable</h1>
             <p className="mt-2 text-sm text-zinc-300">
@@ -101,14 +103,14 @@ export default function WorkerDetails() {
 
   return (
     <div className="space-y-5">
-      <Button asChild variant="ghost" className="rounded-full border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] text-white shadow-[0_18px_45px_-35px_rgba(0,0,0,0.95)] hover:bg-white/15">
+      <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
         <Link href={`/app/analyses/${analysis.job.id}`}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
+          <ArrowLeft className="h-4 w-4 shrink-0" />
           Retour à l'analyse
         </Link>
       </Button>
 
-      <Card className={workerDetailCardClassName}>
+      <Card className={analysisSurfaceCardClassName}>
         <CardContent className="relative p-6">
           <h1 className="font-display text-4xl font-bold tracking-tight text-white">
             {getWorkerDisplayLabel(worker)}
@@ -121,7 +123,7 @@ export default function WorkerDetails() {
         outputAggregates,
         entries,
         language,
-        cardClassName: workerDetailCardClassName,
+        cardClassName: analysisSurfaceCardClassName,
       })}
 
       {entries.length > 0 ? (

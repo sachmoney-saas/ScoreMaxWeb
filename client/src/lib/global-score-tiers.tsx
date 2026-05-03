@@ -68,7 +68,7 @@ export const SCORE_TIERS: {
   },
   {
     maxExclusive: 55,
-    title: "MTN (Mid-Tier Normie) / Ultimate NPC",
+    title: "Mid-Tier Normie / Ultimate NPC",
     pslLabel: "PSL 4.5",
     progressName: { fr: "Mid-tier normie", en: "Mid-tier normie" },
     Icon: Circle,

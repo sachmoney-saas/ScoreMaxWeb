@@ -32,6 +32,7 @@ import {
   requiredScanAssetCodes,
   uploadScanAsset,
 } from "@/lib/face-analysis";
+import { analysisBackNavButtonClassName } from "@/components/analysis/workers/_shared";
 import { queryClient } from "@/lib/queryClient";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
@@ -271,13 +272,9 @@ export default function NewAnalysis() {
 
   return (
     <div className="space-y-6">
-      <Button
-        asChild
-        variant="ghost"
-        className="rounded-full bg-white/10 text-white hover:bg-white/15"
-      >
+      <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
         <Link href="/app">
-          <ArrowLeft className="mr-2 h-4 w-4" />
+          <ArrowLeft className="h-4 w-4 shrink-0" />
           {i18n(language, {
             en: "Back to analyses",
             fr: "Retour aux analyses",
@@ -287,7 +284,10 @@ export default function NewAnalysis() {
 
       <section className="overflow-hidden rounded-[2.5rem] border border-white/20 bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.26),transparent_30%),linear-gradient(145deg,rgba(9,15,22,0.94)_0%,rgba(24,34,43,0.9)_48%,rgba(155,181,190,0.24)_100%)] p-6 text-white shadow-[0_35px_110px_-70px_rgba(0,0,0,0.95)] md:p-10">
         {shouldShowProcessing ? (
-          <AnalysisProcessingState message={analysisMessage} />
+          <AnalysisProcessingState
+            message={analysisMessage}
+            minimalChrome
+          />
         ) : (
           <div className="mx-auto w-full max-w-md">
             <div className="rounded-[2rem] bg-white p-6 text-slate-900 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.6)] sm:p-8">

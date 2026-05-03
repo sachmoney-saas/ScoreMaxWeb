@@ -26,7 +26,7 @@ import {
   type Recommendation,
   type RecommendationAction,
 } from "@/lib/recommendations";
-import { analysisGlassPanelClassName } from "@/components/analysis/workers/_shared";
+import { analysisSurfaceCardClassName } from "@/components/analysis/workers/_shared";
 import { cn } from "@/lib/utils";
 import { RecommendationCard } from "@/components/analysis/recommendations/RecommendationCard";
 
@@ -134,7 +134,11 @@ function CriticalPointSection({
     <section className="space-y-6">
       {/* Priority: diagnostic (score + argument), then how-to below */}
       <div
-        className={`relative overflow-hidden rounded-2xl border border-white/15 border-l-[4px] bg-white/[0.045] pl-4 pr-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:pl-5 sm:pr-5 sm:py-6 md:pl-6 md:pr-6 ${scoreHeroAccentBorder(point.score)}`}
+        className={cn(
+          analysisSurfaceCardClassName,
+          "rounded-2xl border-white/15 border-l-[4px] pl-4 pr-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:pl-5 sm:pr-5 sm:py-6 md:pl-6 md:pr-6",
+          scoreHeroAccentBorder(point.score),
+        )}
       >
         <div
           aria-hidden
@@ -373,7 +377,12 @@ function ComingSoonSection({
   if (workers.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4">
+    <section
+      className={cn(
+        analysisSurfaceCardClassName,
+        "rounded-2xl border border-dashed border-white/15 p-4",
+      )}
+    >
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
         {i18n(language, { en: "Coming soon", fr: "Bientôt disponible" })}
       </p>
@@ -533,8 +542,8 @@ export function CriticalPointsRecommendations({
     return (
       <div
         className={cn(
-          analysisGlassPanelClassName,
-          "flex items-center justify-center gap-2 p-12 text-sm text-zinc-300",
+          analysisSurfaceCardClassName,
+          "flex items-center justify-center gap-2 rounded-2xl p-12 text-sm text-zinc-300",
         )}
       >
         <Loader2 className="h-4 w-4 animate-spin" />
@@ -550,8 +559,8 @@ export function CriticalPointsRecommendations({
     return (
       <div
         className={cn(
-          analysisGlassPanelClassName,
-          "flex items-start gap-3 p-6 text-sm text-rose-200",
+          analysisSurfaceCardClassName,
+          "flex items-start gap-3 rounded-2xl p-6 text-sm text-rose-200",
         )}
       >
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -577,7 +586,12 @@ export function CriticalPointsRecommendations({
 
   if (!hasAnyContent && hasContentInDb) {
     return (
-      <div className={cn(analysisGlassPanelClassName, "space-y-2 p-6 text-sm")}>
+      <div
+        className={cn(
+          analysisSurfaceCardClassName,
+          "space-y-2 rounded-2xl p-6 text-sm",
+        )}
+      >
         <p className="font-display text-lg font-semibold text-white">
           {i18n(language, {
             en: "Nothing critical to address",
@@ -600,7 +614,12 @@ export function CriticalPointsRecommendations({
 
   if (!hasAnyContent && !hasContentInDb) {
     return (
-      <div className={cn(analysisGlassPanelClassName, "space-y-3 p-6 text-sm")}>
+      <div
+        className={cn(
+          analysisSurfaceCardClassName,
+          "space-y-3 rounded-2xl p-6 text-sm",
+        )}
+      >
         <p className="font-display text-lg font-semibold text-white">
           {i18n(language, {
             en: "Recommendations coming soon",
@@ -631,7 +650,12 @@ export function CriticalPointsRecommendations({
             key={`${analysisJobId}:${visibleWorkerGroups.map((g) => g.worker).join("|")}`}
             className="space-y-6"
           >
-            <TabsList className="h-auto max-h-[none] min-h-[2.75rem] w-full flex-wrap justify-start gap-1.5 rounded-2xl border border-white/20 bg-white/[0.07] p-1.5 backdrop-blur-xl">
+            <TabsList
+              className={cn(
+                analysisSurfaceCardClassName,
+                "inline-flex h-auto max-h-[none] min-h-[2.75rem] w-full flex-wrap justify-start gap-1.5 rounded-2xl p-1.5 sm:flex-nowrap",
+              )}
+            >
               {visibleWorkerGroups.map((group) => {
                 const label = getWorkerDisplayLabel(
                   group.worker,
@@ -648,7 +672,7 @@ export function CriticalPointsRecommendations({
                     title={
                       worst !== null ? `${worst.toFixed(1)}/10` : undefined
                     }
-                    className="rounded-xl px-3 py-2 text-left text-xs font-medium text-zinc-200 shadow-none data-[state=active]:bg-slate-950 data-[state=active]:text-white sm:px-4 sm:text-sm"
+                    className="rounded-xl px-3 py-2 text-left text-xs font-medium text-zinc-400 shadow-none hover:text-zinc-200 data-[state=active]:bg-slate-950 data-[state=active]:text-white sm:px-4 sm:text-sm"
                   >
                     <span className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
                       <span className="block max-w-[10rem] truncate sm:max-w-none">
@@ -677,7 +701,12 @@ export function CriticalPointsRecommendations({
                   buildWorkerHref={buildWorkerHref}
                 />
                 {group.criticalPoints.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-400">
+                  <p
+                    className={cn(
+                      analysisSurfaceCardClassName,
+                      "rounded-xl border border-dashed border-white/15 px-4 py-3 text-sm text-zinc-400",
+                    )}
+                  >
                     {i18n(language, {
                       en: "No single measure surfaced as critical here — see matching suggestions below if any.",
                       fr: "Aucune mesure ressort comme critique dans cette zone — voir les suggestions ci-dessous le cas échéant.",

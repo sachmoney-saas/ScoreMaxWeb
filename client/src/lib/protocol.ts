@@ -188,7 +188,6 @@ export function useUserProtocol() {
         if (!row.recommendation) continue;
         const { recommendation: rawRec, ...action } = row;
         const recommendation = normaliseRecommendationRow(rawRec);
-        if (!recommendation.enabled) continue;
         items.push({
           recommendation,
           action: action as RecommendationAction,

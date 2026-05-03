@@ -1757,19 +1757,9 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
   const symmetry = getScore(aggregates, "morphology_and_tilt.eye_symmetry");
   const support = getScore(aggregates, "under_eye_health.support_and_hollows");
   const lashes = getScore(aggregates, "details_and_color.eyelash_density");
-  const shapeEnum = getEnum(aggregates, "morphology_and_tilt.eye_shape");
   const tiltEnum = getEnum(aggregates, "morphology_and_tilt.canthal_tilt");
   const irisEnum = getEnum(aggregates, "details_and_color.iris_color");
 
-  const shapeDisplay =
-    shapeEnum.value && !isUnknownEnumValue(shapeEnum.value)
-      ? formatAggregateDisplayValue(
-          "eyes",
-          "morphology_and_tilt.eye_shape",
-          shapeEnum.value,
-          locale,
-        ) ?? shapeEnum.value
-      : null;
   const tiltDisplay =
     tiltEnum.value && !isUnknownEnumValue(tiltEnum.value)
       ? formatAggregateDisplayValue(
@@ -1788,16 +1778,17 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
       <div className={PREVIEW_HERO}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
-            {i18n(language, { en: "Eye shape", fr: "Forme des yeux" })}
+            {i18n(language, { en: "Eyes", fr: "Yeux" })}
           </p>
           <p className="mt-1 font-display text-base font-bold text-white">
-            {shapeDisplay ?? "—"}
+            {overall.score !== null ? overall.score.toFixed(1) : "—"}
+            <span className="ml-1 text-sm font-semibold text-zinc-400">/10</span>
           </p>
           <p className="mt-1 text-xs leading-snug text-zinc-400 line-clamp-2">
             {overall.argument ??
               i18n(language, {
-                en: "Shape, canthal tilt, symmetry and iris color.",
-                fr: "Forme, inclinaison canthale, symétrie et couleur de l'iris.",
+                en: "Canthal tilt, spacing, symmetry, lids and iris color.",
+                fr: "Inclinaison canthale, espacement, symétrie, paupières et couleur de l'iris.",
               })}
           </p>
         </div>

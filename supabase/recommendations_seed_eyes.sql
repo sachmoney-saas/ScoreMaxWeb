@@ -118,7 +118,7 @@ WITH recs AS (
         jsonb_build_object('en', 'Always combine with a serum or oil to avoid skin friction.',           'fr', 'Toujours avec un sérum ou une huile pour éviter la friction.')
       ),
       12, 'weeks', 0, 30, 'EUR', 'low', 'community',
-      ARRAY['morphology_and_tilt.canthal_tilt','morphology_and_tilt.eye_symmetry'],
+      ARRAY['morphology_and_tilt.canthal_tilt'],
       jsonb_build_object('enum_in', jsonb_build_object('key','morphology_and_tilt.canthal_tilt','values', jsonb_build_array('negative','neutral','downturned','downward')))
     ),
     (
@@ -345,7 +345,8 @@ WITH recs AS (
       1, 'session', 8000, 18000, 'EUR', 'high', 'medical',
       ARRAY['under_eye_health.support_and_hollows','morphology_and_tilt.orbital_depth'],
       jsonb_build_object('and', jsonb_build_array(
-        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.support_and_hollows','value',3))
+        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.support_and_hollows','value',3)),
+        jsonb_build_object('score_lte', jsonb_build_object('key','morphology_and_tilt.orbital_depth','value',5))
       ))
     ),
     (
@@ -361,7 +362,7 @@ WITH recs AS (
       ),
       1, 'session', 12000, 25000, 'EUR', 'high', 'medical',
       ARRAY['morphology_and_tilt.orbital_depth'],
-      jsonb_build_object('enum_in', jsonb_build_object('key','morphology_and_tilt.orbital_depth','values', jsonb_build_array('shallow','prominent','protruding')))
+      jsonb_build_object('score_gte', jsonb_build_object('key','morphology_and_tilt.orbital_depth','value',7))
     ),
     (
       'eyes.laser_resurfacing', 'eyes', 'hard', 'energy', 60,

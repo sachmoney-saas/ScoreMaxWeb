@@ -297,7 +297,7 @@ export function getGlobalScoreTierLabel(score0to100: number): string {
     return "LTN (Low-Tier Normie) / Invisible";
   }
   if (score0to100 < 55) {
-    return "MTN (Mid-Tier Normie) / Ultimate NPC";
+    return "Mid-Tier Normie / Ultimate NPC";
   }
   if (score0to100 < 60) {
     return "True Normie / Baseline";

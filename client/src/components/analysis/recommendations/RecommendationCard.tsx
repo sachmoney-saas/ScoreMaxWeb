@@ -18,6 +18,8 @@ import {
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { analysisSurfaceCardClassName } from "@/components/analysis/workers/_shared";
+import { cn } from "@/lib/utils";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   formatAggregateDisplayLabel,
@@ -240,7 +242,12 @@ export function RecommendationCard({
   const isPending = upsert.isPending || remove.isPending;
 
   return (
-    <Card className="relative overflow-hidden border-white/10 bg-white/[0.03] backdrop-blur-sm transition-colors hover:bg-white/[0.05]">
+    <Card
+      className={cn(
+        analysisSurfaceCardClassName,
+        "rounded-xl transition duration-300 hover:border-white/35",
+      )}
+    >
       <CardContent className="space-y-4 p-5">
         <div className="flex items-start gap-3">
           <div className="flex min-w-0 items-start gap-3">

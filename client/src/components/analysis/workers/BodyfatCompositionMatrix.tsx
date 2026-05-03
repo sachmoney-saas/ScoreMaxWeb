@@ -380,12 +380,6 @@ export function CompositionMatrix({
         </h3>
       </div>
 
-      <CompositionScoresRow
-        leanness={leanness}
-        sharpness={sharpness}
-        language={language}
-      />
-
       <BodyfatCompositionMatrixVisual
         leanness={leanness}
         sharpness={sharpness}

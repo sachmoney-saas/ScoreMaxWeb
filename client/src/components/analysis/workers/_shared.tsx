@@ -18,19 +18,17 @@ export const workerSectionCardClassName =
   "relative overflow-hidden border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.14),transparent_36%),linear-gradient(145deg,rgba(10,16,22,0.85)_0%,rgba(20,31,39,0.81)_48%,rgba(185,204,209,0.2)_100%)] text-zinc-50 shadow-[0_24px_80px_-55px_rgba(0,0,0,0.95)] backdrop-blur-sm";
 
 /**
- * Premium analysis “surface” — matches Overview worker cards, global score, and
- * protocol hero: slightly brighter glass, border-white/20, deeper lift shadow.
- * Use for tab-level panels (recommendations umbrella) so they sit in the same
- * family as the rest of the SaaS analysis chrome.
+ * Premium analysis “surface” — Overview worker cards, global score, recommendations
+ * tab, protocol hero: radial highlight + dark gradient, border-white/20, blur.
  */
 export const analysisSurfaceCardClassName =
   "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.83)_0%,rgba(20,31,39,0.79)_48%,rgba(185,204,209,0.25)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] backdrop-blur-sm";
 
-/**
- * Translucent glass for recommendation surfaces — WaveBackground reads through.
- */
-export const analysisGlassPanelClassName =
-  "rounded-2xl border border-white/20 bg-white/[0.063] backdrop-blur-xl text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.82)]";
+/** Pill « Retour » — même surface sombre (Button `ghost` + `asChild` / Link). */
+export const analysisBackNavButtonClassName = cn(
+  analysisSurfaceCardClassName,
+  "no-default-hover-elevate no-default-active-elevate inline-flex min-h-0 items-center justify-center gap-2 rounded-full border-white/20 px-5 py-2.5 text-sm font-medium text-white transition hover:border-white/35 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+);
 
 /* ----------------------------------------------------------------------------
  * Aggregate readers

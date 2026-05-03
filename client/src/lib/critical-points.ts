@@ -249,8 +249,10 @@ export function buildCriticalPoints(
   }
 
   const orphans: OrphanRecommendations[] = [];
-  for (const [worker, recs] of matchedByWorker.entries()) {
-    const remaining = recs.filter((r) => !surfacedRecIds.has(r.id));
+  for (const [worker, recs] of Array.from(matchedByWorker.entries())) {
+    const remaining = recs.filter(
+      (r: MatchedRecommendation) => !surfacedRecIds.has(r.id),
+    );
     if (remaining.length > 0) {
       orphans.push({ worker, recommendations: remaining });
     }

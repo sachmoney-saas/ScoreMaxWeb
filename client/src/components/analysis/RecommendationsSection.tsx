@@ -12,7 +12,8 @@ import {
   type RecommendationAction,
   type RecommendationType,
 } from "@/lib/recommendations";
-import { analysisGlassPanelClassName } from "@/components/analysis/workers/_shared";
+import { analysisSurfaceCardClassName } from "@/components/analysis/workers/_shared";
+import { cn } from "@/lib/utils";
 import { RecommendationCard } from "@/components/analysis/recommendations/RecommendationCard";
 
 /* ----------------------------------------------------------------------------
@@ -94,7 +95,10 @@ export function RecommendationsSection({
   if (matched.isLoading) {
     return (
       <div
-        className={`${analysisGlassPanelClassName} flex items-center justify-center gap-2 p-12 text-sm text-zinc-300`}
+        className={cn(
+          analysisSurfaceCardClassName,
+          "flex items-center justify-center gap-2 rounded-2xl p-12 text-sm text-zinc-300",
+        )}
       >
         <Loader2 className="h-4 w-4 animate-spin" />
         {i18n(language, {
@@ -107,7 +111,12 @@ export function RecommendationsSection({
 
   if (matched.error) {
     return (
-      <div className={`${analysisGlassPanelClassName} p-6 text-sm text-rose-200`}>
+      <div
+        className={cn(
+          analysisSurfaceCardClassName,
+          "rounded-2xl p-6 text-sm text-rose-200",
+        )}
+      >
         {i18n(language, {
           en: "Couldn't load recommendations.",
           fr: "Impossible de charger les recommandations.",
@@ -124,7 +133,12 @@ export function RecommendationsSection({
 
   if (matched.soft.length === 0 && matched.hard.length === 0) {
     return (
-      <div className={`${analysisGlassPanelClassName} space-y-2 p-6 text-sm text-zinc-300`}>
+      <div
+        className={cn(
+          analysisSurfaceCardClassName,
+          "space-y-2 rounded-2xl p-6 text-sm text-zinc-300",
+        )}
+      >
         <p className="font-display text-lg font-semibold text-white">
           {i18n(language, {
             en: "Nothing critical to address",
@@ -142,7 +156,12 @@ export function RecommendationsSection({
   }
 
   return (
-    <div className={`${analysisGlassPanelClassName} space-y-8 p-6`}>
+    <div
+      className={cn(
+        analysisSurfaceCardClassName,
+        "space-y-8 rounded-2xl p-6",
+      )}
+    >
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
             {i18n(language, {

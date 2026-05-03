@@ -117,6 +117,14 @@ function readNumber(
       const parsed = Number(v.replace(",", "."));
       if (Number.isFinite(parsed)) return parsed;
     }
+    if (Array.isArray(v) && v.length > 0) {
+      const first = v[0];
+      if (typeof first === "number" && Number.isFinite(first)) return first;
+      if (typeof first === "string") {
+        const parsed = Number(first.replace(",", "."));
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
   }
   return null;
 }
