@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
-import { analysesRequestSchema, type AnalysesRequest } from "@shared/oneshot";
+import {
+  analysesRequestSchema,
+  optionalAnalysisLangBodySchema,
+  type AnalysesRequest,
+} from "@shared/oneshot";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
 import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-jobs";
@@ -21,6 +25,7 @@ import {
   getR2SignedUploadUrl,
 } from "../lib/r2-storage";
 import { supabaseAdmin } from "../lib/supabase-admin";
+import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 
 const analysesMetadataSchema = z.object({
   userId: z.string().min(1),
@@ -238,65 +243,73 @@ export function createV1AnalysesRouter(): Router {
     }
   });
 
-  router.post("/analyses/manual-session/:sessionId/launch", async (req, res, next) => {
-    try {
-      const userId = await requireUserId(req.headers.authorization);
-      const params = manualSessionParamsSchema.parse(req.params);
-      const session = await loadManualSession({ sessionId: params.sessionId, userId });
-      const status = await getManualSessionStatus({ sessionId: session.id, userId });
+  router.post(
+    "/analyses/manual-session/:sessionId/launch",
+    validateBody(optionalAnalysisLangBodySchema),
+    async (req, res, next) => {
+      try {
+        const userId = await requireUserId(req.headers.authorization);
+        const params = manualSessionParamsSchema.parse(req.params);
+        const { lang } = req.body as { lang?: string };
+        assertSupportedAnalysisLang(lang);
 
-      if (!status.is_ready) {
-        throw new ApiError({
-          code: "VALIDATION_ERROR",
-          status: 400,
-          message: "Manual analysis session is incomplete",
-          details: { missingAssetCodes: status.missing_asset_types },
+        const session = await loadManualSession({ sessionId: params.sessionId, userId });
+        const status = await getManualSessionStatus({ sessionId: session.id, userId });
+
+        if (!status.is_ready) {
+          throw new ApiError({
+            code: "VALIDATION_ERROR",
+            status: 400,
+            message: "Manual analysis session is incomplete",
+            details: { missingAssetCodes: status.missing_asset_types },
+          });
+        }
+
+        const assets = await loadRequiredAssets({ userId, sessionId: session.id });
+        const payload = await buildPayload({
+          userId,
+          sessionId: session.id,
+          assets,
+          source: "manual_rescan",
+          ...(lang !== undefined ? { lang } : {}),
         });
-      }
+        const jobId = await createAnalysisJob({
+          userId,
+          sessionId: session.id,
+          payload,
+          triggerSource: "user_rerun",
+        });
+        await persistAnalysisJobAssets({
+          jobId,
+          userId,
+          sessionId: session.id,
+          payload,
+        });
 
-      const assets = await loadRequiredAssets({ userId, sessionId: session.id });
-      const payload = await buildPayload({
-        userId,
-        sessionId: session.id,
-        assets,
-        source: "manual_rescan",
-      });
-      const jobId = await createAnalysisJob({
-        userId,
-        sessionId: session.id,
-        payload,
-        triggerSource: "user_rerun",
-      });
-      await persistAnalysisJobAssets({
-        jobId,
-        userId,
-        sessionId: session.id,
-        payload,
-      });
+        await supabaseAdmin
+          .from("scan_sessions")
+          .update({ status: "processing" })
+          .eq("id", session.id)
+          .eq("user_id", userId);
 
-      await supabaseAdmin
-        .from("scan_sessions")
-        .update({ status: "processing" })
-        .eq("id", session.id)
-        .eq("user_id", userId);
+        dispatchAnalysisJob(jobId);
 
-      dispatchAnalysisJob(jobId);
-
-      res.status(202).json({
-        ok: true,
-        httpStatus: 202,
-        data: {
-          job: {
-            id: jobId,
-            status: "queued",
+        res.status(202).json({
+          ok: true,
+          httpStatus: 202,
+          data: {
+            job: {
+              id: jobId,
+              status: "queued",
+            },
           },
-        },
-        error: null,
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
+          error: null,
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get("/analyses/jobs/:jobId", async (req, res, next) => {
     try {
@@ -332,6 +345,14 @@ export function createV1AnalysesRouter(): Router {
   router.post(
     "/analyses",
     validateBody(analysesRequestSchema),
+    (req, _res, next) => {
+      try {
+        assertSupportedAnalysisLang((req.body as AnalysesRequest).lang);
+        next();
+      } catch (error) {
+        next(error);
+      }
+    },
     async (req, res, next) => {
       try {
         const payload = req.body as AnalysesRequest;

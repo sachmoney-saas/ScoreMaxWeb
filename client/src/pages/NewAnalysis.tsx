@@ -28,8 +28,8 @@ import {
   useRecentScanStatus,
 } from "@/hooks/use-supabase";
 import {
+  getScanAssetLabels,
   requiredScanAssetCodes,
-  scanAssetLabels,
   uploadScanAsset,
 } from "@/lib/face-analysis";
 import { queryClient } from "@/lib/queryClient";
@@ -48,6 +48,7 @@ function getErrorMessage(error: unknown, language: AppLanguage): string {
 
 export default function NewAnalysis() {
   const language = useAppLanguage();
+  const scanAssetLabels = getScanAssetLabels(language);
   const { user } = useAuth();
   const [, navigate] = useLocation();
 
@@ -210,6 +211,7 @@ export default function NewAnalysis() {
         sessionId,
         assetTypeCode,
         file,
+        lang: language,
       });
       setUploadedAssetCodes((current) => new Set(current).add(assetTypeCode));
       await Promise.all([

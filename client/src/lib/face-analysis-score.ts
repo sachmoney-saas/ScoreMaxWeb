@@ -193,3 +193,38 @@ export function calculateGlobalFaceScore(results: ScoreInputResult[]): GlobalFac
     totalWeight,
   };
 }
+
+/**
+ * Human-readable PSL / tier label for a global face score (0–100).
+ * Thresholds match the Overview `GlobalScoreCard` ladder.
+ */
+export function getGlobalScoreTierLabel(score0to100: number): string {
+  if (score0to100 < 25) {
+    return "Sub-human Bottom Percentile";
+  }
+  if (score0to100 < 35) {
+    return "Sub-5 / Low-Tier Sub-Normie";
+  }
+  if (score0to100 < 45) {
+    return "LTN (Low-Tier Normie) / Invisible";
+  }
+  if (score0to100 < 55) {
+    return "MTN (Mid-Tier Normie) / Ultimate NPC";
+  }
+  if (score0to100 < 60) {
+    return "True Normie / Baseline";
+  }
+  if (score0to100 < 70) {
+    return "HTN (High-Tier Normie) / Local Chad";
+  }
+  if (score0to100 < 80) {
+    return "Chadlite / Stacylite / Mogger";
+  }
+  if (score0to100 < 85) {
+    return "Model-Tier Chad";
+  }
+  if (score0to100 < 95) {
+    return "Genetic Freak Gigachad PSL God";
+  }
+  return "Alien Tier Ascended";
+}

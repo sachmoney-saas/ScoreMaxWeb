@@ -3,6 +3,8 @@ import { clientEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import type { AnalysesRequest } from "@shared/oneshot";
+import { type AppLanguage, getPreferredLanguage, i18n } from "@/lib/i18n";
+import { faceAnalysisMessage } from "@/lib/face-analysis-messages";
 
 export type ScanAssetRecord = {
   id: string;
@@ -25,16 +27,32 @@ export const requiredScanAssetCodes: OnboardingScanAssetCode[] = [
   "EYE_CLOSEUP",
 ];
 
-export const scanAssetLabels: Record<OnboardingScanAssetCode, string> = {
-  FACE_FRONT: "Visage de face",
-  PROFILE_LEFT: "Profil gauche",
-  PROFILE_RIGHT: "Profil droit",
-  LOOK_UP: "Regard vers le haut",
-  LOOK_DOWN: "Regard vers le bas",
-  SMILE: "Sourire",
-  HAIR_BACK: "Cheveux arrière",
-  EYE_CLOSEUP: "Gros plan des yeux",
-};
+export function getScanAssetLabels(
+  lang: AppLanguage,
+): Record<OnboardingScanAssetCode, string> {
+  return {
+    FACE_FRONT: i18n(lang, { en: "Front face", fr: "Visage de face" }),
+    PROFILE_LEFT: i18n(lang, { en: "Left profile", fr: "Profil gauche" }),
+    PROFILE_RIGHT: i18n(lang, { en: "Right profile", fr: "Profil droit" }),
+    LOOK_UP: i18n(lang, {
+      en: "Looking up",
+      fr: "Regard vers le haut",
+    }),
+    LOOK_DOWN: i18n(lang, {
+      en: "Looking down",
+      fr: "Regard vers le bas",
+    }),
+    SMILE: i18n(lang, { en: "Smile", fr: "Sourire" }),
+    HAIR_BACK: i18n(lang, {
+      en: "Hair from behind",
+      fr: "Cheveux arrière",
+    }),
+    EYE_CLOSEUP: i18n(lang, {
+      en: "Eye close-up",
+      fr: "Gros plan des yeux",
+    }),
+  };
+}
 
 export type ManualAnalysisSessionResponse = {
   session: {
@@ -191,10 +209,10 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
-function buildPublicR2Url(key: string): string {
+function buildPublicR2Url(key: string, lang: AppLanguage): string {
   const baseUrl = clientEnv.VITE_R2_PUBLIC_BASE_URL;
   if (!baseUrl) {
-    throw new Error("VITE_R2_PUBLIC_BASE_URL est requis pour lire les assets R2.");
+    throw new Error(faceAnalysisMessage(lang, "r2BaseUrlMissing"));
   }
 
   const normalizedBase = baseUrl.replace(/\/+$/, "");
@@ -206,16 +224,18 @@ export async function uploadScanAsset(params: {
   sessionId: string;
   assetTypeCode: OnboardingScanAssetCode;
   file: File;
+  lang?: AppLanguage;
 }): Promise<void> {
+  const lang = params.lang ?? getPreferredLanguage();
   if (!["image/jpeg", "image/png"].includes(params.file.type)) {
-    throw new Error("Seuls les fichiers JPG et PNG sont acceptés.");
+    throw new Error(faceAnalysisMessage(lang, "mimeTypeInvalid"));
   }
 
   const extension = params.file.type === "image/png" ? "png" : "jpg";
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) {
-    throw new Error("Session Supabase introuvable");
+    throw new Error(faceAnalysisMessage(lang, "supabaseSessionMissing"));
   }
 
   const signedUploadResponse = await apiRequest(
@@ -239,7 +259,7 @@ export async function uploadScanAsset(params: {
   };
   const uploadData = signedUploadPayload.data;
   if (!uploadData) {
-    throw new Error("Impossible de préparer l'upload sur R2.");
+    throw new Error(faceAnalysisMessage(lang, "signedUploadFailed"));
   }
 
   const uploadResponse = await fetch(uploadData.upload_url, {
@@ -251,7 +271,7 @@ export async function uploadScanAsset(params: {
   });
 
   if (!uploadResponse.ok) {
-    throw new Error("Upload Cloudflare R2 échoué.");
+    throw new Error(faceAnalysisMessage(lang, "r2UploadFailed"));
   }
 
   const { error: insertError } = await supabase.from("scan_assets").insert({
@@ -267,7 +287,7 @@ export async function uploadScanAsset(params: {
   });
 
   if (insertError) {
-    throw insertError;
+    throw new Error(faceAnalysisMessage(lang, "scanAssetsSaveFailed"));
   }
 }
 
@@ -293,18 +313,22 @@ export async function buildFaceAnalysisRequest(params: {
   requestId: string;
   sessionId: string;
   userId: string;
+  lang?: AppLanguage;
 }): Promise<AnalysesRequest> {
+  const lang = params.lang ?? getPreferredLanguage();
   const assets = await fetchOnboardingScanAssets(params.sessionId);
 
   if (assets.length === 0) {
-    throw new Error("No scan assets found for the current onboarding session");
+    throw new Error(faceAnalysisMessage(lang, "noScanAssets"));
   }
 
   const images = await Promise.all(
     assets.map(async (asset) => {
-      const response = await fetch(buildPublicR2Url(asset.r2_key));
+      const response = await fetch(buildPublicR2Url(asset.r2_key, lang));
       if (!response.ok) {
-        throw new Error(`Unable to download asset ${asset.asset_type_code}`);
+        throw new Error(
+          faceAnalysisMessage(lang, "downloadAssetFailed", asset.asset_type_code),
+        );
       }
       const data = await response.blob();
 
@@ -325,6 +349,7 @@ export async function buildFaceAnalysisRequest(params: {
       userId: params.userId,
       sessionId: params.sessionId,
     },
+    ...(params.lang !== undefined ? { lang: params.lang } : {}),
   };
 }
 
@@ -332,6 +357,7 @@ export async function runFaceAnalysis(params: {
   requestId: string;
   sessionId: string;
   userId: string;
+  lang?: AppLanguage;
 }): Promise<AnalysisLaunchResponse> {
   const payload = await buildFaceAnalysisRequest(params);
   const response = await apiRequest("POST", "/v1/analyses", payload);
@@ -477,11 +503,12 @@ export async function fetchManualAnalysisSessionStatus(params: {
 export async function launchManualAnalysis(params: {
   accessToken: string;
   sessionId: string;
+  lang?: AppLanguage;
 }): Promise<AnalysisJobStatusResponse> {
   const response = await apiRequest(
     "POST",
     `/v1/analyses/manual-session/${params.sessionId}/launch`,
-    undefined,
+    params.lang !== undefined ? { lang: params.lang } : undefined,
     { Authorization: `Bearer ${params.accessToken}` },
   );
   const json = (await response.json()) as {

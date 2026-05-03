@@ -1,3 +1,4 @@
+import * as React from "react";
 import { WaveBackground } from "@/components/background/WaveBackground";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -5,11 +6,15 @@ import {
   useDeleteAnalysisJob,
 } from "@/hooks/use-supabase";
 import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
-import { calculateGlobalFaceScore } from "@/lib/face-analysis-score";
+import {
+  calculateGlobalFaceScore,
+  getGlobalScoreTierLabel,
+} from "@/lib/face-analysis-score";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
   ShieldCheck,
+  Sparkles,
   Users,
   LogOut,
   Loader2,
@@ -19,6 +24,7 @@ import {
   MoreHorizontal,
   Plus,
   Trash2,
+  ClipboardList,
 } from "lucide-react";
 import {
   Sidebar,
@@ -106,6 +112,29 @@ function ModernAppSidebar() {
 
   const isCollapsed = state === "collapsed" && !isMobile;
 
+  const lastCompletedAnalysisTierLabel = React.useMemo(() => {
+    const completed = analysisHistory
+      .filter((a) => a.status === "completed" && a.results.length > 0)
+      .sort((a, b) => {
+        const ta = new Date(a.completed_at ?? a.created_at).getTime();
+        const tb = new Date(b.completed_at ?? b.created_at).getTime();
+        return tb - ta;
+      });
+    const latest = completed[0];
+    if (!latest) {
+      return null;
+    }
+    const inputs = latest.results.map((row) => {
+      const result = row.result as Record<string, unknown>;
+      const outputAggregates = isRecord(result.outputAggregates)
+        ? result.outputAggregates
+        : {};
+      return { worker: row.worker, outputAggregates };
+    });
+    const global = calculateGlobalFaceScore(inputs);
+    return global ? getGlobalScoreTierLabel(global.score) : null;
+  }, [analysisHistory]);
+
   const adminItems: SidebarNavItem[] = isAdmin
     ? [
         {
@@ -125,6 +154,12 @@ function ModernAppSidebar() {
           label: "Logs analyses",
           icon: AlertTriangle,
           isActive: (path) => path === "/admin/analysis-failures",
+        },
+        {
+          href: "/admin/recommendations",
+          label: "Recommandations",
+          icon: Sparkles,
+          isActive: (path) => path.startsWith("/admin/recommendations"),
         },
       ]
     : [];
@@ -188,10 +223,10 @@ function ModernAppSidebar() {
 
       <SidebarFooter className={isCollapsed ? "hidden" : "px-2 pt-1 pb-2"}>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          <DropdownMenuTrigger asChild className="w-full">
             <SidebarMenuButton
               size="lg"
-              className="h-11 rounded-xl border border-white/15 bg-white/[0.06] data-[state=open]:bg-white/[0.12]"
+              className="h-11 w-full rounded-xl border border-white/15 bg-white/[0.06] data-[state=open]:bg-white/[0.12]"
             >
               <Avatar className="h-8 w-8 rounded-lg shrink-0">
                 <AvatarFallback className="rounded-lg bg-primary/15 text-primary text-xs">
@@ -200,14 +235,15 @@ function ModernAppSidebar() {
               </Avatar>
               {!isCollapsed ? (
                 <>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
+                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold text-zinc-100">
-                      {profile?.role === "admin"
-                        ? "Administrateur"
-                        : "Utilisateur"}
+                      {profile?.email ?? "—"}
                     </span>
                     <span className="truncate text-xs text-zinc-400">
-                      {profile?.email}
+                      {isHistoryLoading
+                        ? "…"
+                        : lastCompletedAnalysisTierLabel ??
+                          "Aucune analyse terminée"}
                     </span>
                   </div>
                   <ChevronRight className="ml-auto size-4 shrink-0 text-zinc-400" />
@@ -253,7 +289,35 @@ function ModernAppSidebar() {
       </SidebarFooter>
 
       <SidebarContent className={isCollapsed ? "hidden" : "px-2 pb-2"}>
-        <SidebarGroup>
+        {/* p-0: match footer email strip width (SidebarGroup defaults to p-2 and narrows rows). */}
+        <SidebarGroup className="p-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem className="w-full">
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/app/protocol"}
+                  tooltip="Mon protocole"
+                  className="h-11 w-full rounded-xl border border-white/15 bg-white/[0.06] px-3 transition-all duration-200 hover:border-white/25 hover:bg-white/[0.12] data-[active=true]:border-white/25 data-[active=true]:bg-[linear-gradient(132deg,rgba(214,228,255,0.26)_0%,rgba(214,228,255,0.14)_45%,rgba(255,255,255,0.05)_100%)] data-[active=true]:text-zinc-50"
+                >
+                  <Link
+                    href="/app/protocol"
+                    className="flex w-full items-center gap-2.5"
+                  >
+                    <ClipboardList className="h-4 w-4 shrink-0 text-zinc-200" />
+                    <span className="font-semibold text-zinc-100">
+                      Mon protocole
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator className="my-2 bg-white/10" />
+
+        <SidebarGroup className="p-0">
           <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
             Mes analyses
           </SidebarGroupLabel>
@@ -386,7 +450,7 @@ function ModernAppSidebar() {
         {adminItems.length > 0 ? (
           <>
             <SidebarSeparator className="my-2 bg-white/10" />
-            <SidebarGroup>
+            <SidebarGroup className="p-0">
               <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
                 Administration
               </SidebarGroupLabel>

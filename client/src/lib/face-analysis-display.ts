@@ -47,7 +47,7 @@ const workerLabels: Record<string, LocalizedText> = {
   bodyfat: text("Masse grasse faciale", "Facial body fat"),
   cheeks: text("Joues", "Cheeks"),
   chin: text("Menton", "Chin"),
-  coloring: text("Coloration générale", "Overall coloring"),
+  coloring: text("Ta colorimétrie globale", "Your global coloring"),
   ear: text("Oreilles", "Ears"),
   eye_brows: text("Sourcils", "Eyebrows"),
   eyes: text("Yeux", "Eyes"),
@@ -56,7 +56,7 @@ const workerLabels: Record<string, LocalizedText> = {
   lips: text("Lèvres", "Lips"),
   neck: text("Cou", "Neck"),
   nose: text("Nez", "Nose"),
-  skin: text("Peau", "Skin"),
+  skin: text("Ton profil de peau", "Your skin profile"),
   skin_tint: text("Teint", "Skin tone"),
   smile: text("Sourire", "Smile"),
   symmetry_shape: text("Symétrie et forme", "Symmetry and shape"),
@@ -348,7 +348,7 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
     },
   },
   coloring: {
-    label: text("Coloration générale", "Overall coloring"),
+    label: text("Ta colorimétrie globale", "Your global coloring"),
     aggregates: {
       "skin.tone": { label: text("Teint de peau", "Skin tone"), kind: "enum", priority: 10, valueLabels: commonEnumLabels },
       "skin.clarity": { label: text("Clarté de la peau", "Skin clarity"), kind: "score", priority: 20 },
@@ -356,11 +356,8 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
       "hair.color": { label: text("Couleur des cheveux", "Hair color"), kind: "enum", priority: 40, valueLabels: commonEnumLabels },
       "hair.depth": { label: text("Profondeur de couleur des cheveux", "Hair color depth"), kind: "score", priority: 50 },
       "hair.warmth": { label: text("Chaleur de couleur des cheveux", "Hair color warmth"), kind: "enum", priority: 60 },
-      "eyes.iris_color": { label: text("Couleur de l'iris", "Iris color"), kind: "enum", priority: 70, valueLabels: commonEnumLabels },
-      "eyes.iris_depth": { label: text("Profondeur de l'iris", "Iris depth"), kind: "score", priority: 80 },
-      "eyes.iris_saturation": { label: text("Saturation de l'iris", "Iris saturation"), kind: "score", priority: 90 },
+      /** Iris detail lives on the dedicated eyes worker; coloring output only carries sclera clarity here. */
       "eyes.whites_clarity": { label: text("Clarté du blanc des yeux", "Eye whites clarity"), kind: "score", priority: 100 },
-      "eyes.limbal_ring_visibility": { label: text("Visibilité de l'anneau limbique", "Limbal ring visibility"), kind: "score", priority: 110 },
       "eyebrows.color": { label: text("Couleur des sourcils", "Eyebrow color"), kind: "enum", priority: 120, valueLabels: commonEnumLabels },
       "eyebrows.depth": { label: text("Profondeur de couleur des sourcils", "Eyebrow color depth"), kind: "score", priority: 130 },
       "eyebrows.contrast_vs_skin": { label: text("Contraste sourcils-peau", "Brows vs skin contrast"), kind: "score", priority: 140 },
@@ -371,8 +368,18 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
       "contrast.brows_vs_skin": { label: text("Contraste sourcils-peau", "Brows vs skin contrast"), kind: "score", priority: 190 },
       "contrast.lips_vs_skin": { label: text("Contraste lèvres-peau", "Lips vs skin contrast"), kind: "score", priority: 200 },
       "contrast.overall_contrast": { label: text("Contraste global", "Overall contrast"), kind: "score", priority: 210 },
+      "contrast.overall_contrast_score": {
+        label: text("Contraste global", "Overall contrast"),
+        kind: "score",
+        priority: 210,
+      },
       "contrast.contrast_type": { label: text("Type de contraste", "Contrast type"), kind: "enum", priority: 220, valueLabels: commonEnumLabels },
       global_coloring: { label: text("Colorimétrie globale", "Global coloring"), kind: "score", priority: 230 },
+      global_coloring_score: {
+        label: text("Colorimétrie globale", "Global coloring"),
+        kind: "score",
+        priority: 230,
+      },
     },
   },
   neck: {
@@ -410,7 +417,7 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
     },
   },
   skin: {
-    label: text("Peau", "Skin"),
+    label: text("Ton profil de peau", "Your skin profile"),
     aggregates: {
       "texture_and_pores.pore_size_visibility": { label: text("Visibilité des pores", "Pore visibility"), kind: "score", priority: 10 },
       "texture_and_pores.blackheads_and_congestion": { label: text("Points noirs et congestion", "Blackheads and congestion"), kind: "score", priority: 20 },
@@ -838,6 +845,50 @@ export function buildAggregateDisplayEntries(
 
       return entryA.key.localeCompare(entryB.key, "fr");
     });
+}
+
+export type WorkerAggregateCatalogEntry = {
+  key: string;
+  label: string;
+  kind: AggregateDisplayKind | null;
+  priority: number;
+  hidden: boolean;
+  enumValues: { value: string; label: string }[] | null;
+};
+
+/**
+ * Lists every documented aggregate for a worker. Used by the admin
+ * recommendations editor so authors can see what they can write rules against
+ * without opening source code.
+ */
+export function listWorkerAggregateCatalog(
+  worker: string,
+  locale: FaceAnalysisLocale = DEFAULT_FACE_ANALYSIS_LOCALE,
+): WorkerAggregateCatalogEntry[] {
+  const meta = displayMeta[worker]?.aggregates ?? {};
+  return Object.entries(meta)
+    .map(([key, value]) => {
+      const enumValues = value.kind === "enum" && value.valueLabels
+        ? Object.entries(value.valueLabels).map(([enumKey, enumLabel]) => ({
+            value: enumKey,
+            label: resolveLocalizedText(enumLabel, locale) ?? enumKey,
+          }))
+        : null;
+      return {
+        key,
+        label: resolveLocalizedText(value.label, locale) ?? key,
+        kind: value.kind ?? null,
+        priority: value.priority,
+        hidden: value.hidden ?? false,
+        enumValues,
+      };
+    })
+    .sort((a, b) => a.priority - b.priority);
+}
+
+/** Returns all known worker codes (in display order). */
+export function listKnownWorkers(): string[] {
+  return Object.keys(displayMeta);
 }
 
 export function sortAggregateEntries(worker: string, entries: Array<[string, unknown]>): Array<[string, unknown]> {

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 /* ----------------------------------------------------------------------------
  * Shared building blocks for worker visualizations.
@@ -11,6 +12,15 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 
 export const workerSectionCardClassName =
   "relative overflow-hidden border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.16),transparent_36%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.22)_100%)] text-zinc-50 shadow-[0_24px_80px_-55px_rgba(0,0,0,0.95)]";
+
+/**
+ * Premium analysis “surface” — matches Overview worker cards, global score, and
+ * protocol hero: slightly brighter glass, border-white/20, deeper lift shadow.
+ * Use for tab-level panels (recommendations umbrella) so they sit in the same
+ * family as the rest of the SaaS analysis chrome.
+ */
+export const analysisSurfaceCardClassName =
+  "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
 
 /* ----------------------------------------------------------------------------
  * Aggregate readers
@@ -33,6 +43,15 @@ export function getNumber(
   if (typeof v === "string") {
     const parsed = Number(v.replace(",", "."));
     if (Number.isFinite(parsed)) return parsed;
+  }
+  // LLM / pipeline quirks: score sometimes emitted as a single-element array
+  if (Array.isArray(v) && v.length > 0) {
+    const first = v[0];
+    if (typeof first === "number" && Number.isFinite(first)) return first;
+    if (typeof first === "string") {
+      const parsed = Number(first.replace(",", "."));
+      if (Number.isFinite(parsed)) return parsed;
+    }
   }
   return null;
 }
@@ -213,19 +232,31 @@ function nextRingGradientId(): string {
 export function ScoreRing({
   score,
   scale = 10,
+  className,
 }: {
   score: number;
   scale?: number;
+  className?: string;
 }) {
   const gradientId = React.useMemo(() => nextRingGradientId(), []);
   const clamped = Math.max(0, Math.min(score, scale));
   const radius = 46;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (clamped / scale) * circumference;
+
+  /** Two-line label centered on the ring (SVG user space). */
+  const isGlobalHud = scale >= 100;
+  const isTripleDigits = isGlobalHud && clamped >= 100;
+  const mainFontSize = isGlobalHud ? (isTripleDigits ? 28 : 32) : 26;
+  const subFontSize = isGlobalHud ? 11.5 : 10;
+  const mainShiftY = isGlobalHud ? -7 : -4;
+  const subShiftY = isGlobalHud ? 15 : 10.5;
+  const subLetterSpacing = isGlobalHud ? "0.14em" : "0.12em";
+
   return (
     <svg
       viewBox="0 0 120 120"
-      className="h-32 w-32 shrink-0 sm:h-36 sm:w-36"
+      className={cn("h-32 w-32 shrink-0 sm:h-36 sm:w-36", className)}
       role="img"
       aria-label={`Score ${clamped.toFixed(1)} sur ${scale}`}
     >
@@ -255,28 +286,43 @@ export function ScoreRing({
         strokeDashoffset={dashOffset}
         transform="rotate(-90 60 60)"
       />
-      <text
-        x="60"
-        y="58"
-        textAnchor="middle"
-        className="font-display"
-        fontSize="28"
-        fontWeight="700"
-        fill="#ffffff"
-      >
-        {clamped.toFixed(clamped % 1 === 0 ? 0 : 1)}
-      </text>
-      <text
-        x="60"
-        y="78"
-        textAnchor="middle"
-        fontSize="11"
-        fontWeight="600"
-        fill="#a0a8b3"
-        letterSpacing="0.12em"
-      >
-        / {scale}
-      </text>
+      <g transform="translate(60,60)" style={{ isolation: "isolate" }}>
+        {/* Stack from geometric center — dominantBaseline + tunable offsets for optical balance */}
+        <text
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="font-display"
+          y={mainShiftY}
+          fontSize={mainFontSize}
+          fontWeight={700}
+          fill="#fefefe"
+          letterSpacing={isGlobalHud ? "-0.02em" : "0"}
+          style={{
+            paintOrder: "stroke fill",
+            stroke: "rgba(0,0,0,0.22)",
+            strokeWidth: isGlobalHud ? 0.6 : 0.45,
+          }}
+        >
+          {clamped.toFixed(clamped % 1 === 0 ? 0 : 1)}
+        </text>
+        <text
+          textAnchor="middle"
+          dominantBaseline="central"
+          y={subShiftY}
+          fontSize={subFontSize}
+          fontWeight={600}
+          fill="#b8c2cc"
+          letterSpacing={subLetterSpacing}
+          opacity={0.92}
+          style={{
+            paintOrder: "stroke fill",
+            stroke: "rgba(0,0,0,0.18)",
+            strokeWidth: 0.35,
+          }}
+        >
+          / {scale}
+        </text>
+      </g>
     </svg>
   );
 }

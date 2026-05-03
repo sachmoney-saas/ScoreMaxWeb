@@ -11,6 +11,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, User, Mail, Shield, AlertTriangle, Info } from "lucide-react";
 import { useState } from "react";
+import { i18n, useAppLanguage, useLanguage, type AppLanguage } from "@/lib/i18n";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +37,8 @@ export default function Settings() {
   const { user, profile, signOut } = useAuth();
   const { updateProfile, deleteProfile, isDeleting } = useProfile();
   const { toast } = useToast();
+  const uiLang = useAppLanguage();
+  const { language, setLanguage } = useLanguage();
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const form = useForm({
@@ -120,6 +130,37 @@ export default function Settings() {
                 </Button>
               </form>
             </Form>
+          </CardContent>
+        </Card>
+
+        <Card className={settingsPanelClassName}>
+          <CardHeader>
+            <CardTitle>
+              {i18n(uiLang, { en: "Language", fr: "Langue" })}
+            </CardTitle>
+            <CardDescription className="text-zinc-300">
+              {i18n(uiLang, {
+                en: "Interface language for ScoreMax (saved on this device).",
+                fr: "Langue de l’interface ScoreMax (enregistrée sur cet appareil).",
+              })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label className="text-zinc-200">
+              {i18n(uiLang, { en: "Display language", fr: "Langue d’affichage" })}
+            </Label>
+            <Select
+              value={language}
+              onValueChange={(value) => setLanguage(value as AppLanguage)}
+            >
+              <SelectTrigger className="h-11 border-white/15 bg-white/10 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fr">Français</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
 

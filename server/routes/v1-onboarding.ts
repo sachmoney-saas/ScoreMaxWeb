@@ -1,6 +1,9 @@
 import { Router } from "express";
+import { optionalAnalysisLangBodySchema } from "@shared/oneshot";
 import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-jobs";
 import { ApiError } from "../lib/errors";
+import { validateBody } from "../lib/validate";
+import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 import {
   buildPayload,
   createAnalysisJob,
@@ -136,71 +139,79 @@ async function loadLatestReusableOnboardingJob(params: {
 export function createV1OnboardingRouter(): Router {
   const router = Router();
 
-  router.post("/onboarding/complete", async (req, res, next) => {
-    try {
-      const userId = await requireUserId(req.headers.authorization);
-      const session = await loadReadyOnboardingSession(userId);
-      const existingJob = await loadLatestReusableOnboardingJob({
-        userId,
-        sessionId: session.id,
-      });
+  router.post(
+    "/onboarding/complete",
+    validateBody(optionalAnalysisLangBodySchema),
+    async (req, res, next) => {
+      try {
+        const { lang } = req.body as { lang?: string };
+        assertSupportedAnalysisLang(lang);
 
-      if (existingJob) {
-        if (existingJob.status === "queued") {
-          dispatchAnalysisJob(existingJob.id);
+        const userId = await requireUserId(req.headers.authorization);
+        const session = await loadReadyOnboardingSession(userId);
+        const existingJob = await loadLatestReusableOnboardingJob({
+          userId,
+          sessionId: session.id,
+        });
+
+        if (existingJob) {
+          if (existingJob.status === "queued") {
+            dispatchAnalysisJob(existingJob.id);
+          }
+
+          res.status(200).json({
+            ok: true,
+            httpStatus: 200,
+            data: {
+              job: {
+                id: existingJob.id,
+                status: existingJob.status,
+              },
+            },
+            error: null,
+          });
+          return;
         }
 
-        res.status(200).json({
+        const assets = await loadRequiredAssets({ userId, sessionId: session.id });
+        const payload = await buildPayload({
+          userId,
+          sessionId: session.id,
+          assets,
+          source: "onboarding",
+          ...(lang !== undefined ? { lang } : {}),
+        });
+        const jobId = await createAnalysisJob({
+          userId,
+          sessionId: session.id,
+          payload,
+          triggerSource: "onboarding_auto",
+        });
+        await persistAnalysisJobAssets({
+          jobId,
+          userId,
+          sessionId: session.id,
+          payload,
+        });
+
+        dispatchAnalysisJob(jobId);
+
+        res.status(202).json({
           ok: true,
-          httpStatus: 200,
+          httpStatus: 202,
           data: {
             job: {
-              id: existingJob.id,
-              status: existingJob.status,
+              id: jobId,
+              status: "queued",
             },
           },
           error: null,
         });
-        return;
+      } catch (error) {
+        next(error);
       }
-
-      const assets = await loadRequiredAssets({ userId, sessionId: session.id });
-      const payload = await buildPayload({
-        userId,
-        sessionId: session.id,
-        assets,
-        source: "onboarding",
-      });
-      const jobId = await createAnalysisJob({
-        userId,
-        sessionId: session.id,
-        payload,
-        triggerSource: "onboarding_auto",
-      });
-      await persistAnalysisJobAssets({
-        jobId,
-        userId,
-        sessionId: session.id,
-        payload,
-      });
-
-      dispatchAnalysisJob(jobId);
-
-      res.status(202).json({
-        ok: true,
-        httpStatus: 202,
-        data: {
-          job: {
-            id: jobId,
-            status: "queued",
-          },
-        },
-        error: null,
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
+    },
+  );
 
   router.get("/onboarding/analysis/:jobId", async (req, res, next) => {
     try {

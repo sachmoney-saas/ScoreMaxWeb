@@ -153,6 +153,7 @@ export async function buildPayload(params: {
   sessionId: string;
   assets: ScanAssetRow[];
   source: "onboarding" | "manual_rescan";
+  lang?: string;
 }) {
   return analysesRequestSchema.parse({
     requestId: `${params.userId}-${params.sessionId}-${Date.now()}`,
@@ -168,6 +169,7 @@ export async function buildPayload(params: {
       userId: params.userId,
       sessionId: params.sessionId,
     },
+    ...(params.lang !== undefined ? { lang: params.lang } : {}),
   });
 }
 

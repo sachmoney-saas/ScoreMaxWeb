@@ -14,6 +14,19 @@ import { SkinWorkerView } from "@/components/analysis/workers/SkinWorkerView";
 import { BodyfatWorkerView } from "@/components/analysis/workers/BodyfatWorkerView";
 import { SymmetryShapeWorkerView } from "@/components/analysis/workers/SymmetryShapeWorkerView";
 import { AgeWorkerView } from "@/components/analysis/workers/AgeWorkerView";
+import { JawWorkerView } from "@/components/analysis/workers/JawWorkerView";
+import { EyeBrowsWorkerView } from "@/components/analysis/workers/EyeBrowsWorkerView";
+import { EyesWorkerView } from "@/components/analysis/workers/EyesWorkerView";
+import { LipsWorkerView } from "@/components/analysis/workers/LipsWorkerView";
+import { NoseWorkerView } from "@/components/analysis/workers/NoseWorkerView";
+import { ChinWorkerView } from "@/components/analysis/workers/ChinWorkerView";
+import { CheeksWorkerView } from "@/components/analysis/workers/CheeksWorkerView";
+import { SmileWorkerView } from "@/components/analysis/workers/SmileWorkerView";
+import { HairWorkerView } from "@/components/analysis/workers/HairWorkerView";
+import { SkinTintWorkerView } from "@/components/analysis/workers/SkinTintWorkerView";
+import { NeckWorkerView } from "@/components/analysis/workers/NeckWorkerView";
+import { EarWorkerView } from "@/components/analysis/workers/EarWorkerView";
+import { RecommendationsSection } from "@/components/analysis/RecommendationsSection";
 import { ArrowLeft } from "lucide-react";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,72 +116,134 @@ export default function WorkerDetails() {
         </CardContent>
       </Card>
 
-      {worker === "age" ? (
-        <AgeWorkerView aggregates={outputAggregates} language={language} />
-      ) : worker === "coloring" ? (
-        <ColoringWorkerView aggregates={outputAggregates} language={language} />
-      ) : worker === "skin" ? (
-        <SkinWorkerView aggregates={outputAggregates} language={language} />
-      ) : worker === "bodyfat" ? (
-        <BodyfatWorkerView aggregates={outputAggregates} language={language} />
-      ) : worker === "symmetry_shape" ? (
-        <SymmetryShapeWorkerView
+      {renderWorkerBody({
+        worker,
+        outputAggregates,
+        entries,
+        language,
+        cardClassName: workerDetailCardClassName,
+      })}
+
+      {entries.length > 0 ? (
+        <RecommendationsSection
+          worker={worker}
           aggregates={outputAggregates}
           language={language}
         />
-      ) : entries.length === 0 ? (
-        <Card className={workerDetailCardClassName}>
-          <CardContent className="p-6 text-sm text-zinc-300">
-            Aucun détail structuré disponible pour ce worker.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {entries.map((entry) => {
-            const argumentOnlyValue = isArgumentOnlyValue(entry);
-            const compactValue = isCompactValue(entry.value);
-            const detailText = argumentOnlyValue ? entry.value : entry.description;
+      ) : null}
+    </div>
+  );
+}
 
-            return (
-              <Card
-                key={entry.key}
-                className={workerDetailCardClassName}
-              >
-                <CardContent className="p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
-                    {entry.label}
-                  </p>
-                  {argumentOnlyValue ? (
-                    <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+const DEDICATED_WORKER_VIEWS = new Set([
+  "age",
+  "coloring",
+  "skin",
+  "bodyfat",
+  "symmetry_shape",
+  "jaw",
+  "eye_brows",
+  "eyes",
+  "lips",
+  "nose",
+  "chin",
+  "cheeks",
+  "smile",
+  "hair",
+  "skin_tint",
+  "neck",
+  "ear",
+]);
+
+function renderWorkerBody({
+  worker,
+  outputAggregates,
+  entries,
+  language,
+  cardClassName,
+}: {
+  worker: string;
+  outputAggregates: Record<string, unknown>;
+  entries: ReturnType<typeof buildAggregateDisplayEntries>;
+  language: ReturnType<typeof useAppLanguage>;
+  cardClassName: string;
+}): React.ReactNode {
+  switch (worker) {
+    case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} />;
+    case "coloring":      return <ColoringWorkerView aggregates={outputAggregates} language={language} />;
+    case "skin":          return <SkinWorkerView aggregates={outputAggregates} language={language} />;
+    case "bodyfat":       return <BodyfatWorkerView aggregates={outputAggregates} language={language} />;
+    case "symmetry_shape": return <SymmetryShapeWorkerView aggregates={outputAggregates} language={language} />;
+    case "jaw":           return <JawWorkerView aggregates={outputAggregates} language={language} />;
+    case "eye_brows":     return <EyeBrowsWorkerView aggregates={outputAggregates} language={language} />;
+    case "eyes":          return <EyesWorkerView aggregates={outputAggregates} language={language} />;
+    case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} />;
+    case "nose":          return <NoseWorkerView aggregates={outputAggregates} language={language} />;
+    case "chin":          return <ChinWorkerView aggregates={outputAggregates} language={language} />;
+    case "cheeks":        return <CheeksWorkerView aggregates={outputAggregates} language={language} />;
+    case "smile":         return <SmileWorkerView aggregates={outputAggregates} language={language} />;
+    case "hair":          return <HairWorkerView aggregates={outputAggregates} language={language} />;
+    case "skin_tint":     return <SkinTintWorkerView aggregates={outputAggregates} language={language} />;
+    case "neck":          return <NeckWorkerView aggregates={outputAggregates} language={language} />;
+    case "ear":           return <EarWorkerView aggregates={outputAggregates} language={language} />;
+  }
+
+  if (DEDICATED_WORKER_VIEWS.has(worker)) {
+    return null;
+  }
+
+  if (entries.length === 0) {
+    return (
+      <Card className={cardClassName}>
+        <CardContent className="p-6 text-sm text-zinc-300">
+          Aucun détail structuré disponible pour ce worker.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {entries.map((entry) => {
+        const argumentOnlyValue = isArgumentOnlyValue(entry);
+        const compactValue = isCompactValue(entry.value);
+        const detailText = argumentOnlyValue ? entry.value : entry.description;
+
+        return (
+          <Card key={entry.key} className={cardClassName}>
+            <CardContent className="p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+                {entry.label}
+              </p>
+              {argumentOnlyValue ? (
+                <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+                  {detailText}
+                </p>
+              ) : (
+                <div className="mt-3 grid gap-4 sm:grid-cols-[9rem_1fr] sm:items-start">
+                  <div className="min-w-0 rounded-2xl border border-white/15 bg-white/10 px-3 py-3 text-center">
+                    <p
+                      className={
+                        compactValue
+                          ? "truncate text-xl font-bold leading-tight tracking-tight text-white"
+                          : "font-display text-4xl font-bold leading-none tracking-tight text-white"
+                      }
+                      title={entry.value}
+                    >
+                      {entry.value}
+                    </p>
+                  </div>
+                  {detailText ? (
+                    <p className="text-sm leading-relaxed text-zinc-300">
                       {detailText}
                     </p>
-                  ) : (
-                    <div className="mt-3 grid gap-4 sm:grid-cols-[9rem_1fr] sm:items-start">
-                      <div className="min-w-0 rounded-2xl border border-white/15 bg-white/10 px-3 py-3 text-center">
-                        <p
-                          className={
-                            compactValue
-                              ? "truncate text-xl font-bold leading-tight tracking-tight text-white"
-                              : "font-display text-4xl font-bold leading-none tracking-tight text-white"
-                          }
-                          title={entry.value}
-                        >
-                          {entry.value}
-                        </p>
-                      </div>
-                      {detailText ? (
-                        <p className="text-sm leading-relaxed text-zinc-300">
-                          {detailText}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                  ) : null}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

@@ -17,6 +17,11 @@ import AnalysisDetails from "@/pages/AnalysisDetails";
 import WorkerDetails from "@/pages/WorkerDetails";
 import AgeDetails from "@/pages/AgeDetails";
 import AdminPage from "@/pages/Admin";
+import {
+  AdminRecommendationsOverview,
+  AdminRecommendationsWorker,
+} from "@/pages/AdminRecommendations";
+import Protocol from "@/pages/Protocol";
 import Settings from "@/pages/Settings";
 import Billing from "@/pages/Billing";
 import MentionsLegales from "@/pages/MentionsLegales";
@@ -24,6 +29,7 @@ import CGU from "@/pages/CGU";
 import Confidentialite from "@/pages/Confidentialite";
 import { Loader2 } from "lucide-react";
 import { AUTH_CONFIG } from "@/config/auth";
+import { LanguageProvider } from "@/lib/i18n";
 
 function FullScreenLoader() {
   return (
@@ -95,67 +101,79 @@ function Router() {
     : "/onboarding";
 
   return (
-    <Switch>
-      {/* Public Routes */}
-      <Route path={AUTH_CONFIG.LANDING_PATH} component={Landing} />
-      <Route path="/mentions-legales" component={MentionsLegales} />
-      <Route path="/cgu" component={CGU} />
-      <Route path="/confidentialite" component={Confidentialite} />
+    <LanguageProvider>
+      <Switch>
+        {/* Public Routes */}
+        <Route path={AUTH_CONFIG.LANDING_PATH} component={Landing} />
+        <Route path="/mentions-legales" component={MentionsLegales} />
+        <Route path="/cgu" component={CGU} />
+        <Route path="/confidentialite" component={Confidentialite} />
 
-      <Route path={AUTH_CONFIG.LOGIN_PATH}>
-        {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
-      </Route>
-      <Route path={AUTH_CONFIG.REGISTER_PATH}>
-        {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
-      </Route>
+        <Route path={AUTH_CONFIG.LOGIN_PATH}>
+          {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
+        </Route>
+        <Route path={AUTH_CONFIG.REGISTER_PATH}>
+          {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
+        </Route>
 
-      <Route path="/onboarding">
-        <OnboardingRoute />
-      </Route>
+        <Route path="/onboarding">
+          <OnboardingRoute />
+        </Route>
 
-      {/* Protected Routes */}
-      <Route path="/app/age">
-        <ProtectedRoute component={AgeDetails} />
-      </Route>
+        {/* Protected Routes */}
+        <Route path="/app/age">
+          <ProtectedRoute component={AgeDetails} />
+        </Route>
 
-      <Route path="/app/new-analysis">
-        <ProtectedRoute component={NewAnalysis} />
-      </Route>
+        <Route path="/app/new-analysis">
+          <ProtectedRoute component={NewAnalysis} />
+        </Route>
 
-      <Route path="/app/analyses/:jobId/workers/:worker">
-        <ProtectedRoute component={WorkerDetails} />
-      </Route>
+        <Route path="/app/analyses/:jobId/workers/:worker">
+          <ProtectedRoute component={WorkerDetails} />
+        </Route>
 
-      <Route path="/app/analyses/:jobId">
-        <ProtectedRoute component={AnalysisDetails} />
-      </Route>
+        <Route path="/app/analyses/:jobId">
+          <ProtectedRoute component={AnalysisDetails} />
+        </Route>
 
-      <Route path="/app">
-        <ProtectedRoute component={Dashboard} />
-      </Route>
+        <Route path="/app/protocol">
+          <ProtectedRoute component={Protocol} />
+        </Route>
 
-      <Route path="/settings">
-        <ProtectedRoute component={Settings} />
-      </Route>
+        <Route path="/app">
+          <ProtectedRoute component={Dashboard} />
+        </Route>
 
-      <Route path="/billing">
-        <ProtectedRoute component={Billing} />
-      </Route>
+        <Route path="/settings">
+          <ProtectedRoute component={Settings} />
+        </Route>
 
-      {/* Admin Route */}
-      <Route path="/admin">
-        <ProtectedRoute component={AdminPage} />
-      </Route>
-      <Route path="/admin/users">
-        <ProtectedRoute component={AdminPage} />
-      </Route>
-      <Route path="/admin/analysis-failures">
-        <ProtectedRoute component={AdminPage} />
-      </Route>
+        <Route path="/billing">
+          <ProtectedRoute component={Billing} />
+        </Route>
 
-      {/* Fallback */}
-      <Route component={NotFound} />
-    </Switch>
+        {/* Admin Route */}
+        <Route path="/admin">
+          <ProtectedRoute component={AdminPage} />
+        </Route>
+        <Route path="/admin/users">
+          <ProtectedRoute component={AdminPage} />
+        </Route>
+        <Route path="/admin/analysis-failures">
+          <ProtectedRoute component={AdminPage} />
+        </Route>
+        <Route path="/admin/recommendations">
+          <ProtectedRoute component={AdminRecommendationsOverview} />
+        </Route>
+        <Route path="/admin/recommendations/:worker">
+          <ProtectedRoute component={AdminRecommendationsWorker} />
+        </Route>
+
+        {/* Fallback */}
+        <Route component={NotFound} />
+      </Switch>
+    </LanguageProvider>
   );
 }
 

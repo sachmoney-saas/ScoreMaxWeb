@@ -23,6 +23,10 @@ import {
 
 const RING_GRADIENT_ID = "scoremaxPreviewRingGradient";
 
+/** Centered preview hero: global ring + copy (overview worker cards). */
+const PREVIEW_HERO = "flex w-full flex-col items-center gap-3 text-center";
+const PREVIEW_COPY = "w-full max-w-md text-balance";
+
 function MiniRing({
   score,
   scale = 10,
@@ -73,8 +77,9 @@ function MiniRing({
       />
       <text
         x="36"
-        y="40"
+        y="36"
         textAnchor="middle"
+        dominantBaseline="middle"
         className="font-display"
         fontSize="18"
         fontWeight="700"
@@ -246,6 +251,17 @@ const LIP_COLOR_HEX: Record<string, string> = {
   dark: "#4a2a2a",
 };
 
+/** Eyebrow palette (align with `ColoringWorkerView` + model enums). */
+const EYEBROW_COLOR_HEX: Record<string, string> = {
+  black: "#0f0d0c",
+  dark_brown: "#3d2419",
+  brown: "#6b4329",
+  medium_brown: "#6b4329",
+  light_brown: "#a06d3f",
+  blonde: "#d8b777",
+  grey: "#9da0a3",
+};
+
 const FITZPATRICK_HEX: Record<string, string> = {
   i: "#f6e3d4",
   ii: "#ecc8b0",
@@ -307,62 +323,105 @@ function ColoringPreview({ aggregates, language }: PreviewProps) {
 
   const skinTone = getEnum(aggregates, "skin.tone").value;
   const hairColor = getEnum(aggregates, "hair.color").value;
-  const irisColor = getEnum(aggregates, "eyes.iris_color").value;
+  const browColor = getEnum(aggregates, "eyebrows.color").value;
   const lipColor = getEnum(aggregates, "lips.color").value;
   const contrastType = getEnum(aggregates, "contrast.contrast_type").value;
 
-  const palette = [
-    { key: "skin.tone", value: skinTone, hex: SKIN_TONE_HEX[normalizeKey(skinTone) ?? ""] },
-    { key: "hair.color", value: hairColor, hex: HAIR_COLOR_HEX[normalizeKey(hairColor) ?? ""] },
-    { key: "eyes.iris_color", value: irisColor, hex: IRIS_COLOR_HEX[normalizeKey(irisColor) ?? ""] },
-    { key: "lips.color", value: lipColor, hex: LIP_COLOR_HEX[normalizeKey(lipColor) ?? ""] },
-  ].filter(
-    (p): p is { key: string; value: string; hex: string } =>
-      !!p.value && !!p.hex,
-  );
+  /** Order: hair → skin → brows → lips (matches full worker view). */
+  const swatches: {
+    key: string;
+    zoneLabel: string;
+    value: string | null;
+    hex: string | null;
+  }[] = [
+    {
+      key: "hair",
+      zoneLabel: i18n(language, { en: "Hair", fr: "Cheveux" }),
+      value: hairColor,
+      hex: hairColor
+        ? HAIR_COLOR_HEX[normalizeKey(hairColor) ?? ""] ?? null
+        : null,
+    },
+    {
+      key: "skin",
+      zoneLabel: i18n(language, { en: "Skin", fr: "Peau" }),
+      value: skinTone,
+      hex: skinTone
+        ? SKIN_TONE_HEX[normalizeKey(skinTone) ?? ""] ?? null
+        : null,
+    },
+    {
+      key: "brows",
+      zoneLabel: i18n(language, { en: "Eyebrows", fr: "Sourcils" }),
+      value: browColor,
+      hex: browColor
+        ? EYEBROW_COLOR_HEX[normalizeKey(browColor) ?? ""] ?? null
+        : null,
+    },
+    {
+      key: "lips",
+      zoneLabel: i18n(language, { en: "Lips", fr: "Lèvres" }),
+      value: lipColor,
+      hex: lipColor
+        ? LIP_COLOR_HEX[normalizeKey(lipColor) ?? ""] ?? null
+        : null,
+    },
+  ];
+
+  const argumentText =
+    global.argument ??
+    i18n(language, {
+      en: "Detected harmony across skin, hair, brows and lips.",
+      fr: "Harmonie détectée entre peau, cheveux, sourcils et lèvres.",
+    });
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
-        {global.score !== null ? <MiniRing score={global.score} /> : null}
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
-            {i18n(language, { en: "Coloring profile", fr: "Profil colorimétrique" })}
-          </p>
-          <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
-            {global.argument ??
-              i18n(language, {
-                en: "Detected harmony across skin, hair, eyes and lips.",
-                fr: "Harmonie détectée entre peau, cheveux, yeux et lèvres.",
-              })}
+      <div className={PREVIEW_HERO}>
+        {global.score !== null ? (
+          <MiniRing score={global.score} />
+        ) : (
+          <div className="h-[76px] w-[76px]" aria-hidden />
+        )}
+        <div className={PREVIEW_COPY}>
+          <p className="text-xs leading-relaxed text-zinc-300 line-clamp-4">
+            {argumentText}
           </p>
           {contrastType ? (
-            <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-300">
-              {i18n(language, { en: "Contrast", fr: "Contraste" })}{" "}
-              <span className="text-white">
-                {formatAggregateDisplayValue(
-                  "coloring",
-                  "contrast.contrast_type",
-                  contrastType,
-                  locale,
-                )}
+            <div className="mt-2 flex justify-center">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-300">
+                {i18n(language, { en: "Contrast", fr: "Contraste" })}{" "}
+                <span className="text-white">
+                  {formatAggregateDisplayValue(
+                    "coloring",
+                    "contrast.contrast_type",
+                    contrastType,
+                    locale,
+                  )}
+                </span>
               </span>
-            </p>
+            </div>
           ) : null}
         </div>
       </div>
-      {palette.length ? (
-        <div className="flex items-center gap-1 overflow-hidden rounded-xl border border-white/15 p-1.5">
-          {palette.map((p) => (
+      <div className="grid grid-cols-4 gap-x-2 gap-y-1.5 rounded-xl border border-white/15 bg-white/[0.02] p-2 pt-2.5">
+        {swatches.map((s) => (
+          <div key={s.key} className="flex min-w-0 flex-col items-center gap-1">
+            <span className="w-full truncate text-center text-[9px] font-semibold uppercase leading-tight tracking-[0.08em] text-zinc-400">
+              {s.zoneLabel}
+            </span>
             <div
-              key={p.key}
-              className="flex h-8 flex-1 items-center justify-center rounded-md"
-              style={{ backgroundColor: p.hex }}
-              title={p.value}
+              className="h-8 w-full min-w-0 rounded-md border border-white/10 shadow-inner"
+              style={
+                s.hex
+                  ? { backgroundColor: s.hex }
+                  : { backgroundColor: "rgba(255,255,255,0.05)" }
+              }
+              title={s.value ?? undefined}
             />
-          ))}
-        </div>
-      ) : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -457,9 +516,9 @@ function SkinPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {global.score !== null ? <MiniRing score={global.score} /> : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Skin radar", fr: "Radar peau" })}
           </p>
@@ -471,7 +530,9 @@ function SkinPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <SkinMiniRadar scores={radarScores} />
+        <div className="flex w-full justify-center pt-1">
+          <SkinMiniRadar scores={radarScores} />
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <StatChip
@@ -542,9 +603,9 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {global.score !== null ? <MiniRing score={global.score} /> : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Visual tier", fr: "Niveau visuel" })}
           </p>
@@ -631,9 +692,9 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {overall.score !== null ? <MiniRing score={overall.score} /> : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Face shape", fr: "Forme du visage" })}
           </p>
@@ -651,7 +712,7 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
         {shapePath ? (
           <svg
             viewBox="0 0 100 120"
-            className="h-20 w-16 shrink-0"
+            className="mx-auto h-20 w-16 shrink-0"
             aria-hidden="true"
           >
             <path
@@ -723,11 +784,11 @@ function JawPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? definition.score) !== null ? (
           <MiniRing score={(overall.score ?? definition.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Frontal jaw shape", fr: "Forme frontale" })}
           </p>
@@ -744,7 +805,7 @@ function JawPreview({ aggregates, language }: PreviewProps) {
         </div>
         <svg
           viewBox="0 0 100 110"
-          className="h-20 w-16 shrink-0"
+          className="mx-auto h-20 w-16 shrink-0"
           aria-hidden="true"
         >
           <path
@@ -814,11 +875,11 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? symmetry.score) !== null ? (
           <MiniRing score={(overall.score ?? symmetry.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Brow profile", fr: "Profil des sourcils" })}
           </p>
@@ -830,7 +891,11 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg viewBox="0 0 100 30" className="h-12 w-24 shrink-0" aria-hidden="true">
+        <svg
+          viewBox="0 0 100 30"
+          className="mx-auto h-12 w-24 shrink-0"
+          aria-hidden="true"
+        >
           <path
             d="M5 22 Q 25 8 48 18"
             stroke="#e9f1f4"
@@ -895,11 +960,11 @@ function SmilePreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? whiteness.score) !== null ? (
           <MiniRing score={(overall.score ?? whiteness.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Tooth shade", fr: "Teinte des dents" })}
           </p>
@@ -968,11 +1033,11 @@ function CheeksPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? projection.score) !== null ? (
           <MiniRing score={(overall.score ?? projection.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Cheekbones", fr: "Pommettes" })}
           </p>
@@ -1029,11 +1094,11 @@ function HairPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? density.score) !== null ? (
           <MiniRing score={(overall.score ?? density.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Hair quality", fr: "Qualité capillaire" })}
           </p>
@@ -1045,10 +1110,12 @@ function HairPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
           {textureDisplay ? (
-            <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-300">
-              {i18n(language, { en: "Texture", fr: "Texture" })}{" "}
-              <span className="text-white">{textureDisplay}</span>
-            </p>
+            <div className="mt-1.5 flex justify-center">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-300">
+                {i18n(language, { en: "Texture", fr: "Texture" })}{" "}
+                <span className="text-white">{textureDisplay}</span>
+              </span>
+            </div>
           ) : null}
         </div>
       </div>
@@ -1118,9 +1185,9 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {overall.score !== null ? <MiniRing score={overall.score} /> : null}
-        <div className="min-w-0 flex-1 space-y-1.5">
+        <div className={`${PREVIEW_COPY} flex w-full flex-col items-center gap-2`}>
           {fitzColor ? (
             <ColorChip
               color={fitzColor}
@@ -1164,11 +1231,11 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? length.score) !== null ? (
           <MiniRing score={(overall.score ?? length.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Neck profile", fr: "Profil du cou" })}
           </p>
@@ -1180,7 +1247,11 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg viewBox="0 0 60 80" className="h-16 w-12 shrink-0" aria-hidden="true">
+        <svg
+          viewBox="0 0 60 80"
+          className="mx-auto h-16 w-12 shrink-0"
+          aria-hidden="true"
+        >
           <path
             d="M18 4 H42 V32 Q42 56 30 76 Q18 56 18 32 Z"
             fill="rgba(154,174,181,0.18)"
@@ -1236,11 +1307,11 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? fullness.score) !== null ? (
           <MiniRing score={(overall.score ?? fullness.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Lips", fr: "Lèvres" })}
           </p>
@@ -1252,7 +1323,11 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg viewBox="0 0 80 50" className="h-14 w-20 shrink-0" aria-hidden="true">
+        <svg
+          viewBox="0 0 80 50"
+          className="mx-auto h-14 w-20 shrink-0"
+          aria-hidden="true"
+        >
           <path
             d="M10 22 Q 22 8 40 18 Q 58 8 70 22 Q 60 38 40 38 Q 20 38 10 22 Z"
             fill={lipHex ?? "rgba(192,114,123,0.7)"}
@@ -1310,11 +1385,11 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? contour.score) !== null ? (
           <MiniRing score={(overall.score ?? contour.score) as number} />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Chin shape", fr: "Forme du menton" })}
           </p>
@@ -1377,9 +1452,9 @@ function NosePreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {overall.score !== null ? <MiniRing score={overall.score} /> : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Nose profile", fr: "Profil du nez" })}
           </p>
@@ -1391,7 +1466,11 @@ function NosePreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg viewBox="0 0 60 80" className="h-16 w-12 shrink-0" aria-hidden="true">
+        <svg
+          viewBox="0 0 60 80"
+          className="mx-auto h-16 w-12 shrink-0"
+          aria-hidden="true"
+        >
           <path
             d="M30 6 Q 26 30 22 50 Q 18 64 30 70 Q 42 64 38 50 Q 34 30 30 6 Z"
             fill="rgba(154,174,181,0.18)"
@@ -1448,13 +1527,13 @@ function EarPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {(overall.score ?? sizeHarmony.score) !== null ? (
           <MiniRing
             score={(overall.score ?? sizeHarmony.score) as number}
           />
         ) : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Ears", fr: "Oreilles" })}
           </p>
@@ -1467,7 +1546,11 @@ function EarPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg viewBox="0 0 60 80" className="h-16 w-12 shrink-0" aria-hidden="true">
+        <svg
+          viewBox="0 0 60 80"
+          className="mx-auto h-16 w-12 shrink-0"
+          aria-hidden="true"
+        >
           <path
             d="M22 6 Q 50 6 50 36 Q 50 62 38 70 Q 28 76 22 64 Q 12 60 14 44 Q 14 18 22 6 Z"
             fill="rgba(154,174,181,0.18)"
@@ -1534,9 +1617,9 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {overall.score !== null ? <MiniRing score={overall.score} /> : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Eye shape", fr: "Forme des yeux" })}
           </p>
@@ -1553,7 +1636,7 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
         </div>
         {irisHex ? (
           <div
-            className="h-10 w-10 shrink-0 rounded-full ring-2 ring-white/30"
+            className="mx-auto h-10 w-10 shrink-0 rounded-full ring-2 ring-white/30"
             style={{
               background: `radial-gradient(circle at 35% 35%, ${irisHex} 0%, ${irisHex} 60%, rgba(0,0,0,0.6) 100%)`,
             }}
@@ -1630,9 +1713,9 @@ function GenericPreview({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4">
+      <div className={PREVIEW_HERO}>
         {hero ? <MiniRing score={hero.score} /> : null}
-        <div className="min-w-0 flex-1">
+        <div className={PREVIEW_COPY}>
           {heroLabel ? (
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
               {heroLabel}

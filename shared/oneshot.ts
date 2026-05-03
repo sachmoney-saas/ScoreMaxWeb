@@ -12,6 +12,7 @@ export const scoreMaxErrorCodeSchema = z.enum([
   "PROMPT_NOT_FOUND",
   "IMAGE_NOT_FOUND",
   "RUNS_LIMIT_EXCEEDED",
+  "UNSUPPORTED_LANGUAGE",
   "INTERNAL_SERVER_ERROR",
 ]);
 
@@ -37,12 +38,33 @@ const analysesItemSchema = z.object({
   runs: z.number().int().min(1).max(10).optional(),
 });
 
+/** ISO 639-1 two-letter code; normalized to lowercase. Omitted/empty → undefined (upstream defaults to English). */
+const analysisLangFieldSchema = z.preprocess((val) => {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val !== "string") return val;
+  const t = val.trim().toLowerCase();
+  return t === "" ? undefined : t;
+}, z.string().regex(/^[a-z]{2}$/).optional());
+
+export const optionalAnalysisLangBodySchema = z.preprocess(
+  (val) =>
+    val === undefined || val === null || typeof val !== "object"
+      ? {}
+      : val,
+  z
+    .object({
+      lang: analysisLangFieldSchema.optional(),
+    })
+    .strict(),
+);
+
 export const analysesRequestSchema = z
   .object({
     requestId: z.string().min(1),
     images: z.array(analysesImageSchema).min(1),
     analyses: z.array(analysesItemSchema).min(1),
     metadata: z.record(z.unknown()).optional(),
+    lang: analysisLangFieldSchema.optional(),
   })
   .superRefine((payload, ctx) => {
     const imageIds = new Set(payload.images.map((image) => image.imageId));

@@ -897,7 +897,7 @@ export default function Onboarding() {
       const startResponse = await apiRequest(
         "POST",
         "/v1/onboarding/complete",
-        undefined,
+        { lang: language },
         headers,
       );
       const startPayload = (await startResponse.json()) as {
@@ -1078,6 +1078,7 @@ export default function Onboarding() {
           sessionId: onboardingSessionId,
           assetTypeCode: assetTypeCode as OnboardingScanAssetCode,
           file,
+          lang: language,
         });
 
         await queryClient.invalidateQueries({

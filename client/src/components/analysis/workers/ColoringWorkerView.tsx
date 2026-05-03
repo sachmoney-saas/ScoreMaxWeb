@@ -43,18 +43,6 @@ const HAIR_COLOR_PALETTE: Swatch[] = [
   { value: "white", color: "#e8e9ec" },
 ];
 
-const IRIS_COLOR_PALETTE: Swatch[] = [
-  { value: "black", color: "#1a1413" },
-  { value: "dark_brown", color: "#3a261a" },
-  { value: "medium_brown", color: "#6a4528" },
-  { value: "light_brown", color: "#a06f43" },
-  { value: "hazel", color: "#9a7a3f" },
-  { value: "green", color: "#4f7d4f" },
-  { value: "blue_grey", color: "#7488a0" },
-  { value: "blue", color: "#3d6a9c" },
-  { value: "light_blue", color: "#7cb1d6" },
-];
-
 const EYEBROW_COLOR_PALETTE: Swatch[] = [
   { value: "black", color: "#0f0d0c" },
   { value: "dark_brown", color: "#3d2419" },
@@ -95,12 +83,16 @@ function ColorSwatchScale({
   palette,
   selected,
   label,
+  correspondenceLabel,
   valueLabel,
   argument,
 }: {
   palette: Swatch[];
   selected: string | null;
+  /** Technical / catalog label (e.g. aggregate name) for accessibility. */
   label: string;
+  /** What the palette represents — shown above the color strip (hair, skin, …). */
+  correspondenceLabel: string;
   valueLabel: string | null;
   argument: string | null;
 }) {
@@ -119,7 +111,13 @@ function ColorSwatchScale({
           <span className="text-xs font-medium text-zinc-500">—</span>
         )}
       </div>
-      <div className="relative h-9 w-full overflow-hidden rounded-xl border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+        {correspondenceLabel}
+      </p>
+      <div
+        className="relative h-9 w-full overflow-hidden rounded-xl border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+        aria-label={`${correspondenceLabel} — ${label}`}
+      >
         <div className="flex h-full w-full">
           {palette.map((p) => (
             <div
@@ -184,11 +182,8 @@ export function ColoringWorkerView({
   const hairWarmthEnum = getEnum(aggregates, "hair.warmth");
   const hairWarmthScore = getScore(aggregates, "hair.warmth");
 
-  const irisColor = getEnum(aggregates, "eyes.iris_color");
-  const irisDepth = getScore(aggregates, "eyes.iris_depth");
-  const irisSaturation = getScore(aggregates, "eyes.iris_saturation");
+  /** Coloring worker output no longer includes iris / limbal detail at this level. */
   const eyeWhitesClarity = getScore(aggregates, "eyes.whites_clarity");
-  const limbalRing = getScore(aggregates, "eyes.limbal_ring_visibility");
 
   const browColor = getEnum(aggregates, "eyebrows.color");
   const browDepth = getScore(aggregates, "eyebrows.depth");
@@ -201,10 +196,15 @@ export function ColoringWorkerView({
   const contrastEyes = getScore(aggregates, "contrast.eyes_vs_skin");
   const contrastBrows = getScore(aggregates, "contrast.brows_vs_skin");
   const contrastLips = getScore(aggregates, "contrast.lips_vs_skin");
+  const overallContrastNew = getScore(aggregates, "contrast.overall_contrast_score");
   const contrastOverall =
-    getScore(aggregates, "contrast.overall_contrast_score").score !== null
-      ? getScore(aggregates, "contrast.overall_contrast_score")
+    overallContrastNew.score !== null
+      ? overallContrastNew
       : getScore(aggregates, "contrast.overall_contrast");
+  const contrastOverallLabelKey =
+    overallContrastNew.score !== null
+      ? "contrast.overall_contrast_score"
+      : "contrast.overall_contrast";
   const contrastType = getEnum(aggregates, "contrast.contrast_type");
 
   return (
@@ -224,34 +224,6 @@ export function ColoringWorkerView({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
-          eyebrow={i18n(language, { en: "Skin", fr: "Peau" })}
-          title={i18n(language, {
-            en: "Skin tone & clarity",
-            fr: "Teint et clarté",
-          })}
-        >
-          <ColorSwatchScale
-            palette={SKIN_TONE_PALETTE}
-            selected={skinTone.value}
-            label={formatLabel("skin.tone")}
-            valueLabel={formatEnumValue("skin.tone", skinTone.value)}
-            argument={skinTone.argument}
-          />
-          <ScoreBar
-            label={formatLabel("skin.clarity")}
-            score={skinClarity.score}
-            argument={skinClarity.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("skin.evenness")}
-            score={skinEvenness.score}
-            argument={skinEvenness.argument}
-            language={language}
-          />
-        </SectionShell>
-
-        <SectionShell
           eyebrow={i18n(language, { en: "Hair", fr: "Cheveux" })}
           title={i18n(language, {
             en: "Hair coloring",
@@ -261,6 +233,10 @@ export function ColoringWorkerView({
           <ColorSwatchScale
             palette={HAIR_COLOR_PALETTE}
             selected={hairColor.value}
+            correspondenceLabel={i18n(language, {
+              en: "Hair",
+              fr: "Cheveux",
+            })}
             label={formatLabel("hair.color")}
             valueLabel={formatEnumValue("hair.color", hairColor.value)}
             argument={hairColor.argument}
@@ -290,41 +266,33 @@ export function ColoringWorkerView({
         </SectionShell>
 
         <SectionShell
-          eyebrow={i18n(language, { en: "Eyes", fr: "Yeux" })}
+          eyebrow={i18n(language, { en: "Skin", fr: "Peau" })}
           title={i18n(language, {
-            en: "Iris & sclera",
-            fr: "Iris et sclère",
+            en: "Skin tone & clarity",
+            fr: "Teint et clarté",
           })}
         >
           <ColorSwatchScale
-            palette={IRIS_COLOR_PALETTE}
-            selected={irisColor.value}
-            label={formatLabel("eyes.iris_color")}
-            valueLabel={formatEnumValue("eyes.iris_color", irisColor.value)}
-            argument={irisColor.argument}
+            palette={SKIN_TONE_PALETTE}
+            selected={skinTone.value}
+            correspondenceLabel={i18n(language, {
+              en: "Skin",
+              fr: "Peau",
+            })}
+            label={formatLabel("skin.tone")}
+            valueLabel={formatEnumValue("skin.tone", skinTone.value)}
+            argument={skinTone.argument}
           />
           <ScoreBar
-            label={formatLabel("eyes.iris_depth")}
-            score={irisDepth.score}
-            argument={irisDepth.argument}
+            label={formatLabel("skin.clarity")}
+            score={skinClarity.score}
+            argument={skinClarity.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("eyes.iris_saturation")}
-            score={irisSaturation.score}
-            argument={irisSaturation.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("eyes.whites_clarity")}
-            score={eyeWhitesClarity.score}
-            argument={eyeWhitesClarity.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("eyes.limbal_ring_visibility")}
-            score={limbalRing.score}
-            argument={limbalRing.argument}
+            label={formatLabel("skin.evenness")}
+            score={skinEvenness.score}
+            argument={skinEvenness.argument}
             language={language}
           />
         </SectionShell>
@@ -339,6 +307,10 @@ export function ColoringWorkerView({
           <ColorSwatchScale
             palette={EYEBROW_COLOR_PALETTE}
             selected={browColor.value}
+            correspondenceLabel={i18n(language, {
+              en: "Eyebrows",
+              fr: "Sourcils",
+            })}
             label={formatLabel("eyebrows.color")}
             valueLabel={formatEnumValue("eyebrows.color", browColor.value)}
             argument={browColor.argument}
@@ -367,6 +339,10 @@ export function ColoringWorkerView({
           <ColorSwatchScale
             palette={LIP_COLOR_PALETTE}
             selected={lipColor.value}
+            correspondenceLabel={i18n(language, {
+              en: "Lips",
+              fr: "Lèvres",
+            })}
             label={formatLabel("lips.color")}
             valueLabel={formatEnumValue("lips.color", lipColor.value)}
             argument={lipColor.argument}
@@ -375,6 +351,21 @@ export function ColoringWorkerView({
             label={formatLabel("lips.saturation")}
             score={lipSaturation.score}
             argument={lipSaturation.argument}
+            language={language}
+          />
+        </SectionShell>
+
+        <SectionShell
+          eyebrow={i18n(language, { en: "Eyes", fr: "Yeux" })}
+          title={i18n(language, {
+            en: "Sclera (whites)",
+            fr: "Blanc des yeux (sclère)",
+          })}
+        >
+          <ScoreBar
+            label={formatLabel("eyes.whites_clarity")}
+            score={eyeWhitesClarity.score}
+            argument={eyeWhitesClarity.argument}
             language={language}
           />
         </SectionShell>
@@ -394,7 +385,7 @@ export function ColoringWorkerView({
             language={language}
           />
           <ScoreBar
-            label={formatLabel("contrast.overall_contrast")}
+            label={formatLabel(contrastOverallLabelKey)}
             score={contrastOverall.score}
             argument={contrastOverall.argument}
             language={language}

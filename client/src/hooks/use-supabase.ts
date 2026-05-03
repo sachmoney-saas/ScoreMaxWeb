@@ -30,6 +30,7 @@ import {
   type ManualAnalysisSessionStatus,
   type RecentScanStatus,
 } from "@/lib/face-analysis";
+import { useAppLanguage } from "@/lib/i18n";
 
 /**
  * Hook for fetching and managing the current user's profile
@@ -451,10 +452,15 @@ export function useManualAnalysisSessionStatus(
 export function useLaunchManualAnalysis() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const language = useAppLanguage();
 
   return useMutation<AnalysisJobStatusResponse, Error, string>({
     mutationFn: async (sessionId: string) =>
-      launchManualAnalysis({ accessToken: await getAccessToken(), sessionId }),
+      launchManualAnalysis({
+        accessToken: await getAccessToken(),
+        sessionId,
+        lang: language,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["analysis-history", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["latest-face-analysis", user?.id] });
