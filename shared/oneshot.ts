@@ -94,6 +94,7 @@ const resultsByWorkerSchema = z.object({
   promptVersion: z.string(),
   requestedRuns: z.number().int(),
   completedRuns: z.number().int(),
+  /** Worker averages / scores as plain JSON; decimals must pass through (no int coercion in app parse). */
   outputAggregates: z.record(z.unknown()),
   rawRuns: z.array(rawRunSchema),
 });

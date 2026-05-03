@@ -5,6 +5,7 @@ import {
   formatAggregateDisplayLabel,
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
+import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
@@ -482,7 +483,8 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
           fr: "Ta ligne mandibulaire",
         })}
         argument={overall.argument}
-        score={overall.score}
+        score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
+        scoreFractionDigits={2}
         rightSlot={
           frontalDisplay || sideDisplay ? (
             <div className="flex flex-col gap-2">

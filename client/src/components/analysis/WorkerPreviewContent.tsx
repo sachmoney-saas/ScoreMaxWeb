@@ -6,7 +6,17 @@ import {
 } from "@/lib/face-analysis-display";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
-  bandFromScore,
+  calculateWorkerFaceScore,
+  computeMeanLeafScores10,
+  skinRadarAxisHighlights,
+  skinRadarAxisPaint,
+} from "@/lib/face-analysis-score";
+import {
+  BodyfatCompositionMatrixVisual,
+  BodyfatWeakestScoreCallout,
+  getBodyfatCompositionSharpness,
+} from "./workers/BodyfatCompositionMatrix";
+import {
   getEnum,
   getNumber,
   getScore,
@@ -21,25 +31,72 @@ import {
  * quality-band semantics) so previews and detail pages feel cohesive.
  * ========================================================================= */
 
-const RING_GRADIENT_ID = "scoremaxPreviewRingGradient";
-
-/** Centered preview hero: global ring + copy (overview worker cards). */
+/** Centered preview hero: copy + visuals (headline score ring lives on the card title row). */
 const PREVIEW_HERO = "flex w-full flex-col items-center gap-3 text-center";
+/** Tighter stack so the skin radar sits closer to the copy (less dead vertical space). */
+const PREVIEW_HERO_SKIN_RADAR = "flex w-full flex-col items-center gap-1 text-center";
 const PREVIEW_COPY = "w-full max-w-md text-balance";
 
-function MiniRing({
+export type MiniRingHighlight = "default" | "strength" | "weakness";
+
+export function MiniRing({
   score,
   scale = 10,
   size = 76,
+  fractionDigits,
+  highlight = "default",
 }: {
   score: number;
   scale?: number;
   size?: number;
+  fractionDigits?: number;
+  /** Coloring for overview worker cards in top-3 strengths vs weaknesses. */
+  highlight?: MiniRingHighlight;
 }) {
+  const gradientId = React.useId().replace(/:/g, "");
   const clamped = Math.max(0, Math.min(score, scale));
   const radius = 28;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (clamped / scale) * circumference;
+  const decimals =
+    fractionDigits !== undefined
+      ? fractionDigits
+      : clamped % 1 === 0
+        ? 0
+        : 1;
+
+  const arcGradient =
+    highlight === "strength"
+      ? (
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#059669" />
+            <stop offset="100%" stopColor="#6ee7b7" />
+          </linearGradient>
+        )
+      : highlight === "weakness"
+        ? (
+            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#dc2626" />
+              <stop offset="100%" stopColor="#f87171" />
+            </linearGradient>
+          )
+        : (
+            <linearGradient id={gradientId} x1="12%" y1="88%" x2="88%" y2="12%">
+              <stop offset="0%" stopColor="#475569" />
+              <stop offset="22%" stopColor="#cbd5e1" />
+              <stop offset="48%" stopColor="#ffffff" />
+              <stop offset="72%" stopColor="#e8eef5" />
+              <stop offset="100%" stopColor="#64748b" />
+            </linearGradient>
+          );
+
+  const textFill =
+    highlight === "strength"
+      ? "#6ee7b7"
+      : highlight === "weakness"
+        ? "#fca5a5"
+        : "#ffffff";
+
   return (
     <svg
       viewBox="0 0 72 72"
@@ -47,14 +104,9 @@ function MiniRing({
       height={size}
       className="shrink-0"
       role="img"
-      aria-label={`Score ${clamped.toFixed(1)} sur ${scale}`}
+      aria-label={`Score ${clamped.toFixed(decimals)} sur ${scale}`}
     >
-      <defs>
-        <linearGradient id={RING_GRADIENT_ID} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#9aaeb5" />
-          <stop offset="100%" stopColor="#e9f1f4" />
-        </linearGradient>
-      </defs>
+      <defs>{arcGradient}</defs>
       <circle
         cx="36"
         cy="36"
@@ -68,7 +120,7 @@ function MiniRing({
         cy="36"
         r={radius}
         fill="none"
-        stroke={`url(#${RING_GRADIENT_ID})`}
+        stroke={`url(#${gradientId})`}
         strokeWidth="6"
         strokeLinecap="round"
         strokeDasharray={circumference}
@@ -83,9 +135,9 @@ function MiniRing({
         className="font-display"
         fontSize="18"
         fontWeight="700"
-        fill="#ffffff"
+        fill={textFill}
       >
-        {clamped.toFixed(clamped % 1 === 0 ? 0 : 1)}
+        {clamped.toFixed(decimals)}
       </text>
     </svg>
   );
@@ -378,11 +430,6 @@ function ColoringPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {global.score !== null ? (
-          <MiniRing score={global.score} />
-        ) : (
-          <div className="h-[76px] w-[76px]" aria-hidden />
-        )}
         <div className={PREVIEW_COPY}>
           <p className="text-xs leading-relaxed text-zinc-300 line-clamp-4">
             {argumentText}
@@ -428,65 +475,214 @@ function ColoringPreview({ aggregates, language }: PreviewProps) {
 
 /* ----------------------------------- Skin ------------------------------------- */
 
-function SkinMiniRadar({ scores }: { scores: number[] }) {
-  const size = 96;
-  const c = size / 2;
-  const max = 38;
-  const n = scores.length;
+/** Compact axis labels — aligned with `SkinWorkerView` radar. */
+const SKIN_PREVIEW_RADAR_LABELS: Record<string, { en: string; fr: string }> = {
+  "texture_and_pores.pore_size_visibility": { en: "Pores", fr: "Pores" },
+  "texture_and_pores.blackheads_and_congestion": {
+    en: "Congestion",
+    fr: "Congestion",
+  },
+  "texture_and_pores.surface_smoothness": {
+    en: "Smoothness",
+    fr: "Lissage",
+  },
+  "acne_and_scarring.active_acne": { en: "Acne", fr: "Acné" },
+  "acne_and_scarring.atrophic_scarring": {
+    en: "Scarring",
+    fr: "Cicatrices",
+  },
+  "pigmentation_and_tone.color_uniformity": {
+    en: "Uniformity",
+    fr: "Uniformité",
+  },
+  "pigmentation_and_tone.redness_and_erythema": {
+    en: "Redness",
+    fr: "Rougeurs",
+  },
+  "hydration_and_vitality.sebum_hydration_balance": {
+    en: "Hydration",
+    fr: "Hydratation",
+  },
+  "hydration_and_vitality.firmness_and_elasticity": {
+    en: "Firmness",
+    fr: "Fermeté",
+  },
+};
+
+function SkinPreviewRadar({
+  data,
+  language,
+}: {
+  data: { label: string; score: number }[];
+  language: AppLanguage;
+}) {
+  const gradientId = React.useId().replace(/:/g, "");
+  /** Horizontal pad for long labels; slightly tighter vertically to reduce empty bands in the SVG. */
+  const viewPadX = 70;
+  const viewPadY = 56;
+  const size = 320;
+  const center = size / 2;
+  const maxRadius = 106;
+  const n = data.length;
   if (n < 3) return null;
-  const polar = (i: number, v: number) => {
-    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
-    const r = (Math.max(0, Math.min(v, 10)) / 10) * max;
-    return { x: c + r * Math.cos(a), y: c + r * Math.sin(a) };
+
+  const polar = (index: number, value: number) => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
+    const r = (Math.max(0, Math.min(value, 10)) / 10) * maxRadius;
+    return {
+      x: center + r * Math.cos(angle),
+      y: center + r * Math.sin(angle),
+    };
   };
-  const pts = scores.map((s, i) => polar(i, s));
-  const polygon = pts.map((p) => `${p.x},${p.y}`).join(" ");
-  const grid = [0.33, 0.66, 1];
+
+  const labelPolar = (index: number) => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
+    const r = maxRadius + 30;
+    return {
+      x: center + r * Math.cos(angle),
+      y: center + r * Math.sin(angle),
+      anchor:
+        Math.cos(angle) > 0.2
+          ? "start"
+          : Math.cos(angle) < -0.2
+            ? "end"
+            : "middle",
+    } as const;
+  };
+
+  const valuePoints = data.map((d, i) => polar(i, d.score));
+  const polygon = valuePoints.map((p) => `${p.x},${p.y}`).join(" ");
+  const highlights = skinRadarAxisHighlights(data.map((d) => d.score));
+  const ringValues = [2.5, 5, 7.5, 10];
+
+  const scaleHint = i18n(language, {
+    en: "Scale 0–10 toward outer ring",
+    fr: "Échelle 0–10 vers l’anneau extérieur",
+  });
+
   return (
     <svg
-      viewBox={`0 0 ${size} ${size}`}
-      className="h-24 w-24 shrink-0"
+      viewBox={`-${viewPadX} -${viewPadY} ${size + 2 * viewPadX} ${size + 2 * viewPadY}`}
+      className="mx-auto h-auto w-full max-w-[min(100%,440px)] shrink-0 overflow-visible"
       role="img"
-      aria-label="Skin radar preview"
+      aria-label={scaleHint}
     >
       <defs>
-        <linearGradient id="miniRadar" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#9aaeb5" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="#d6e4ff" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="#d6e4ff" stopOpacity="0.22" />
         </linearGradient>
       </defs>
-      {grid.map((g) => (
+
+      {ringValues.map((value) => (
         <circle
-          key={g}
-          cx={c}
-          cy={c}
-          r={g * max}
+          key={`ring-${value}`}
+          cx={center}
+          cy={center}
+          r={(value / 10) * maxRadius}
           fill="none"
-          stroke="rgba(255,255,255,0.08)"
+          stroke="rgba(255,255,255,0.09)"
           strokeWidth="1"
         />
       ))}
-      {scores.map((_, i) => {
-        const e = polar(i, 10);
+
+      {data.map((_, i) => {
+        const end = polar(i, 10);
         return (
           <line
-            key={i}
-            x1={c}
-            y1={c}
-            x2={e.x}
-            y2={e.y}
-            stroke="rgba(255,255,255,0.06)"
+            key={`spoke-${i}`}
+            x1={center}
+            y1={center}
+            x2={end.x}
+            y2={end.y}
+            stroke="rgba(255,255,255,0.07)"
             strokeWidth="1"
           />
         );
       })}
+
       <polygon
         points={polygon}
-        fill="url(#miniRadar)"
+        fill={`url(#${gradientId})`}
         stroke="#cfdde2"
-        strokeWidth="1.4"
+        strokeWidth="1.5"
         strokeLinejoin="round"
       />
+
+      {valuePoints.map((p, i) => {
+        const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        return (
+          <circle
+            key={`pt-${i}`}
+            cx={p.x}
+            cy={p.y}
+            r={3.5}
+            fill={paint.dotFill}
+            stroke={paint.dotStroke}
+            strokeWidth="1.4"
+          />
+        );
+      })}
+
+      {/* Scale reference along bottom ray (0–10 toward perimeter) */}
+      {[0, 2.5, 5, 7.5, 10].map((v) => {
+        const ang = Math.PI / 2;
+        const r = (v / 10) * maxRadius;
+        const pad = v === 0 ? 16 : v === 10 ? 16 : 13;
+        const xo = center + (r + pad) * Math.cos(ang);
+        const yo = center + (r + pad) * Math.sin(ang);
+        return (
+          <text
+            key={`tick-${v}`}
+            x={xo}
+            y={yo}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize="8.25"
+            fontWeight="600"
+            fill="#6b7280"
+          >
+            {v === Math.floor(v) ? String(v) : v}
+          </text>
+        );
+      })}
+
+      {data.map((d, i) => {
+        const lp = labelPolar(i);
+        const scoreTxt = d.score.toFixed(d.score % 1 === 0 ? 0 : 1);
+        const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        return (
+          <React.Fragment key={`label-${i}`}>
+            <text
+              x={lp.x}
+              y={lp.y - 7}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize="10"
+              fontWeight="600"
+              fill={paint.labelFill}
+              letterSpacing="0.03em"
+            >
+              {d.label}
+            </text>
+            <text
+              x={lp.x}
+              y={lp.y + 10}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize="9"
+              fontWeight="700"
+              fill={paint.previewScoreFill}
+            >
+              {scoreTxt}
+              <tspan fill={paint.previewMutedFill} fontWeight="600">
+                {" "}
+                /10
+              </tspan>
+            </text>
+          </React.Fragment>
+        );
+      })}
     </svg>
   );
 }
@@ -496,33 +692,90 @@ function SkinPreview({ aggregates, language }: PreviewProps) {
     getScore(aggregates, "overall_skin_score").score !== null
       ? getScore(aggregates, "overall_skin_score")
       : getScore(aggregates, "overall_skin");
-  const radarScores = [
-    "texture_and_pores.pore_size_visibility",
-    "texture_and_pores.surface_smoothness",
-    "acne_and_scarring.active_acne",
-    "pigmentation_and_tone.color_uniformity",
-    "pigmentation_and_tone.redness_and_erythema",
-    "hydration_and_vitality.firmness_and_elasticity",
-  ]
-    .map((k) => getScore(aggregates, k).score)
-    .filter((v): v is number => v !== null);
 
-  const pores = getScore(aggregates, "texture_and_pores.pore_size_visibility").score;
-  const acne = getScore(aggregates, "acne_and_scarring.active_acne").score;
-  const uniformity = getScore(
+  const poreVisibility = getScore(
+    aggregates,
+    "texture_and_pores.pore_size_visibility",
+  );
+  const blackheads = getScore(
+    aggregates,
+    "texture_and_pores.blackheads_and_congestion",
+  );
+  const surfaceSmoothness = getScore(
+    aggregates,
+    "texture_and_pores.surface_smoothness",
+  );
+  const activeAcne = getScore(aggregates, "acne_and_scarring.active_acne");
+  const atrophicScarring = getScore(
+    aggregates,
+    "acne_and_scarring.atrophic_scarring",
+  );
+  const colorUniformity = getScore(
     aggregates,
     "pigmentation_and_tone.color_uniformity",
-  ).score;
+  );
+  const redness = getScore(
+    aggregates,
+    "pigmentation_and_tone.redness_and_erythema",
+  );
+  const sebumHydration = getScore(
+    aggregates,
+    "hydration_and_vitality.sebum_hydration_balance",
+  );
+  const firmness = getScore(
+    aggregates,
+    "hydration_and_vitality.firmness_and_elasticity",
+  );
+
+  const radarData = [
+    {
+      key: "texture_and_pores.pore_size_visibility",
+      value: poreVisibility.score,
+    },
+    {
+      key: "texture_and_pores.blackheads_and_congestion",
+      value: blackheads.score,
+    },
+    {
+      key: "texture_and_pores.surface_smoothness",
+      value: surfaceSmoothness.score,
+    },
+    { key: "acne_and_scarring.active_acne", value: activeAcne.score },
+    {
+      key: "acne_and_scarring.atrophic_scarring",
+      value: atrophicScarring.score,
+    },
+    {
+      key: "pigmentation_and_tone.color_uniformity",
+      value: colorUniformity.score,
+    },
+    {
+      key: "pigmentation_and_tone.redness_and_erythema",
+      value: redness.score,
+    },
+    {
+      key: "hydration_and_vitality.sebum_hydration_balance",
+      value: sebumHydration.score,
+    },
+    {
+      key: "hydration_and_vitality.firmness_and_elasticity",
+      value: firmness.score,
+    },
+  ]
+    .filter((d): d is { key: string; value: number } => d.value !== null)
+    .map((d) => ({
+      label: i18n(language, SKIN_PREVIEW_RADAR_LABELS[d.key]),
+      score: d.value,
+    }));
 
   return (
     <div className="space-y-3">
-      <div className={PREVIEW_HERO}>
-        {global.score !== null ? <MiniRing score={global.score} /> : null}
+      <div className={PREVIEW_HERO_SKIN_RADAR}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Skin radar", fr: "Radar peau" })}
           </p>
-          <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
+          <p className="mt-0.5 text-xs leading-snug text-zinc-300 line-clamp-3">
             {global.argument ??
               i18n(language, {
                 en: "Texture, blemishes and tone synthesis.",
@@ -530,54 +783,17 @@ function SkinPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <div className="flex w-full justify-center pt-1">
-          <SkinMiniRadar scores={radarScores} />
+        <div className="flex w-full justify-center px-0.5">
+          {radarData.length >= 3 ? (
+            <SkinPreviewRadar data={radarData} language={language} />
+          ) : null}
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <StatChip
-          label={i18n(language, { en: "Pores", fr: "Pores" })}
-          value={pores !== null ? pores.toFixed(0) : "—"}
-          band={pores !== null ? bandFromScore(pores) : null}
-        />
-        <StatChip
-          label={i18n(language, { en: "Acne", fr: "Acné" })}
-          value={acne !== null ? acne.toFixed(0) : "—"}
-          band={acne !== null ? bandFromScore(acne) : null}
-        />
-        <StatChip
-          label={i18n(language, { en: "Uniformity", fr: "Uniformité" })}
-          value={uniformity !== null ? uniformity.toFixed(0) : "—"}
-          band={uniformity !== null ? bandFromScore(uniformity) : null}
-        />
       </div>
     </div>
   );
 }
 
 /* ----------------------------------- Bodyfat ------------------------------------- */
-
-const BODYFAT_TIERS = [
-  { key: "obese", color: "#3a4a52", en: "Obese", fr: "Obèse" },
-  { key: "overweight", color: "#536974", en: "Overweight", fr: "Surpoids" },
-  { key: "average_soft", color: "#788d96", en: "Average", fr: "Moyen" },
-  { key: "athletic_lean", color: "#9fb4bb", en: "Athletic", fr: "Athlétique" },
-  { key: "model_shredded", color: "#c5d6db", en: "Shredded", fr: "Sec" },
-  { key: "extreme_gaunt", color: "#e9f1f4", en: "Gaunt", fr: "Émacié" },
-];
-
-const BODYFAT_ALIASES: Record<string, string> = {
-  obese: "obese",
-  overweight: "overweight",
-  soft: "overweight",
-  average_soft: "average_soft",
-  average: "average_soft",
-  lean: "athletic_lean",
-  lean_athletic: "athletic_lean",
-  athletic_lean: "athletic_lean",
-  model_shredded: "model_shredded",
-  extreme_gaunt: "extreme_gaunt",
-};
 
 function BodyfatPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
@@ -589,9 +805,6 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
     aggregates,
     "body_fat_estimation.visual_estimate_tier",
   );
-  const tierKey =
-    BODYFAT_ALIASES[normalizeKey(tierEnum.value) ?? ""] ?? null;
-  const tierIdx = BODYFAT_TIERS.findIndex((t) => t.key === tierKey);
   const tierDisplay = tierEnum.value
     ? formatAggregateDisplayValue(
         "bodyfat",
@@ -600,11 +813,11 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
         locale,
       )
     : null;
+  const sharpness = getBodyfatCompositionSharpness(aggregates);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className={PREVIEW_HERO}>
-        {global.score !== null ? <MiniRing score={global.score} /> : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Visual tier", fr: "Niveau visuel" })}
@@ -612,40 +825,27 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
           <p className="mt-1 font-display text-base font-bold text-white">
             {tierDisplay ?? "—"}
           </p>
-          <p className="mt-1 text-xs leading-snug text-zinc-400 line-clamp-2">
-            {global.argument ??
-              i18n(language, {
-                en: "Where your face sits on the leanness spectrum.",
-                fr: "Position sur le spectre de minceur faciale.",
-              })}
-          </p>
         </div>
       </div>
-      {tierIdx >= 0 ? (
-        <div className="space-y-1.5">
-          <div className="relative h-7 overflow-hidden rounded-lg border border-white/15">
-            <div className="flex h-full">
-              {BODYFAT_TIERS.map((t) => (
-                <div
-                  key={t.key}
-                  className="flex-1"
-                  style={{ backgroundColor: t.color }}
-                />
-              ))}
-            </div>
-            <div
-              className="pointer-events-none absolute top-0 h-full w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_2px_rgba(0,0,0,0.55)]"
-              style={{
-                left: `${((tierIdx + 0.5) / BODYFAT_TIERS.length) * 100}%`,
-              }}
-            />
-          </div>
-          <div className="flex justify-between text-[9px] font-semibold uppercase tracking-[0.1em] text-zinc-500">
-            <span>{i18n(language, { en: "Softer", fr: "Plus doux" })}</span>
-            <span>{i18n(language, { en: "Leaner", fr: "Plus sec" })}</span>
-          </div>
-        </div>
-      ) : null}
+      <div className="space-y-2">
+        <p className="text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+          {i18n(language, {
+            en: "Composition matrix",
+            fr: "Matrice de composition",
+          })}
+        </p>
+        <BodyfatCompositionMatrixVisual
+          leanness={global.score}
+          sharpness={sharpness}
+          language={language}
+          compact
+        />
+        <BodyfatWeakestScoreCallout
+          aggregates={aggregates}
+          language={language}
+          compact
+        />
+      </div>
     </div>
   );
 }
@@ -693,7 +893,6 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {overall.score !== null ? <MiniRing score={overall.score} /> : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Face shape", fr: "Forme du visage" })}
@@ -785,9 +984,6 @@ function JawPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? definition.score) !== null ? (
-          <MiniRing score={(overall.score ?? definition.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Frontal jaw shape", fr: "Forme frontale" })}
@@ -876,9 +1072,6 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? symmetry.score) !== null ? (
-          <MiniRing score={(overall.score ?? symmetry.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Brow profile", fr: "Profil des sourcils" })}
@@ -961,9 +1154,6 @@ function SmilePreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? whiteness.score) !== null ? (
-          <MiniRing score={(overall.score ?? whiteness.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Tooth shade", fr: "Teinte des dents" })}
@@ -1034,9 +1224,6 @@ function CheeksPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? projection.score) !== null ? (
-          <MiniRing score={(overall.score ?? projection.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Cheekbones", fr: "Pommettes" })}
@@ -1095,9 +1282,6 @@ function HairPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? density.score) !== null ? (
-          <MiniRing score={(overall.score ?? density.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Hair quality", fr: "Qualité capillaire" })}
@@ -1186,7 +1370,6 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {overall.score !== null ? <MiniRing score={overall.score} /> : null}
         <div className={`${PREVIEW_COPY} flex w-full flex-col items-center gap-2`}>
           {fitzColor ? (
             <ColorChip
@@ -1232,9 +1415,6 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? length.score) !== null ? (
-          <MiniRing score={(overall.score ?? length.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Neck profile", fr: "Profil du cou" })}
@@ -1308,9 +1488,6 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? fullness.score) !== null ? (
-          <MiniRing score={(overall.score ?? fullness.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Lips", fr: "Lèvres" })}
@@ -1386,9 +1563,6 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? contour.score) !== null ? (
-          <MiniRing score={(overall.score ?? contour.score) as number} />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Chin shape", fr: "Forme du menton" })}
@@ -1453,7 +1627,6 @@ function NosePreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {overall.score !== null ? <MiniRing score={overall.score} /> : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Nose profile", fr: "Profil du nez" })}
@@ -1528,11 +1701,6 @@ function EarPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {(overall.score ?? sizeHarmony.score) !== null ? (
-          <MiniRing
-            score={(overall.score ?? sizeHarmony.score) as number}
-          />
-        ) : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Ears", fr: "Oreilles" })}
@@ -1618,7 +1786,6 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {overall.score !== null ? <MiniRing score={overall.score} /> : null}
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Eye shape", fr: "Forme des yeux" })}
@@ -1714,7 +1881,6 @@ function GenericPreview({
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
-        {hero ? <MiniRing score={hero.score} /> : null}
         <div className={PREVIEW_COPY}>
           {heroLabel ? (
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
@@ -1749,6 +1915,21 @@ function GenericPreview({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Headline ring on overview worker cards — matches {@link calculateWorkerFaceScore}
+ * for weighted workers; otherwise mean of leaf metrics (e.g. age).
+ */
+export function getWorkerPreviewHeadlineScore(
+  worker: string,
+  aggregates: Record<string, unknown>,
+): number | null {
+  const weighted = calculateWorkerFaceScore(worker, aggregates);
+  if (weighted !== null) {
+    return weighted;
+  }
+  return computeMeanLeafScores10(aggregates, 1);
 }
 
 /* ============================================================================

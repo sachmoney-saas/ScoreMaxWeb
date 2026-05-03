@@ -6,10 +6,9 @@ import {
   useDeleteAnalysisJob,
 } from "@/hooks/use-supabase";
 import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
-import {
-  calculateGlobalFaceScore,
-  getGlobalScoreTierLabel,
-} from "@/lib/face-analysis-score";
+import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
+import { calculateGlobalFaceScore } from "@/lib/face-analysis-score";
+import { getScoreRank } from "@/lib/global-score-tiers";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -62,6 +61,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 type SidebarNavItem = {
   href: string;
@@ -74,10 +74,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function getHistoryGlobalScoreLabel(
+function getHistoryGlobalScoreSummary(
   results: Array<{ worker: string; result: Record<string, unknown> }>,
-): string {
-  const score = calculateGlobalFaceScore(
+): { score0to100: number | null; rankTitle: string | null } {
+  const global = calculateGlobalFaceScore(
     results.map((row) => {
       const outputAggregates = isRecord(row.result.outputAggregates)
         ? row.result.outputAggregates
@@ -90,7 +90,14 @@ function getHistoryGlobalScoreLabel(
     }),
   );
 
-  return score ? `${score.score}/100` : "—/100";
+  if (!global) {
+    return { score0to100: null, rankTitle: null };
+  }
+
+  return {
+    score0to100: global.score,
+    rankTitle: getScoreRank(global.score).title,
+  };
 }
 
 function formatAnalysisHistoryDate(value: string): string {
@@ -101,6 +108,10 @@ function formatAnalysisHistoryDate(value: string): string {
     minute: "2-digit",
   }).format(new Date(value));
 }
+
+/** Matches ScoreRing default arc — frosted highlight + slate depth (Tailwind arbitrary layers). */
+const SIDEBAR_SURFACE_CLASS =
+  "bg-[radial-gradient(ellipse_110%_70%_at_0%_-10%,rgba(248,250,252,0.24)_0%,transparent_52%),radial-gradient(circle_at_88%_108%,rgba(148,163,184,0.18)_0%,transparent_46%),linear-gradient(152deg,rgba(11,17,24,0.97)_0%,rgba(17,26,34,0.94)_42%,rgba(26,36,50,0.92)_100%)]";
 
 function ModernAppSidebar() {
   const [location] = useLocation();
@@ -132,7 +143,7 @@ function ModernAppSidebar() {
       return { worker: row.worker, outputAggregates };
     });
     const global = calculateGlobalFaceScore(inputs);
-    return global ? getGlobalScoreTierLabel(global.score) : null;
+    return global ? getScoreRank(global.score).title : null;
   }, [analysisHistory]);
 
   const adminItems: SidebarNavItem[] = isAdmin
@@ -168,11 +179,15 @@ function ModernAppSidebar() {
     <Sidebar
       collapsible="icon"
       variant="sidebar"
-      className="relative z-40 border-r border-white/10 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] [--sidebar-width:22rem] [&_[data-sidebar=sidebar]]:bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)]"
+      className={cn(
+        "relative z-40 border-r border-white/10 [--sidebar-width:22rem]",
+        SIDEBAR_SURFACE_CLASS,
+        "[&_[data-sidebar=sidebar]]:bg-transparent",
+      )}
     >
       <SidebarHeader className="px-2 pt-3 pb-2">
         <div
-          className={`group relative flex h-11 cursor-pointer items-center overflow-hidden rounded-xl border border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.12)_0%,rgba(214,228,255,0.08)_52%,rgba(255,255,255,0.03)_100%)] shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] transition-all hover:border-white/25 ${
+          className={`group relative flex h-11 cursor-pointer items-center overflow-hidden rounded-xl border border-white/20 bg-[linear-gradient(128deg,rgba(255,255,255,0.38)_0%,rgba(248,250,252,0.14)_42%,rgba(214,228,255,0.09)_72%,rgba(255,255,255,0.05)_100%)] shadow-[0_30px_65px_-55px_rgba(0,0,0,0.98)] transition-all hover:border-white/30 ${
             isCollapsed ? "justify-center px-0" : "px-2"
           }`}
           title={isCollapsed ? "Ouvrir la left sidebar" : "Rétracter la left sidebar"}
@@ -253,7 +268,10 @@ function ModernAppSidebar() {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-2xl border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.96)_0%,rgba(20,31,39,0.94)_48%,rgba(185,204,209,0.22)_100%)] p-1.5 text-zinc-100 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] backdrop-blur-xl"
+            className={cn(
+              "w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-2xl border-white/15 p-1.5 text-zinc-100 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] backdrop-blur-xl",
+              SIDEBAR_SURFACE_CLASS,
+            )}
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={8}
@@ -329,7 +347,7 @@ function ModernAppSidebar() {
               <Plus className="mr-2 h-4 w-4" />
               Nouvelle analyse
             </Link>
-            <SidebarMenu className="space-y-2">
+            <SidebarMenu className="space-y-1.5">
               {isHistoryLoading ? (
                 <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-zinc-400">
                   Chargement des analyses...
@@ -344,7 +362,9 @@ function ModernAppSidebar() {
 
               {analysisHistory.map((analysis) => {
                 const isAnalysisLoading = analysis.status === "queued" || analysis.status === "running";
-                const scoreLabel = getHistoryGlobalScoreLabel(analysis.results);
+                const { score0to100, rankTitle } = getHistoryGlobalScoreSummary(
+                  analysis.results,
+                );
                 const dateLabel = formatAnalysisHistoryDate(
                   analysis.completed_at ?? analysis.created_at,
                 );
@@ -353,12 +373,12 @@ function ModernAppSidebar() {
 
                 return (
                   <SidebarMenuItem key={analysis.id}>
-                  <div className={`group flex items-center gap-2.5 rounded-xl border p-2 transition hover:border-white/20 hover:bg-white/[0.085] ${
+                  <div className={`group flex items-center gap-2 rounded-xl border px-2 py-1.5 transition hover:border-white/20 hover:bg-white/[0.085] ${
                     isActiveAnalysis
                       ? "border-white/25 bg-white/[0.12]"
                       : "border-white/10 bg-white/[0.055]"
                   }`}>
-                    <Link href={analysisHref} className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <Link href={analysisHref} className="flex min-w-0 flex-1 items-center gap-1.5">
                       <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
                         {analysis.has_thumbnail && user?.id ? (
                           <img
@@ -385,15 +405,47 @@ function ModernAppSidebar() {
                           </div>
                         ) : null}
                       </div>
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
-                          {isAnalysisLoading
-                            ? analysis.status === "queued" ? "En file d'attente" : "Analyse en cours"
-                            : scoreLabel}
-                        </p>
-                        <p className="shrink-0 text-xs text-zinc-400">
-                          {dateLabel}
-                        </p>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        {isAnalysisLoading ? (
+                          <>
+                            <p className="min-w-0 truncate text-sm font-semibold leading-tight text-zinc-100">
+                              {analysis.status === "queued"
+                                ? "En file d'attente"
+                                : "Analyse en cours"}
+                            </p>
+                            <p className="truncate text-[9px] tabular-nums leading-tight text-zinc-500">
+                              {dateLabel}
+                            </p>
+                          </>
+                        ) : score0to100 !== null && rankTitle ? (
+                          <div className="flex min-w-0 items-center gap-1">
+                            <div className="-ml-0.5 shrink-0">
+                              <MiniRing
+                                score={score0to100}
+                                scale={100}
+                                size={44}
+                                fractionDigits={1}
+                              />
+                            </div>
+                            <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                              <p className="truncate text-[11px] font-semibold leading-snug text-zinc-100">
+                                {rankTitle}
+                              </p>
+                              <p className="truncate text-[9px] tabular-nums leading-snug text-zinc-500">
+                                {dateLabel}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="min-w-0 truncate text-sm font-semibold leading-tight text-zinc-400">
+                              —
+                            </p>
+                            <p className="truncate text-[9px] tabular-nums leading-tight text-zinc-500">
+                              {dateLabel}
+                            </p>
+                          </>
+                        )}
                       </div>
                     </Link>
                     <AlertDialog>

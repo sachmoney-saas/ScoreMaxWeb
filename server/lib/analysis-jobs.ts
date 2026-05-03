@@ -1,4 +1,8 @@
-import { analysesRequestSchema, type AnalysesRequest, type AnalysesResponse } from "@shared/oneshot";
+import {
+  analysesRequestSchema,
+  type AnalysesRequest,
+  type AnalysesResponse,
+} from "@shared/oneshot";
 import { mapUnknownError } from "./errors";
 import { logger } from "./logger";
 import { runScoreMaxAnalyses } from "./scoremax-client";
@@ -90,6 +94,17 @@ export async function persistAnalysisJobAssets(params: {
   }
 }
 
+/**
+ * Snapshot a ScoreMax worker row for JSONB storage without numeric coercion.
+ * We never Math.round / parseInt aggregate scores here; JSON.parse preserves
+ * finite floats as JSON numbers (same precision PostgreSQL jsonb stores).
+ */
+function snapshotWorkerResultForDb(
+  workerResult: AnalysesResponse["resultsByWorker"][number],
+): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(workerResult)) as Record<string, unknown>;
+}
+
 async function persistAnalysisResults(params: {
   jobId: string;
   userId: string;
@@ -106,7 +121,7 @@ async function persistAnalysisResults(params: {
       worker: workerResult.worker,
       prompt_version: workerResult.promptVersion,
       provider: "scoremax",
-      result: workerResult as unknown as Record<string, unknown>,
+      result: snapshotWorkerResultForDb(workerResult),
     })),
   );
 

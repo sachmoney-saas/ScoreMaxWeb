@@ -6,6 +6,11 @@ import {
 } from "@/lib/face-analysis-display";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
+  calculateWorkerFaceScore,
+  skinRadarAxisHighlights,
+  skinRadarAxisPaint,
+} from "@/lib/face-analysis-score";
+import {
   getScore,
   ScoreBar,
   SectionShell,
@@ -24,9 +29,12 @@ function SkinRadarChart({
 }: {
   data: { label: string; score: number }[];
 }) {
-  const size = 360;
+  /** Horizontal pad for clipped labels; vertical pad slightly smaller to tighten the SVG letterbox. */
+  const viewPadX = 62;
+  const viewPadY = 50;
+  const size = 400;
   const center = size / 2;
-  const maxRadius = 130;
+  const maxRadius = 146;
   const n = data.length;
 
   /** Polar → cartesian, angle starts at the top (-90deg) and goes clockwise. */
@@ -41,7 +49,7 @@ function SkinRadarChart({
 
   const labelPolar = (index: number) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
-    const r = maxRadius + 22;
+    const r = maxRadius + 26;
     return {
       x: center + r * Math.cos(angle),
       y: center + r * Math.sin(angle),
@@ -56,13 +64,14 @@ function SkinRadarChart({
 
   const valuePoints = data.map((d, i) => polar(i, d.score));
   const polygon = valuePoints.map((p) => `${p.x},${p.y}`).join(" ");
+  const highlights = skinRadarAxisHighlights(data.map((d) => d.score));
 
   const ringValues = [2.5, 5, 7.5, 10];
 
   return (
     <svg
-      viewBox={`0 0 ${size} ${size}`}
-      className="mx-auto block h-auto w-full max-w-[420px]"
+      viewBox={`-${viewPadX} -${viewPadY} ${size + 2 * viewPadX} ${size + 2 * viewPadY}`}
+      className="mx-auto block h-auto w-full max-w-[420px] overflow-visible"
       role="img"
       aria-label="Skin radar chart"
     >
@@ -112,21 +121,25 @@ function SkinRadarChart({
       />
 
       {/* Value markers */}
-      {valuePoints.map((p, i) => (
-        <circle
-          key={`pt-${i}`}
-          cx={p.x}
-          cy={p.y}
-          r={3}
-          fill="#ffffff"
-          stroke="#9aaeb5"
-          strokeWidth="1.5"
-        />
-      ))}
+      {valuePoints.map((p, i) => {
+        const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        return (
+          <circle
+            key={`pt-${i}`}
+            cx={p.x}
+            cy={p.y}
+            r={3.4}
+            fill={paint.dotFill}
+            stroke={paint.dotStroke}
+            strokeWidth="1.5"
+          />
+        );
+      })}
 
       {/* Axis labels */}
       {data.map((d, i) => {
         const lp = labelPolar(i);
+        const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
         return (
           <text
             key={`label-${i}`}
@@ -134,9 +147,9 @@ function SkinRadarChart({
             y={lp.y}
             textAnchor={lp.anchor}
             dominantBaseline="middle"
-            fontSize="10"
+            fontSize="11"
             fontWeight="600"
-            fill="#aab2bd"
+            fill={paint.labelFill}
             letterSpacing="0.04em"
           >
             {d.label}
@@ -210,6 +223,8 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
       ? getScore(aggregates, "overall_skin_score")
       : getScore(aggregates, "overall_skin");
 
+  const heroSkinScore = calculateWorkerFaceScore(WORKER_KEY, aggregates);
+
   // Compact axis labels for the radar (keep them short)
   const radarLabels: Record<string, { en: string; fr: string }> = {
     "texture_and_pores.pore_size_visibility": { en: "Pores", fr: "Pores" },
@@ -267,14 +282,15 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
           fr: "Ton profil de peau",
         })}
         argument={globalScore.argument}
-        score={globalScore.score}
+        score={heroSkinScore}
+        scoreFractionDigits={heroSkinScore != null ? 2 : undefined}
       />
 
       {/* Radar snapshot */}
       {radarData.length >= 3 ? (
         <Card className={workerSectionCardClassName}>
-          <CardContent className="p-6 sm:p-8">
-            <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+          <CardContent className="p-5 sm:p-6">
+            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:items-start lg:gap-5">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                   {i18n(language, {
@@ -288,7 +304,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
                     fr: "Toutes les dimensions d'un coup d'œil",
                   })}
                 </h3>
-                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                   {i18n(language, {
                     en: "The shape of the polygon shows where your skin currently shines and where it can improve. The closer a vertex is to the outer edge, the better the score on that dimension.",
                     fr: "La forme du polygone montre où ta peau brille déjà et où elle peut s'améliorer. Plus un sommet s'approche du bord extérieur, plus le score est élevé sur cette dimension.",

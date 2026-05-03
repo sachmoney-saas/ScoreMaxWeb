@@ -92,6 +92,42 @@ function getNestedValue(record: Record<string, unknown>, dottedPath: string): un
   return current;
 }
 
+/**
+ * Nine radar metrics used to derive the skin worker overall (mean), aligned with `SkinWorkerView`.
+ */
+export const SKIN_RADAR_METRIC_KEYS = [
+  "texture_and_pores.pore_size_visibility",
+  "texture_and_pores.blackheads_and_congestion",
+  "texture_and_pores.surface_smoothness",
+  "acne_and_scarring.active_acne",
+  "acne_and_scarring.atrophic_scarring",
+  "pigmentation_and_tone.color_uniformity",
+  "pigmentation_and_tone.redness_and_erythema",
+  "hydration_and_vitality.sebum_hydration_balance",
+  "hydration_and_vitality.firmness_and_elasticity",
+] as const;
+
+/**
+ * Mean of all nine skin radar metrics (0–10). All nine must be present; otherwise returns null
+ * and callers fall back to API `overall_skin*`.
+ */
+export function computeSkinDerivedOverall10(
+  aggregates: Record<string, unknown>,
+): number | null {
+  const values: number[] = [];
+  for (const key of SKIN_RADAR_METRIC_KEYS) {
+    let v = parseScore10(getNestedValue(aggregates, key));
+    if (v === null) {
+      v = parseScore10(getNestedValue(aggregates, `${key}.score`));
+    }
+    if (v === null) {
+      return null;
+    }
+    values.push(v);
+  }
+  return values.reduce((sum, x) => sum + x, 0) / values.length;
+}
+
 function getOverallScore(worker: string, aggregates: Record<string, unknown>): number | null {
   const keys = SCOREMAX_OVERALL_SCORE_KEYS[worker] ?? [];
 
@@ -114,12 +150,14 @@ function isScoreField(key: string): boolean {
   return key.endsWith(".score") || key.endsWith("_score");
 }
 
-function collectScores(value: unknown, parentKey = ""): number[] {
+type ScorePathValue = { path: string; score: number };
+
+function collectScorePaths(value: unknown, parentKey = ""): ScorePathValue[] {
   if (!isRecord(value)) {
     return [];
   }
 
-  const scores: number[] = [];
+  const out: ScorePathValue[] = [];
 
   for (const [key, childValue] of Object.entries(value)) {
     const path = parentKey ? `${parentKey}.${key}` : key;
@@ -127,15 +165,31 @@ function collectScores(value: unknown, parentKey = ""): number[] {
     if (isScoreField(path)) {
       const score = parseScore10(childValue);
       if (score !== null) {
-        scores.push(score);
+        out.push({ path, score });
       }
       continue;
     }
 
-    scores.push(...collectScores(childValue, path));
+    out.push(...collectScorePaths(childValue, path));
   }
 
-  return scores;
+  return out;
+}
+
+function collectScores(value: unknown, parentKey = ""): number[] {
+  return collectScorePaths(value, parentKey).map((p) => p.score);
+}
+
+function buildExcludedOverallPaths(worker: string): Set<string> {
+  const keys = SCOREMAX_OVERALL_SCORE_KEYS[worker] ?? [];
+  const excluded = new Set<string>();
+  for (const k of keys) {
+    excluded.add(`${k}.score`);
+    if (isScoreField(k)) {
+      excluded.add(k);
+    }
+  }
+  return excluded;
 }
 
 function average(values: number[]): number | null {
@@ -146,6 +200,18 @@ function average(values: number[]): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+/** Mean of all leaf metrics (paths ending in `.score` / `_score`) — workers outside weights / fallback. */
+export function computeMeanLeafScores10(
+  aggregates: Record<string, unknown>,
+  minMetrics = 1,
+): number | null {
+  const pairs = collectScorePaths(aggregates);
+  if (pairs.length < minMetrics) {
+    return null;
+  }
+  return average(pairs.map((p) => p.score))!;
+}
+
 export function calculateWorkerFaceScore(
   worker: string,
   aggregates: Record<string, unknown>,
@@ -154,12 +220,33 @@ export function calculateWorkerFaceScore(
     return null;
   }
 
+  if (worker === "skin") {
+    const derived = computeSkinDerivedOverall10(aggregates);
+    if (derived !== null) {
+      return derived;
+    }
+  }
+
+  const pairs = collectScorePaths(aggregates);
+  const excluded = buildExcludedOverallPaths(worker);
+  const metricScores = pairs
+    .filter((p) => !excluded.has(p.path))
+    .map((p) => p.score);
+
+  if (metricScores.length >= 3) {
+    return average(metricScores)!;
+  }
+
   const overallScore = getOverallScore(worker, aggregates);
   if (overallScore !== null) {
     return overallScore;
   }
 
-  return average(collectScores(aggregates));
+  if (metricScores.length > 0) {
+    return average(metricScores)!;
+  }
+
+  return pairs.length > 0 ? average(pairs.map((p) => p.score)) : null;
 }
 
 export function calculateGlobalFaceScore(results: ScoreInputResult[]): GlobalFaceScore | null {
@@ -187,8 +274,9 @@ export function calculateGlobalFaceScore(results: ScoreInputResult[]): GlobalFac
     return null;
   }
 
+  const raw0to100 = (weightedSum / totalWeight) * 10;
   return {
-    score: Math.round((weightedSum / totalWeight) * 10),
+    score: Math.round(raw0to100 * 10) / 10,
     usedWorkerCount,
     totalWeight,
   };
@@ -227,4 +315,68 @@ export function getGlobalScoreTierLabel(score0to100: number): string {
     return "Genetic Freak Gigachad PSL God";
   }
   return "Alien Tier Ascended";
+}
+
+/** Radar peau : met en évidence les 3 axes les plus bas (rouge) et le(s) plus haut(s) (vert). */
+export type SkinRadarAxisHighlight = "weak" | "strong" | "neutral";
+
+export function skinRadarAxisHighlights(
+  scores: readonly number[],
+): SkinRadarAxisHighlight[] {
+  const n = scores.length;
+  if (n === 0) return [];
+
+  const maxScore = Math.max(...scores);
+  const indexed = scores.map((score, index) => ({ score, index }));
+  const sortedAsc = [...indexed].sort((a, b) =>
+    a.score !== b.score ? a.score - b.score : a.index - b.index,
+  );
+  const weakIndices = new Set(
+    sortedAsc.slice(0, Math.min(3, n)).map((x) => x.index),
+  );
+  const strongIndices = new Set(
+    indexed.filter((x) => x.score === maxScore).map((x) => x.index),
+  );
+
+  return scores.map((_, i) => {
+    if (strongIndices.has(i)) return "strong";
+    if (weakIndices.has(i)) return "weak";
+    return "neutral";
+  });
+}
+
+/** Couleurs SVG partagées (carte worker + preview). */
+export function skinRadarAxisPaint(highlight: SkinRadarAxisHighlight): {
+  labelFill: string;
+  previewScoreFill: string;
+  previewMutedFill: string;
+  dotFill: string;
+  dotStroke: string;
+} {
+  switch (highlight) {
+    case "weak":
+      return {
+        labelFill: "#f87171",
+        previewScoreFill: "#fca5a5",
+        previewMutedFill: "#ef4444",
+        dotFill: "#fecaca",
+        dotStroke: "#f87171",
+      };
+    case "strong":
+      return {
+        labelFill: "#6ee7b7",
+        previewScoreFill: "#6ee7b7",
+        previewMutedFill: "#34d399",
+        dotFill: "#d1fae5",
+        dotStroke: "#34d399",
+      };
+    default:
+      return {
+        labelFill: "#aab2bd",
+        previewScoreFill: "#e9f1f4",
+        previewMutedFill: "#6b7280",
+        dotFill: "#ffffff",
+        dotStroke: "#9aaeb5",
+      };
+  }
 }

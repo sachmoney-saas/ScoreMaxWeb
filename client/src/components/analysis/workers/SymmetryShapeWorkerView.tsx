@@ -5,6 +5,7 @@ import {
   formatAggregateDisplayLabel,
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
+import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   bandFromScore,
@@ -577,7 +578,8 @@ export function SymmetryShapeWorkerView({
           fr: "Ta structure faciale",
         })}
         argument={overall.argument}
-        score={overall.score}
+        score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
+        scoreFractionDigits={2}
         rightSlot={
           shapeDisplay ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">

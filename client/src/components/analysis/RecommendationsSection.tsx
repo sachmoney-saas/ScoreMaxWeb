@@ -5,7 +5,6 @@ import {
   Syringe,
 } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   useMatchedRecommendations,
@@ -13,7 +12,7 @@ import {
   type RecommendationAction,
   type RecommendationType,
 } from "@/lib/recommendations";
-import { analysisSurfaceCardClassName } from "@/components/analysis/workers/_shared";
+import { analysisGlassPanelClassName } from "@/components/analysis/workers/_shared";
 import { RecommendationCard } from "@/components/analysis/recommendations/RecommendationCard";
 
 /* ----------------------------------------------------------------------------
@@ -94,28 +93,26 @@ export function RecommendationsSection({
 
   if (matched.isLoading) {
     return (
-      <Card className={analysisSurfaceCardClassName}>
-        <CardContent className="flex items-center justify-center gap-2 p-12 text-sm text-zinc-400">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {i18n(language, {
-            en: "Loading personalised recommendations…",
-            fr: "Chargement des recommandations personnalisées…",
-          })}
-        </CardContent>
-      </Card>
+      <div
+        className={`${analysisGlassPanelClassName} flex items-center justify-center gap-2 p-12 text-sm text-zinc-300`}
+      >
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {i18n(language, {
+          en: "Loading personalised recommendations…",
+          fr: "Chargement des recommandations personnalisées…",
+        })}
+      </div>
     );
   }
 
   if (matched.error) {
     return (
-      <Card className={analysisSurfaceCardClassName}>
-        <CardContent className="p-6 text-sm text-rose-300">
-          {i18n(language, {
-            en: "Couldn't load recommendations.",
-            fr: "Impossible de charger les recommandations.",
-          })}
-        </CardContent>
-      </Card>
+      <div className={`${analysisGlassPanelClassName} p-6 text-sm text-rose-200`}>
+        {i18n(language, {
+          en: "Couldn't load recommendations.",
+          fr: "Impossible de charger les recommandations.",
+        })}
+      </div>
     );
   }
 
@@ -127,28 +124,25 @@ export function RecommendationsSection({
 
   if (matched.soft.length === 0 && matched.hard.length === 0) {
     return (
-      <Card className={analysisSurfaceCardClassName}>
-        <CardContent className="space-y-2 p-6 text-sm text-zinc-300">
-          <p className="font-display text-lg font-semibold text-white">
-            {i18n(language, {
-              en: "Nothing critical to address",
-              fr: "Rien de critique à adresser",
-            })}
-          </p>
-          <p className="text-zinc-400">
-            {i18n(language, {
-              en: "Your scores on this worker are healthy — keep your routine consistent.",
-              fr: "Tes scores sur ce worker sont sains — garde ta routine régulière.",
-            })}
-          </p>
-        </CardContent>
-      </Card>
+      <div className={`${analysisGlassPanelClassName} space-y-2 p-6 text-sm text-zinc-300`}>
+        <p className="font-display text-lg font-semibold text-white">
+          {i18n(language, {
+            en: "Nothing critical to address",
+            fr: "Rien de critique à adresser",
+          })}
+        </p>
+        <p className="text-zinc-400">
+          {i18n(language, {
+            en: "Your scores on this worker are healthy — keep your routine consistent.",
+            fr: "Tes scores sur ce worker sont sains — garde ta routine régulière.",
+          })}
+        </p>
+      </div>
     );
   }
 
   return (
-    <Card className={analysisSurfaceCardClassName}>
-      <CardContent className="space-y-8 p-6">
+    <div className={`${analysisGlassPanelClassName} space-y-8 p-6`}>
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
             {i18n(language, {
@@ -212,13 +206,12 @@ export function RecommendationsSection({
           </section>
         ) : null}
 
-        <p className="border-t border-white/5 pt-4 text-[11px] leading-relaxed text-zinc-500">
-          {i18n(language, {
-            en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
-            fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",
-          })}
-        </p>
-      </CardContent>
-    </Card>
+      <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
+        {i18n(language, {
+          en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
+          fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",
+        })}
+      </p>
+    </div>
   );
 }

@@ -1,5 +1,9 @@
 import * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  GLOBAL_TIER_SEGMENTS,
+  localScoreToGlobal100,
+} from "@/lib/global-score-tiers";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +25,13 @@ export const workerSectionCardClassName =
  */
 export const analysisSurfaceCardClassName =
   "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
+
+/**
+ * Translucent glass for recommendation surfaces — matches Overview tab triggers
+ * (`TabsList`) so the WaveBackground reads through instead of a flat slate slab.
+ */
+export const analysisGlassPanelClassName =
+  "rounded-2xl border border-white/20 bg-white/[0.07] backdrop-blur-xl text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.82)]";
 
 /* ----------------------------------------------------------------------------
  * Aggregate readers
@@ -180,8 +191,10 @@ export function ScoreBar({
 }) {
   if (score === null) return null;
   const clamped = Math.max(0, Math.min(score, scale));
-  const pct = (clamped / scale) * 100;
+  const score0to100 = localScoreToGlobal100(clamped, scale);
+  const pct = score0to100;
   const band = bandFromScore(clamped);
+
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3">
@@ -202,16 +215,30 @@ export function ScoreBar({
           </span>
         </div>
       </div>
-      <div className="relative h-2 overflow-hidden rounded-full bg-white/[0.08]">
-        {/* Faint band separators behind to anchor the eye to thresholds 4/6/8 */}
-        <div className="absolute inset-y-0 left-[40%] w-px bg-white/10" />
-        <div className="absolute inset-y-0 left-[60%] w-px bg-white/10" />
-        <div className="absolute inset-y-0 left-[80%] w-px bg-white/10" />
+
+      <div className="relative h-2.5 w-full">
+        <div className="absolute inset-0 flex overflow-hidden rounded-full bg-white/[0.06]">
+          {GLOBAL_TIER_SEGMENTS.map((seg, i) => (
+            <div
+              key={i}
+              className="h-full border-l border-white/12 bg-white/[0.04] first:border-l-0"
+              style={{ width: `${seg.widthFrac * 100}%` }}
+            />
+          ))}
+        </div>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+          <div
+            className="h-full bg-gradient-to-r from-[#9aaeb5] via-[#bcd0d6] to-[#e9f1f4]"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
         <div
-          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#9aaeb5] via-[#bcd0d6] to-[#e9f1f4]"
-          style={{ width: `${pct}%` }}
+          className="pointer-events-none absolute top-1/2 z-10 h-7 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_12px_rgba(255,255,255,0.55)]"
+          style={{ left: `${pct}%` }}
+          aria-hidden
         />
       </div>
+
       {argument ? (
         <p className="text-xs leading-relaxed text-zinc-400">{argument}</p>
       ) : null}
@@ -233,16 +260,26 @@ export function ScoreRing({
   score,
   scale = 10,
   className,
+  /** When set, fixes decimal places (e.g. 2 for derived skin mean). Otherwise integer vs one decimal. */
+  fractionDigits,
 }: {
   score: number;
   scale?: number;
   className?: string;
+  fractionDigits?: number;
 }) {
   const gradientId = React.useMemo(() => nextRingGradientId(), []);
   const clamped = Math.max(0, Math.min(score, scale));
   const radius = 46;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (clamped / scale) * circumference;
+
+  const decimals =
+    fractionDigits !== undefined
+      ? fractionDigits
+      : clamped % 1 === 0
+        ? 0
+        : 1;
 
   /** Two-line label centered on the ring (SVG user space). */
   const isGlobalHud = scale >= 100;
@@ -258,12 +295,15 @@ export function ScoreRing({
       viewBox="0 0 120 120"
       className={cn("h-32 w-32 shrink-0 sm:h-36 sm:w-36", className)}
       role="img"
-      aria-label={`Score ${clamped.toFixed(1)} sur ${scale}`}
+      aria-label={`Score ${clamped.toFixed(decimals)} sur ${scale}`}
     >
       <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#9aaeb5" />
-          <stop offset="100%" stopColor="#e9f1f4" />
+        <linearGradient id={gradientId} x1="12%" y1="88%" x2="88%" y2="12%">
+          <stop offset="0%" stopColor="#475569" />
+          <stop offset="22%" stopColor="#cbd5e1" />
+          <stop offset="48%" stopColor="#ffffff" />
+          <stop offset="72%" stopColor="#e8eef5" />
+          <stop offset="100%" stopColor="#64748b" />
         </linearGradient>
       </defs>
       <circle
@@ -303,7 +343,7 @@ export function ScoreRing({
             strokeWidth: isGlobalHud ? 0.6 : 0.45,
           }}
         >
-          {clamped.toFixed(clamped % 1 === 0 ? 0 : 1)}
+          {clamped.toFixed(decimals)}
         </text>
         <text
           textAnchor="middle"
@@ -397,6 +437,7 @@ export function WorkerHero({
   argument,
   score,
   scale = 10,
+  scoreFractionDigits,
   rightSlot,
 }: {
   eyebrow: string;
@@ -404,6 +445,7 @@ export function WorkerHero({
   argument?: string | null;
   score?: number | null;
   scale?: number;
+  scoreFractionDigits?: number;
   rightSlot?: React.ReactNode;
 }) {
   return (
@@ -411,7 +453,11 @@ export function WorkerHero({
       <CardContent className="p-6 sm:p-8">
         <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
           {score !== null && score !== undefined ? (
-            <ScoreRing score={score} scale={scale} />
+            <ScoreRing
+              score={score}
+              scale={scale}
+              fractionDigits={scoreFractionDigits}
+            />
           ) : null}
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">

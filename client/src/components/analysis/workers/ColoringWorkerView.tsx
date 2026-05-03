@@ -4,6 +4,7 @@ import {
   formatAggregateDisplayLabel,
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
+import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
@@ -219,7 +220,8 @@ export function ColoringWorkerView({
           fr: "Ta colorimétrie globale",
         })}
         argument={globalScore.argument}
-        score={globalScore.score}
+        score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
+        scoreFractionDigits={2}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

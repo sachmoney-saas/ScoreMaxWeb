@@ -5,7 +5,12 @@ import {
   formatAggregateDisplayLabel,
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
+import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import {
+  CompositionMatrix,
+  getBodyfatCompositionSharpness,
+} from "./BodyfatCompositionMatrix";
 import {
   bandFromScore,
   getEnum,
@@ -191,210 +196,6 @@ function VisualTierScale({
 }
 
 /* ----------------------------------------------------------------------------
- * 2D Composition matrix — Leanness × Angularity
- *
- * Inspired by the brow "Bold/Subtle × Feminine/Masculine" matrix in the
- * inspiration deck. We build a 5×5 grid where the user's marker is positioned
- * by averaging two semantic axes:
- *
- *   X axis — Leanness  : facial_leanness_score
- *   Y axis — Sharpness : avg(jawline_definition, zygomatic_bone_visibility,
- *                            facial_angularity)
- * ------------------------------------------------------------------------- */
-
-function CompositionMatrix({
-  leanness,
-  sharpness,
-  language,
-}: {
-  leanness: number | null;
-  sharpness: number | null;
-  language: AppLanguage;
-}) {
-  const cols = 5;
-  const rows = 5;
-
-  // Map [0..10] → [0..cols-1]
-  const xIdx =
-    leanness !== null
-      ? Math.min(cols - 1, Math.max(0, Math.round((leanness / 10) * (cols - 1))))
-      : null;
-  // Y is inverted on screen (higher sharpness = top row index 0)
-  const yIdx =
-    sharpness !== null
-      ? Math.min(
-          rows - 1,
-          Math.max(0, Math.round(((10 - sharpness) / 10) * (rows - 1))),
-        )
-      : null;
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-[28px_1fr_28px] grid-rows-[28px_1fr_28px] items-center gap-1">
-        {/* top label (sharp) */}
-        <div />
-        <div className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Sharp", fr: "Marqué" })}
-        </div>
-        <div />
-
-        {/* left label (rounded) */}
-        <div className="rotate-[-90deg] text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Soft", fr: "Doux" })}
-        </div>
-
-        {/* matrix grid */}
-        <div
-          className="relative aspect-square w-full rounded-2xl border border-white/10 bg-white/[0.03] p-2"
-          role="img"
-          aria-label="Composition matrix"
-        >
-          <div className="grid h-full w-full grid-cols-5 grid-rows-5 gap-1">
-            {Array.from({ length: rows }).map((_, ry) =>
-              Array.from({ length: cols }).map((_, cx) => {
-                const isUser = xIdx === cx && yIdx === ry;
-                const distance = Math.hypot(cx - (cols - 1) / 2, ry - (rows - 1) / 2);
-                // background tile gets a subtle radial fade towards center
-                const baseOpacity = Math.max(0.04, 0.18 - distance * 0.04);
-                return (
-                  <div
-                    key={`cell-${ry}-${cx}`}
-                    className={`rounded-md transition ${
-                      isUser
-                        ? "ring-2 ring-white/80"
-                        : ""
-                    }`}
-                    style={{
-                      backgroundColor: isUser
-                        ? "#e9f1f4"
-                        : `rgba(154,174,181,${baseOpacity})`,
-                      boxShadow: isUser
-                        ? "0 0 18px rgba(255,255,255,0.55)"
-                        : undefined,
-                    }}
-                  />
-                );
-              }),
-            )}
-          </div>
-
-          {/* axes */}
-          <div className="pointer-events-none absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-white/10" />
-          <div className="pointer-events-none absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-white/10" />
-        </div>
-
-        {/* right label (lean) */}
-        <div className="rotate-90 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Lean", fr: "Sec" })}
-        </div>
-
-        {/* bottom label (soft) */}
-        <div />
-        <div className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Plump", fr: "Plein" })}
-        </div>
-        <div />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 text-[11px] leading-relaxed text-zinc-400 sm:grid-cols-4">
-        <div>
-          <p className="font-semibold text-zinc-200">
-            {i18n(language, { en: "Soft & plump", fr: "Doux et plein" })}
-          </p>
-          <p className="text-xs">
-            {i18n(language, {
-              en: "Higher fat, smoother contours.",
-              fr: "Plus de gras, contours adoucis.",
-            })}
-          </p>
-        </div>
-        <div>
-          <p className="font-semibold text-zinc-200">
-            {i18n(language, { en: "Sharp & plump", fr: "Marqué et plein" })}
-          </p>
-          <p className="text-xs">
-            {i18n(language, {
-              en: "Strong bones under fuller flesh.",
-              fr: "Os marqués sous un visage plein.",
-            })}
-          </p>
-        </div>
-        <div>
-          <p className="font-semibold text-zinc-200">
-            {i18n(language, { en: "Soft & lean", fr: "Doux et sec" })}
-          </p>
-          <p className="text-xs">
-            {i18n(language, {
-              en: "Lean tissue, rounded structure.",
-              fr: "Tissus secs, structure arrondie.",
-            })}
-          </p>
-        </div>
-        <div>
-          <p className="font-semibold text-zinc-200">
-            {i18n(language, { en: "Sharp & lean", fr: "Marqué et sec" })}
-          </p>
-          <p className="text-xs">
-            {i18n(language, {
-              en: "Defined bones, very low fat.",
-              fr: "Os définis, peu de gras.",
-            })}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------------------
- * Region pill — small visual showing how the score breaks down on a face area
- * ------------------------------------------------------------------------- */
-
-function RegionPill({
-  label,
-  score,
-}: {
-  label: string;
-  score: number | null;
-}) {
-  if (score === null) {
-    return (
-      <div className="flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
-        <span className="text-[11px] uppercase tracking-[0.1em] text-zinc-500">
-          {label}
-        </span>
-        <span className="text-xs text-zinc-500">—</span>
-      </div>
-    );
-  }
-  const band = bandFromScore(score);
-  const dotColor =
-    band === "excellent"
-      ? "bg-emerald-300"
-      : band === "good"
-        ? "bg-lime-300"
-        : band === "moderate"
-          ? "bg-amber-300"
-          : "bg-rose-300";
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-      <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-        <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-zinc-300">
-          {label}
-        </span>
-      </div>
-      <span className="font-display text-sm font-bold tabular-nums text-white">
-        {score.toFixed(score % 1 === 0 ? 0 : 1)}
-        <span className="ml-0.5 text-[10px] font-semibold text-zinc-500">
-          /10
-        </span>
-      </span>
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------------------
  * Main view
  * ------------------------------------------------------------------------- */
 
@@ -436,16 +237,7 @@ export function BodyfatWorkerView({
   );
   const angularity = getScore(aggregates, "upper_face_skin.facial_angularity");
 
-  // Sharpness axis = avg of bone-definition signals
-  const sharpnessSignals = [
-    jawline.score,
-    zygomatic.score,
-    angularity.score,
-  ].filter((v): v is number => v !== null);
-  const sharpness =
-    sharpnessSignals.length > 0
-      ? sharpnessSignals.reduce((a, b) => a + b, 0) / sharpnessSignals.length
-      : null;
+  const sharpness = getBodyfatCompositionSharpness(aggregates);
 
   const tierLabel = tierKey
     ? formatAggregateDisplayValue(
@@ -477,7 +269,8 @@ export function BodyfatWorkerView({
           fr: "Ta minceur faciale",
         })}
         argument={facialLeanness.argument}
-        score={facialLeanness.score}
+        score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
+        scoreFractionDigits={2}
         rightSlot={
           tierLabel ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
@@ -529,43 +322,11 @@ export function BodyfatWorkerView({
 
       <Card className={workerSectionCardClassName}>
         <CardContent className="p-6 sm:p-8">
-          <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-            <div className="space-y-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                {i18n(language, {
-                  en: "Composition matrix",
-                  fr: "Matrice de composition",
-                })}
-              </p>
-              <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                {i18n(language, {
-                  en: "Leanness × bone definition",
-                  fr: "Minceur × définition osseuse",
-                })}
-              </h3>
-              <p className="text-sm leading-relaxed text-zinc-400">
-                {i18n(language, {
-                  en: "Two faces with the same leanness can read very differently depending on bone structure. The matrix combines both signals so you see the full picture.",
-                  fr: "Deux visages aussi secs peuvent rendre très différemment selon la structure osseuse. La matrice combine les deux signaux pour une lecture complète.",
-                })}
-              </p>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <RegionPill
-                  label={i18n(language, { en: "Leanness", fr: "Minceur" })}
-                  score={facialLeanness.score}
-                />
-                <RegionPill
-                  label={i18n(language, { en: "Sharpness", fr: "Marqué" })}
-                  score={sharpness}
-                />
-              </div>
-            </div>
-            <CompositionMatrix
-              leanness={facialLeanness.score}
-              sharpness={sharpness}
-              language={language}
-            />
-          </div>
+          <CompositionMatrix
+            leanness={facialLeanness.score}
+            sharpness={sharpness}
+            language={language}
+          />
         </CardContent>
       </Card>
 

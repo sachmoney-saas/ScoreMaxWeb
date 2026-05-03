@@ -4,6 +4,7 @@ import {
   type FaceAnalysisLocale,
   formatAggregateDisplayLabel,
 } from "@/lib/face-analysis-display";
+import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   bandFromScore,
@@ -261,7 +262,8 @@ export function CheeksWorkerView({
           fr: "Ta signature des pommettes",
         })}
         argument={overall.argument}
-        score={overall.score}
+        score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
+        scoreFractionDigits={2}
       />
 
       {/* Heatmap */}
