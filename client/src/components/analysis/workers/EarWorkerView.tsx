@@ -341,7 +341,10 @@ export function EarWorkerView({ aggregates, language }: EarWorkerViewProps) {
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_ear");
+  const overall =
+    getScore(aggregates, "overall_ear_score").score !== null
+      ? getScore(aggregates, "overall_ear_score")
+      : getScore(aggregates, "overall_ear");
 
   // Proportions & placement
   const sizeHarmony = getScore(

@@ -782,6 +782,8 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
 
 export default function Landing() {
   const language = useAppLanguage();
+  const { user } = useAuth();
+  const heroCtaHref = user ? "/app/new-analysis" : "/register";
   const localizedAppearanceImpactCategories = React.useMemo(
     () =>
       appearanceImpactCategories.map((category) => ({
@@ -825,30 +827,60 @@ export default function Landing() {
       <FloatingHeader language={language} />
 
       {/* Hero Section */}
-      <section className="relative isolate min-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-6 pt-28">
-        <div className="relative mx-auto flex min-h-[calc(100svh-8.5rem)] w-full lg:max-w-[75%] flex-col justify-between md:min-h-[calc(100svh-9.5rem)]">
+      <section className="relative isolate min-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pt-24 pb-4 sm:pt-28">
+        <div className="relative mx-auto flex min-h-[calc(100svh-5.5rem)] w-full max-w-5xl flex-col lg:max-w-[75%] md:min-h-[calc(100svh-6rem)]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="relative z-10 mx-auto w-full max-w-4xl pt-6 md:pt-10"
+            className="relative z-10 flex flex-1 flex-col justify-center px-1 py-6 sm:px-2 sm:py-10 md:py-14"
           >
-            <div className="text-center max-w-4xl mx-auto space-y-6">
-              <motion.h1
-                variants={itemVariants}
-                className="font-display text-5xl md:text-7xl font-bold leading-[1.1] tracking-tight text-balance"
-              >
-                {i18n(language, {
-                  en: "Beauty can be",
-                  fr: "La beauté peut être",
-                })}
-                <span className="block">
+            <div className="mx-auto w-full max-w-[36rem] space-y-6 text-center sm:max-w-2xl md:space-y-7 lg:max-w-3xl lg:space-y-8">
+              <motion.div variants={itemVariants} className="flex justify-center">
+                <span
+                  className="inline-flex max-w-[min(100%,22rem)] items-center justify-center rounded-full border border-white/20 bg-white/[0.07] px-3.5 py-1.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.12em] text-foreground/90 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.5)] backdrop-blur-md sm:max-w-none sm:px-4 sm:text-[11px] sm:tracking-[0.14em] md:text-xs"
+                >
                   {i18n(language, {
-                    en: "measured and improved",
-                    fr: "mesurée et améliorée",
+                    en: "Based on 200+ facial markers",
+                    fr: "Basé sur plus de 200+ marqueurs",
                   })}
                 </span>
+              </motion.div>
+              <motion.h1
+                variants={itemVariants}
+                className="hero-title-sunset mx-auto max-w-[min(100%,24rem)] font-display text-[clamp(2.25rem,6.5vw+0.75rem,4.5rem)] font-bold leading-[1.05] tracking-[-0.02em] text-balance sm:max-w-2xl sm:leading-[1.06] md:max-w-3xl md:leading-[1.07] lg:max-w-4xl xl:text-[clamp(2.75rem,5vw+1rem,4.75rem)]"
+              >
+                {i18n(language, {
+                  en: "Become a 10/10 with science",
+                  fr: "Deviens un 10/10 grâce à la science",
+                })}
               </motion.h1>
+              <motion.h2
+                variants={itemVariants}
+                className="mx-auto max-w-[min(100%,36rem)] text-balance font-sans text-base font-medium leading-relaxed tracking-tight text-foreground/72 sm:text-[1.0625rem] md:max-w-xl md:text-lg md:leading-[1.65] lg:max-w-2xl"
+              >
+                {i18n(language, {
+                  en: "AI scans your face, scores you out of 100, and delivers the exact plan to transform in 90 days.",
+                  fr: "L'IA scanne ton visage, te note sur 100 et te livre le plan exact pour te transformer en 90 jours.",
+                })}
+              </motion.h2>
+              <motion.div
+                variants={itemVariants}
+                className="flex flex-wrap items-center justify-center gap-4 pt-1 sm:pt-2"
+              >
+                <Link href={heroCtaHref} className="pointer-events-auto">
+                  <Button
+                    size="lg"
+                    className="h-14 min-h-14 rounded-full px-8 text-base font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_12px_40px_-8px_rgba(0,0,0,0.45)] sm:h-[3.75rem] sm:min-h-[3.75rem] sm:px-11 sm:text-lg md:h-16 md:min-h-16 md:px-12 md:text-[1.125rem]"
+                  >
+                    {i18n(language, {
+                      en: "Discover my score",
+                      fr: "Découvrir mon score",
+                    })}
+                    <ArrowRight className="ml-2.5 h-4 w-4 shrink-0 sm:h-[1.125rem] sm:w-[1.125rem] md:h-5 md:w-5" strokeWidth={2.25} />
+                  </Button>
+                </Link>
+              </motion.div>
             </div>
           </motion.div>
 
@@ -864,9 +896,9 @@ export default function Landing() {
               opacity: { duration: 0.35, delay: 0.25 },
               y: { duration: 1.8, repeat: Infinity, ease: "easeInOut" },
             }}
-            className="mt-6 flex justify-center text-foreground/70 hover:text-foreground transition-colors"
+            className="mt-auto flex shrink-0 justify-center pb-2 pt-4 text-foreground/55 transition-colors hover:text-foreground/90"
           >
-            <ChevronDown className="h-9 w-9" strokeWidth={1.8} />
+            <ChevronDown className="h-8 w-8 sm:h-9 sm:w-9" strokeWidth={1.8} />
           </motion.a>
         </div>
       </section>

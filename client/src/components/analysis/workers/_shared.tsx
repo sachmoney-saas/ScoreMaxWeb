@@ -32,21 +32,53 @@ export const analysisBackNavButtonClassName = cn(
 
 /* ----------------------------------------------------------------------------
  * Aggregate readers
+ *
+ * The analysis API may return either flattened keys
+ * (`"proportions_and_placement.size_harmony.score"`) or nested objects
+ * (`{ proportions_and_placement: { size_harmony: { score, argument } } }`).
+ * We support both so worker UIs stay populated.
  * ------------------------------------------------------------------------- */
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getNestedValue(record: Record<string, unknown>, dottedPath: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(record, dottedPath)) {
+    return record[dottedPath];
+  }
+
+  let current: unknown = record;
+  for (const segment of dottedPath.split(".")) {
+    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, segment)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+
+  return current;
+}
+
+function resolveAggregateValue(aggs: Record<string, unknown>, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(aggs, key)) {
+    return aggs[key];
+  }
+  return getNestedValue(aggs, key);
+}
 
 export function getString(
   aggs: Record<string, unknown>,
   key: string,
 ): string | null {
-  const v = aggs[key];
-  return typeof v === "string" && v.trim().length > 0 ? v : null;
+  const v = resolveAggregateValue(aggs, key);
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
 }
 
 export function getNumber(
   aggs: Record<string, unknown>,
   key: string,
 ): number | null {
-  const v = aggs[key];
+  const v = resolveAggregateValue(aggs, key);
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string") {
     const parsed = Number(v.replace(",", "."));
@@ -82,11 +114,24 @@ export function getEnum(
   ...keys: string[]
 ): { value: string | null; argument: string | null } {
   for (const key of keys) {
-    const value = getString(aggs, key);
+    const raw = resolveAggregateValue(aggs, key);
+    let value: string | null = null;
+    if (typeof raw === "string" && raw.trim().length > 0) {
+      value = raw.trim();
+    } else if (isRecord(raw)) {
+      const inner = raw.value ?? raw.category ?? raw.type ?? raw.label;
+      if (typeof inner === "string" && inner.trim().length > 0) {
+        value = inner.trim();
+      }
+    }
     if (value) {
+      let argument = getString(aggs, `${key}.argument`);
+      if (!argument && isRecord(raw) && typeof raw.argument === "string" && raw.argument.trim()) {
+        argument = raw.argument.trim();
+      }
       return {
         value,
-        argument: getString(aggs, `${key}.argument`),
+        argument,
       };
     }
   }

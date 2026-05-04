@@ -4,11 +4,17 @@ type AnalysisProcessingStateProps = {
   message?: string | null;
   /** Sans ligne « Analyse IA » ni icône étoiles (ex. page Nouvelle analyse). */
   minimalChrome?: boolean;
+  /**
+   * Job finished côté serveur ; on attend la redirection client.
+   * Évite une barre à ~66 % qui paraît « bloquée ».
+   */
+  awaitingRedirect?: boolean;
 };
 
 export function AnalysisProcessingState({
   message,
   minimalChrome = false,
+  awaitingRedirect = false,
 }: AnalysisProcessingStateProps) {
   return (
     <div className="rounded-[1.5rem] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(15,23,42,0.08),transparent_42%),linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-5 text-center sm:p-8">
@@ -47,7 +53,13 @@ export function AnalysisProcessingState({
           </div>
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full w-2/3 animate-pulse rounded-full bg-slate-950" />
+          <div
+            className={
+              awaitingRedirect
+                ? "h-full w-full animate-pulse rounded-full bg-slate-950"
+                : "h-full w-2/3 animate-pulse rounded-full bg-slate-950"
+            }
+          />
         </div>
       </div>
     </div>
