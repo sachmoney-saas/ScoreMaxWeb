@@ -29,8 +29,8 @@ function buildLandmarks(): LandmarkPoint[] {
 function frameForPose(poseId: PoseId): FaceFrame {
   const defaults: Record<PoseId, FaceFrame["headPose"]> = {
     frontal: { yaw: 0, pitch: 0, roll: 0 },
-    "profile-right": { yaw: -50, pitch: 0, roll: 0 },
-    "profile-left": { yaw: 50, pitch: 0, roll: 0 },
+    "profile-right": { yaw: 50, pitch: 0, roll: 0 },
+    "profile-left": { yaw: -50, pitch: 0, roll: 0 },
     "jaw-up": { yaw: 0, pitch: -35, roll: 0 },
     "crown-down": { yaw: 0, pitch: 34, roll: 0 },
     "closeup-smile": { yaw: 0, pitch: 0, roll: 0 },

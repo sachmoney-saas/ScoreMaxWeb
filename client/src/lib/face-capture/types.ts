@@ -109,8 +109,12 @@ export const CAPTURE_POSES: PoseDefinition[] = [
      * (its detection envelope), `CaptureSession` extrapolation takes over
      * and completes the hold using the last in-range sample, then captures
      * the live (over-rotated) camera frame.
+     *
+     * Yaw uses raw bitmap convention (`solveHeadPoseFromMatrix(..., false)`)
+     * while the preview is CSS-mirrored — chevrons account for this in
+     * `FaceCaptureView`.
      */
-    yawRange: [-90, -40],
+    yawRange: [40, 90],
     pitchRange: [-25, 25],
     rollRange: [-15, 15],
     minFaceRatio: 0.08,
@@ -122,7 +126,7 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     label: "Profil gauche",
     description: "Tournez la tête vers la gauche",
     icon: "👈",
-    yawRange: [40, 90],
+    yawRange: [-90, -40],
     pitchRange: [-25, 25],
     rollRange: [-15, 15],
     minFaceRatio: 0.08,

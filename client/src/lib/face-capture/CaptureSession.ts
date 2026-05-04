@@ -14,11 +14,6 @@ import { FaceDetector } from "./FaceDetector";
 import { MaskRenderer } from "./MaskRenderer";
 import { MotionTracker } from "./MotionTracker";
 import { PoseValidator } from "./PoseValidator";
-import {
-  evaluateFrameQualityForCapture,
-  evaluateFrameQualityMinimal,
-  qualityGateAccepts,
-} from "./QualityGate";
 
 export type CaptureSessionEvent =
   | { type: "pose_captured"; poseId: PoseId; blob: Blob }
@@ -63,19 +58,24 @@ export class CaptureSession {
   private readonly validator = new PoseValidator();
   private readonly maskRenderer = new MaskRenderer();
   /**
-   * Motion-tracking window. 400 ms gives enough samples to filter out
-   * MediaPipe landmark jitter (~±1-2° noise per frame) while staying responsive
-   * to real motion.
+   * Motion-tracking window. Kept for diagnostics / hint logic; hold
+   * interruption no longer relies on instantaneous angular speed.
    */
   private readonly motion = new MotionTracker(400);
   /**
-   * Hard motion ceiling (deg/sec). The hold accumulates regardless of small
-   * or even moderate motion — only a *very large* head movement resets it.
-   * 220°/sec equates to ~88° swept in the 400 ms window, which only
-   * happens when the user deliberately changes pose; breathing, sway,
-   * micro-readjustments and even moderate turns all stay below.
+   * Hold-interruption thresholds: once we're holding, the scan bar is NEVER
+   * stopped by validation drift, sub-threshold motion, or quality wobble — it
+   * is only reset when the user has clearly moved out of the locked pose.
+   *
+   *   |Δyaw|  > 30°   (deliberate left/right turn — switching to a new pose)
+   *   |Δroll| > 10°   (deliberate head tilt that breaks the pose)
+   *
+   * Pitch is intentionally NOT a hard interrupt: jaw-up / crown-down poses
+   * intentionally swing pitch wide, and frontal users tend to nod slightly.
+   * Deltas are measured against the head pose at hold start (`holdStartHeadPose`).
    */
-  private readonly extremeMotionDegPerSec = 220;
+  private readonly holdInterruptYawDeg = 30;
+  private readonly holdInterruptRollDeg = 10;
   private readonly config: CaptureSessionConfig;
 
   private callback: CaptureSessionCallback | null = null;
@@ -86,15 +86,19 @@ export class CaptureSession {
   private lastValidation: PoseValidation | null = null;
   private lastHeadPose: HeadPose | null = null;
   /**
-   * Hold grace window. If we briefly lose validation (small position drift,
-   * faceRatio jitter, brief motion spike) while already accumulating hold,
-   * we freeze progress instead of resetting it. If validation comes back
-   * within `holdGraceMs`, hold resumes from where it paused. If not, the
-   * hold is then reset and we go back to Aligning. 1500 ms is permissive
-   * enough that small fidgets never break the analysis.
+   * Head pose snapshot at the moment the hold started. We compare every
+   * subsequent frame's yaw/roll to this anchor to detect deliberate
+   * pose-change motion (see `holdInterruptYawDeg` / `holdInterruptRollDeg`).
    */
-  private graceUntil: number | null = null;
-  private readonly holdGraceMs = 1500;
+  private holdStartHeadPose: HeadPose | null = null;
+  /**
+   * Face-loss grace deadline. ONLY armed when the face disappears mid-hold
+   * (no MediaPipe detection AND no extrapolation possible). Within this
+   * window we keep the holding visual frozen instead of resetting; past it
+   * we go back to AwaitFace.
+   */
+  private faceLossGraceUntil: number | null = null;
+  private readonly faceLossGraceMs = 1500;
   /**
    * Last successfully detected head pose / landmarks / blendshapes, kept
    * across face-loss frames. Used both for contextual hints AND for pose
@@ -166,7 +170,7 @@ export class CaptureSession {
     this.lastSeenAt = 0;
     this.holdStartAt = null;
     this.holdProgress = 0;
-    this.graceUntil = null;
+    this.holdStartHeadPose = null;
     this.cooldownUntil = 0;
     this.captureLock = false;
     this.transitionPoseId = null;
@@ -305,7 +309,7 @@ export class CaptureSession {
       this.state = "Cooldown";
       this.holdStartAt = null;
       this.holdProgress = 0;
-      this.graceUntil = null;
+      this.holdStartHeadPose = null;
       this.motion.reset();
       return;
     }
@@ -353,15 +357,15 @@ export class CaptureSession {
      * Face-loss grace fallback: if we were already in Holding when the
      * face dropped out (and extrapolation isn't applicable — non-directional
      * pose, or last-seen too old), we keep `state = Holding` for up to
-     * `holdGraceMs`. During that window the white flash border stays on,
+     * `faceLossGraceMs`. During that window the white flash border stays on,
      * `holdProgress` is frozen, and if the face comes back the hold resumes
      * from where it was. Past the grace, we hard-reset to AwaitFace.
      */
     if (this.state === "Holding" && this.holdStartAt !== null) {
-      if (this.graceUntil === null) {
-        this.graceUntil = now + this.holdGraceMs;
+      if (this.faceLossGraceUntil === null) {
+        this.faceLossGraceUntil = now + this.faceLossGraceMs;
       }
-      if (now < this.graceUntil) {
+      if (now < this.faceLossGraceUntil) {
         this.faceInView = true;
         this.maskRenderer.clear();
         return;
@@ -381,7 +385,8 @@ export class CaptureSession {
     };
     this.holdStartAt = null;
     this.holdProgress = 0;
-    this.graceUntil = null;
+    this.holdStartHeadPose = null;
+    this.faceLossGraceUntil = null;
     this.motion.reset();
     this.state = "AwaitFace";
     this.maskRenderer.clear();
@@ -407,7 +412,8 @@ export class CaptureSession {
       this.state = "AwaitFace";
       this.holdStartAt = null;
       this.holdProgress = 0;
-      this.graceUntil = null;
+      this.holdStartHeadPose = null;
+      this.faceLossGraceUntil = null;
       this.poseStates[0]!.state = "pending";
       const warmupValidation: PoseValidation = {
         poseId: "frontal",
@@ -445,75 +451,64 @@ export class CaptureSession {
 
     const ready = validation.status === "ready";
     /**
-     * Hard motion gate. Extrapolated frames don't carry fresh motion
-     * samples (the face was just lost by MediaPipe), and the user must
-     * have already stopped — that's why they crossed the detection
-     * envelope. So we never treat extrapolated frames as "moving".
-     *
-     * For live frames, we check only the *upper* threshold: small/moderate
-     * motion does NOT pause progression — only a clearly deliberate, large
-     * head movement (e.g. switching to a new pose) resets the hold.
+     * Hold-interruption rule (replaces the old "extreme deg/sec motion +
+     * validation grace" combo): once the hold is armed, we ONLY abort if the
+     * user has clearly turned away from the locked pose. Concretely, |Δyaw|
+     * > 30° or |Δroll| > 10° measured against the head pose at hold start.
+     * Pitch is excluded on purpose — jaw-up / crown-down poses can swing
+     * pitch wide as the user settles. Extrapolated frames carry the cached
+     * head pose, which is by definition stable, so deltas are always 0.
      */
-    const extremeMotion =
-      !isExtrapolated && this.motion.angularSpeed() > this.extremeMotionDegPerSec;
+    let bigMovementInterrupt = false;
+    if (this.holdStartAt !== null && this.holdStartHeadPose) {
+      const dyaw = Math.abs(frame.headPose.yaw - this.holdStartHeadPose.yaw);
+      const droll = Math.abs(frame.headPose.roll - this.holdStartHeadPose.roll);
+      if (dyaw > this.holdInterruptYawDeg || droll > this.holdInterruptRollDeg) {
+        bigMovementInterrupt = true;
+      }
+    }
 
     let triggerCapture = false;
 
-    if (extremeMotion) {
-      /**
-       * Hard reset: very large head motion — likely a deliberate pose
-       * change. We bypass the grace window entirely.
-       */
+    if (bigMovementInterrupt) {
       this.holdStartAt = null;
       this.holdProgress = 0;
-      this.graceUntil = null;
+      this.holdStartHeadPose = null;
+      this.faceLossGraceUntil = null;
       this.state = "Aligning";
       this.poseStates[this.currentPoseIndex]!.state = "aligning";
-    } else if (ready) {
+    } else if (this.holdStartAt !== null) {
       /**
-       * Coming out of grace: shift `holdStartAt` forward by the paused
-       * duration so progress resumes exactly where it stopped (rather than
-       * jumping ahead by the time spent out of range).
+       * Already holding: progress accumulates from `holdStartAt` regardless of
+       * the per-frame validation status — small drifts, brief MediaPipe
+       * wobble, micro-blinks, sub-threshold motion all stay invisible to the
+       * user. The scan bar only stops if the user has clearly moved out of
+       * the pose (handled above) or completes (triggerCapture).
        */
-      if (this.graceUntil !== null && this.holdStartAt !== null) {
-        const graceStart = this.graceUntil - this.holdGraceMs;
-        const pauseDuration = Math.max(0, frame.timestamp - graceStart);
-        this.holdStartAt += pauseDuration;
-      }
-      this.graceUntil = null;
-
+      this.faceLossGraceUntil = null;
       this.state = "Holding";
       this.poseStates[this.currentPoseIndex]!.state = "holding";
-      if (this.holdStartAt === null) this.holdStartAt = frame.timestamp;
       const holdMs = poseDef.holdMs || ((this.config.holdFrames ?? 18) * this.frameIntervalMs);
       this.holdProgress = Math.max(0, Math.min(1, (frame.timestamp - this.holdStartAt) / holdMs));
       if (this.holdProgress >= 1) {
         triggerCapture = true;
       }
-    } else if (this.holdStartAt !== null) {
-      /**
-       * Validation just dropped while we were holding. Give a grace window
-       * (1500 ms) for the user to come back. During grace `holdProgress`
-       * stays frozen and the Holding visual remains, avoiding flicker on
-       * brief out-of-range fluctuations.
-       */
-      if (this.graceUntil === null) {
-        this.graceUntil = frame.timestamp + this.holdGraceMs;
-      }
-      if (frame.timestamp < this.graceUntil) {
-        this.state = "Holding";
-        this.poseStates[this.currentPoseIndex]!.state = "holding";
-      } else {
-        this.holdStartAt = null;
-        this.holdProgress = 0;
-        this.graceUntil = null;
-        this.state = "Aligning";
-        this.poseStates[this.currentPoseIndex]!.state = "aligning";
+    } else if (ready) {
+      this.holdStartAt = frame.timestamp;
+      this.holdStartHeadPose = frame.headPose;
+      this.faceLossGraceUntil = null;
+      this.state = "Holding";
+      this.poseStates[this.currentPoseIndex]!.state = "holding";
+      const holdMs = poseDef.holdMs || ((this.config.holdFrames ?? 18) * this.frameIntervalMs);
+      this.holdProgress = Math.max(0, Math.min(1, (frame.timestamp - this.holdStartAt) / holdMs));
+      if (this.holdProgress >= 1) {
+        triggerCapture = true;
       }
     } else {
       this.state = "Aligning";
       this.holdStartAt = null;
       this.holdProgress = 0;
+      this.holdStartHeadPose = null;
       this.poseStates[this.currentPoseIndex]!.state = "aligning";
     }
 
@@ -605,36 +600,23 @@ export class CaptureSession {
     this.captureLock = true;
     poseState.state = "capturing";
     this.state = "Capturing";
-    const poseDef = CAPTURE_POSES[idx]!;
-
-    if (poseDef.qualityGateRequired) {
-      let q = evaluateFrameQualityForCapture(this.videoEl);
-      if (!qualityGateAccepts(q)) {
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => resolve());
-        });
-        q = evaluateFrameQualityForCapture(this.videoEl);
-      }
-      if (!qualityGateAccepts(q)) {
-        q = evaluateFrameQualityMinimal(this.videoEl);
-      }
-      if (!qualityGateAccepts(q)) {
-        poseState.state = "aligning";
-        this.state = "Aligning";
-        this.holdStartAt = null;
-        this.holdProgress = 0;
-        this.graceUntil = null;
-        this.captureLock = false;
-        return;
-      }
-    }
+    /**
+     * Quality gate is intentionally NOT used as a hard reject here: by the
+     * time we reach this code path the user has already held the pose for
+     * `holdMs` (1.8 s) without a >30°/>10° interruption, so we owe them a
+     * capture. A failing quality check that bounces them back to Aligning
+     * is exactly the "bar finishes but nothing happens, then restarts"
+     * symptom the user reported. We rely on the held-pose stability
+     * window itself as the quality signal.
+     */
 
     const cooldownMs = this.config.cooldownMs ?? 300;
     /** Pre-arm cooldown BEFORE the async takePhoto so subsequent frames can't sneak past. */
     this.cooldownUntil = performance.now() + cooldownMs;
     this.holdStartAt = null;
     this.holdProgress = 0;
-    this.graceUntil = null;
+    this.holdStartHeadPose = null;
+    this.faceLossGraceUntil = null;
 
     let blob: Blob | null = null;
     for (let attempt = 0; attempt < 4 && !blob; attempt++) {
@@ -676,7 +658,8 @@ export class CaptureSession {
     this.cooldownUntil = performance.now() + cooldownMs;
     this.holdStartAt = null;
     this.holdProgress = 0;
-    this.graceUntil = null;
+    this.holdStartHeadPose = null;
+    this.faceLossGraceUntil = null;
     this.currentPoseIndex = idx + 1;
     this.state = "NextPose";
     this.captureLock = false;

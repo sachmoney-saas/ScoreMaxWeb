@@ -140,8 +140,13 @@ export function FaceCaptureView({
     if (!poseDef) return null;
     const [yMin, yMax] = poseDef.yawRange;
     const y = state.headPose.yaw;
-    if (y < yMin) return 'left';
-    if (y > yMax) return 'right';
+    /**
+     * Preview is CSS-mirrored while yaw comes from the raw bitmap; min/max
+     * comparisons still order yaw linearly, but the chevron that matches
+     * "tournez à droite/gauche" is opposite to a plain yMin/yMax screen map.
+     */
+    if (y < yMin) return 'right';
+    if (y > yMax) return 'left';
     return null;
   }, [activePoseId, state.headPose, state.validation?.status]);
 
@@ -169,18 +174,28 @@ export function FaceCaptureView({
         }}
       >
         <div className="relative min-h-0 flex-1 overflow-hidden">
+          {/**
+           * Selfie mirror: built-in webcams and phone front cameras deliver an
+           * un-mirrored bitmap, which feels "inverted" because users expect
+           * mirror-preview (FaceTime / Snap / Instagram). We CSS-mirror BOTH the
+           * <video> and the <canvas> so they share the exact same flip — landmarks
+           * are still computed in raw-bitmap space, so the mesh stays glued to
+           * the face after the flip. Captured photos use the raw bitmap, so the
+           * stored image is canonical (un-mirrored) for face analysis.
+           */}
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
             className="absolute inset-0 h-full w-full object-cover"
+            style={{ transform: 'scaleX(-1)' }}
           />
 
           <canvas
             ref={overlayRef}
-            className="pointer-events-none absolute inset-0"
-            style={{ zIndex: 2 }}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            style={{ zIndex: 2, transform: 'scaleX(-1)' }}
           />
 
           {!isLoading && !hasError && isAdmin ? (

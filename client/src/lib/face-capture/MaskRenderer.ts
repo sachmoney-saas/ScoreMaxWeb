@@ -89,6 +89,7 @@ export class MaskRenderer {
   private _alignmentQuality = 0;
   private _lastBufferW = 0;
   private _lastBufferH = 0;
+  private _resizeObserver: ResizeObserver | null = null;
 
   /** Réutilisation buffers par contour (tailles fixes connues à l’init). */
   private _featurePosBuffers: Float32Array[] = [];
@@ -122,6 +123,21 @@ export class MaskRenderer {
     this.renderer.sortObjects = false;
     this._lastBufferW = cw;
     this._lastBufferH = ch;
+
+    /**
+     * Watch the canvas's own CSS box for layout changes (rotation, address bar
+     * collapse, parent resize, panel collapse...). Without this, `_syncCanvasSize`
+     * only reacts inside `render()` using the values its caller passes in — if
+     * those drift from the canvas's actual box, the mesh is composited at the
+     * wrong scale and ends up offset.
+     */
+    if (typeof ResizeObserver !== "undefined") {
+      this._resizeObserver = new ResizeObserver(() => {
+        if (!this.overlay) return;
+        this._syncCanvasSize(this.overlay.clientWidth, this.overlay.clientHeight);
+      });
+      this._resizeObserver.observe(overlayCanvas);
+    }
 
     this._buildGeometries();
   }
@@ -251,12 +267,22 @@ export class MaskRenderer {
     landmarks: LandmarkPoint[],
     videoW: number,
     videoH: number,
-    elW: number,
-    elH: number,
+    _elW: number,
+    _elH: number,
     opts?: { holdingProgress?: number },
   ): void {
     if (!this.scene || !this.overlay || !this.renderer || !this.camera) return;
     if (landmarks.length < 3) return;
+    /**
+     * Single source of truth for the rendering box: the canvas's own CSS
+     * dimensions. We deliberately ignore the caller-passed `_elW`/`_elH`
+     * (typically `videoEl.clientWidth`) because the canvas is the actual
+     * compositing target — any drift between those two boxes (different
+     * Tailwind utilities, intrinsic 300×150 attributes, layout race) would
+     * shift the mesh horizontally even with otherwise-correct math.
+     */
+    const elW = this.overlay.clientWidth;
+    const elH = this.overlay.clientHeight;
     if (elW <= 0 || elH <= 0 || videoW <= 0 || videoH <= 0) return;
 
     if (this.meshMesh) {
@@ -496,6 +522,8 @@ export class MaskRenderer {
   }
 
   dispose(): void {
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = null;
     this.meshGeo?.dispose();
     this.meshMat?.dispose();
     this.meshGeo = null;

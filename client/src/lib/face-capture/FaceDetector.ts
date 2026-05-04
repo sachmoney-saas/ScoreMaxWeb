@@ -64,7 +64,8 @@ export class FaceDetector {
     }));
 
     const matrix = result.facialTransformationMatrixes?.[0]?.data ?? [];
-    const pose = solveHeadPoseFromMatrix(matrix, true);
+    /** `false`: yaw/pitch/roll match the raw video bitmap (same space as landmarks). Preview uses CSS `scaleX(-1)` — a second "mirrored" yaw flip would invert gauche/droite vs what users see. */
+    const pose = solveHeadPoseFromMatrix(matrix, false);
 
     const blendshapes: Record<string, number> = {};
     const categories = result.faceBlendshapes?.[0]?.categories ?? [];
