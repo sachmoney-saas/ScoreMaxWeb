@@ -3,13 +3,13 @@ import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BriefcaseBusiness,
-  Download,
-  ImagePlus,
+  Camera,
   Infinity as InfinityIcon,
   Loader2,
   LogOut,
   ScanFace,
   Trash2,
+  Upload,
   Users,
   MoreVertical,
 } from "lucide-react";
@@ -37,14 +37,35 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import { FaceCaptureView } from "@/components/FaceCaptureView";
 import { useAuth } from "@/hooks/use-auth";
-import { useOnboardingScanStatus } from "@/hooks/use-supabase";
-import { uploadScanAsset } from "@/lib/face-analysis";
+import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
+import {
+  useAnalysisJobStatus,
+  useOnboardingScanStatus,
+} from "@/hooks/use-supabase";
+import {
+  getScanAssetLabels,
+  uploadScanAsset,
+} from "@/lib/face-analysis";
+import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
+import type { PoseId } from "@/lib/face-capture/types";
+import { deleteMyAccount } from "@/lib/account-api";
 import { supabase } from "@/lib/supabase";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { AUTH_CONFIG } from "@/config/auth";
+import {
+  authPageOverlayClassName,
+  saasGlassDropdownMenuContentClassName,
+  saasGlassInsetClassName,
+  saasGlassPanelClassName,
+} from "@/lib/auth-page-shell-styles";
+import {
+  onboardingBackButtonClassName,
+  onboardingPrimaryCtaClassName,
+} from "@/lib/cta-button-styles";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
 type OnboardingEvidenceBlock = {
@@ -59,19 +80,6 @@ type OnboardingStep = {
   icon?: React.ComponentType<{ className?: string }>;
   /** Blocs citation + source ; vide = pas d’encadré gris (ex. introduction). */
   evidence: OnboardingEvidenceBlock[];
-};
-
-type RequiredScanAsset = {
-  code: string;
-  label_fr: string;
-  label_en: string;
-};
-
-type OnboardingAnalysisJob = {
-  id: string;
-  status: "queued" | "running" | "completed" | "failed";
-  error_code?: string | null;
-  error_message?: string | null;
 };
 
 /** Comparatif Rencontres — chargées en cache dès l’entrée dans l’onboarding. */
@@ -90,7 +98,7 @@ function OnboardingBeforeAfterComparison({ language }: { language: AppLanguage }
     <div className="space-y-2 sm:space-y-3">
       {/* Hauteur plafonnée par viewport pour garder l'étape lisible sans scroll excessif */}
       <div
-        className="relative isolate aspect-[4/5] w-full max-h-[min(32svh,280px)] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_28px_65px_-52px_rgba(9,20,37,0.18)] sm:aspect-[4/3] sm:max-h-[min(38svh,360px)] md:max-h-[min(44svh,450px)] lg:max-h-[min(50svh,540px)]"
+        className="relative isolate aspect-[4/5] w-full max-h-[min(32svh,280px)] overflow-hidden rounded-2xl border border-white/15 bg-black/30 shadow-[0_28px_65px_-52px_rgba(0,0,0,0.45)] sm:aspect-[4/3] sm:max-h-[min(38svh,360px)] md:max-h-[min(44svh,450px)] lg:max-h-[min(50svh,540px)]"
       >
         {/* Panneau gauche : uniquement l’avant — aucune image droite en dessous */}
         <div
@@ -167,7 +175,7 @@ function OnboardingBeforeAfterComparison({ language }: { language: AppLanguage }
           en: "Compare before and after",
           fr: "Comparer avant et apres",
         })}
-        className="h-1.5 w-full shrink-0 cursor-ew-resize appearance-none rounded-full bg-slate-200 accent-slate-900 sm:h-2"
+        className="h-1.5 w-full shrink-0 cursor-ew-resize appearance-none rounded-full bg-white/15 accent-white sm:h-2"
       />
     </div>
   );
@@ -208,16 +216,16 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
   const potentialX = xToPixel(potentialScore);
 
   return (
-    <div className="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-      <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3.5">
+    <div className={cn(saasGlassInsetClassName, "min-w-0 space-y-3 p-3 sm:p-4")}>
+      <div className={cn(saasGlassInsetClassName, "min-w-0 rounded-xl p-2.5 sm:p-3.5")}>
           <div className="mx-auto max-w-xl text-center">
-            <h3 className="font-display text-3xl leading-tight tracking-tight text-slate-900 sm:text-4xl">
+            <h3 className="font-hero text-2xl font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-3xl md:text-4xl">
               {i18n(language, {
                 en: "Your score isn't fixed",
                 fr: "Ton score n'est pas figé",
               })}
             </h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-slate-500 sm:mt-2 sm:text-base">
+            <p className="mt-1.5 text-sm leading-relaxed text-zinc-300 sm:mt-2 sm:text-base">
               {i18n(language, {
                 en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
                 fr: "De petits changements réguliers se cumulent avec le temps. Suis ta progression et regarde ton score évoluer.",
@@ -227,19 +235,24 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
 
           <div className="mt-5 flex items-end justify-center gap-5 text-center sm:mt-6 sm:gap-9">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
                 {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
               </p>
-              <p className="mt-2 font-display text-5xl tracking-tight text-slate-400 sm:text-6xl">
+              <p className="mt-2 font-display text-5xl tracking-tight text-zinc-100 sm:text-6xl">
                 {currentScore.toFixed(2)}
               </p>
             </div>
-            <div className="pb-3 text-4xl text-slate-300 sm:text-5xl">→</div>
+            <div
+              className="pb-3 text-4xl font-light text-zinc-200 sm:text-5xl"
+              aria-hidden
+            >
+              →
+            </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
                 {i18n(language, { en: "Potential", fr: "Potentiel" })}
               </p>
-              <p className="mt-2 font-display text-5xl tracking-tight text-slate-900 sm:text-6xl">
+              <p className="mt-2 font-display text-5xl tracking-tight text-white sm:text-6xl">
                 {potentialScore.toFixed(2)}
               </p>
             </div>
@@ -261,7 +274,8 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                   y1={yToPixel(value)}
                   x2={plotLeft + plotWidth}
                   y2={yToPixel(value)}
-                  stroke="#dde3ec"
+                  stroke="rgb(148 163 184)"
+                  strokeOpacity={0.38}
                   strokeWidth="1"
                 />
               ))}
@@ -270,13 +284,15 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 y1={plotTop + plotHeight}
                 x2={plotLeft + plotWidth}
                 y2={plotTop + plotHeight}
-                stroke="#cad2dd"
+                stroke="rgb(203 213 225)"
+                strokeOpacity={0.55}
                 strokeWidth="1"
               />
               <polyline
                 points={curvePoints}
                 fill="none"
-                stroke="#aab5c3"
+                stroke="rgb(226 232 240)"
+                strokeOpacity={0.92}
                 strokeWidth="2.5"
               />
               <line
@@ -284,7 +300,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 y1={plotTop}
                 x2={currentX}
                 y2={plotTop + plotHeight}
-                stroke="#a8b492"
+                stroke="rgb(196 214 176)"
                 strokeWidth="3"
               />
               <line
@@ -292,9 +308,10 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 y1={plotTop}
                 x2={potentialX}
                 y2={plotTop + plotHeight}
-                stroke="#9cc5a9"
-                strokeWidth="1.6"
-                strokeDasharray="5 5"
+                stroke="rgb(180 220 200)"
+                strokeWidth="2.25"
+                strokeDasharray="7 5"
+                strokeOpacity={0.95}
               />
               <rect
                 x={currentX - 56}
@@ -302,15 +319,16 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 width="116"
                 height="24"
                 rx="12"
-                fill="#eef2e6"
-                stroke="#b7c09f"
+                fill="rgba(39, 39, 42, 0.92)"
+                stroke="rgb(161 161 170)"
+                strokeOpacity={0.85}
               />
               <text
                 x={currentX + 2}
                 y={plotTop - 14}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#9aa775"
+                fill="rgb(244 244 245)"
                 fontWeight="600"
               >
                 6.42 · Top 17.0%
@@ -320,7 +338,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 y={plotTop + plotHeight - 2}
                 transform={`rotate(-90 ${(currentX + potentialX) / 2 + 4} ${plotTop + plotHeight - 2})`}
                 fontSize="18"
-                fill="#a6c0ab"
+                fill="rgb(196 214 176)"
                 fontWeight="500"
                 letterSpacing="0.06em"
               >
@@ -333,7 +351,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                   y={yToPixel(index / 4) + 4}
                   textAnchor="end"
                   fontSize="11"
-                  fill="#9aa7b8"
+                  fill="rgb(212 212 216)"
                 >
                   {tick}
                 </text>
@@ -344,7 +362,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 transform={`rotate(-90 22 ${plotTop + plotHeight / 2})`}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#9aa7b8"
+                fill="rgb(212 212 216)"
                 letterSpacing="0.08em"
                 fontWeight="500"
               >
@@ -357,7 +375,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                   y={plotTop + plotHeight + 20}
                   textAnchor="middle"
                   fontSize="11"
-                  fill="#8f9caf"
+                  fill="rgb(212 212 216)"
                 >
                   {index}
                 </text>
@@ -367,7 +385,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 y={chartHeight - 10}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#9faabb"
+                fill="rgb(212 212 216)"
                 letterSpacing="0.15em"
                 fontWeight="600"
               >
@@ -381,16 +399,16 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
   );
 }
 
-const REQUIRED_SCAN_ASSETS: RequiredScanAsset[] = [
-  { code: "FACE_FRONT", label_fr: "Visage de face", label_en: "Front face" },
-  { code: "PROFILE_LEFT", label_fr: "Profil gauche", label_en: "Left profile" },
-  { code: "PROFILE_RIGHT", label_fr: "Profil droit", label_en: "Right profile" },
-  { code: "LOOK_UP", label_fr: "Regarder en haut", label_en: "Look up" },
-  { code: "LOOK_DOWN", label_fr: "Regarder en bas", label_en: "Look down" },
-  { code: "SMILE", label_fr: "Sourire", label_en: "Smile" },
-  { code: "HAIR_BACK", label_fr: "Cheveux en arrière", label_en: "Hair back" },
-  { code: "EYE_CLOSEUP", label_fr: "Gros plan œil", label_en: "Eye close-up" },
-];
+const ONBOARDING_POSE_TO_ASSET: Record<PoseId, OnboardingScanAssetCode> = {
+  frontal: "FACE_FRONT",
+  "profile-right": "PROFILE_RIGHT",
+  "profile-left": "PROFILE_LEFT",
+  "jaw-up": "LOOK_UP",
+  "crown-down": "LOOK_DOWN",
+  "closeup-eye": "EYE_CLOSEUP",
+  "closeup-smile": "SMILE",
+  "closeup-hairline": "HAIR_BACK",
+};
 
 function getOnboardingSteps(language: AppLanguage): OnboardingStep[] {
   const tr = (en: string, fr: string) => i18n(language, { en, fr });
@@ -525,29 +543,7 @@ function getOnboardingSteps(language: AppLanguage): OnboardingStep[] {
     category: tr("AI analysis", "Analyse IA"),
     description: "",
     icon: ScanFace,
-    evidence: [
-      {
-        claim: tr(
-          "Uses infrared sensors for the most precise facial analysis possible (iPhone X and newer).",
-          "Permet d'utiliser les capteurs infrarouge pour l'analyse faciale la plus précise possible (iPhone X et +).",
-        ),
-        source: "",
-      },
-      {
-        claim: tr(
-          "Most competitors rely on simple photos, which is far less precise.",
-          "Nos concurrents utilisent de simples photos : ce n'est pas précis.",
-        ),
-        source: "",
-      },
-      {
-        claim: tr(
-          "Anti-cheat live capture verifies it's really you, not a static photo upload.",
-          "Nous empêchons la triche : la capture est faite en direct sur toi et empêche l'usage de simples photos.",
-        ),
-        source: "",
-      },
-    ],
+    evidence: [],
   },
   ];
 }
@@ -808,9 +804,10 @@ function OnboardingWaveBackground() {
 
 export default function Onboarding() {
   const language = useAppLanguage();
-  const isFrench = language === "fr";
+  const scanAssetLabels = getScanAssetLabels(language);
   const [, setLocation] = useLocation();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const { status: gateStatus } = useOnboardingGate();
   const [stepIndex, setStepIndex] = React.useState(0);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [analysisMessage, setAnalysisMessage] = React.useState<string | null>(
@@ -818,11 +815,11 @@ export default function Onboarding() {
   );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
-  const [isUploadDialogOpen, setIsUploadDialogOpen] = React.useState(false);
-  const [uploadingAssetCode, setUploadingAssetCode] = React.useState<string | null>(
-    null,
-  );
-  const [uploadMessage, setUploadMessage] = React.useState<string | null>(null);
+  const [showCameraCapture, setShowCameraCapture] = React.useState(false);
+  const [capturedPoses, setCapturedPoses] = React.useState<CapturedPose[]>([]);
+  const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
+  const [onboardingJobId, setOnboardingJobId] = React.useState<string | null>(null);
+  const [isUploadingCaptures, setIsUploadingCaptures] = React.useState(false);
 
   React.useEffect(() => {
     for (const src of ONBOARDING_PRELOAD_IMAGE_URLS) {
@@ -838,10 +835,10 @@ export default function Onboarding() {
       return;
     }
 
-    if (profile?.has_completed_onboarding) {
+    if (gateStatus === "ok") {
       setLocation(AUTH_CONFIG.REDIRECT_PATH);
     }
-  }, [profile?.has_completed_onboarding, setLocation, user]);
+  }, [gateStatus, setLocation, user]);
 
   const steps = React.useMemo(() => getOnboardingSteps(language), [language]);
   const currentStep = steps[stepIndex];
@@ -851,7 +848,11 @@ export default function Onboarding() {
     currentStep.category === "Vie sociale" || currentStep.category === "Social life";
   const isIntroStep = currentStep.category === "Introduction";
   const isLastStep = stepIndex === steps.length - 1;
-  const isAnalysisRunning = isLastStep && isSubmitting;
+
+  const jobStatus = useAnalysisJobStatus(onboardingJobId, {
+    enabled: Boolean(user?.id && onboardingJobId),
+  });
+  const jobStatusValue = jobStatus.data?.job.status;
 
   const {
     data: scanStatus,
@@ -859,28 +860,112 @@ export default function Onboarding() {
     isError: isScanStatusError,
   } = useOnboardingScanStatus({ enabled: isLastStep && !!user?.id });
 
-  const requiredAssetCount = scanStatus?.required_asset_count ?? 8;
-  const completedAssetCount = scanStatus?.completed_asset_count ?? 0;
-  const missingAssetTypes = scanStatus?.missing_asset_types ?? [];
-  const missingAssetLabels = new Set(missingAssetTypes);
-  const isScanReady = scanStatus?.is_ready ?? false;
-  const canCompleteOnboarding = !isLastStep || isScanReady;
   const onboardingSessionId = scanStatus?.session_id;
 
-  const markOnboardingCompleted = React.useCallback(async () => {
-    if (!user?.id || isSubmitting) {
+  const isAnalysisRunning =
+    isLastStep &&
+    (isSubmitting ||
+      Boolean(onboardingJobId && jobStatusValue !== "failed"));
+
+  const processingMessage =
+    jobStatusValue === "completed"
+      ? i18n(language, {
+          en: "Analysis completed, redirecting...",
+          fr: "Analyse terminée, redirection...",
+        })
+      : jobStatusValue === "running"
+        ? i18n(language, {
+            en: "Running ScoreMax analysis...",
+            fr: "Analyse ScoreMax en cours...",
+          })
+        : jobStatusValue === "queued"
+          ? i18n(language, {
+              en: "Analysis queued...",
+              fr: "Analyse en file d'attente...",
+            })
+          : analysisMessage;
+
+  React.useEffect(() => {
+    if (jobStatusValue !== "completed" || !user?.id) {
       return;
     }
 
-    setIsSubmitting(true);
+    let cancelled = false;
+    const fallbackTimer = window.setTimeout(() => {
+      if (!cancelled) setLocation(AUTH_CONFIG.REDIRECT_PATH);
+    }, 12_000);
+
+    void Promise.allSettled([
+      queryClient.refetchQueries({ queryKey: ["profile", user.id] }),
+      queryClient.refetchQueries({
+        queryKey: ["latest-face-analysis", user.id],
+      }),
+    ]).finally(() => {
+      if (cancelled) return;
+      window.clearTimeout(fallbackTimer);
+      setLocation(AUTH_CONFIG.REDIRECT_PATH);
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+    };
+  }, [jobStatusValue, setLocation, user?.id, language]);
+
+  React.useEffect(() => {
+    if (jobStatusValue !== "failed" || !jobStatus.data?.job) {
+      return;
+    }
+    setAnalysisMessage(
+      jobStatus.data.job.error_message ??
+        i18n(language, {
+          en: "The analysis failed.",
+          fr: "L'analyse a échoué.",
+        }),
+    );
+    setIsSubmitting(false);
+    setOnboardingJobId(null);
+  }, [jobStatus.data?.job, jobStatusValue, language]);
+
+  const handleCapturedComplete = React.useCallback((poses: CapturedPose[]) => {
+    setCapturedPoses(poses);
+    setShowCameraCapture(false);
+    setShowCapturedPreview(true);
+  }, []);
+
+  const uploadAndCompleteOnboarding = React.useCallback(async () => {
+    if (!user?.id || !onboardingSessionId || capturedPoses.length === 0) {
+      return;
+    }
+
+    setIsUploadingCaptures(true);
     setAnalysisMessage(
       i18n(language, {
-        en: "Preparing photos for analysis...",
-        fr: "Préparation des photos pour l'analyse...",
+        en: "Uploading captures...",
+        fr: "Envoi des captures...",
       }),
     );
+    setShowCapturedPreview(false);
 
     try {
+      for (const pose of capturedPoses) {
+        const code = ONBOARDING_POSE_TO_ASSET[pose.poseId];
+        if (!code) continue;
+        await uploadScanAsset({
+          userId: user.id,
+          sessionId: onboardingSessionId,
+          assetTypeCode: code,
+          file: new File([pose.blob], `${pose.poseId}.jpg`, {
+            type: "image/jpeg",
+          }),
+          lang: language,
+        });
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: ["onboarding-scan-status", user.id],
+      });
+
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
 
@@ -893,6 +978,14 @@ export default function Onboarding() {
         );
       }
 
+      setIsSubmitting(true);
+      setAnalysisMessage(
+        i18n(language, {
+          en: "Launching analysis...",
+          fr: "Lancement de l'analyse...",
+        }),
+      );
+
       const headers = { Authorization: `Bearer ${accessToken}` };
       const startResponse = await apiRequest(
         "POST",
@@ -901,7 +994,7 @@ export default function Onboarding() {
         headers,
       );
       const startPayload = (await startResponse.json()) as {
-        data?: { job?: OnboardingAnalysisJob };
+        data?: { job?: { id?: string } };
       };
       const jobId = startPayload.data?.job?.id;
 
@@ -914,87 +1007,7 @@ export default function Onboarding() {
         );
       }
 
-      setAnalysisMessage(
-        i18n(language, {
-          en: "ScoreMax analysis started...",
-          fr: "Analyse ScoreMax lancée...",
-        }),
-      );
-
-      for (let attempt = 0; attempt < 120; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 1500));
-
-        const statusResponse = await apiRequest(
-          "GET",
-          `/v1/onboarding/analysis/${jobId}`,
-          undefined,
-          headers,
-        );
-        const statusPayload = (await statusResponse.json()) as {
-          data?: { job?: OnboardingAnalysisJob };
-        };
-        const job = statusPayload.data?.job;
-
-        if (!job) {
-          throw new Error(
-            i18n(language, {
-              en: "Analysis status not found",
-              fr: "Statut d'analyse introuvable",
-            }),
-          );
-        }
-
-        if (job.status === "queued") {
-          setAnalysisMessage(
-            i18n(language, {
-              en: "Analysis queued...",
-              fr: "Analyse en file d'attente...",
-            }),
-          );
-          continue;
-        }
-
-        if (job.status === "running") {
-          setAnalysisMessage(
-            i18n(language, {
-              en: "ScoreMax analysis in progress...",
-              fr: "Analyse ScoreMax en cours...",
-            }),
-          );
-          continue;
-        }
-
-        if (job.status === "failed") {
-          throw new Error(
-            job.error_message ||
-              job.error_code ||
-              i18n(language, {
-                en: "ScoreMax analysis failed",
-                fr: "Analyse ScoreMax échouée",
-              }),
-          );
-        }
-
-        setAnalysisMessage(
-          i18n(language, {
-            en: "Analysis complete, redirecting to your dashboard...",
-            fr: "Analyse terminée, redirection vers votre dashboard...",
-          }),
-        );
-        await queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
-        await queryClient.invalidateQueries({
-          queryKey: ["latest-face-analysis", user.id],
-        });
-        setLocation(AUTH_CONFIG.REDIRECT_PATH);
-        return;
-      }
-
-      throw new Error(
-        i18n(language, {
-          en: "Analysis is taking too long, please retry in a few moments",
-          fr: "Analyse trop longue, réessaie dans quelques instants",
-        }),
-      );
+      setOnboardingJobId(jobId);
     } catch (error) {
       console.error("Unable to complete onboarding:", error);
       setAnalysisMessage(
@@ -1006,8 +1019,15 @@ export default function Onboarding() {
             }),
       );
       setIsSubmitting(false);
+    } finally {
+      setIsUploadingCaptures(false);
     }
-  }, [isSubmitting, language, setLocation, user?.id]);
+  }, [capturedPoses, language, onboardingSessionId, user?.id]);
+
+  const openOnboardingCapture = React.useCallback(() => {
+    if (!onboardingSessionId || isScanStatusLoading) return;
+    setShowCameraCapture(true);
+  }, [isScanStatusLoading, onboardingSessionId]);
 
   const handleLogout = React.useCallback(async () => {
     await supabase.auth.signOut();
@@ -1019,33 +1039,37 @@ export default function Onboarding() {
     setIsDeletingAccount(true);
 
     try {
-      const { error: deleteProfileError } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", user.id);
-
-      if (deleteProfileError) {
-        throw deleteProfileError;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) {
+        throw new Error("No session");
       }
 
-      const { error: deleteUserError } = await supabase.auth.admin.deleteUser(
-        user.id,
-      );
-
-      if (deleteUserError) {
-        throw deleteUserError;
-      }
+      await deleteMyAccount(accessToken);
 
       await supabase.auth.signOut();
       queryClient.clear();
       setLocation(AUTH_CONFIG.LOGIN_PATH);
     } catch (error) {
       console.error("Error while deleting account:", error);
+      const serverMessage = error instanceof Error ? error.message : "";
+      const isSubscriptionBlock =
+        serverMessage.includes("subscription") ||
+        serverMessage.includes("abonnement");
       alert(
-        i18n(language, {
-          en: "Unable to delete account right now. Try again later.",
-          fr: "Impossible de supprimer le compte pour le moment. Réessaye plus tard.",
-        }),
+        isSubscriptionBlock
+          ? i18n(language, {
+              en: "Cancel your active subscription before deleting your account.",
+              fr: "Résilie ton abonnement actif avant de supprimer ton compte.",
+            })
+          : serverMessage && !serverMessage.includes("No session")
+            ? serverMessage
+            : i18n(language, {
+                en: "Unable to delete account right now. Try again later.",
+                fr: "Impossible de supprimer le compte pour le moment. Réessaye plus tard.",
+              }),
       );
     } finally {
       setIsDeletingAccount(false);
@@ -1053,70 +1077,17 @@ export default function Onboarding() {
     }
   }, [language, setLocation, user?.id]);
 
-  const handleManualAssetUpload = React.useCallback(
-    async (assetTypeCode: string, file: File | null) => {
-      if (!user?.id || !onboardingSessionId || !file || uploadingAssetCode) {
-        return;
-      }
-
-      if (!["image/jpeg", "image/png"].includes(file.type)) {
-        setUploadMessage(
-          i18n(language, {
-            en: "Use a JPG or PNG image.",
-            fr: "Utilise une image JPG ou PNG.",
-          }),
-        );
-        return;
-      }
-
-      setUploadingAssetCode(assetTypeCode);
-      setUploadMessage(null);
-
-      try {
-        await uploadScanAsset({
-          userId: user.id,
-          sessionId: onboardingSessionId,
-          assetTypeCode: assetTypeCode as OnboardingScanAssetCode,
-          file,
-          lang: language,
-        });
-
-        await queryClient.invalidateQueries({
-          queryKey: ["onboarding-scan-status", user.id],
-        });
-        setUploadMessage(
-          i18n(language, {
-            en: "Photo added.",
-            fr: "Photo ajoutée.",
-          }),
-        );
-      } catch (error) {
-        console.error("Unable to upload onboarding asset:", error);
-        setUploadMessage(
-          i18n(language, {
-            en: "Unable to add this photo.",
-            fr: "Impossible d'ajouter cette photo.",
-          }),
-        );
-      } finally {
-        setUploadingAssetCode(null);
-      }
-    },
-    [language, onboardingSessionId, uploadingAssetCode, user?.id],
-  );
-
   const handleNext = React.useCallback(() => {
-    if (stepIndex >= steps.length - 1) {
-      markOnboardingCompleted();
-      return;
-    }
-
-    setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
-  }, [markOnboardingCompleted, stepIndex]);
+    setStepIndex((prev) => {
+      if (prev >= steps.length - 1) return prev;
+      return prev + 1;
+    });
+  }, [steps.length]);
 
   return (
-    <div className="relative min-h-dvh overflow-y-auto bg-[#9aaeb5]">
+    <div className="relative min-h-dvh overflow-x-hidden overflow-y-auto">
       <OnboardingWaveBackground />
+      <div className={authPageOverlayClassName} aria-hidden />
 
       {/* Account Menu */}
       <div className="absolute top-4 right-4 z-20">
@@ -1130,14 +1101,20 @@ export default function Onboarding() {
               <MoreVertical className="h-5 w-5 text-white" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
+          <DropdownMenuContent
+            align="end"
+            className={cn("w-48", saasGlassDropdownMenuContentClassName)}
+          >
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="cursor-pointer rounded-lg text-zinc-100 focus:bg-white/10 focus:text-white data-[highlighted]:bg-white/10 data-[highlighted]:text-white"
+            >
+              <LogOut className="mr-2 h-4 w-4 text-zinc-400" />
               <span>{i18n(language, { en: "Log out", fr: "Se déconnecter" })}</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setIsDeleteDialogOpen(true)}
-              className="text-red-600 focus:text-red-600"
+              className="cursor-pointer rounded-lg text-red-400 focus:bg-red-500/15 focus:text-red-300 data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-300"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               <span>{i18n(language, { en: "Delete account", fr: "Supprimer le compte" })}</span>
@@ -1176,13 +1153,13 @@ export default function Onboarding() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-center px-4 py-8 sm:px-6">
-        <div className="my-auto space-y-4 py-4 sm:space-y-6">
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-center px-4 py-6 sm:px-6 sm:py-6">
+        <div className="my-auto space-y-3 py-3 sm:space-y-4 sm:py-4">
           <div className="flex justify-center">
             <img
               src="/favicon.png"
               alt="Logo ScoreMax"
-              className="h-10 w-10 rounded-xl border border-white/50 bg-white/80 p-1.5 shadow-[0_10px_28px_-18px_rgba(9,20,37,0.65)]"
+              className="h-10 w-10 rounded-xl border border-white/25 bg-white/10 p-1.5 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.65)]"
             />
           </div>
 
@@ -1196,7 +1173,7 @@ export default function Onboarding() {
               <div
                 key={`step-segment-${index}`}
                 className={`h-2 rounded-full transition-colors duration-200 ${
-                  index <= stepIndex ? "bg-[#121826]" : "bg-white/50"
+                  index <= stepIndex ? "bg-white" : "bg-white/25"
                 }`}
               />
             ))}
@@ -1209,17 +1186,29 @@ export default function Onboarding() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -14 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
-              className={`rounded-[2rem] border border-white/60 bg-white p-5 shadow-[0_24px_70px_-35px_rgba(9,20,37,0.55)] sm:p-8 ${
-                isIntroStep ? "min-h-[360px] sm:min-h-[420px]" : ""
-              } ${isLastStep ? "mx-auto w-full max-w-[430px]" : ""}`}
+              className={cn(
+                saasGlassPanelClassName,
+                "text-white shadow-[0_24px_70px_-35px_rgba(0,0,0,0.65)]",
+                isIntroStep
+                  ? "flex min-h-[min(392px,72dvh)] flex-col overflow-hidden px-4 pb-4 pt-3 sm:min-h-[min(432px,70dvh)] sm:px-6 sm:pb-5 sm:pt-4"
+                  : "p-5 sm:p-8",
+                isLastStep && "mx-auto w-full max-w-[430px]",
+              )}
             >
               {isAnalysisRunning ? (
-                <AnalysisProcessingState message={analysisMessage} />
+                <AnalysisProcessingState
+                  message={processingMessage}
+                  minimalChrome
+                  awaitingRedirect={jobStatusValue === "completed"}
+                  theme="dark"
+                />
               ) : (
                 <div
-                  className={`min-w-0 space-y-5 ${
+                  className={`min-w-0 ${
+                    isIntroStep ? "" : "space-y-5"
+                  } ${
                     isIntroStep
-                      ? "flex min-h-[200px] flex-col items-center justify-center text-center sm:min-h-[240px]"
+                      ? "flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto text-center"
                       : ""
                   }`}
                 >
@@ -1232,7 +1221,7 @@ export default function Onboarding() {
                           isDatingStep
                             ? "space-y-2 text-center sm:space-y-3"
                             : isIntroStep
-                              ? "text-center"
+                              ? "w-full min-w-0 max-w-full space-y-2 text-center"
                               : "space-y-3 text-center"
                         }
                       >
@@ -1244,7 +1233,7 @@ export default function Onboarding() {
                           }
                           animate={
                             isIntroStep
-                              ? { opacity: 1, scale: 1.03, y: 0 }
+                              ? { opacity: 1, scale: 1, y: 0 }
                               : undefined
                           }
                           transition={
@@ -1254,18 +1243,18 @@ export default function Onboarding() {
                           }
                           className={
                             isDatingStep
-                              ? "mx-auto max-w-[18ch] text-xl font-display font-bold leading-snug tracking-tight text-slate-900 sm:text-2xl md:text-[2rem]"
+                              ? "mx-auto max-w-[18ch] text-xl font-hero font-semibold leading-snug tracking-[-0.015em] text-white sm:text-2xl md:text-[2rem]"
                               : isIntroStep
-                                ? "mx-auto max-w-[16ch] text-center text-[2.15rem] font-display font-extrabold leading-[0.96] tracking-[-0.022em] text-slate-900 sm:text-[2.95rem] md:text-[3.35rem]"
-                              : "mx-auto max-w-[22ch] text-2xl font-display font-bold leading-tight tracking-tight text-slate-900 sm:text-[2rem]"
+                                ? "mx-auto w-full min-w-0 max-w-full text-balance text-center text-[clamp(1.2rem,3.4vw+0.45rem,2.35rem)] font-hero font-semibold leading-[1.1] tracking-[-0.02em] text-white sm:text-[clamp(1.28rem,2.6vw+0.55rem,2.65rem)] md:text-[clamp(1.35rem,2vw+0.65rem,3rem)]"
+                              : "mx-auto max-w-[min(100%,26ch)] text-2xl font-hero font-semibold leading-[1.08] tracking-[-0.015em] text-white sm:max-w-[28ch] sm:text-[2rem] md:text-[2.125rem]"
                           }
                         >
                           {isIntroStep ? (
                             <>
-                              <span className="block">
+                              <span className="block break-words">
                                 {i18n(language, { en: "Appearance matters", fr: "L'apparence compte" })}
                               </span>
-                              <span className="block">
+                              <span className="block break-words">
                                 {i18n(language, { en: "and you already know it", fr: "et tu le sais déjà" })}
                               </span>
                             </>
@@ -1274,7 +1263,7 @@ export default function Onboarding() {
                           )}
                         </motion.h1>
                         {isIntroStep ? (
-                          <h2 className="mx-auto mt-14 text-center text-sm font-semibold tracking-[0.09em] text-slate-500 sm:mt-16 sm:text-base">
+                          <h2 className="mx-auto text-center text-[0.9375rem] font-semibold leading-snug tracking-[0.08em] text-zinc-400 sm:text-lg sm:tracking-[0.09em]">
                             {i18n(language, {
                               en: "Finance, Influence, Dating...",
                               fr: "Finance, Influence, Rencontres...",
@@ -1284,7 +1273,7 @@ export default function Onboarding() {
                         {isDatingStep ? (
                           <OnboardingBeforeAfterComparison language={language} />
                         ) : !isIntroStep ? (
-                          <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-slate-600 sm:text-base">
+                          <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-zinc-300 sm:text-base">
                             {currentStep.description}
                           </p>
                         ) : null}
@@ -1296,21 +1285,21 @@ export default function Onboarding() {
                 !isSocialStep &&
                 !isLastStep &&
                 currentStep.evidence.length > 0 ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className={cn(saasGlassInsetClassName, "p-4")}>
                     {currentStep.evidence.map((block, index) => (
                       <div
                         key={`onboarding-evidence-${index}`}
                         className={
                           index > 0
-                            ? "mt-3 border-t border-slate-200 pt-3"
+                            ? "mt-3 border-t border-white/10 pt-3"
                             : undefined
                         }
                       >
-                        <p className="text-sm font-semibold leading-relaxed text-slate-900 sm:text-base">
+                        <p className="text-sm font-semibold leading-relaxed text-zinc-100 sm:text-base">
                           {block.claim}
                         </p>
                         {block.source ? (
-                          <p className="mt-1 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-400 sm:text-sm">
                             {block.source}
                           </p>
                         ) : null}
@@ -1322,85 +1311,72 @@ export default function Onboarding() {
                 {isLastStep ? (
                   <div className="mx-auto w-full max-w-sm">
                     <div className="flex flex-col text-center">
-                      <p className="mt-3 text-[1.45rem] font-extrabold text-slate-900 sm:text-[1.75rem]">
+                      <p className="mt-3 text-center text-[1.45rem] font-hero font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
                         {i18n(language, {
                           en: "Start your first analysis",
                           fr: "Lance ta première analyse",
                         })}
                       </p>
-                      <div className="mt-3 w-full space-y-2.5 text-left">
-                        {currentStep.evidence.map((block, index) => (
-                          <div
-                            key={`app-card-argument-${index}`}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-2.5"
-                          >
-                            <div className="flex items-start gap-2">
-                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-500" />
-                              <p className="text-xs leading-relaxed text-slate-700 sm:text-sm">
-                                {index === 0 ? (
-                                  <>
-                                    {i18n(language, {
-                                      en: "Uses infrared sensors for the most precise facial analysis possible (",
-                                      fr: "Permet d'utiliser les capteurs infrarouge pour l'analyse faciale la plus précise possible (",
-                                    })}
-                                    <em>
-                                      {i18n(language, {
-                                        en: "iPhone X and newer",
-                                        fr: "iPhone X et +",
-                                      })}
-                                    </em>
-                                    )
-                                  </>
-                                ) : (
-                                  block.claim
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      {isScanStatusError ? (
+                        <p className="mt-3 text-sm text-red-600">
+                          {i18n(language, {
+                            en: "Unable to load your scan session. Refresh the page and try again.",
+                            fr: "Impossible de charger ta session. Actualise la page et réessaye.",
+                          })}
+                        </p>
+                      ) : null}
                       <div className="mt-4 flex justify-center">
-                        <a
-                          href="https://apps.apple.com"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex w-full max-w-[360px] items-center justify-center gap-2 rounded-2xl bg-black p-3 text-white shadow-[0_16px_30px_-18px_rgba(0,0,0,0.95)] transition hover:bg-[#050505]"
-                        >
-                          <img
-                            src="/favicon.png"
-                            alt="ScoreMax"
-                            className="h-10 w-10 rounded-lg bg-black object-contain"
-                          />
-                          <span className="text-sm font-semibold tracking-tight sm:text-base">
-                            {i18n(language, {
-                              en: "ScoreMax 3D Infrared Scan",
-                              fr: "ScoreMax Scan 3D Infrarouge",
-                            })}
-                          </span>
-                          <Download className="h-5 w-5 shrink-0" />
-                        </a>
-                      </div>
-                      {canCompleteOnboarding ? (
                         <button
                           type="button"
-                          onClick={handleNext}
-                          disabled={isSubmitting}
-                          className="mx-auto mt-4 flex min-h-[68px] w-full max-w-[360px] items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_-16px_rgba(5,150,105,0.85)] transition hover:bg-emerald-700 disabled:opacity-60 sm:min-h-[76px]"
+                          onClick={() => void openOnboardingCapture()}
+                          disabled={
+                            isScanStatusLoading ||
+                            !onboardingSessionId ||
+                            isScanStatusError
+                          }
+                          className={cn(
+                            "flex w-full max-w-[360px] items-center justify-center gap-3 px-4 py-3.5 text-base transition disabled:pointer-events-none disabled:opacity-55",
+                            onboardingPrimaryCtaClassName,
+                          )}
                         >
-                          {i18n(language, { en: "Start", fr: "Commencer" })}
+                          {isScanStatusLoading ? (
+                            <span className="flex w-full items-center justify-center py-1">
+                              <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
+                            </span>
+                          ) : (
+                            <>
+                              <img
+                                src="/favicon.png"
+                                alt=""
+                                className="h-10 w-10 shrink-0 rounded-lg bg-black object-contain"
+                              />
+                              <span className="text-sm font-semibold tracking-tight sm:text-base">
+                                {i18n(language, {
+                                  en: "Launch analysis",
+                                  fr: "Lancer l'analyse",
+                                })}
+                              </span>
+                            </>
+                          )}
                         </button>
-                      ) : (
-                        <div className="mx-auto mt-4 flex min-h-[68px] w-full max-w-[360px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 sm:min-h-[76px]">
-                          <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-                          <span>
-                            {i18n(language, {
-                              en: "Waiting for analysis",
-                              fr: "En attente de l'analyse",
-                            })}
-                          </span>
-                        </div>
-                      )}
+                      </div>
                     </div>
+                  </div>
+                ) : null}
+
+                {isIntroStep ? (
+                  <div className="mx-auto mt-5 w-full max-w-sm shrink-0 sm:mt-6">
+                    <Button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={isSubmitting}
+                      className={cn(
+                        "h-12 w-full text-base sm:min-h-[3.25rem]",
+                        onboardingPrimaryCtaClassName,
+                      )}
+                    >
+                      {i18n(language, { en: "Continue", fr: "Continuer" })}
+                    </Button>
                   </div>
                 ) : null}
 
@@ -1408,60 +1384,45 @@ export default function Onboarding() {
               )}
 
               {!isAnalysisRunning ? (
-                isIntroStep ? (
-                  <div className="mt-6 flex justify-center sm:mt-8">
-                    <Button
-                      type="button"
-                      onClick={handleNext}
-                      disabled={isSubmitting || !canCompleteOnboarding}
-                      className="w-full max-w-sm rounded-xl bg-black text-white hover:bg-zinc-800"
-                    >
-                      {i18n(language, { en: "Continue", fr: "Continuer" })}
-                    </Button>
-                  </div>
-                ) : isLastStep ? null : (
+                isIntroStep || isLastStep ? null : (
                   <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8">
                     <Button
                       type="button"
                       onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
                       disabled={stepIndex === 0 || isSubmitting}
-                      className="rounded-xl bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-40"
+                      className={cn(
+                        "h-11 sm:h-12",
+                        onboardingBackButtonClassName,
+                      )}
                     >
                       {i18n(language, { en: "Back", fr: "Retour" })}
                     </Button>
                     <Button
                       type="button"
                       onClick={handleNext}
-                      disabled={isSubmitting || (isLastStep && !canCompleteOnboarding)}
-                      className={`rounded-xl text-white ${
-                        isLastStep && !canCompleteOnboarding
-                          ? "bg-slate-700 hover:bg-slate-700"
-                          : "bg-black hover:bg-zinc-800"
-                      }`}
-                    >
-                      {isLastStep ? (
-                        canCompleteOnboarding
-                          ? i18n(language, { en: "Start", fr: "Commencer" })
-                          : i18n(language, { en: "Start", fr: "Commencer" })
-                      ) : (
-                        i18n(language, { en: "Continue", fr: "Continuer" })
+                      disabled={isSubmitting}
+                      className={cn(
+                        "h-11 text-sm sm:h-12 sm:text-base",
+                        onboardingPrimaryCtaClassName,
                       )}
+                    >
+                      {i18n(language, { en: "Continue", fr: "Continuer" })}
                     </Button>
                   </div>
                 )
               ) : null}
 
               {!isAnalysisRunning && analysisMessage ? (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-center gap-3 text-sm text-slate-700">
-                    {isSubmitting ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                <div className={cn(saasGlassInsetClassName, "mt-4 p-4")}>
+                  <div className="flex items-center justify-center gap-3 text-sm text-zinc-200">
+                    {isSubmitting || isUploadingCaptures ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
                     ) : null}
                     <span>{analysisMessage}</span>
                   </div>
-                  {isSubmitting ? (
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200">
-                      <div className="h-full w-1/2 animate-pulse rounded-full bg-black" />
+                  {isSubmitting || isUploadingCaptures ? (
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full w-1/2 animate-pulse rounded-full bg-white/40" />
                     </div>
                   ) : null}
                 </div>
@@ -1470,6 +1431,81 @@ export default function Onboarding() {
           </AnimatePresence>
         </div>
       </div>
+
+      {showCameraCapture ? (
+        <FaceCaptureView
+          language={language}
+          onComplete={handleCapturedComplete}
+          onCancel={() => setShowCameraCapture(false)}
+        />
+      ) : null}
+
+      <Dialog open={showCapturedPreview} onOpenChange={setShowCapturedPreview}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/15 bg-[linear-gradient(135deg,rgba(10,16,22,0.98)_0%,rgba(18,27,35,0.96)_55%,rgba(255,255,255,0.06)_100%)] text-zinc-50 shadow-[0_35px_110px_-70px_rgba(0,0,0,0.95)] sm:rounded-[2rem]">
+          <DialogHeader>
+            <DialogTitle className="font-hero text-2xl font-semibold leading-[1.06] tracking-[-0.015em] text-zinc-50 sm:text-3xl">
+              {i18n(language, {
+                en: "Captures review",
+                fr: "Aperçu des captures",
+              })}
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              {i18n(language, {
+                en: `${capturedPoses.length}/8 captures — check the quality before uploading.`,
+                fr: `${capturedPoses.length}/8 captures — vérifie la qualité avant d'uploader.`,
+              })}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+            {capturedPoses.map((pose) => {
+              const code = ONBOARDING_POSE_TO_ASSET[pose.poseId];
+              const label = code ? scanAssetLabels[code] ?? pose.poseId : pose.poseId;
+              return (
+                <div key={pose.poseId} className="space-y-1">
+                  <div className="relative aspect-square overflow-hidden rounded-xl border border-white/20 bg-black/40">
+                    <img
+                      src={pose.thumbnailUrl}
+                      alt={label}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <p className="text-center text-xs text-zinc-300">{label}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 border-t border-white/10 pt-4">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-sm border-white/25 bg-black/20 text-sm font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-white/10 hover:text-zinc-50"
+              onClick={() => {
+                setShowCapturedPreview(false);
+                setShowCameraCapture(true);
+              }}
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              {i18n(language, { en: "Retake", fr: "Refaire" })}
+            </Button>
+            <Button
+              className={`flex-1 rounded-sm border border-white/20 bg-white text-sm font-semibold text-slate-950 shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_12px_32px_-12px_rgba(0,0,0,0.55)] hover:bg-zinc-200`}
+              disabled={isUploadingCaptures || capturedPoses.length === 0}
+              onClick={() => void uploadAndCompleteOnboarding()}
+            >
+              {isUploadingCaptures ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              {i18n(language, {
+                en: "Upload captures",
+                fr: "Uploader les captures",
+              })}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

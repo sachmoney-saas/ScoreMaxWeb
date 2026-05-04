@@ -65,6 +65,8 @@ import {
   useUserGrowth,
 } from "@/hooks/use-supabase";
 import type { AdminAnalysisFailure } from "@/lib/admin-analysis";
+import { deleteUserAccountAsAdmin } from "@/lib/admin-users-api";
+import { queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
 
 type AdminProfile = Profile & {
@@ -156,10 +158,11 @@ export default function AdminPage() {
 }
 
 function UsersManagementPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { data: profiles = [], isLoading } = useAllProfiles();
-  const { updateProfile, deleteProfile, isUpdating, isDeleting } = useProfile();
+  const { updateProfile, isUpdating } = useProfile();
   const { toast } = useToast();
+  const [isPurgingUserAccount, setIsPurgingUserAccount] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [onboardingFilter, setOnboardingFilter] = useState<OnboardingFilter>("all");
@@ -240,10 +243,21 @@ function UsersManagementPage() {
     }
 
     try {
-      await deleteProfile(getProfileId(profile));
-      toast({ title: "Utilisateur supprimé", description: "Le profil utilisateur a été supprimé." });
+      setIsPurgingUserAccount(true);
+      const token = session?.access_token;
+      if (!token) {
+        throw new Error("Session expirée.");
+      }
+      await deleteUserAccountAsAdmin({ accessToken: token, userId: getProfileId(profile) });
+      toast({
+        title: "Utilisateur supprimé",
+        description: "Le compte, le profil et les données associées ont été supprimés.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
     } catch (error) {
       toast({ variant: "destructive", title: "Suppression impossible", description: getErrorMessage(error) });
+    } finally {
+      setIsPurgingUserAccount(false);
     }
   }
 
@@ -262,7 +276,7 @@ function UsersManagementPage() {
       ) : (
         <UserManagement
           currentUserId={user?.id}
-          isMutating={isUpdating || isDeleting}
+          isMutating={isUpdating || isPurgingUserAccount}
           onboardingFilter={onboardingFilter}
           profiles={filteredProfiles}
           roleFilter={roleFilter}

@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { deleteMyAccount } from "@/lib/account-api";
 import { useProfile } from "@/hooks/use-supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,8 +35,9 @@ import {
 const settingsPanelClassName = "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
 
 export default function Settings() {
-  const { user, profile, signOut } = useAuth();
-  const { updateProfile, deleteProfile, isDeleting } = useProfile();
+  const { user, profile, session, signOut } = useAuth();
+  const { updateProfile, isUpdating } = useProfile();
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const { toast } = useToast();
   const uiLang = useAppLanguage();
   const { language, setLanguage } = useLanguage();
@@ -80,11 +82,21 @@ export default function Settings() {
     }
 
     try {
-      await deleteProfile(user.id);
-      toast({ title: "Compte supprimé", description: "Votre compte et vos données ont été définitivement supprimés." });
+      setIsDeletingAccount(true);
+      if (!session?.access_token) {
+        throw new Error("Session expirée. Reconnecte-toi et réessaie.");
+      }
+      await deleteMyAccount(session.access_token);
+      toast({
+        title: "Compte supprimé",
+        description: "Votre compte et vos données ont été définitivement supprimés.",
+      });
       await signOut();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Erreur", description: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      toast({ variant: "destructive", title: "Erreur", description: message });
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -251,10 +263,10 @@ export default function Settings() {
                     {!profile?.is_subscriber && (
                       <AlertDialogAction
                         onClick={handleDeleteAccount}
-                        disabled={deleteConfirmText !== "SUPPRIMER" || isDeleting}
+                        disabled={deleteConfirmText !== "SUPPRIMER" || isDeletingAccount}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-lg shadow-destructive/20"
                       >
-                        {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isDeletingAccount && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Confirmer la suppression
                       </AlertDialogAction>
                     )}

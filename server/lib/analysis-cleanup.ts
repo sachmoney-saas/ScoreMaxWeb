@@ -380,3 +380,43 @@ export async function deleteAnalysisJobAndAssets(params: {
       : {}),
   };
 }
+
+export type UserScanStoragePurgeSummary = {
+  scan_asset_row_count: number;
+  removed_storage_object_count: number;
+  failed_storage_object_count: number;
+};
+
+/** Supprime les objets R2 liés aux scan_assets de l'utilisateur (avant suppression auth.users en cascade). */
+export async function deleteAllScanAssetStorageForUser(userId: string): Promise<UserScanStoragePurgeSummary> {
+  const { data: assets, error } = await supabaseAdmin
+    .from("scan_assets")
+    .select("id, r2_bucket, r2_key")
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to load scan assets for account deletion",
+      details: error,
+    });
+  }
+
+  const rows = (assets ?? []) as Pick<ScanAssetCleanupRow, "id" | "r2_bucket" | "r2_key">[];
+  const refs = rows
+    .filter((row) => typeof row.r2_key === "string" && row.r2_key.trim() !== "")
+    .map((row) => ({
+      scanAssetId: row.id,
+      bucket: getStorageBucket(row),
+      path: row.r2_key as string,
+    }));
+
+  const removal = await removeStorageObjects(refs);
+
+  return {
+    scan_asset_row_count: rows.length,
+    removed_storage_object_count: removal.removedObjectCount,
+    failed_storage_object_count: removal.failedObjectCount,
+  };
+}

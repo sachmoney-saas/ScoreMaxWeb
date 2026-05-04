@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,6 +7,8 @@
 :root {
   --font-sans: "DM Sans", sans-serif;
   --font-display: "Outfit", sans-serif;
+  /* Titres hero type Didone / éditorial (proche ref. utilisateur) */
+  --font-hero: "Playfair Display", Georgia, "Times New Roman", serif;
 
   --background: 236 38% 4%;
   --foreground: 218 34% 96%;

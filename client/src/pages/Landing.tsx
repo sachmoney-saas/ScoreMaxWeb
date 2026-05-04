@@ -6,7 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { primaryCtaSurfaceClassName } from "@/lib/cta-button-styles";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 function FloatingHeader({ language }: { language: AppLanguage }) {
   const { user } = useAuth();
@@ -56,8 +58,11 @@ function FloatingHeader({ language }: { language: AppLanguage }) {
         <div className="flex items-center gap-3">
           {user ? (
             <Link href="/app">
-              <Button size="sm" className="rounded-full px-6">
-                App
+              <Button
+                size="sm"
+                className={cn("px-5 text-sm", primaryCtaSurfaceClassName)}
+              >
+                {i18n(language, { en: "My Account", fr: "Mon compte" })}
               </Button>
             </Link>
           ) : (
@@ -74,7 +79,7 @@ function FloatingHeader({ language }: { language: AppLanguage }) {
               <Link href="/register">
                 <Button
                   size="sm"
-                  className="rounded-full px-6 shadow-lg shadow-primary/20"
+                  className="rounded-sm px-6 shadow-lg shadow-primary/20"
                 >
                   {i18n(language, { en: "Get Started", fr: "Démarrer" })}
                 </Button>
@@ -605,12 +610,17 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
           <div ref={measureRef} className="py-16 md:py-24">
             <div className="rounded-[2.2rem] border border-white/15 bg-black/30 p-6 shadow-[0_24px_90px_-58px_rgba(0,0,0,0.85)] backdrop-blur-sm md:p-10">
               <div className="mx-auto max-w-3xl text-center">
-                <h2 className="font-display text-4xl leading-tight tracking-tight text-white md:text-6xl">
-                  Your score isn't fixed
+                <h2 className="font-hero text-4xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white md:text-6xl">
+                  {i18n(language, {
+                    en: "Your score isn't fixed",
+                    fr: "Ton score n'est pas figé",
+                  })}
                 </h2>
-                <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-zinc-400 md:text-3xl">
-                  Small, consistent changes compound over time. Track your progress and
-                  watch your score move.
+                <p className="mx-auto mt-4 max-w-2xl font-sans text-base font-medium leading-relaxed text-zinc-400 md:text-3xl">
+                  {i18n(language, {
+                    en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
+                    fr: "De petits changements constants s'accumulent avec le temps. Suis ta progression et vois ton score évoluer.",
+                  })}
                 </p>
               </div>
 
@@ -826,34 +836,31 @@ export default function Landing() {
     <div className="landing-grain min-h-screen bg-background relative">
       <FloatingHeader language={language} />
 
-      {/* Hero Section */}
-      <section className="relative isolate min-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pt-24 pb-4 sm:pt-28">
-        <div className="relative mx-auto flex min-h-[calc(100svh-5.5rem)] w-full max-w-5xl flex-col lg:max-w-[75%] md:min-h-[calc(100svh-6rem)]">
+      {/* Hero Section — exactly one viewport tall; flex keeps content + chevron inside */}
+      <section className="relative isolate flex h-[100svh] max-h-[100svh] flex-col overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-2 pt-[max(4.75rem,calc(env(safe-area-inset-top,0px)+1rem))] sm:pb-3 sm:pt-[max(5.25rem,calc(env(safe-area-inset-top,0px)+1.25rem))]">
+        <div className="relative mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col lg:max-w-[75%]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="relative z-10 flex flex-1 flex-col justify-center px-1 py-6 sm:px-2 sm:py-10 md:py-14"
+            className="relative z-10 flex min-h-0 flex-1 flex-col justify-center px-1 py-3 sm:px-2 sm:py-5 md:py-6"
           >
-            <div className="mx-auto w-full max-w-[36rem] space-y-6 text-center sm:max-w-2xl md:space-y-7 lg:max-w-3xl lg:space-y-8">
-              <motion.div variants={itemVariants} className="flex justify-center">
-                <span
-                  className="inline-flex max-w-[min(100%,22rem)] items-center justify-center rounded-full border border-white/20 bg-white/[0.07] px-3.5 py-1.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.12em] text-foreground/90 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.5)] backdrop-blur-md sm:max-w-none sm:px-4 sm:text-[11px] sm:tracking-[0.14em] md:text-xs"
-                >
-                  {i18n(language, {
-                    en: "Based on 200+ facial markers",
-                    fr: "Basé sur plus de 200+ marqueurs",
-                  })}
-                </span>
-              </motion.div>
+            <div className="mx-auto w-full max-w-[36rem] -translate-y-2 space-y-4 text-center sm:-translate-y-3 sm:max-w-2xl sm:space-y-5 md:-translate-y-4 md:space-y-6 lg:max-w-3xl">
               <motion.h1
                 variants={itemVariants}
-                className="hero-title-sunset mx-auto max-w-[min(100%,24rem)] font-display text-[clamp(2.25rem,6.5vw+0.75rem,4.5rem)] font-bold leading-[1.05] tracking-[-0.02em] text-balance sm:max-w-2xl sm:leading-[1.06] md:max-w-3xl md:leading-[1.07] lg:max-w-4xl xl:text-[clamp(2.75rem,5vw+1rem,4.75rem)]"
+                className="mx-auto max-w-[min(100%,24rem)] font-hero text-[clamp(2.25rem,6.5vw+0.75rem,4.5rem)] font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white sm:max-w-2xl sm:leading-[1.08] md:max-w-3xl md:leading-[1.09] lg:max-w-4xl xl:text-[clamp(2.75rem,5vw+1rem,4.75rem)]"
               >
-                {i18n(language, {
-                  en: "Become a 10/10 with science",
-                  fr: "Deviens un 10/10 grâce à la science",
-                })}
+                {language === "fr" ? (
+                  <>
+                    Deviens un <span className="text-[#d6e4ff]">10/10</span> grâce à la{" "}
+                    <span className="text-[#d6e4ff]">Science</span>
+                  </>
+                ) : (
+                  <>
+                    Become a <span className="text-[#d6e4ff]">10/10</span> with{" "}
+                    <span className="text-[#d6e4ff]">Science</span>
+                  </>
+                )}
               </motion.h1>
               <motion.h2
                 variants={itemVariants}
@@ -866,20 +873,23 @@ export default function Landing() {
               </motion.h2>
               <motion.div
                 variants={itemVariants}
-                className="flex flex-wrap items-center justify-center gap-4 pt-1 sm:pt-2"
+                className="flex flex-col items-center gap-2 pt-0.5 sm:gap-3"
               >
-                <Link href={heroCtaHref} className="pointer-events-auto">
-                  <Button
-                    size="lg"
-                    className="h-14 min-h-14 rounded-full px-8 text-base font-semibold shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_12px_40px_-8px_rgba(0,0,0,0.45)] sm:h-[3.75rem] sm:min-h-[3.75rem] sm:px-11 sm:text-lg md:h-16 md:min-h-16 md:px-12 md:text-[1.125rem]"
-                  >
-                    {i18n(language, {
-                      en: "Discover my score",
-                      fr: "Découvrir mon score",
-                    })}
-                    <ArrowRight className="ml-2.5 h-4 w-4 shrink-0 sm:h-[1.125rem] sm:w-[1.125rem] md:h-5 md:w-5" strokeWidth={2.25} />
-                  </Button>
+                <Link
+                  href={heroCtaHref}
+                  className="pointer-events-auto inline-flex min-h-12 items-center justify-center rounded-sm border border-primary-border bg-primary px-7 text-base font-semibold text-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_12px_40px_-8px_rgba(0,0,0,0.45)] hover-elevate active-elevate-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:min-h-[3.25rem] sm:px-10 sm:text-lg md:min-h-14 md:px-11 md:text-[1.0625rem]"
+                >
+                  {i18n(language, {
+                    en: "Discover my score",
+                    fr: "Découvrir mon score",
+                  })}
                 </Link>
+                <p className="max-w-[min(100%,22rem)] text-center text-balance font-sans text-[13px] font-medium leading-snug tracking-tight text-foreground/55 sm:max-w-md sm:text-sm">
+                  {i18n(language, {
+                    en: "Built for people who take self-improvement seriously—not noise, not trends.",
+                    fr: "Pensé pour celles et ceux qui prennent leur progression au sérieux—pas pour le superficiel ni les modes.",
+                  })}
+                </p>
               </motion.div>
             </div>
           </motion.div>
@@ -896,7 +906,7 @@ export default function Landing() {
               opacity: { duration: 0.35, delay: 0.25 },
               y: { duration: 1.8, repeat: Infinity, ease: "easeInOut" },
             }}
-            className="mt-auto flex shrink-0 justify-center pb-2 pt-4 text-foreground/55 transition-colors hover:text-foreground/90"
+            className="mt-auto flex shrink-0 justify-center pb-1 pt-2 text-foreground/55 transition-colors hover:text-foreground/90 sm:pb-2 sm:pt-3"
           >
             <ChevronDown className="h-8 w-8 sm:h-9 sm:w-9" strokeWidth={1.8} />
           </motion.a>
@@ -919,7 +929,7 @@ export default function Landing() {
           >
             <motion.h2
               variants={itemVariants}
-              className="font-display text-3xl md:text-5xl font-bold leading-[1.1] tracking-tight text-balance"
+              className="font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
             >
               Your Complete Facial Analysis
             </motion.h2>
@@ -953,7 +963,7 @@ export default function Landing() {
           >
             <motion.h2
               variants={itemVariants}
-              className="text-center font-display text-3xl md:text-5xl font-bold leading-[1.1] tracking-tight text-balance"
+              className="text-center font-hero text-3xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance md:text-5xl"
             >
               {i18n(language, {
                 en: "Beauty can be",
@@ -1038,7 +1048,7 @@ export default function Landing() {
 
             <motion.h2
               variants={itemVariants}
-              className="font-display text-4xl font-bold leading-tight tracking-tight text-white md:text-6xl"
+              className="font-hero text-4xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white md:text-6xl"
             >
               {i18n(language, {
                 en: "This isn't for everyone",
@@ -1086,12 +1096,23 @@ export default function Landing() {
           >
             <motion.h2
               variants={itemVariants}
-              className="mx-auto max-w-4xl font-display text-4xl font-bold leading-tight tracking-tight text-[#141822] md:text-7xl"
+              className="mx-auto max-w-4xl font-hero text-4xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-[#141822] md:text-7xl"
             >
-              {i18n(language, {
-                en: "Your transformation starts with a first analysis",
-                fr: "Ta transformation commence par une première analyse",
-              })}
+              {language === "fr" ? (
+                <>
+                  Ta transformation commence par{" "}
+                  <span className="underline decoration-[#141822] decoration-2 underline-offset-[0.15em]">
+                    une première analyse
+                  </span>
+                </>
+              ) : (
+                <>
+                  Your transformation starts with a{" "}
+                  <span className="underline decoration-[#141822] decoration-2 underline-offset-[0.15em]">
+                    first analysis
+                  </span>
+                </>
+              )}
             </motion.h2>
 
             <motion.p
@@ -1106,12 +1127,12 @@ export default function Landing() {
 
             <motion.div variants={itemVariants} className="pt-2">
               <Link href="/register">
-                <Button className="h-16 rounded-full bg-[#0f1219] px-10 text-lg font-semibold text-white shadow-[0_28px_65px_-35px_rgba(0,0,0,0.65)] hover:bg-black">
+                <Button className="h-14 min-h-14 rounded-sm bg-[#0f1219] px-10 text-base font-semibold text-white shadow-[0_28px_65px_-35px_rgba(0,0,0,0.65)] hover:bg-black md:h-[3.75rem] md:min-h-[3.75rem] md:text-lg">
                   {i18n(language, {
                     en: "Begin Your First Analysis",
                     fr: "Commence ta première analyse",
                   })}
-                  <ArrowRight className="ml-2 h-5 w-5" />
+                  <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
                 </Button>
               </Link>
             </motion.div>

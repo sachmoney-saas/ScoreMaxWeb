@@ -85,6 +85,7 @@ export default {
       fontFamily: {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
+        hero: ["var(--font-hero)", "Georgia", "serif"],
         mono: ["var(--font-mono)"],
       },
       keyframes: {

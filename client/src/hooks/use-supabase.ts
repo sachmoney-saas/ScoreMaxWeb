@@ -207,7 +207,9 @@ export function useUserGrowth() {
 }
 
 /**
- * Hook for polling onboarding scan completeness status.
+ * Onboarding scan session snapshot (session id, progress). Fetches on demand
+ * or when explicitly invalidated — no background polling (web capture replaces
+ * the legacy iOS “wait until ready” loop).
  */
 export function useOnboardingScanStatus(options?: { enabled?: boolean }) {
   const { user } = useAuth();
@@ -235,14 +237,6 @@ export function useOnboardingScanStatus(options?: { enabled?: boolean }) {
       };
     },
     enabled: !!user && (options?.enabled ?? true),
-    refetchInterval: (query) => {
-      const state = query.state.data;
-      if (!state) {
-        return 2500;
-      }
-
-      return state.is_ready ? false : 2500;
-    },
     staleTime: 0,
   });
 }

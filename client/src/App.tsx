@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import NotFound from "@/pages/not-found";
@@ -45,21 +46,18 @@ function ProtectedRoute({
 }: {
   component: React.ComponentType;
 }) {
-  const { user, profile, isLoading } = useAuth();
+  const { user } = useAuth();
+  const { status } = useOnboardingGate();
 
-  if (isLoading) {
+  if (status === "loading") {
     return <FullScreenLoader />;
   }
 
-  if (!user) {
+  if (!user || status === "anon") {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
   }
 
-  if (!profile) {
-    return <Redirect to="/onboarding" />;
-  }
-
-  if (!profile?.has_completed_onboarding) {
+  if (status === "needs_onboarding") {
     return <Redirect to="/onboarding" />;
   }
 
@@ -73,9 +71,10 @@ function ProtectedRoute({
 }
 
 function OnboardingRoute() {
-  const { user, profile, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
+  const { status } = useOnboardingGate();
 
-  if (isLoading) {
+  if (isLoading || status === "loading") {
     return <FullScreenLoader />;
   }
 
@@ -83,7 +82,7 @@ function OnboardingRoute() {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
   }
 
-  if (profile?.has_completed_onboarding) {
+  if (status === "ok") {
     return <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />;
   }
 
@@ -95,10 +94,8 @@ function OnboardingRoute() {
 }
 
 function Router() {
-  const { user, profile } = useAuth();
-  const postAuthRedirectPath = profile?.has_completed_onboarding
-    ? AUTH_CONFIG.REDIRECT_PATH
-    : "/onboarding";
+  const { user, isLoading } = useAuth();
+  const { status: gate } = useOnboardingGate();
 
   return (
     <LanguageProvider>
@@ -110,10 +107,30 @@ function Router() {
         <Route path="/confidentialite" component={Confidentialite} />
 
         <Route path={AUTH_CONFIG.LOGIN_PATH}>
-          {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
+          {user ? (
+            isLoading || gate === "loading" ? (
+              <FullScreenLoader />
+            ) : gate === "ok" ? (
+              <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />
+            ) : (
+              <Redirect to="/onboarding" />
+            )
+          ) : (
+            <AuthPage />
+          )}
         </Route>
         <Route path={AUTH_CONFIG.REGISTER_PATH}>
-          {user ? <Redirect to={postAuthRedirectPath} /> : <AuthPage />}
+          {user ? (
+            isLoading || gate === "loading" ? (
+              <FullScreenLoader />
+            ) : gate === "ok" ? (
+              <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />
+            ) : (
+              <Redirect to="/onboarding" />
+            )
+          ) : (
+            <AuthPage />
+          )}
         </Route>
 
         <Route path="/onboarding">
