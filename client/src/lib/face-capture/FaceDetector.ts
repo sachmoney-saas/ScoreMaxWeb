@@ -64,8 +64,13 @@ export class FaceDetector {
     }));
 
     const matrix = result.facialTransformationMatrixes?.[0]?.data ?? [];
-    /** `false`: yaw/pitch/roll match the raw video bitmap (same space as landmarks). Preview uses CSS `scaleX(-1)` — a second "mirrored" yaw flip would invert gauche/droite vs what users see. */
-    const pose = solveHeadPoseFromMatrix(matrix, false);
+    /**
+     * `true`: yaw aligns with the mirror preview (`scaleX(-1)` on `<video>` / canvas).
+     * Landmarks stay in raw bitmap space; only pose yaw is negated for UX. Profile
+     * yaw ranges in `CAPTURE_POSES` match this mirrored convention (see comments
+     * on `profile-right` / `profile-left`).
+     */
+    const pose = solveHeadPoseFromMatrix(matrix, true);
 
     const blendshapes: Record<string, number> = {};
     const categories = result.faceBlendshapes?.[0]?.categories ?? [];

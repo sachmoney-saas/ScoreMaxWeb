@@ -598,6 +598,7 @@ CREATE TABLE IF NOT EXISTS public.analysis_jobs (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   session_id UUID NOT NULL REFERENCES public.scan_sessions(id) ON DELETE RESTRICT,
   trigger_source TEXT DEFAULT 'onboarding_auto' NOT NULL,
+  tier TEXT DEFAULT 'standard' NOT NULL,
   status TEXT DEFAULT 'queued' NOT NULL,
   request_payload JSONB DEFAULT '{}'::jsonb NOT NULL,
   version INTEGER DEFAULT 1 NOT NULL,
@@ -612,8 +613,38 @@ CREATE TABLE IF NOT EXISTS public.analysis_jobs (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   CONSTRAINT scoremax_analysis_jobs_status_check CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   CONSTRAINT scoremax_analysis_jobs_trigger_source_check CHECK (trigger_source IN ('onboarding_auto', 'user_rerun', 'admin')),
+  CONSTRAINT scoremax_analysis_jobs_tier_check CHECK (tier IN ('freemium', 'standard')),
   CONSTRAINT scoremax_analysis_jobs_version_positive CHECK (version > 0)
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'analysis_jobs'
+      AND column_name = 'tier'
+  ) THEN
+    ALTER TABLE public.analysis_jobs
+      ADD COLUMN tier TEXT NOT NULL DEFAULT 'standard';
+
+    UPDATE public.analysis_jobs
+       SET tier = 'freemium'
+     WHERE trigger_source <> 'admin';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_analysis_jobs_tier_check'
+      AND conrelid = 'public.analysis_jobs'::regclass
+  ) THEN
+    ALTER TABLE public.analysis_jobs
+      ADD CONSTRAINT scoremax_analysis_jobs_tier_check
+      CHECK (tier IN ('freemium', 'standard'));
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.analysis_job_assets (
   analysis_job_id UUID NOT NULL REFERENCES public.analysis_jobs(id) ON DELETE CASCADE,
@@ -643,6 +674,47 @@ CREATE INDEX IF NOT EXISTS scoremax_analysis_jobs_parent_idx
   ON public.analysis_jobs (parent_analysis_job_id);
 CREATE UNIQUE INDEX IF NOT EXISTS scoremax_analysis_jobs_session_version_uidx
   ON public.analysis_jobs (session_id, version);
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'analysis_jobs'
+      AND column_name = 'tier'
+  ) THEN
+    WITH ranked AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY user_id
+          ORDER BY
+            CASE status
+              WHEN 'completed' THEN 0
+              WHEN 'running' THEN 1
+              WHEN 'queued' THEN 2
+              ELSE 3
+            END,
+            completed_at DESC NULLS LAST,
+            created_at DESC
+        ) AS rn
+      FROM public.analysis_jobs
+      WHERE tier = 'freemium'
+        AND status IN ('queued', 'running', 'completed')
+    )
+    UPDATE public.analysis_jobs aj
+    SET tier = 'standard',
+        updated_at = NOW()
+    FROM ranked r
+    WHERE aj.id = r.id
+      AND r.rn > 1;
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_analysis_jobs_user_freemium_active_uidx
+  ON public.analysis_jobs (user_id)
+  WHERE tier = 'freemium' AND status IN ('queued', 'running', 'completed');
 CREATE INDEX IF NOT EXISTS scoremax_analysis_job_assets_user_idx
   ON public.analysis_job_assets (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS scoremax_analysis_results_job_created_idx
@@ -1300,6 +1372,147 @@ $body$;
 GRANT EXECUTE ON FUNCTION public.ensure_onboarding_scan_session() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_onboarding_scan_status() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_recent_scan_status(INTEGER) TO authenticated;
+
+-- 12b) Subscription infrastructure (additive, idempotent) ---------------------
+-- See supabase/subscriptions_migration.sql for full documentation.
+CREATE TABLE IF NOT EXISTS public.user_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  source TEXT NOT NULL,
+  current_period_start TIMESTAMP WITH TIME ZONE,
+  current_period_end TIMESTAMP WITH TIME ZONE,
+  granted_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  granted_reason TEXT,
+  external_subscription_id TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  CONSTRAINT scoremax_user_subscriptions_status_check
+    CHECK (status IN ('active', 'canceled', 'expired')),
+  CONSTRAINT scoremax_user_subscriptions_source_check
+    CHECK (source IN ('manual_admin', 'dodo', 'stripe'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_user_subscriptions_active_uidx
+  ON public.user_subscriptions (user_id)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS scoremax_user_subscriptions_user_idx
+  ON public.user_subscriptions (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_user_subscriptions_source_idx
+  ON public.user_subscriptions (source, status);
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_user_subscriptions_external_uidx
+  ON public.user_subscriptions (source, external_subscription_id)
+  WHERE external_subscription_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public.subscription_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  subscription_id UUID REFERENCES public.user_subscriptions(id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  source TEXT NOT NULL,
+  actor_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  reason TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  CONSTRAINT scoremax_subscription_events_type_check
+    CHECK (event_type IN ('granted','revoked','expired','renewed','period_updated','admin_note')),
+  CONSTRAINT scoremax_subscription_events_source_check
+    CHECK (source IN ('manual_admin','dodo','stripe','system'))
+);
+
+CREATE INDEX IF NOT EXISTS scoremax_subscription_events_user_idx
+  ON public.subscription_events (user_id, created_at DESC);
+
+ALTER TABLE IF EXISTS public.user_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.subscription_events ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.scoremax_touch_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'scoremax_user_subscriptions_touch_updated_at') THEN
+    CREATE TRIGGER scoremax_user_subscriptions_touch_updated_at
+      BEFORE UPDATE ON public.user_subscriptions
+      FOR EACH ROW EXECUTE FUNCTION public.scoremax_touch_updated_at();
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.scoremax_sync_is_subscriber(target_user UUID)
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE has_active BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_subscriptions us
+    WHERE us.user_id = target_user
+      AND us.status = 'active'
+      AND (us.current_period_end IS NULL OR us.current_period_end > NOW())
+  ) INTO has_active;
+  UPDATE public.profiles SET is_subscriber = has_active, updated_at = NOW()
+   WHERE id = target_user AND is_subscriber IS DISTINCT FROM has_active;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.scoremax_user_subscriptions_sync_trigger()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.scoremax_sync_is_subscriber(OLD.user_id);
+    RETURN OLD;
+  END IF;
+  PERFORM public.scoremax_sync_is_subscriber(NEW.user_id);
+  IF TG_OP = 'UPDATE' AND NEW.user_id <> OLD.user_id THEN
+    PERFORM public.scoremax_sync_is_subscriber(OLD.user_id);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'scoremax_on_user_subscription_change') THEN
+    CREATE TRIGGER scoremax_on_user_subscription_change
+      AFTER INSERT OR UPDATE OR DELETE ON public.user_subscriptions
+      FOR EACH ROW EXECUTE FUNCTION public.scoremax_user_subscriptions_sync_trigger();
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.scoremax_is_subscriber(target_user UUID)
+RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_subscriptions us
+    WHERE us.user_id = target_user
+      AND us.status = 'active'
+      AND (us.current_period_end IS NULL OR us.current_period_end > NOW())
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.scoremax_has_premium_access(target_user UUID)
+RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT public.scoremax_is_admin(target_user) OR public.scoremax_is_subscriber(target_user);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.scoremax_is_subscriber(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.scoremax_has_premium_access(UUID) TO authenticated;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='user_subscriptions' AND policyname='scoremax_user_subscriptions_select_own') THEN
+    EXECUTE 'CREATE POLICY "scoremax_user_subscriptions_select_own" ON public.user_subscriptions FOR SELECT USING (auth.uid() = user_id)';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='user_subscriptions' AND policyname='scoremax_user_subscriptions_select_admin') THEN
+    EXECUTE 'CREATE POLICY "scoremax_user_subscriptions_select_admin" ON public.user_subscriptions FOR SELECT USING (public.scoremax_is_admin(auth.uid()))';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='subscription_events' AND policyname='scoremax_subscription_events_select_own') THEN
+    EXECUTE 'CREATE POLICY "scoremax_subscription_events_select_own" ON public.subscription_events FOR SELECT USING (auth.uid() = user_id)';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='subscription_events' AND policyname='scoremax_subscription_events_select_admin') THEN
+    EXECUTE 'CREATE POLICY "scoremax_subscription_events_select_admin" ON public.subscription_events FOR SELECT USING (public.scoremax_is_admin(auth.uid()))';
+  END IF;
+END $$;
 
 -- 13) Post-check summary output
 SELECT

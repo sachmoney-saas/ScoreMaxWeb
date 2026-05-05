@@ -226,6 +226,28 @@ FROM public.scan_sessions ss
 GROUP BY ss.status
 ORDER BY session_count DESC, ss.status;
 
+-- 6b) analysis_jobs.tier verification (freemium / standard)
+SELECT
+  CASE WHEN c.column_name IS NULL THEN 'missing' ELSE 'present' END AS tier_column_status,
+  CASE WHEN k.conname IS NULL THEN 'missing' ELSE 'present' END AS tier_check_constraint_status,
+  CASE WHEN i.indexname IS NULL THEN 'missing' ELSE 'present' END AS one_freemium_per_user_index_status
+FROM (SELECT 1) AS one
+LEFT JOIN information_schema.columns c
+  ON c.table_schema = 'public' AND c.table_name = 'analysis_jobs' AND c.column_name = 'tier'
+LEFT JOIN pg_constraint k
+  ON k.conname = 'scoremax_analysis_jobs_tier_check'
+ AND k.conrelid = 'public.analysis_jobs'::regclass
+LEFT JOIN pg_indexes i
+  ON i.schemaname = 'public'
+ AND i.indexname = 'scoremax_analysis_jobs_user_freemium_active_uidx';
+
+SELECT
+  tier,
+  COUNT(*) AS job_count
+FROM public.analysis_jobs
+GROUP BY tier
+ORDER BY tier;
+
 -- 7) Onboarding polling function smoke check (authenticated context required)
 -- Expected shape: session_id, required_asset_count, completed_asset_count, is_ready, missing_asset_types
 SELECT

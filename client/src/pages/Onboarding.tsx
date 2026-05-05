@@ -14,7 +14,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import type { OnboardingScanAssetCode } from "@shared/schema";
-import { AnalysisProcessingState } from "@/components/analysis/AnalysisProcessingState";
+import { AnalysisProcessingState, analysisElapsedAnchorEpochMs } from "@/components/analysis/AnalysisProcessingState";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -49,6 +49,7 @@ import {
   getScanAssetLabels,
   uploadScanAsset,
 } from "@/lib/face-analysis";
+import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
 import type { PoseId } from "@/lib/face-capture/types";
 import { deleteMyAccount } from "@/lib/account-api";
@@ -917,11 +918,11 @@ export default function Onboarding() {
       return;
     }
     setAnalysisMessage(
-      jobStatus.data.job.error_message ??
-        i18n(language, {
-          en: "The analysis failed.",
-          fr: "L'analyse a échoué.",
-        }),
+      buildAnalysisSupportMessage({
+        language,
+        errorCode: jobStatus.data.job.error_code,
+        errorMessage: jobStatus.data.job.error_message,
+      }),
     );
     setIsSubmitting(false);
     setOnboardingJobId(null);
@@ -1199,8 +1200,10 @@ export default function Onboarding() {
                 <AnalysisProcessingState
                   message={processingMessage}
                   minimalChrome
-                  awaitingRedirect={jobStatusValue === "completed"}
                   theme="dark"
+                  elapsedAnchorEpochMs={analysisElapsedAnchorEpochMs(
+                    jobStatus.data?.job.created_at,
+                  )}
                 />
               ) : (
                 <div

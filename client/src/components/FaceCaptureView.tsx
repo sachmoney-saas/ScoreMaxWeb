@@ -42,16 +42,16 @@ const STEP_INSTRUCTION: Record<PoseId, { en: string; fr: string }> = {
     en: 'Lower your head slightly to include the top of your head.',
   },
   'closeup-eye': {
-    fr: 'Rapprochez-vous : yeux en gros plan, regard vers la caméra.',
-    en: 'Move closer: eyes in close-up, looking at the camera.',
+    fr: 'Cadrez un œil au centre — vous pouvez rester à distance modérée.',
+    en: 'Frame one eye in the centre — a moderate distance is fine.',
   },
   'closeup-smile': {
     fr: 'Rapprochez-vous et souriez naturellement.',
     en: 'Move closer and give a natural smile.',
   },
   'closeup-hairline': {
-    fr: 'Rapprochez-vous et dégagez votre front.',
-    en: 'Move closer and show your forehead.',
+    fr: 'Dégagez le front — distance modérée, hairline visible.',
+    en: 'Show your forehead — moderate distance is fine if the hairline is visible.',
   },
 };
 
@@ -141,9 +141,10 @@ export function FaceCaptureView({
     const [yMin, yMax] = poseDef.yawRange;
     const y = state.headPose.yaw;
     /**
-     * Preview is CSS-mirrored while yaw comes from the raw bitmap; min/max
-     * comparisons still order yaw linearly, but the chevron that matches
-     * "tournez à droite/gauche" is opposite to a plain yMin/yMax screen map.
+     * Yaw uses `solveHeadPoseFromMatrix(..., true)` so it matches the
+     * mirrored preview; chevron “left/right” still needs the inverse of a
+     * naive min/max screen map so “tournez à droite/gauche” lines up with the
+     * gesture users expect.
      */
     if (y < yMin) return 'right';
     if (y > yMax) return 'left';

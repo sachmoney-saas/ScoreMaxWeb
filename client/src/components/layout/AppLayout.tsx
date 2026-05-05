@@ -62,6 +62,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { scoreRingMatchMetallicPillClassName } from "@/components/analysis/workers/_shared";
+import { BrandLoader } from "@/components/ui/brand-loader";
+import {
+  analysisElapsedAnchorEpochMs,
+  formatAnalysisElapsedLabel,
+} from "@/components/analysis/AnalysisProcessingState";
+import { useAppLanguage } from "@/lib/i18n";
 
 type SidebarNavItem = {
   href: string;
@@ -107,6 +114,37 @@ function formatAnalysisHistoryDate(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+/** Durée depuis `created_at` du job (sidebar : à droite de « Analyse en cours »). */
+function SidebarAnalysisRunningElapsed({ createdAtIso }: { createdAtIso: string }) {
+  const language = useAppLanguage();
+  const anchorMs = React.useMemo(
+    () => analysisElapsedAnchorEpochMs(createdAtIso),
+    [createdAtIso],
+  );
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = window.setInterval(() => setTick((previous) => previous + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const elapsedSeconds = React.useMemo(() => {
+    if (anchorMs != null) {
+      return Math.max(0, Math.floor((Date.now() - anchorMs) / 1000));
+    }
+    return tick;
+  }, [anchorMs, tick]);
+
+  return (
+    <span
+      className="shrink-0 whitespace-nowrap tabular-nums text-[10px] font-semibold leading-tight text-zinc-400 sm:text-[11px]"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      {formatAnalysisElapsedLabel(elapsedSeconds, language)}
+    </span>
+  );
 }
 
 /** Matches ScoreRing default arc — frosted highlight + slate depth (Tailwind arbitrary layers). */
@@ -230,7 +268,8 @@ function ModernAppSidebar() {
               }`}
             >
               <p className="truncate font-display text-base font-semibold tracking-tight text-zinc-100">
-                ScoreMax
+                Score
+                <span className="italic text-[#d6e4ff]">Max</span>
               </p>
             </div>
           </div>
@@ -317,14 +356,24 @@ function ModernAppSidebar() {
                   asChild
                   isActive={location === "/app/protocol"}
                   tooltip="Mon protocole"
-                  className="h-11 w-full rounded-xl border border-white/15 bg-white/[0.06] px-3 transition-all duration-200 hover:border-white/25 hover:bg-white/[0.12] data-[active=true]:border-white/25 data-[active=true]:bg-[linear-gradient(132deg,rgba(214,228,255,0.26)_0%,rgba(214,228,255,0.14)_45%,rgba(255,255,255,0.05)_100%)] data-[active=true]:text-zinc-50"
+                  className={cn(
+                    scoreRingMatchMetallicPillClassName,
+                    "h-11 w-full rounded-xl px-3 !text-zinc-950",
+                    "transition-[transform,filter] duration-150 ease-out",
+                    "hover:!text-zinc-950 hover:!brightness-[1.04]",
+                    "hover:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+                    "active:!text-zinc-950 active:!brightness-[0.98] active:translate-y-px",
+                    "active:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+                    "data-[active=true]:!text-zinc-950 data-[active=true]:!brightness-[0.99] data-[active=true]:translate-y-px",
+                    "data-[active=true]:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+                  )}
                 >
                   <Link
                     href="/app/protocol"
-                    className="flex w-full items-center gap-2.5"
+                    className="relative z-10 flex w-full items-center justify-center gap-2.5 text-center select-none !text-zinc-950"
                   >
-                    <ClipboardList className="h-4 w-4 shrink-0 text-zinc-200" />
-                    <span className="font-semibold text-zinc-100">
+                    <ClipboardList className="h-4 w-4 shrink-0 !text-zinc-900" />
+                    <span className="font-semibold text-zinc-950">
                       Mon protocole
                     </span>
                   </Link>
@@ -337,7 +386,7 @@ function ModernAppSidebar() {
         <SidebarSeparator className="my-2 bg-white/10" />
 
         <SidebarGroup className="p-0">
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+          <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-white">
             Mes analyses
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -408,16 +457,14 @@ function ModernAppSidebar() {
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                         {isAnalysisLoading ? (
-                          <>
+                          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                             <p className="min-w-0 truncate text-sm font-semibold leading-tight text-zinc-100">
-                              {analysis.status === "queued"
-                                ? "En file d'attente"
-                                : "Analyse en cours"}
+                              Analyse en cours
                             </p>
-                            <p className="truncate text-[9px] tabular-nums leading-tight text-zinc-500">
-                              {dateLabel}
-                            </p>
-                          </>
+                            <SidebarAnalysisRunningElapsed
+                              createdAtIso={analysis.created_at}
+                            />
+                          </div>
                         ) : score0to100 !== null && rankTitle ? (
                           <div className="flex min-w-0 items-center gap-1">
                             <div className="-ml-0.5 shrink-0">
@@ -550,11 +597,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-[#9aaeb5]">
         <WaveBackground />
-        <div className="relative z-10 flex flex-col items-center gap-4">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground font-medium animate-pulse">
-            Chargement de la plateforme...
-          </p>
+        <div className="relative z-10 flex flex-col items-center justify-center">
+          <BrandLoader size="lg" tone="on-dark" label="Chargement de la plateforme" />
         </div>
       </div>
     );
@@ -574,8 +618,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <ModernAppSidebar />
         <SidebarInset className="flex min-h-0 flex-col overflow-hidden bg-transparent">
           <SidebarTrigger className="absolute left-4 top-4 z-30 h-8 w-8 rounded-lg border border-white/10 bg-white/10 backdrop-blur-xl hover:bg-white/15 md:hidden" />
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8">
-            <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500 text-foreground">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-4 md:p-8">
+            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col animate-in fade-in slide-in-from-bottom-4 duration-500 text-foreground">
               {children}
             </div>
           </div>

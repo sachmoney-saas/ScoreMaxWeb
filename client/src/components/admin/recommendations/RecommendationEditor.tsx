@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import type { WorkerAggregateCatalogEntry } from "@/lib/face-analysis-display";
 import { extractReferencedKeys } from "@/lib/recommendation-condition";
+import { sanitizeProtocolSlots } from "@/lib/protocol-slots";
 import type {
   Condition,
   Recommendation,
@@ -74,8 +75,31 @@ function makeEmpty(worker: string): FormState {
   };
 }
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? (value as string[]) : [];
+}
+
+function asSteps(value: unknown): Recommendation["steps"] {
+  return Array.isArray(value) ? (value as Recommendation["steps"]) : [];
+}
+
+/** DB/jsonb rows can omit or null array fields — normalize so the editor never crashes. */
 function fromRecord(rec: Recommendation): FormState {
-  return { ...rec, enabled: (rec as Recommendation & { enabled?: boolean }).enabled ?? true };
+  const r = rec as Recommendation & { enabled?: boolean };
+  return {
+    ...rec,
+    id: rec.id ?? "",
+    worker: rec.worker ?? "",
+    title_en: rec.title_en ?? "",
+    title_fr: rec.title_fr ?? "",
+    summary_en: rec.summary_en ?? "",
+    summary_fr: rec.summary_fr ?? "",
+    steps: asSteps(rec.steps),
+    targets: asStringArray(rec.targets),
+    protocol_slots: sanitizeProtocolSlots(rec.protocol_slots),
+    conditions: rec.conditions ?? { all: true },
+    enabled: r.enabled ?? true,
+  };
 }
 
 function suggestId(worker: string, titleEn: string): string {
@@ -93,20 +117,26 @@ function suggestId(worker: string, titleEn: string): string {
 
 function buildSemanticWarnings(form: FormState): string[] {
   const w: string[] = [];
-  if (form.type === "hard" && form.steps.length === 0) {
+  const stepsLen = form.steps?.length ?? 0;
+  const targetsLen = form.targets?.length ?? 0;
+  const slotsLen = form.protocol_slots?.length ?? 0;
+  const summaryFr = (form.summary_fr ?? "").trim();
+  const summaryEn = (form.summary_en ?? "").trim();
+
+  if (form.type === "hard" && stepsLen === 0) {
     w.push("Une intervention hardmaxxing devrait détailler des étapes.");
   }
   if (form.type === "hard" && form.cost_min === null && form.cost_max === null) {
     w.push("Renseigne une fourchette de coût pour les interventions hard.");
   }
-  if (form.targets.length === 0) {
+  if (targetsLen === 0) {
     w.push("Aucune métrique ciblée — la reco ne sera jamais boostée par pertinence.");
   }
-  if (!form.summary_fr.trim() || !form.summary_en.trim()) {
+  if (!summaryFr || !summaryEn) {
     w.push("Pense à remplir les résumés FR ET EN.");
   }
   if (
-    form.protocol_slots.length === 0 &&
+    slotsLen === 0 &&
     form.duration_value === null &&
     form.category !== "surgery" &&
     form.category !== "device_clinical"
@@ -115,7 +145,7 @@ function buildSemanticWarnings(form: FormState): string[] {
       "Aucun créneau ni durée : la reco n'apparaîtra ni dans la routine ni dans les cures actives.",
     );
   }
-  if (form.duration_unit === "permanent" && form.protocol_slots.length === 0) {
+  if (form.duration_unit === "permanent" && slotsLen === 0) {
     w.push(
       "Reco permanente sans créneau : ajoute au moins le slot 'general' pour qu'elle apparaisse dans les règles.",
     );

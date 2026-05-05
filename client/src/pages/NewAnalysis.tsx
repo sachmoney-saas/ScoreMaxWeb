@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import { FaceCaptureView } from "@/components/FaceCaptureView";
-import { AnalysisProcessingState } from "@/components/analysis/AnalysisProcessingState";
+import { AnalysisProcessingState, analysisElapsedAnchorEpochMs } from "@/components/analysis/AnalysisProcessingState";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,9 +28,14 @@ import {
   getScanAssetLabels,
   uploadScanAsset,
 } from "@/lib/face-analysis";
+import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
 import type { PoseId } from "@/lib/face-capture/types";
-import { analysisBackNavButtonClassName } from "@/components/analysis/workers/_shared";
+import { cn } from "@/lib/utils";
+import {
+  analysisBackNavButtonClassName,
+  analysisHeroGlassClassName,
+} from "@/components/analysis/workers/_shared";
 import { queryClient } from "@/lib/queryClient";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
@@ -262,17 +267,17 @@ export default function NewAnalysis() {
   useEffect(() => {
     if (jobStatus.data?.job.status === "failed") {
       setErrorMessage(
-        jobStatus.data.job.error_message ??
-          i18n(language, {
-            en: "The analysis failed.",
-            fr: "L'analyse a échoué.",
-          }),
+        buildAnalysisSupportMessage({
+          language,
+          errorCode: jobStatus.data.job.error_code,
+          errorMessage: jobStatus.data.job.error_message,
+        }),
       );
     }
   }, [jobStatus.data, language]);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 pt-2">
         <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
           <Link href="/app">
@@ -285,13 +290,21 @@ export default function NewAnalysis() {
         </Button>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-4 pb-10 pt-4 min-h-0">
-        <section className="w-full max-w-lg overflow-hidden rounded-[2.5rem] border border-white/20 bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.26),transparent_30%),linear-gradient(145deg,rgba(9,15,22,0.94)_0%,rgba(24,34,43,0.9)_48%,rgba(155,181,190,0.24)_100%)] p-6 text-white shadow-[0_35px_110px_-70px_rgba(0,0,0,0.95)] backdrop-blur-sm md:max-w-xl md:p-10">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-6 pt-2">
+        <section
+          className={cn(
+            analysisHeroGlassClassName,
+            "w-full max-w-lg overflow-hidden rounded-[2.5rem] p-6 text-white md:max-w-xl md:p-10",
+          )}
+        >
         {shouldShowProcessing ? (
           <AnalysisProcessingState
             message={analysisMessage}
             minimalChrome
-            awaitingRedirect={jobStatusValue === "completed"}
+            theme="dark"
+            elapsedAnchorEpochMs={analysisElapsedAnchorEpochMs(
+              jobStatus.data?.job.created_at,
+            )}
           />
         ) : (
           <div className="mx-auto w-full max-w-lg px-1">

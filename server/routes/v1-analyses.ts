@@ -2,8 +2,10 @@ import { Router } from "express";
 import { z } from "zod";
 import {
   analysesRequestSchema,
+  ANALYSIS_TIER_RUNS,
   optionalAnalysisLangBodySchema,
   type AnalysesRequest,
+  type AnalysisTier,
 } from "@shared/oneshot";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
@@ -11,6 +13,7 @@ import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-j
 import { ApiError } from "../lib/errors";
 import { validateBody, validateQuery } from "../lib/validate";
 import {
+  assertFreemiumQuotaAvailable,
   buildPayload,
   createAnalysisJob,
   loadRequiredAssets,
@@ -19,6 +22,7 @@ import {
   type ScanSessionRow,
 } from "../lib/analysis-orchestration";
 import { requireUserId } from "../lib/auth";
+import { hasPremiumAccess } from "../lib/subscriptions";
 import {
   downloadR2Object,
   getDefaultR2Bucket,
@@ -271,6 +275,7 @@ export function createV1AnalysesRouter(): Router {
           sessionId: session.id,
           assets,
           source: "manual_rescan",
+          tier: "standard",
           ...(lang !== undefined ? { lang } : {}),
         });
         const jobId = await createAnalysisJob({
@@ -278,6 +283,7 @@ export function createV1AnalysesRouter(): Router {
           sessionId: session.id,
           payload,
           triggerSource: "user_rerun",
+          tier: "standard",
         });
         await persistAnalysisJobAssets({
           jobId,
@@ -317,7 +323,9 @@ export function createV1AnalysesRouter(): Router {
       const params = analysisJobParamsSchema.parse(req.params);
       const { data: job, error } = await supabaseAdmin
         .from("analysis_jobs")
-        .select("id, status, error_code, error_message, started_at, completed_at, failed_at, session_id, version")
+        .select(
+          "id, status, error_code, error_message, created_at, started_at, completed_at, failed_at, session_id, version",
+        )
         .eq("id", params.jobId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -367,17 +375,51 @@ export function createV1AnalysesRouter(): Router {
         }
 
         const { userId, sessionId, source } = metadata.data;
+
+        // Subscription clamp: only premium users (active sub OR admin) can
+        // request standard runs. Non-premium callers are forced to freemium
+        // (1 run per worker). Premium callers can opt into freemium by
+        // sending `runs: 1` on every worker.
+        const isPremium = await hasPremiumAccess(userId);
+        const allRequestedSingleRun = payload.analyses.every(
+          (analysis) => analysis.runs === 1,
+        );
+        const tier: AnalysisTier =
+          !isPremium || allRequestedSingleRun ? "freemium" : "standard";
+
+        // Always normalize `runs` to the resolved tier so the upstream call,
+        // the persisted payload and the DB row are mutually consistent.
+        const normalizedAnalyses = payload.analyses.map((analysis) => ({
+          ...analysis,
+          runs: ANALYSIS_TIER_RUNS[tier],
+        }));
+
+        const normalizedPayload: AnalysesRequest = {
+          ...payload,
+          analyses: normalizedAnalyses,
+          metadata: {
+            ...(payload.metadata ?? {}),
+            tier,
+          },
+        };
+
+        if (tier === "freemium") {
+          // Defence in depth alongside the partial unique DB index.
+          await assertFreemiumQuotaAvailable(userId);
+        }
+
         const jobId = await createAnalysisJob({
           userId,
           sessionId,
-          payload,
+          payload: normalizedPayload,
           triggerSource: source === "onboarding" ? "onboarding_auto" : "user_rerun",
+          tier,
         });
         await persistAnalysisJobAssets({
           jobId,
           userId,
           sessionId,
-          payload,
+          payload: normalizedPayload,
         });
 
         dispatchAnalysisJob(jobId);
@@ -389,6 +431,7 @@ export function createV1AnalysesRouter(): Router {
             job: {
               id: jobId,
               status: "queued",
+              tier,
             },
           },
           error: null,

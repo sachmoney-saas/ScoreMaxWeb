@@ -397,8 +397,8 @@ export class CaptureSession {
    * When `isExtrapolated` is true, we skip the motion-stability gate (no
    * recent live samples to reason about — and the very fact MediaPipe lost
    * the face means the user pushed past detection limits, which is exactly
-   * what we want to capture). The mesh overlay is also hidden because the
-   * cached landmarks no longer match the live camera frame.
+   * what we want to capture). L’overlay masque est aussi masqué car les
+   * landmarks en cache ne correspondent plus au flux caméra.
    */
   private processFrame(frame: FaceFrame, isExtrapolated: boolean): void {
     if (!this.videoEl) return;
@@ -513,11 +513,8 @@ export class CaptureSession {
     }
 
     /**
-     * Render mask based on the just-decided state. In Holding, we draw the
-     * solid white face fill + green scan bar (driven by `holdProgress`).
-     * Otherwise we draw the regular wireframe mesh + feature contours.
-     * During extrapolation the cached landmarks no longer match the live
-     * camera frame, so we hide the mesh entirely.
+     * Rendu du masque : ovale opaque + maillage / traits intérieurs (~10 %).
+     * Barre de scan en phase Holding. En extrapolation, on masque l’overlay.
      */
     if (isExtrapolated) {
       this.maskRenderer.clear();

@@ -110,13 +110,12 @@ export const CAPTURE_POSES: PoseDefinition[] = [
      * and completes the hold using the last in-range sample, then captures
      * the live (over-rotated) camera frame.
      *
-     * Yaw uses raw bitmap convention (`solveHeadPoseFromMatrix(..., false)`)
-     * while the preview is CSS-mirrored — chevrons account for this in
-     * `FaceCaptureView`.
+     * Yaw is mirrored to match the selfie preview (`solveHeadPoseFromMatrix(..., true)`).
+     * “Tournez à droite” → yaw devient négatif (profil droit).
      */
-    yawRange: [40, 90],
-    pitchRange: [-25, 25],
-    rollRange: [-15, 15],
+    yawRange: [-95, -32],
+    pitchRange: [-28, 28],
+    rollRange: [-18, 18],
     minFaceRatio: 0.08,
     holdMs: 1800,
     qualityGateRequired: true,
@@ -126,9 +125,10 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     label: "Profil gauche",
     description: "Tournez la tête vers la gauche",
     icon: "👈",
-    yawRange: [-90, -40],
-    pitchRange: [-25, 25],
-    rollRange: [-15, 15],
+    /** Même convention miroir : « vers la gauche » → yaw positif. */
+    yawRange: [32, 95],
+    pitchRange: [-28, 28],
+    rollRange: [-18, 18],
     minFaceRatio: 0.08,
     holdMs: 1800,
     qualityGateRequired: true,
@@ -173,23 +173,24 @@ export const CAPTURE_POSES: PoseDefinition[] = [
   {
     id: "closeup-eye",
     label: "Gros plan oeil",
-    description: "Rapprochez un oeil de la caméra",
+    description: "Cadrez un œil au centre — distance modérée possible",
     icon: "👁",
     /**
      * Wide angular tolerance: targeting one eye with a phone naturally
      * involves pivoting the head, so we accept ±25° yaw / ±20° pitch.
+     * `minFaceRatio` bas pour permettre un cadrage un peu plus loin qu’un vrai macro.
      */
     yawRange: [-25, 25],
     pitchRange: [-20, 20],
     rollRange: [-15, 15],
-    minFaceRatio: 0.55,
+    minFaceRatio: 0.4,
     holdMs: 1800,
     qualityGateRequired: true,
   },
   {
     id: "closeup-hairline",
     label: "Gros plan hairline",
-    description: "Dégagez le front pour montrer la hairline",
+    description: "Dégagez le front — distance modérée possible",
     icon: "💇",
     /**
      * Wide angular tolerance: showing the hairline naturally involves
@@ -199,7 +200,7 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     yawRange: [-25, 25],
     pitchRange: [-25, 30],
     rollRange: [-15, 15],
-    minFaceRatio: 0.45,
+    minFaceRatio: 0.34,
     holdMs: 1800,
     qualityGateRequired: true,
   },

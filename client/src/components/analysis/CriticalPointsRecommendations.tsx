@@ -26,7 +26,11 @@ import {
   type Recommendation,
   type RecommendationAction,
 } from "@/lib/recommendations";
-import { analysisSurfaceCardClassName } from "@/components/analysis/workers/_shared";
+import {
+  analysisSurfaceCardClassName,
+  analysisTabActiveMetallicTriggerClassName,
+  analysisTabBarGlassClassName,
+} from "@/components/analysis/workers/_shared";
 import { cn } from "@/lib/utils";
 import { RecommendationCard } from "@/components/analysis/recommendations/RecommendationCard";
 
@@ -652,8 +656,8 @@ export function CriticalPointsRecommendations({
           >
             <TabsList
               className={cn(
-                analysisSurfaceCardClassName,
-                "inline-flex h-auto max-h-[none] min-h-[2.75rem] w-full flex-wrap justify-start gap-1.5 rounded-2xl p-1.5 sm:flex-nowrap",
+                analysisTabBarGlassClassName,
+                "inline-flex h-auto max-h-[none] min-h-[2.75rem] w-fit max-w-full flex-wrap justify-start gap-1.5 self-start rounded-2xl p-1.5 text-zinc-300 sm:flex-nowrap",
               )}
             >
               {visibleWorkerGroups.map((group) => {
@@ -672,9 +676,15 @@ export function CriticalPointsRecommendations({
                     title={
                       worst !== null ? `${worst.toFixed(1)}/10` : undefined
                     }
-                    className="rounded-xl px-3 py-2 text-left text-xs font-medium text-zinc-400 shadow-none hover:text-zinc-200 data-[state=active]:bg-slate-950 data-[state=active]:text-white sm:px-4 sm:text-sm"
+                    className={cn(
+                      "relative z-0 rounded-xl border border-transparent px-3 py-2 text-left text-xs font-medium text-zinc-400 shadow-none hover:text-zinc-200 sm:px-4 sm:text-sm",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
+                      analysisTabActiveMetallicTriggerClassName,
+                      "data-[state=active]:hover:text-zinc-950",
+                      "data-[state=active]:[&_span.font-display]:text-zinc-700 data-[state=active]:[&_span.font-display]:opacity-100",
+                    )}
                   >
-                    <span className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
+                    <span className="relative z-10 flex flex-col items-start gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
                       <span className="block max-w-[10rem] truncate sm:max-w-none">
                         {label}
                       </span>

@@ -31,4 +31,28 @@ describe("solveHeadPoseFromMatrix", () => {
     const pose = solveHeadPoseFromMatrix(matrix, false);
     expect(pose.yaw).toBeGreaterThan(80);
   });
+
+  it("negates yaw when mirrored flag is set (selfie preview convention)", () => {
+    const yaw = Math.PI / 2;
+    const matrix = [
+      Math.cos(yaw),
+      0,
+      -Math.sin(yaw),
+      0,
+      0,
+      1,
+      0,
+      0,
+      Math.sin(yaw),
+      0,
+      Math.cos(yaw),
+      0,
+      0,
+      0,
+      0,
+      1,
+    ];
+    const pose = solveHeadPoseFromMatrix(matrix, true);
+    expect(pose.yaw).toBeLessThan(-80);
+  });
 });

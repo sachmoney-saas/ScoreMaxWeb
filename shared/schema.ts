@@ -64,6 +64,7 @@ export const analysisJobs = pgTable("analysis_jobs", {
   user_id: uuid("user_id").notNull(),
   session_id: uuid("session_id").notNull(),
   trigger_source: text("trigger_source", { enum: ["onboarding_auto", "user_rerun", "admin"] }).default("onboarding_auto").notNull(),
+  tier: text("tier", { enum: ["freemium", "standard"] }).default("standard").notNull(),
   status: text("status", { enum: ["queued", "running", "completed", "failed"] }).default("queued").notNull(),
   request_payload: jsonb("request_payload").$type<Record<string, unknown>>().default({}).notNull(),
   version: integer("version").default(1).notNull(),
@@ -103,6 +104,37 @@ export const analysisResults = pgTable("analysis_results", {
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const userSubscriptions = pgTable("user_subscriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  user_id: uuid("user_id").notNull(),
+  status: text("status", { enum: ["active", "canceled", "expired"] }).notNull(),
+  source: text("source", { enum: ["manual_admin", "dodo", "stripe"] }).notNull(),
+  current_period_start: timestamp("current_period_start", { withTimezone: true }),
+  current_period_end: timestamp("current_period_end", { withTimezone: true }),
+  granted_by: uuid("granted_by"),
+  granted_reason: text("granted_reason"),
+  external_subscription_id: text("external_subscription_id"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const subscriptionEvents = pgTable("subscription_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  user_id: uuid("user_id").notNull(),
+  subscription_id: uuid("subscription_id"),
+  event_type: text("event_type", {
+    enum: ["granted", "revoked", "expired", "renewed", "period_updated", "admin_note"],
+  }).notNull(),
+  source: text("source", {
+    enum: ["manual_admin", "dodo", "stripe", "system"],
+  }).notNull(),
+  actor_user_id: uuid("actor_user_id"),
+  reason: text("reason"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const insertProfileSchema = createInsertSchema(profiles, {
   email: z.string().email(),
   full_name: z.string().min(2).max(100).optional(),
@@ -119,6 +151,37 @@ export type ScanAsset = typeof scanAssets.$inferSelect;
 export type AnalysisJob = typeof analysisJobs.$inferSelect;
 export type AnalysisJobAsset = typeof analysisJobAssets.$inferSelect;
 export type AnalysisResult = typeof analysisResults.$inferSelect;
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type SubscriptionEvent = typeof subscriptionEvents.$inferSelect;
+
+export type SubscriptionStatus = UserSubscription["status"];
+export type SubscriptionSource = UserSubscription["source"];
+export type SubscriptionEventType = SubscriptionEvent["event_type"];
+
+/**
+ * Wire-level subscription summary returned by API responses.
+ * Timestamps are ISO 8601 strings; this matches what Supabase / JSON return
+ * to clients and avoids the Drizzle `Date` inference at the network boundary.
+ */
+export type ActiveSubscriptionSummary = {
+  id: string;
+  status: SubscriptionStatus;
+  source: SubscriptionSource;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  granted_reason: string | null;
+  created_at: string;
+};
+
+/** Premium-features state that the API exposes for any user (free, sub, admin). */
+export type PremiumAccessState = {
+  /** Effective access to premium features (admin OR active subscription). */
+  has_premium_access: boolean;
+  /** True when the user has an active subscription row, regardless of admin role. */
+  is_subscriber: boolean;
+  is_admin: boolean;
+  active_subscription: ActiveSubscriptionSummary | null;
+};
 
 export type OnboardingScanAssetCode =
   | "FACE_FRONT"

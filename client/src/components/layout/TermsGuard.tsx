@@ -63,9 +63,9 @@ export function TermsGuard() {
         <h2 className="text-xl font-bold">Acceptation requise</h2>
         <p className="text-muted-foreground text-sm">
           Pour continuer à utiliser notre service, vous devez accepter nos{" "}
-          <Link href="/cgu" className="text-primary hover:underline">Conditions Générales d'Utilisation</Link>{" "}
+          <Link href="/terms" className="text-primary hover:underline">Conditions Générales d'Utilisation</Link>{" "}
           et notre{" "}
-          <Link href="/confidentialite" className="text-primary hover:underline">Politique de Confidentialité</Link>.
+          <Link href="/privacy" className="text-primary hover:underline">Politique de Confidentialité</Link>.
         </p>
         <div className="flex justify-end pt-2">
           <button 

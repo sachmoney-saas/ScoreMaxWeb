@@ -1,27 +1,46 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Link } from "wouter";
+import { LegalPageShell } from "@/components/layout/LegalPageShell";
+import { i18n, useAppLanguage } from "@/lib/i18n";
 
 export default function Confidentialite() {
-  return (
-    <div className="min-h-screen bg-background py-20 px-4">
-      <div className="max-w-3xl mx-auto space-y-8">
-        <Link href="/" className="text-primary hover:underline">← Retour à l'accueil</Link>
-        <h1 className="text-4xl font-display font-bold">Politique de Confidentialité</h1>
-        
-        <Card>
-          <CardContent className="pt-6 space-y-4 text-muted-foreground">
-            <section>
-              <h2 className="text-xl font-bold text-foreground mb-2">1. Collecte des données</h2>
-              <p>Nous collectons les informations que vous nous fournissez lors de votre inscription (email, nom).</p>
-            </section>
+  const language = useAppLanguage();
 
-            <section>
-              <h2 className="text-xl font-bold text-foreground mb-2">2. Utilisation des données</h2>
-              <p>Vos données sont utilisées exclusivement pour le bon fonctionnement de votre compte et de nos services.</p>
-            </section>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+  return (
+    <LegalPageShell
+      current="privacy"
+      title={i18n(language, {
+        en: "Privacy policy",
+        fr: "Politique de confidentialité",
+      })}
+    >
+      <section>
+        <h2 className="mb-2 text-xl font-semibold text-white">
+          {i18n(language, {
+            en: "1. Data we collect",
+            fr: "1. Collecte des données",
+          })}
+        </h2>
+        <p>
+          {i18n(language, {
+            en: "We collect information you provide when you register (e.g. email, name).",
+            fr: "Nous collectons les informations que vous nous fournissez lors de votre inscription (email, nom).",
+          })}
+        </p>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-xl font-semibold text-white">
+          {i18n(language, {
+            en: "2. How we use data",
+            fr: "2. Utilisation des données",
+          })}
+        </h2>
+        <p>
+          {i18n(language, {
+            en: "Your data is used solely to operate your account and our services.",
+            fr: "Vos données sont utilisées exclusivement pour le bon fonctionnement de votre compte et de nos services.",
+          })}
+        </p>
+      </section>
+    </LegalPageShell>
   );
 }

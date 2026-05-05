@@ -598,6 +598,7 @@ CREATE TABLE IF NOT EXISTS public.analysis_jobs (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   session_id UUID NOT NULL REFERENCES public.scan_sessions(id) ON DELETE RESTRICT,
   trigger_source TEXT DEFAULT 'onboarding_auto' NOT NULL,
+  tier TEXT DEFAULT 'standard' NOT NULL,
   status TEXT DEFAULT 'queued' NOT NULL,
   request_payload JSONB DEFAULT '{}'::jsonb NOT NULL,
   version INTEGER DEFAULT 1 NOT NULL,
@@ -612,8 +613,41 @@ CREATE TABLE IF NOT EXISTS public.analysis_jobs (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   CONSTRAINT scoremax_analysis_jobs_status_check CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   CONSTRAINT scoremax_analysis_jobs_trigger_source_check CHECK (trigger_source IN ('onboarding_auto', 'user_rerun', 'admin')),
+  CONSTRAINT scoremax_analysis_jobs_tier_check CHECK (tier IN ('freemium', 'standard')),
   CONSTRAINT scoremax_analysis_jobs_version_positive CHECK (version > 0)
 );
+
+-- Idempotent: backfill `tier` on databases created before the freemium tier existed.
+-- All historical jobs were 1-run analyses (the old hardcoded behaviour) so they
+-- match the freemium tier, except admin re-runs which we keep as standard.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'analysis_jobs'
+      AND column_name = 'tier'
+  ) THEN
+    ALTER TABLE public.analysis_jobs
+      ADD COLUMN tier TEXT NOT NULL DEFAULT 'standard';
+
+    UPDATE public.analysis_jobs
+       SET tier = 'freemium'
+     WHERE trigger_source <> 'admin';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'scoremax_analysis_jobs_tier_check'
+      AND conrelid = 'public.analysis_jobs'::regclass
+  ) THEN
+    ALTER TABLE public.analysis_jobs
+      ADD CONSTRAINT scoremax_analysis_jobs_tier_check
+      CHECK (tier IN ('freemium', 'standard'));
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS public.analysis_job_assets (
   analysis_job_id UUID NOT NULL REFERENCES public.analysis_jobs(id) ON DELETE CASCADE,
@@ -643,6 +677,57 @@ CREATE INDEX IF NOT EXISTS scoremax_analysis_jobs_parent_idx
   ON public.analysis_jobs (parent_analysis_job_id);
 CREATE UNIQUE INDEX IF NOT EXISTS scoremax_analysis_jobs_session_version_uidx
   ON public.analysis_jobs (session_id, version);
+
+-- ---------------------------------------------------------------------------
+-- Freemium partial unique index: dedupe legacy rows first.
+-- After backfilling `tier = 'freemium'` for all non-admin jobs, many users had
+-- several completed freemium rows → CREATE UNIQUE INDEX ... fails with 23505.
+-- Keep a single canonical freemium row per user (best = completed preferring
+-- latest completion, else running/queued by recency); demote extras to
+-- `standard` (historical request_payload is unchanged).
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'analysis_jobs'
+      AND column_name = 'tier'
+  ) THEN
+    WITH ranked AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY user_id
+          ORDER BY
+            CASE status
+              WHEN 'completed' THEN 0
+              WHEN 'running' THEN 1
+              WHEN 'queued' THEN 2
+              ELSE 3
+            END,
+            completed_at DESC NULLS LAST,
+            created_at DESC
+        ) AS rn
+      FROM public.analysis_jobs
+      WHERE tier = 'freemium'
+        AND status IN ('queued', 'running', 'completed')
+    )
+    UPDATE public.analysis_jobs aj
+    SET tier = 'standard',
+        updated_at = NOW()
+    FROM ranked r
+    WHERE aj.id = r.id
+      AND r.rn > 1;
+  END IF;
+END $$;
+
+-- Hard guarantee: at most one active freemium analysis per user account.
+-- Failed jobs are excluded so a user can retry after a freemium failure.
+CREATE UNIQUE INDEX IF NOT EXISTS scoremax_analysis_jobs_user_freemium_active_uidx
+  ON public.analysis_jobs (user_id)
+  WHERE tier = 'freemium' AND status IN ('queued', 'running', 'completed');
 CREATE INDEX IF NOT EXISTS scoremax_analysis_job_assets_user_idx
   ON public.analysis_job_assets (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS scoremax_analysis_results_job_created_idx

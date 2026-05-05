@@ -3,6 +3,11 @@ import { z } from "zod";
 import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
 import { requireAdminUser } from "../lib/auth";
 import { ApiError } from "../lib/errors";
+import {
+  getPremiumAccessState,
+  grantManualSubscription,
+  revokeSubscription,
+} from "../lib/subscriptions";
 import { supabaseAdmin } from "../lib/supabase-admin";
 
 const adminFailuresQuerySchema = z.object({
@@ -15,6 +20,28 @@ const adminFailuresQuerySchema = z.object({
 const analysisJobParamsSchema = z.object({
   jobId: z.string().uuid(),
 });
+
+const userIdParamsSchema = z.object({
+  userId: z.string().uuid(),
+});
+
+const grantSubscriptionBodySchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500).optional(),
+    /** Optional ISO 8601 datetime. Omit (or null) for perpetual manual access. */
+    endsAt: z
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .optional(),
+  })
+  .strict();
+
+const revokeSubscriptionBodySchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
 
 type AnalysisFailureRow = {
   id: string;
@@ -184,6 +211,65 @@ export function createV1AdminRouter(): Router {
         ok: true,
         httpStatus: 200,
         data: { failures },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/users/:userId/subscription", async (req, res, next) => {
+    try {
+      await requireAdminUser(req.headers.authorization);
+      const params = userIdParamsSchema.parse(req.params);
+      const state = await getPremiumAccessState(params.userId);
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: state,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/users/:userId/subscription/grant", async (req, res, next) => {
+    try {
+      const admin = await requireAdminUser(req.headers.authorization);
+      const params = userIdParamsSchema.parse(req.params);
+      const body = grantSubscriptionBodySchema.parse(req.body ?? {});
+      const state = await grantManualSubscription({
+        userId: params.userId,
+        actorUserId: admin.id,
+        reason: body.reason ?? null,
+        endsAt: body.endsAt ?? null,
+      });
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: state,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/admin/users/:userId/subscription/revoke", async (req, res, next) => {
+    try {
+      const admin = await requireAdminUser(req.headers.authorization);
+      const params = userIdParamsSchema.parse(req.params);
+      const body = revokeSubscriptionBodySchema.parse(req.body ?? {});
+      const state = await revokeSubscription({
+        userId: params.userId,
+        actorUserId: admin.id,
+        reason: body.reason ?? null,
+      });
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: state,
         error: null,
       });
     } catch (error) {

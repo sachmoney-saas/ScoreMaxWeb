@@ -1,4 +1,8 @@
-import { analysesRequestSchema } from "@shared/oneshot";
+import {
+  analysesRequestSchema,
+  ANALYSIS_TIER_RUNS,
+  type AnalysisTier,
+} from "@shared/oneshot";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import { ApiError } from "./errors";
 import { downloadR2Object, getDefaultR2Bucket } from "./r2-storage";
@@ -153,8 +157,13 @@ export async function buildPayload(params: {
   sessionId: string;
   assets: ScanAssetRow[];
   source: "onboarding" | "manual_rescan";
+  /** Defaults to "standard" (5 runs/worker). Onboarding uses "freemium" (1 run). */
+  tier?: AnalysisTier;
   lang?: string;
 }) {
+  const tier: AnalysisTier = params.tier ?? "standard";
+  const runs = ANALYSIS_TIER_RUNS[tier];
+
   return analysesRequestSchema.parse({
     requestId: `${params.userId}-${params.sessionId}-${Date.now()}`,
     images: await buildAnalysisImages(params.assets),
@@ -162,12 +171,13 @@ export async function buildPayload(params: {
       worker,
       imageId,
       promptVersion: "latest",
-      runs: 1,
+      runs,
     })),
     metadata: {
       source: params.source,
       userId: params.userId,
       sessionId: params.sessionId,
+      tier,
     },
     ...(params.lang !== undefined ? { lang: params.lang } : {}),
   });
@@ -199,6 +209,8 @@ export async function createAnalysisJob(params: {
   sessionId: string;
   payload: unknown;
   triggerSource: "onboarding_auto" | "user_rerun" | "admin";
+  /** Pricing tier the request was built at; persisted on the job row. */
+  tier: AnalysisTier;
 }): Promise<string> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const version = await getNextAnalysisVersion(params.sessionId);
@@ -208,6 +220,7 @@ export async function createAnalysisJob(params: {
         user_id: params.userId,
         session_id: params.sessionId,
         trigger_source: params.triggerSource,
+        tier: params.tier,
         status: "queued",
         version,
         request_payload: params.payload as Record<string, unknown>,
@@ -219,14 +232,31 @@ export async function createAnalysisJob(params: {
       return data.id as string;
     }
 
-    if (error?.code !== "23505" || attempt === 1) {
-      throw new ApiError({
-        code: "INTERNAL_SERVER_ERROR",
-        status: 500,
-        message: error?.message || "Unable to create analysis job",
-        details: error,
-      });
+    // 23505 = unique_violation. The (session_id, version) race resolves on retry,
+    // but the freemium-per-user partial unique index is intentional and must
+    // surface as a structured 409 to the caller.
+    if (error?.code === "23505") {
+      const message = error.message ?? "";
+      if (message.includes("scoremax_analysis_jobs_user_freemium_active_uidx")) {
+        throw new ApiError({
+          code: "VALIDATION_ERROR",
+          status: 409,
+          message: "Freemium analysis quota already used",
+          details: { quota: "freemium_one_per_account" },
+        });
+      }
+
+      if (attempt < 1) {
+        continue;
+      }
     }
+
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: error?.message || "Unable to create analysis job",
+      details: error,
+    });
   }
 
   throw new ApiError({
@@ -234,5 +264,65 @@ export async function createAnalysisJob(params: {
     status: 500,
     message: "Unable to create analysis job",
   });
+}
+
+export type ActiveFreemiumJob = {
+  id: string;
+  status: "queued" | "running" | "completed";
+  session_id: string;
+  created_at: string;
+};
+
+/**
+ * Returns the user's existing **non-failed** freemium analysis job, if any.
+ *
+ * "Non-failed" matches the partial unique index
+ * `scoremax_analysis_jobs_user_freemium_active_uidx`, so a single freemium row
+ * is guaranteed by the database when one is found.
+ */
+export async function loadActiveFreemiumJobForUser(
+  userId: string,
+): Promise<ActiveFreemiumJob | null> {
+  const { data, error } = await supabaseAdmin
+    .from("analysis_jobs")
+    .select("id, status, session_id, created_at")
+    .eq("user_id", userId)
+    .eq("tier", "freemium")
+    .in("status", ["queued", "running", "completed"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to check freemium analysis quota",
+      details: error,
+    });
+  }
+
+  return (data as ActiveFreemiumJob | null) ?? null;
+}
+
+/**
+ * Throws a 409 if the user already has an active freemium analysis.
+ * Use this at the request edge before creating a new freemium job; the partial
+ * unique index in the DB is the second line of defence.
+ */
+export async function assertFreemiumQuotaAvailable(userId: string): Promise<void> {
+  const existing = await loadActiveFreemiumJobForUser(userId);
+  if (existing) {
+    throw new ApiError({
+      code: "VALIDATION_ERROR",
+      status: 409,
+      message: "Freemium analysis already used for this account",
+      details: {
+        quota: "freemium_one_per_account",
+        existingJobId: existing.id,
+        existingJobStatus: existing.status,
+      },
+    });
+  }
 }
 

@@ -2,7 +2,11 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { recoverAnalysisJobsOnStartup } from "./lib/analysis-jobs";
+import {
+  recoverAnalysisJobsOnStartup,
+  reconcileAnalysisJobsTick,
+  startAnalysisJobsWatchdog,
+} from "./lib/analysis-jobs";
 import { logger } from "./lib/logger";
 import { serverEnv } from "./lib/env";
 import { mapUnknownError } from "./lib/errors";
@@ -89,7 +93,13 @@ app.use(
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info(`serving on port ${port}`);
     setTimeout(() => {
-      void recoverAnalysisJobsOnStartup({ dispatchQueuedJobs: false });
+      void (async () => {
+        await recoverAnalysisJobsOnStartup({ dispatchQueuedJobs: true });
+        // Premier passage immédiat puis cycle périodique pour rattraper les
+        // jobs orphelins (process tué pendant un await, etc.).
+        await reconcileAnalysisJobsTick();
+        startAnalysisJobsWatchdog();
+      })();
     }, 10_000).unref();
   });
 })();

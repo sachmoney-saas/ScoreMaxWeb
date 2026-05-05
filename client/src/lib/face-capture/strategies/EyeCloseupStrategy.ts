@@ -17,7 +17,7 @@ export class EyeCloseupStrategy implements PoseStrategy {
     if (!inRange(frame.headPose.yaw, pose.yawRange)) hints.push("Tournez moins la tête");
     if (!inRange(frame.headPose.pitch, pose.pitchRange)) hints.push("Regardez vers la caméra");
     if (!inRange(frame.headPose.roll, pose.rollRange)) hints.push("Redressez la tête");
-    if (faceRatio(frame) < pose.minFaceRatio) hints.push("Rapprochez encore l'oeil");
+    if (faceRatio(frame) < pose.minFaceRatio) hints.push("Rapprochez-vous un peu ou cadrez l'œil");
     const progress =
       (rangeProgress(frame.headPose.yaw, pose.yawRange, 12) +
         rangeProgress(frame.headPose.pitch, pose.pitchRange, 12) +

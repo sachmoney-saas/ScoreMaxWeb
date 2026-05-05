@@ -2,7 +2,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { clientEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 import type { OnboardingScanAssetCode } from "@shared/schema";
-import type { AnalysesRequest } from "@shared/oneshot";
+import {
+  ANALYSIS_TIER_RUNS,
+  type AnalysesRequest,
+  type AnalysisTier,
+} from "@shared/oneshot";
 import { type AppLanguage, getPreferredLanguage, i18n } from "@/lib/i18n";
 import { faceAnalysisMessage } from "@/lib/face-analysis-messages";
 
@@ -90,6 +94,8 @@ export type AnalysisJobStatusResponse = {
     status: "queued" | "running" | "completed" | "failed";
     error_code: string | null;
     error_message: string | null;
+    /** Présent sur GET `/jobs/:id` et données agrégées ; peut manquer sur la réponse 202 launch. */
+    created_at?: string;
     started_at: string | null;
     completed_at: string | null;
     failed_at: string | null;
@@ -188,14 +194,22 @@ const workerImageMap: Record<string, OnboardingScanAssetCode> = {
   symmetry_shape: "FACE_FRONT",
 };
 
-export const faceAnalysisWorkers = Object.entries(workerImageMap).map(
-  ([worker, imageId]) => ({
+/**
+ * Build the per-worker analyses array sent to the API.
+ *
+ * `tier` controls the number of runs requested per worker:
+ *   - "freemium" → 1 run  (used during onboarding, ~5× cheaper)
+ *   - "standard" → 5 runs (default for paid re-analyses)
+ */
+export function buildFaceAnalysisWorkers(tier: AnalysisTier = "standard") {
+  const runs = ANALYSIS_TIER_RUNS[tier];
+  return Object.entries(workerImageMap).map(([worker, imageId]) => ({
     worker,
     imageId,
     promptVersion: "latest" as const,
-    runs: 1,
-  }),
-);
+    runs,
+  }));
+}
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer();
@@ -219,6 +233,17 @@ function buildPublicR2Url(key: string, lang: AppLanguage): string {
   return `${normalizedBase}/${key}`;
 }
 
+/** Prépare l’URL signée (appel court). */
+const SCAN_ASSET_SIGNED_UPLOAD_TIMEOUT_MS = 45_000;
+/** Envoi binaire vers R2 (réseau / gros fichier). */
+const SCAN_ASSET_R2_PUT_TIMEOUT_MS = 120_000;
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error && error.name === "AbortError") return true;
+  return false;
+}
+
 export async function uploadScanAsset(params: {
   userId: string;
   sessionId: string;
@@ -231,25 +256,33 @@ export async function uploadScanAsset(params: {
     throw new Error(faceAnalysisMessage(lang, "mimeTypeInvalid"));
   }
 
-  const extension = params.file.type === "image/png" ? "png" : "jpg";
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) {
     throw new Error(faceAnalysisMessage(lang, "supabaseSessionMissing"));
   }
 
-  const signedUploadResponse = await apiRequest(
-    "POST",
-    "/v1/analyses/scan-assets/signed-upload",
-    {
-      sessionId: params.sessionId,
-      assetTypeCode: params.assetTypeCode,
-      mimeType: params.file.type,
-    },
-    {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  );
+  let signedUploadResponse: Response;
+  try {
+    signedUploadResponse = await apiRequest(
+      "POST",
+      "/v1/analyses/scan-assets/signed-upload",
+      {
+        sessionId: params.sessionId,
+        assetTypeCode: params.assetTypeCode,
+        mimeType: params.file.type,
+      },
+      {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      AbortSignal.timeout(SCAN_ASSET_SIGNED_UPLOAD_TIMEOUT_MS),
+    );
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(faceAnalysisMessage(lang, "uploadTimedOut"));
+    }
+    throw error;
+  }
   const signedUploadPayload = (await signedUploadResponse.json()) as {
     data?: {
       bucket: string;
@@ -262,13 +295,22 @@ export async function uploadScanAsset(params: {
     throw new Error(faceAnalysisMessage(lang, "signedUploadFailed"));
   }
 
-  const uploadResponse = await fetch(uploadData.upload_url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": params.file.type,
-    },
-    body: params.file,
-  });
+  let uploadResponse: Response;
+  try {
+    uploadResponse = await fetch(uploadData.upload_url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": params.file.type,
+      },
+      body: params.file,
+      signal: AbortSignal.timeout(SCAN_ASSET_R2_PUT_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(faceAnalysisMessage(lang, "uploadTimedOut"));
+    }
+    throw error;
+  }
 
   if (!uploadResponse.ok) {
     throw new Error(faceAnalysisMessage(lang, "r2UploadFailed"));
@@ -313,9 +355,12 @@ export async function buildFaceAnalysisRequest(params: {
   requestId: string;
   sessionId: string;
   userId: string;
+  /** Defaults to "freemium" since this builder is only used by onboarding flows. */
+  tier?: AnalysisTier;
   lang?: AppLanguage;
 }): Promise<AnalysesRequest> {
   const lang = params.lang ?? getPreferredLanguage();
+  const tier: AnalysisTier = params.tier ?? "freemium";
   const assets = await fetchOnboardingScanAssets(params.sessionId);
 
   if (assets.length === 0) {
@@ -343,11 +388,12 @@ export async function buildFaceAnalysisRequest(params: {
   return {
     requestId: params.requestId,
     images,
-    analyses: faceAnalysisWorkers,
+    analyses: buildFaceAnalysisWorkers(tier),
     metadata: {
       source: "onboarding",
       userId: params.userId,
       sessionId: params.sessionId,
+      tier,
     },
     ...(params.lang !== undefined ? { lang: params.lang } : {}),
   };
@@ -357,6 +403,7 @@ export async function runFaceAnalysis(params: {
   requestId: string;
   sessionId: string;
   userId: string;
+  tier?: AnalysisTier;
   lang?: AppLanguage;
 }): Promise<AnalysisLaunchResponse> {
   const payload = await buildFaceAnalysisRequest(params);

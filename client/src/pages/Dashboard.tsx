@@ -11,7 +11,7 @@ export default function Dashboard() {
     });
 
   return (
-    <div className="space-y-8">
+    <div className="flex min-h-0 flex-1 flex-col">
       <AnalysisResultsSection
         analysis={latestAnalysis}
         isLoading={isAnalysisLoading}

@@ -1,123 +1,134 @@
-import { Loader2, Sparkles } from "lucide-react";
+import * as React from "react";
 import { cn } from "@/lib/utils";
+import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
+import { analysisGlassPanelClassName } from "@/components/analysis/workers/_shared";
+import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
 type AnalysisProcessingStateProps = {
+  /** Contexte pour lecteurs d’écran (file vs analyse, etc.). */
   message?: string | null;
-  /** Sans ligne « Analyse IA » ni icône étoiles (ex. page Nouvelle analyse). */
+  /** Variante compacte (ex. carte « Nouvelle analyse » ou onboarding). */
   minimalChrome?: boolean;
-  /**
-   * Job finished côté serveur ; on attend la redirection client.
-   * Évite une barre à ~66 % qui paraît « bloquée ».
-   */
-  awaitingRedirect?: boolean;
-  /** Fond clair (carte) ou glass sombre (ex. onboarding). */
   theme?: "light" | "dark";
+  /**
+   * Sur le fond Wave du shell app : panneau vitré centré (comme les cartes résultats).
+   */
+  backdrop?: boolean;
+  /**
+   * Timestamp création du job (`Date.parse(job.created_at)`).
+   * Si défini, le chrono suit le temps réel côté serveur (pas de reset au changement de page).
+   */
+  elapsedAnchorEpochMs?: number | null;
 };
+
+/** Format « 42 s » / « 3 min 12 s » pour sidebar et écran d’analyse. */
+export function formatAnalysisElapsedLabel(totalSeconds: number, lang: AppLanguage): string {
+  if (totalSeconds < 60) {
+    return i18n(lang, {
+      fr: `${totalSeconds} s`,
+      en: `${totalSeconds} s`,
+    });
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return i18n(lang, {
+    fr: `${minutes} min ${seconds} s`,
+    en: `${minutes} min ${seconds} s`,
+  });
+}
+
+/**
+ * À passer à `elapsedAnchorEpochMs` pour un chrono stable (ISO `analysis_jobs.created_at`).
+ */
+export function analysisElapsedAnchorEpochMs(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : null;
+}
 
 export function AnalysisProcessingState({
   message,
   minimalChrome = false,
-  awaitingRedirect = false,
   theme = "light",
+  backdrop = false,
+  elapsedAnchorEpochMs = null,
 }: AnalysisProcessingStateProps) {
+  const language = useAppLanguage();
   const isDark = theme === "dark";
+  const tone = backdrop || isDark ? "on-dark" : "on-light";
+
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = window.setInterval(() => setTick((previous) => previous + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const hasAnchor =
+    typeof elapsedAnchorEpochMs === "number" && Number.isFinite(elapsedAnchorEpochMs);
+
+  const elapsedSeconds = React.useMemo(() => {
+    if (hasAnchor) {
+      return Math.max(0, Math.floor((Date.now() - elapsedAnchorEpochMs) / 1000));
+    }
+    return tick;
+  }, [elapsedAnchorEpochMs, hasAnchor, tick]);
+
+  const titleLabel = i18n(language, {
+    fr: "Analyse en cours",
+    en: "Analysis in progress",
+  });
+
+  const elapsedLabel = formatAnalysisElapsedLabel(elapsedSeconds, language);
+  const detailHint = message?.trim();
+  const ariaLabel = [titleLabel, detailHint, elapsedLabel].filter(Boolean).join(" — ");
+
+  const loaderSize = backdrop ? "lg" : minimalChrome ? "md" : "lg";
+  const trackGap = "mt-7";
+
+  const panelClass = cn(
+    "mx-auto flex w-full max-w-[min(100%,22rem)] flex-col items-center rounded-[2rem] px-8 py-10 sm:max-w-md sm:px-10 sm:py-11",
+    tone === "on-dark"
+      ? cn(analysisGlassPanelClassName, "text-zinc-50")
+      : "border border-slate-200/90 bg-white/95 text-slate-900 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.35)] backdrop-blur-md",
+  );
+
+  const outerClass = "flex w-full flex-col items-center justify-center px-2 py-2 text-center sm:px-3";
 
   return (
-    <div
-      className={cn(
-        "rounded-[1.5rem] p-5 text-center sm:p-8",
-        isDark
-          ? "border border-white/12 bg-white/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset] backdrop-blur-md"
-          : "border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(15,23,42,0.08),transparent_42%),linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)]",
-      )}
-    >
-      <div
-        className={cn(
-          "mx-auto flex h-24 w-24 items-center justify-center rounded-full border shadow-[0_20px_55px_-35px_rgba(15,23,42,0.8)]",
-          isDark
-            ? "border-white/15 bg-white/10"
-            : "border border-slate-200 bg-white",
-        )}
-      >
-        <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-slate-950 text-white">
-          <div
-            className={cn(
-              "absolute inset-[-10px] animate-spin rounded-full border border-t-slate-950",
-              isDark ? "border-white/20 border-t-white" : "border-slate-300 border-t-slate-950",
-            )}
-          />
-          {!minimalChrome ? <Sparkles className="h-7 w-7" /> : null}
-        </div>
-      </div>
-
-      <div className="mx-auto mt-6 max-w-md space-y-3">
-        {!minimalChrome ? (
-          <p
-            className={cn(
-              "text-[11px] font-semibold uppercase tracking-[0.16em]",
-              isDark ? "text-zinc-400" : "text-slate-500",
-            )}
-          >
-            Analyse IA en cours
-          </p>
-        ) : null}
-        <h1
+    <div className={outerClass}>
+      <div className={panelClass}>
+        <BrandLoader
+          label={ariaLabel}
+          tone={tone}
+          size={loaderSize}
           className={cn(
-            "font-display text-2xl font-bold leading-tight tracking-tight sm:text-[2rem]",
-            isDark ? "text-white" : "text-slate-950",
+            tone === "on-dark"
+              ? "drop-shadow-[0_8px_28px_rgba(0,0,0,0.38)]"
+              : "drop-shadow-[0_12px_28px_rgba(0,0,0,0.14)]",
+          )}
+        />
+
+        <h2
+          className={cn(
+            "mt-7 font-display text-lg font-semibold tracking-tight sm:text-xl",
+            tone === "on-dark" ? "text-white" : "text-slate-900",
           )}
         >
-          ScoreMax analyse tes photos
-        </h1>
+          {titleLabel}
+        </h2>
+
         <p
           className={cn(
-            "text-sm leading-relaxed sm:text-base",
-            isDark ? "text-zinc-300" : "text-slate-600",
+            "mt-2 text-sm tabular-nums tracking-tight",
+            tone === "on-dark" ? "text-zinc-400" : "text-slate-500",
           )}
+          aria-live="polite"
+          aria-atomic="true"
         >
-          On prépare ton diagnostic visage et on sécurise les résultats avant de
-          t&apos;envoyer vers ton dashboard.
+          {elapsedLabel}
         </p>
-      </div>
 
-      <div
-        className={cn(
-          "mx-auto mt-7 max-w-md rounded-2xl p-4 text-left shadow-sm",
-          isDark
-            ? "border border-white/10 bg-black/25"
-            : "border border-slate-200 bg-white/80",
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <Loader2
-            className={cn("h-5 w-5 animate-spin", isDark ? "text-zinc-200" : "text-slate-900")}
-          />
-          <div>
-            <p className={cn("text-sm font-semibold", isDark ? "text-white" : "text-slate-900")}>
-              {message ?? "Analyse ScoreMax en cours..."}
-            </p>
-            <p className={cn("text-xs", isDark ? "text-zinc-400" : "text-slate-500")}>
-              Cette étape peut prendre quelques instants.
-            </p>
-          </div>
-        </div>
-        <div
-          className={cn("mt-4 h-2 overflow-hidden rounded-full", isDark ? "bg-white/10" : "bg-slate-100")}
-        >
-          <div
-            className={
-              awaitingRedirect
-                ? cn(
-                    "h-full w-full animate-pulse rounded-full",
-                    isDark ? "bg-white" : "bg-slate-950",
-                  )
-                : cn(
-                    "h-full w-2/3 animate-pulse rounded-full",
-                    isDark ? "bg-white" : "bg-slate-950",
-                  )
-            }
-          />
-        </div>
+        <BrandLoaderTrack tone={tone} className={cn(trackGap, "w-[min(240px,85%)]")} />
       </div>
     </div>
   );

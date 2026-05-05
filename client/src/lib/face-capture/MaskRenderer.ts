@@ -1,7 +1,7 @@
 // ============================================================
-// MaskRenderer — Tessellation intérieure (discrete, peu opaque) + contours
-// (lèvres, yeux, bas du nez) + ovale extérieur.
-// Landmarks alignés sur object-fit: cover comme la vidéo.
+// MaskRenderer — Contour ovale net + intérieur très discret (~10 %).
+// Maillage triangulaire (wireframe) + traits yeux / nez / bouche en faible
+// opacité ; ovale extérieur reste opaque pour lisibilité du masque.
 // ============================================================
 //
 // Coordinates: normalized to video bitmap (videoWidth × videoHeight), then to
@@ -16,8 +16,8 @@ import type { LandmarkPoint } from './types';
 import { FACEMESH_FEATURE_CONTOURS_ORDERED } from './facemesh-feature-contours';
 import { FACEMESH_TESSELATION_TRIS } from './facemesh-tesselation-tris';
 
-/** Opacité du maillage intérieur vs traits saillants (~30 % des contours). */
-const INNER_MESH_OPACITY_FACTOR = 0.3;
+/** Maillage intérieur + yeux / nez / bouche — très léger (~10 %). */
+const INTERIOR_GRAPHICS_OPACITY = 0.1;
 
 /**
  * Contour visage MediaPipe — ordre cyclique (front → tempes → mâchoire → menton).
@@ -96,8 +96,8 @@ export class MaskRenderer {
   private _meshPos: Float32Array | null = null;
   private _meshPosAttr: THREE.BufferAttribute | null = null;
   private _ovalPos: Float32Array | null = null;
-  private readonly _meshColor = new THREE.Color();
   private readonly _ovalColor = new THREE.Color();
+  private readonly _meshColor = new THREE.Color();
   private readonly _ndcScratch = { x: 0, y: 0, z: 0 };
 
   init(overlayCanvas: HTMLCanvasElement): void {
@@ -124,14 +124,7 @@ export class MaskRenderer {
     this._lastBufferW = cw;
     this._lastBufferH = ch;
 
-    /**
-     * Watch the canvas's own CSS box for layout changes (rotation, address bar
-     * collapse, parent resize, panel collapse...). Without this, `_syncCanvasSize`
-     * only reacts inside `render()` using the values its caller passes in — if
-     * those drift from the canvas's actual box, the mesh is composited at the
-     * wrong scale and ends up offset.
-     */
-    if (typeof ResizeObserver !== "undefined") {
+    if (typeof ResizeObserver !== 'undefined') {
       this._resizeObserver = new ResizeObserver(() => {
         if (!this.overlay) return;
         this._syncCanvasSize(this.overlay.clientWidth, this.overlay.clientHeight);
@@ -151,7 +144,7 @@ export class MaskRenderer {
       color: 0xffffff,
       transparent: true,
       wireframe: true,
-      opacity: 0.22,
+      opacity: INTERIOR_GRAPHICS_OPACITY,
       side: THREE.DoubleSide,
       depthTest: false,
       depthWrite: false,
@@ -164,7 +157,7 @@ export class MaskRenderer {
       color: 0xffffff,
       linewidth: 3.0,
       transparent: true,
-      opacity: 0.88,
+      opacity: INTERIOR_GRAPHICS_OPACITY,
       depthTest: false,
       depthWrite: false,
       resolution: new THREE.Vector2(this.overlay.clientWidth, this.overlay.clientHeight),
@@ -186,7 +179,7 @@ export class MaskRenderer {
       color: 0xffffff,
       linewidth: 4.125,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.96,
       depthTest: false,
       depthWrite: false,
       resolution: new THREE.Vector2(this.overlay.clientWidth, this.overlay.clientHeight),
@@ -195,10 +188,6 @@ export class MaskRenderer {
     this.ovalLine.renderOrder = 2;
     this.scene.add(this.ovalLine);
 
-    /**
-     * Scan bar: thin plane (emerald) clipped to the face silhouette.
-     * `scanGlowMesh` is a wider semi-transparent halo.
-     */
     const scanGeo = new THREE.PlaneGeometry(1, 1);
     this.scanGlowMat = new THREE.MeshBasicMaterial({
       color: 0x10b981,
@@ -225,9 +214,6 @@ export class MaskRenderer {
     this.scene.add(this.scanMesh);
   }
 
-  /**
-   * Keep WebGL backing store in sync with layout (fixes 0×0 init + resize).
-   */
   private _syncCanvasSize(elW: number, elH: number): void {
     if (!this.renderer) return;
     if (elW <= 0 || elH <= 0) return;
@@ -254,15 +240,6 @@ export class MaskRenderer {
     this._alignmentQuality = q;
   }
 
-  /**
-   * @param videoW videoWidth / intrinsic frame width fed to MediaPipe
-   * @param videoH videoHeight / intrinsic frame height
-   * @param elW clientWidth of the overlay (= video element box)
-   * @param elH clientHeight
-   * @param opts.holdingProgress when defined, draws a light-blue scan bar at
-   *   y = lerp(faceTop, faceBottom, progress), with width clipped to the
-   *   actual face oval at that y (intersection-based, not bounding box).
-   */
   render(
     landmarks: LandmarkPoint[],
     videoW: number,
@@ -273,14 +250,7 @@ export class MaskRenderer {
   ): void {
     if (!this.scene || !this.overlay || !this.renderer || !this.camera) return;
     if (landmarks.length < 3) return;
-    /**
-     * Single source of truth for the rendering box: the canvas's own CSS
-     * dimensions. We deliberately ignore the caller-passed `_elW`/`_elH`
-     * (typically `videoEl.clientWidth`) because the canvas is the actual
-     * compositing target — any drift between those two boxes (different
-     * Tailwind utilities, intrinsic 300×150 attributes, layout race) would
-     * shift the mesh horizontally even with otherwise-correct math.
-     */
+
     const elW = this.overlay.clientWidth;
     const elH = this.overlay.clientHeight;
     if (elW <= 0 || elH <= 0 || videoW <= 0 || videoH <= 0) return;
@@ -301,14 +271,9 @@ export class MaskRenderer {
     this._syncCanvasSize(elW, elH);
 
     const q = this._alignmentQuality;
-
+    /** Contour ovale : opaque / très lisible ; intérieur à `INTERIOR_GRAPHICS_OPACITY`. */
     const lineOpacity = 0.48 + q * 0.47;
-    /** Traits lèvres / yeux / nez */
-    const featureOpacity = Math.min(1, lineOpacity * 0.85 + 0.1);
-    /** contour ovale visage */
-    const rimOpacity = Math.min(1, lineOpacity * 0.88 + 0.12);
-    /** Maillage intérieur : plus discret que les contours (WebGL fil ~1 px). */
-    const meshOpacity = Math.min(1, featureOpacity * INNER_MESH_OPACITY_FACTOR);
+    const contourOpacity = Math.min(1, lineOpacity * 0.92 + 0.08);
     this._meshColor.setRGB(1, 1, 1);
     this._ovalColor.copy(this._meshColor);
 
@@ -336,12 +301,12 @@ export class MaskRenderer {
       this._meshPosAttr!.needsUpdate = true;
       this.meshGeo.setDrawRange(0, FACEMESH_TESSELATION_TRIS.length);
       this.meshMat.color.copy(this._meshColor);
-      this.meshMat.opacity = meshOpacity;
+      this.meshMat.opacity = INTERIOR_GRAPHICS_OPACITY;
     }
 
     if (this.featureLineMat) {
       this.featureLineMat.color.copy(this._ovalColor);
-      this.featureLineMat.opacity = featureOpacity;
+      this.featureLineMat.opacity = INTERIOR_GRAPHICS_OPACITY;
     }
 
     for (let fi = 0; fi < this._featureLines.length; fi++) {
@@ -404,7 +369,7 @@ export class MaskRenderer {
         op[n * 3 + 2] = op[2]!;
         this.ovalGeo.setPositions(op);
         this.ovalMat.color.copy(this._ovalColor);
-        this.ovalMat.opacity = rimOpacity;
+        this.ovalMat.opacity = contourOpacity;
         const dw = this.renderer.domElement.width;
         const dh = this.renderer.domElement.height;
         if (dw > 0 && dh > 0) {
@@ -413,19 +378,15 @@ export class MaskRenderer {
       }
     }
 
-    /**
-     * Holding-state scan bar: positioned within the face oval (not just the
-     * mesh bbox), so its width tracks the face silhouette as it sweeps top
-     * to bottom. Hidden when no `holdingProgress` is provided.
-     */
     const holdingProgress = opts?.holdingProgress;
-    if (holdingProgress !== undefined && this.scanMesh && this.scanGlowMesh) {
+    if (
+      holdingProgress !== undefined &&
+      this.scanMesh &&
+      this.scanGlowMesh &&
+      Number.isFinite(bboxMinY) &&
+      Number.isFinite(bboxMaxY)
+    ) {
       const clampedProgress = Math.max(0, Math.min(1, holdingProgress));
-      /**
-       * Once the sweep reaches 100%, hide the bar immediately — otherwise it
-       * sits at the bottom of the face until `Capturing` clears state, which
-       * feels like a stuck artifact.
-       */
       if (clampedProgress >= 1) {
         this.scanMesh.visible = false;
         this.scanGlowMesh.visible = false;
@@ -458,15 +419,6 @@ export class MaskRenderer {
     this.renderer.render(this.scene, this.camera);
   }
 
-  /**
-   * Compute the x-range in NDC where a horizontal line at `y = barY`
-   * intersects the face oval polygon. Returns null when the line doesn't
-   * cross the oval (above forehead apex or below chin).
-   *
-   * Linear scan over the oval's edges: for each edge crossing y=barY, lerp
-   * to find the exact x. We then take min/max of the crossings (typically
-   * 2 — left side and right side of the face).
-   */
   private _computeOvalXAtY(
     landmarks: LandmarkPoint[],
     videoW: number,

@@ -19,8 +19,9 @@ import { hairlineProgress } from "./helpers";
  */
 const HOLDING_ANGLE_EXPAND_DEG = 10;
 const HOLDING_FACE_RATIO_FACTOR = 0.85;
-const HOLDING_HAIRLINE_THRESHOLD = 0.5;
-const STRICT_HAIRLINE_THRESHOLD = 0.7;
+/** Un peu plus tolérant quand le visage est plus petit dans le cadre (prise un peu plus loin). */
+const HOLDING_HAIRLINE_THRESHOLD = 0.46;
+const STRICT_HAIRLINE_THRESHOLD = 0.64;
 
 export class HairlineStrategy implements PoseStrategy {
   readonly poseId = "closeup-hairline" as const;
@@ -43,7 +44,7 @@ export class HairlineStrategy implements PoseStrategy {
     if (!inRange(frame.headPose.pitch, pitchRange)) hints.push("Penchez moins la tête");
     if (!inRange(frame.headPose.roll, rollRange)) hints.push("Redressez la tête");
     if (hairline < hairlineThreshold) hints.push("Dégagez davantage le front");
-    if (faceRatio(frame) < minFaceRatio) hints.push("Rapprochez votre front");
+    if (faceRatio(frame) < minFaceRatio) hints.push("Rapprochez-vous un peu ou inclinez pour le front");
     const progress =
       (rangeProgress(frame.headPose.yaw, yawRange, 10) +
         rangeProgress(frame.headPose.pitch, pitchRange, 10) +

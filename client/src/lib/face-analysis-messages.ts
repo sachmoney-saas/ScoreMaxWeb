@@ -8,6 +8,7 @@ export function faceAnalysisMessage(
     | "mimeTypeInvalid"
     | "supabaseSessionMissing"
     | "signedUploadFailed"
+    | "uploadTimedOut"
     | "r2UploadFailed"
     | "scanAssetsSaveFailed"
     | "noScanAssets"
@@ -34,6 +35,11 @@ export function faceAnalysisMessage(
       return i18n(lang, {
         en: "Could not prepare upload to storage.",
         fr: "Impossible de préparer l’upload sur le stockage.",
+      });
+    case "uploadTimedOut":
+      return i18n(lang, {
+        en: "Upload timed out. Check your connection and try again.",
+        fr: "Délai d’envoi dépassé. Vérifie ta connexion et réessaie.",
       });
     case "r2UploadFailed":
       return i18n(lang, {

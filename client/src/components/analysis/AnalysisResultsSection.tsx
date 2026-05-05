@@ -23,7 +23,10 @@ import {
   SCOREMAX_WORKER_WEIGHTS,
 } from "@/lib/face-analysis-score";
 import type { GlobalFaceScore } from "@/lib/face-analysis-score";
-import { AnalysisProcessingState } from "@/components/analysis/AnalysisProcessingState";
+import {
+  AnalysisProcessingState,
+  analysisElapsedAnchorEpochMs,
+} from "@/components/analysis/AnalysisProcessingState";
 import {
   getWorkerPreviewHeadlineScore,
   MiniRing,
@@ -33,7 +36,10 @@ import {
 import { CriticalPointsRecommendations } from "@/components/analysis/CriticalPointsRecommendations";
 import {
   analysisSurfaceCardClassName,
+  analysisTabActiveMetallicTriggerClassName,
+  analysisTabBarGlassClassName,
   ScoreRing,
+  scoreRingMatchMetallicPillClassName,
 } from "@/components/analysis/workers/_shared";
 import { cn } from "@/lib/utils";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
@@ -61,14 +67,13 @@ const EMPTY_RESULT: PersistedWorkerAnalysisResult = {
   rawRuns: [],
 };
 
-/** Inactive: muted; active: pill sombre + une seule bordure argent épaisse (pas ring/offset). */
+/** Inactive: muted; active: pill métal (comme Mon protocole / badge rank). */
 const ANALYSIS_TAB_TRIGGER_CLASS = cn(
-  "rounded-xl border-[3px] border-transparent px-5 py-2.5 text-sm font-medium text-zinc-400 transition-all",
+  "relative z-0 rounded-xl border border-transparent px-5 py-2.5 text-sm font-medium text-zinc-400 transition-all",
   "hover:text-zinc-200",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
-  "data-[state=active]:border-zinc-300 data-[state=active]:bg-slate-950 data-[state=active]:text-white",
-  "data-[state=active]:shadow-[0_2px_14px_-6px_rgba(0,0,0,0.55),0_0_18px_-10px_rgba(255,255,255,0.12)]",
-  "data-[state=active]:hover:text-white",
+  analysisTabActiveMetallicTriggerClassName,
+  "data-[state=active]:hover:text-zinc-950",
 );
 
 const WORKER_DISPLAY_ORDER = [
@@ -816,14 +821,11 @@ function GlobalScoreCard({
             <div
               className={cn(
                 "relative mx-auto mt-5 max-w-xl overflow-hidden rounded-2xl px-4 py-2.5 text-center",
-                "border border-white/70 ring-1 ring-black/[0.06]",
-                "bg-[linear-gradient(152deg,#ffffff_0%,#fafafa_14%,#f4f4f5_38%,#e4e4e7_68%,#cfcfd4_100%)]",
-                "shadow-[inset_0_2px_4px_rgba(255,255,255,0.92),inset_0_-4px_12px_rgba(24,24,27,0.12),0_10px_28px_-12px_rgba(0,0,0,0.55),0_4px_12px_-6px_rgba(0,0,0,0.18)]",
-                "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-[linear-gradient(118deg,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(0,0,0,0.04)_100%)] before:content-['']",
+                scoreRingMatchMetallicPillClassName,
               )}
             >
               <p
-                className="relative font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base [text-shadow:0_1px_0_rgba(255,255,255,0.65)]"
+                className="relative z-10 font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base [text-shadow:0_1px_0_rgba(255,255,255,0.65)]"
               >
                 {rank.title}
               </p>
@@ -965,13 +967,17 @@ export function AnalysisResultsSection({
 
   if (isAnalysisLoading) {
     return (
-      <AnalysisProcessingState
-        message={
-          analysis.job.status === "queued"
-            ? "Analyse en file d'attente..."
-            : "Analyse ScoreMax en cours..."
-        }
-      />
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-8">
+        <AnalysisProcessingState
+          backdrop
+          elapsedAnchorEpochMs={analysisElapsedAnchorEpochMs(analysis.job.created_at)}
+          message={
+            analysis.job.status === "queued"
+              ? "Analyse en file d'attente..."
+              : "Analyse ScoreMax en cours..."
+          }
+        />
+      </div>
     );
   }
 
@@ -1037,18 +1043,18 @@ export function AnalysisResultsSection({
       <Tabs defaultValue="overview" className="space-y-5">
         <TabsList
           className={cn(
-            analysisSurfaceCardClassName,
-            "inline-flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl p-1.5 sm:flex-nowrap",
+            analysisTabBarGlassClassName,
+            "inline-flex h-auto w-fit max-w-full flex-wrap justify-start gap-1 self-start rounded-2xl p-1.5 text-zinc-300 sm:flex-nowrap",
           )}
         >
           <TabsTrigger value="overview" className={ANALYSIS_TAB_TRIGGER_CLASS}>
-            Overview
+            <span className="relative z-10">Overview</span>
           </TabsTrigger>
           <TabsTrigger
             value="recommendations"
             className={ANALYSIS_TAB_TRIGGER_CLASS}
           >
-            Recommandations
+            <span className="relative z-10">Recommandations</span>
           </TabsTrigger>
         </TabsList>
 

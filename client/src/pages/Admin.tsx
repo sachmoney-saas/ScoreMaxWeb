@@ -65,6 +65,10 @@ import {
   useUserGrowth,
 } from "@/hooks/use-supabase";
 import type { AdminAnalysisFailure } from "@/lib/admin-analysis";
+import {
+  grantUserSubscription,
+  revokeUserSubscription,
+} from "@/lib/admin-subscriptions-api";
 import { deleteUserAccountAsAdmin } from "@/lib/admin-users-api";
 import { queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
@@ -163,6 +167,7 @@ function UsersManagementPage() {
   const { updateProfile, isUpdating } = useProfile();
   const { toast } = useToast();
   const [isPurgingUserAccount, setIsPurgingUserAccount] = useState(false);
+  const [isMutatingSubscription, setIsMutatingSubscription] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [onboardingFilter, setOnboardingFilter] = useState<OnboardingFilter>("all");
@@ -187,14 +192,62 @@ function UsersManagementPage() {
   }, [onboardingFilter, profiles, roleFilter, searchQuery]);
 
   async function handleToggleSubscriber(profile: AdminProfile) {
-    try {
-      await updateProfile({
-        id: getProfileId(profile),
-        updates: { is_subscriber: !profile.is_subscriber },
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      toast({
+        variant: "destructive",
+        title: "Session expirée",
+        description: "Reconnecte-toi pour modifier les abonnements.",
       });
-      toast({ title: "Profil mis à jour", description: "Le statut abonné a été modifié." });
+      return;
+    }
+
+    if (profile.role === "admin") {
+      toast({
+        variant: "destructive",
+        title: "Action inutile",
+        description:
+          "Les administrateurs disposent automatiquement de l'accès abonné via leur rôle.",
+      });
+      return;
+    }
+
+    const userId = getProfileId(profile);
+    const willGrant = !profile.is_subscriber;
+
+    try {
+      setIsMutatingSubscription(true);
+      if (willGrant) {
+        await grantUserSubscription({
+          accessToken,
+          userId,
+          reason: "Manual grant from admin panel",
+        });
+        toast({
+          title: "Abonnement accordé",
+          description: "L'utilisateur a maintenant un accès abonné permanent.",
+        });
+      } else {
+        await revokeUserSubscription({
+          accessToken,
+          userId,
+          reason: "Manual revoke from admin panel",
+        });
+        toast({
+          title: "Abonnement révoqué",
+          description: "L'accès abonné a été retiré.",
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      await queryClient.invalidateQueries({ queryKey: ["profile", userId] });
     } catch (error) {
-      toast({ variant: "destructive", title: "Mise à jour impossible", description: getErrorMessage(error) });
+      toast({
+        variant: "destructive",
+        title: "Mise à jour impossible",
+        description: getErrorMessage(error),
+      });
+    } finally {
+      setIsMutatingSubscription(false);
     }
   }
 
@@ -276,7 +329,7 @@ function UsersManagementPage() {
       ) : (
         <UserManagement
           currentUserId={user?.id}
-          isMutating={isUpdating || isPurgingUserAccount}
+          isMutating={isUpdating || isPurgingUserAccount || isMutatingSubscription}
           onboardingFilter={onboardingFilter}
           profiles={filteredProfiles}
           roleFilter={roleFilter}
@@ -755,11 +808,25 @@ function UserManagement(props: UserManagementProps) {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Switch
-                              checked={profile.is_subscriber}
-                              disabled={props.isMutating}
+                              checked={profile.is_subscriber || profile.role === "admin"}
+                              disabled={props.isMutating || profile.role === "admin"}
                               onCheckedChange={() => props.onToggleSubscriber(profile)}
+                              aria-label={
+                                profile.role === "admin"
+                                  ? "Accès abonné automatique pour les administrateurs"
+                                  : "Basculer le statut abonné"
+                              }
                             />
-                            {profile.is_subscriber ? <Crown className="h-4 w-4 text-amber-500" /> : null}
+                            {profile.role === "admin" ? (
+                              <Badge
+                                variant="outline"
+                                className="whitespace-nowrap border-blue-300/45 bg-blue-400/15 text-blue-100"
+                              >
+                                <Crown className="mr-1 h-3 w-3" /> Auto (admin)
+                              </Badge>
+                            ) : profile.is_subscriber ? (
+                              <Crown className="h-4 w-4 text-amber-500" />
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell>

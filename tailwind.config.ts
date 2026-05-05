@@ -97,10 +97,16 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "brand-loader-shimmer": {
+          "0%": { transform: "translateX(-120%)", opacity: "0.35" },
+          "45%": { opacity: "1" },
+          "100%": { transform: "translateX(220%)", opacity: "0.35" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "brand-loader-shimmer": "brand-loader-shimmer 2.2s ease-in-out infinite",
       },
     },
   },

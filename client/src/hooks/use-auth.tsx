@@ -28,6 +28,11 @@ type AuthContextType = {
   profile: Profile | null;
   isLoading: boolean;
   isAdmin: boolean;
+  /**
+   * Effective gate for paid/premium features.
+   * Mirrors `scoremax_has_premium_access(uid)` server-side: admin OR active sub.
+   */
+  hasPremiumAccess: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -118,12 +123,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const isAdmin = profile?.role === "admin";
   const value = {
     session,
     user,
     profile: profile ?? null,
     isLoading: isLoadingSession || (!!user && isLoadingProfile),
-    isAdmin: profile?.role === "admin",
+    isAdmin,
+    hasPremiumAccess: isAdmin || Boolean(profile?.is_subscriber),
     signOut,
   };
 

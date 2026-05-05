@@ -1,15 +1,11 @@
 import type { FaceFrame, PoseDefinition } from "../types";
 import { PoseStrategy, faceRatio, inRange, rangeProgress } from "./PoseStrategy";
-import { smileProgress } from "./helpers";
+import { smileProgress, SMILE_BLENDSHAPE_THRESHOLD } from "./helpers";
 
 /**
- * Threshold tuned for MediaPipe blendshapes (`mouthSmileLeft` + `mouthSmileRight`):
- * - neutral closed mouth: ~0.05
- * - polite closed-mouth smile: ~0.20–0.35
- * - clear smile (closed or open): ~0.40+
+ * Blendshapes : seuil via `SMILE_BLENDSHAPE_THRESHOLD` + forme `smileProgress`
+ * (bilatéral, pénalité jawOpen). Fallback géométrique plus strict si pas de blendshapes.
  */
-const SMILE_THRESHOLD = 0.3;
-
 export class SmileStrategy implements PoseStrategy {
   readonly poseId = "closeup-smile" as const;
 
@@ -19,11 +15,11 @@ export class SmileStrategy implements PoseStrategy {
     if (!inRange(frame.headPose.yaw, pose.yawRange)) hints.push("Tournez moins la tête");
     if (!inRange(frame.headPose.pitch, pose.pitchRange)) hints.push("Regardez droit devant");
     if (!inRange(frame.headPose.roll, pose.rollRange)) hints.push("Redressez la tête");
-    if (smile < SMILE_THRESHOLD) {
-      hints.push('Souriez davantage.');
+    if (smile < SMILE_BLENDSHAPE_THRESHOLD) {
+      hints.push("Souriez davantage (visible des deux côtés).");
     }
     if (faceRatio(frame) < pose.minFaceRatio) hints.push("Rapprochez votre visage");
-    const smileNormalized = Math.min(1, smile / SMILE_THRESHOLD);
+    const smileNormalized = Math.min(1, smile / SMILE_BLENDSHAPE_THRESHOLD);
     const progress =
       (rangeProgress(frame.headPose.yaw, pose.yawRange, 12) +
         rangeProgress(frame.headPose.pitch, pose.pitchRange, 12) +

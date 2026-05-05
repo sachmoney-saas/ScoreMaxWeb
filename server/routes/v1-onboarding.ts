@@ -5,19 +5,16 @@ import { ApiError } from "../lib/errors";
 import { validateBody } from "../lib/validate";
 import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 import {
+  assertFreemiumQuotaAvailable,
   buildPayload,
   createAnalysisJob,
+  loadActiveFreemiumJobForUser,
   loadRequiredAssets,
   refreshScanSessionProgress,
   type ScanSessionRow,
 } from "../lib/analysis-orchestration";
 import { requireUserId } from "../lib/auth";
 import { supabaseAdmin } from "../lib/supabase-admin";
-
-type ExistingOnboardingJob = {
-  id: string;
-  status: "queued" | "running" | "completed" | "failed";
-};
 
 async function loadReadyOnboardingSession(userId: string): Promise<ScanSessionRow> {
   const { data, error } = await supabaseAdmin
@@ -100,42 +97,6 @@ async function loadReadyOnboardingSession(userId: string): Promise<ScanSessionRo
   return refreshed;
 }
 
-async function loadLatestReusableOnboardingJob(params: {
-  userId: string;
-  sessionId: string;
-}): Promise<ExistingOnboardingJob | null> {
-  const { data, error } = await supabaseAdmin
-    .from("analysis_jobs")
-    .select("id, status")
-    .eq("user_id", params.userId)
-    .eq("session_id", params.sessionId)
-    .eq("trigger_source", "onboarding_auto")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new ApiError({
-      code: "INTERNAL_SERVER_ERROR",
-      status: 500,
-      message: "Unable to load existing onboarding analysis job",
-      details: error,
-    });
-  }
-
-  if (!data) {
-    return null;
-  }
-
-  const job = data as ExistingOnboardingJob;
-  if (job.status === "failed") {
-    return null;
-  }
-
-  return job;
-}
-
-
 export function createV1OnboardingRouter(): Router {
   const router = Router();
 
@@ -148,15 +109,16 @@ export function createV1OnboardingRouter(): Router {
         assertSupportedAnalysisLang(lang);
 
         const userId = await requireUserId(req.headers.authorization);
-        const session = await loadReadyOnboardingSession(userId);
-        const existingJob = await loadLatestReusableOnboardingJob({
-          userId,
-          sessionId: session.id,
-        });
 
-        if (existingJob) {
-          if (existingJob.status === "queued") {
-            dispatchAnalysisJob(existingJob.id);
+        // Freemium quota: each account is entitled to a single non-failed
+        // freemium analysis. If one already exists (any session), reuse it
+        // instead of creating a duplicate. This also covers the case of users
+        // who started a fresh onboarding session after abandoning a previous
+        // one whose analysis already ran.
+        const existingFreemium = await loadActiveFreemiumJobForUser(userId);
+        if (existingFreemium) {
+          if (existingFreemium.status === "queued") {
+            dispatchAnalysisJob(existingFreemium.id);
           }
 
           res.status(200).json({
@@ -164,8 +126,8 @@ export function createV1OnboardingRouter(): Router {
             httpStatus: 200,
             data: {
               job: {
-                id: existingJob.id,
-                status: existingJob.status,
+                id: existingFreemium.id,
+                status: existingFreemium.status,
               },
             },
             error: null,
@@ -173,12 +135,18 @@ export function createV1OnboardingRouter(): Router {
           return;
         }
 
+        const session = await loadReadyOnboardingSession(userId);
+        // Defence in depth: the DB partial unique index also enforces this,
+        // but checking up-front yields a clean 409 instead of a 23505 surprise.
+        await assertFreemiumQuotaAvailable(userId);
+
         const assets = await loadRequiredAssets({ userId, sessionId: session.id });
         const payload = await buildPayload({
           userId,
           sessionId: session.id,
           assets,
           source: "onboarding",
+          tier: "freemium",
           ...(lang !== undefined ? { lang } : {}),
         });
         const jobId = await createAnalysisJob({
@@ -186,6 +154,7 @@ export function createV1OnboardingRouter(): Router {
           sessionId: session.id,
           payload,
           triggerSource: "onboarding_auto",
+          tier: "freemium",
         });
         await persistAnalysisJobAssets({
           jobId,

@@ -14,12 +14,8 @@ export class JawUpStrategy implements PoseStrategy {
     if (!inRange(frame.headPose.roll, pose.rollRange)) hints.push("Redressez la tête");
     if (!chin) hints.push("Menton non détecté");
     if (faceRatio(frame) < pose.minFaceRatio) hints.push("Rapprochez votre visage");
-    const progress =
-      (rangeProgress(frame.headPose.pitch, pose.pitchRange, 25) +
-        rangeProgress(frame.headPose.yaw, pose.yawRange, 15) +
-        rangeProgress(frame.headPose.roll, pose.rollRange, 15) +
-        Math.min(1, faceRatio(frame) / pose.minFaceRatio)) /
-      4;
+    /** Score d’alignement : uniquement le pitch (angle tête haut/bas). */
+    const progress = rangeProgress(frame.headPose.pitch, pose.pitchRange, 25);
     return { ok: hints.length === 0, hints, progress };
   }
 }

@@ -10,6 +10,16 @@ import { supabaseAdmin } from "./supabase-admin";
 
 const activeJobIds = new Set<string>();
 
+/**
+ * Au-delà de cette durée, un job en `running` qui n'a aucun worker dans ce
+ * process (`activeJobIds`) est considéré comme orphelin (process tué en plein
+ * await sous `bun --watch`, crash, etc.) et marqué `failed` par le watchdog.
+ *
+ * Doit être > `SCOREMAX_API_TIMEOUT_MS` ; on prend une marge confortable.
+ */
+const STALLED_RUNNING_JOB_THRESHOLD_MS = 15 * 60 * 1000;
+const WATCHDOG_INTERVAL_MS = 60 * 1000;
+
 type PersistedAnalysisJob = {
   id: string;
   user_id: string;
@@ -65,10 +75,11 @@ export async function persistAnalysisJobAssets(params: {
 
   const { data: scanAssets, error } = await supabaseAdmin
     .from("scan_assets")
-    .select("id, asset_type_code")
+    .select("id, asset_type_code, created_at")
     .eq("session_id", params.sessionId)
     .eq("user_id", params.userId)
-    .in("asset_type_code", referencedAssetCodes);
+    .in("asset_type_code", referencedAssetCodes)
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw error;
@@ -78,7 +89,21 @@ export async function persistAnalysisJobAssets(params: {
     return;
   }
 
-  const jobAssetRows = scanAssets.map((asset) => ({
+  /**
+   * Guard against duplicate assets of the same type in a session.
+   * Users can re-upload/retake poses, so `scan_assets` may contain multiple
+   * rows for one `asset_type_code`. Keep only the latest one per type before
+   * `upsert`, otherwise Postgres can raise:
+   * "ON CONFLICT DO UPDATE command cannot affect row a second time" (21000).
+   */
+  const latestByType = new Map<string, (typeof scanAssets)[number]>();
+  for (const asset of scanAssets) {
+    if (!latestByType.has(asset.asset_type_code)) {
+      latestByType.set(asset.asset_type_code, asset);
+    }
+  }
+
+  const jobAssetRows = Array.from(latestByType.values()).map((asset) => ({
     analysis_job_id: params.jobId,
     asset_type_code: asset.asset_type_code,
     scan_asset_id: asset.id,
@@ -252,5 +277,105 @@ export async function recoverAnalysisJobsOnStartup(params?: { dispatchQueuedJobs
 
   for (const job of queuedJobs ?? []) {
     dispatchAnalysisJob(job.id as string);
+  }
+}
+
+/**
+ * Watchdog périodique pour réconcilier l'état DB avec ce que ce process
+ * traite réellement (`activeJobIds`). Couvre deux pannes silencieuses :
+ *
+ * 1. Job `running` en DB **non présent** dans `activeJobIds` et dont
+ *    `started_at` est plus vieux que `STALLED_RUNNING_JOB_THRESHOLD_MS` →
+ *    le worker a été tué (hot-reload `bun --watch`, crash) → `failed`.
+ * 2. Job `queued` en DB **non présent** dans `activeJobIds` → personne ne
+ *    l'a repris (ex. après redémarrage avec `dispatchQueuedJobs:false`,
+ *    ou après réincarnation par le bloc 1) → on relance `dispatchAnalysisJob`.
+ */
+export async function reconcileAnalysisJobsTick(): Promise<void> {
+  const stalledBefore = new Date(
+    Date.now() - STALLED_RUNNING_JOB_THRESHOLD_MS,
+  ).toISOString();
+
+  try {
+    const { data: stalledRunning, error: stalledError } = await supabaseAdmin
+      .from("analysis_jobs")
+      .select("id, started_at")
+      .eq("status", "running")
+      .lt("started_at", stalledBefore);
+
+    if (stalledError) {
+      logger.error({ err: stalledError }, "Watchdog: load stalled running failed");
+    } else {
+      for (const job of stalledRunning ?? []) {
+        const jobId = job.id as string;
+        if (activeJobIds.has(jobId)) {
+          continue;
+        }
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from("analysis_jobs")
+          .update({
+            status: "failed",
+            failed_at: new Date().toISOString(),
+            error_code: "JOB_STALLED",
+            error_message:
+              "Worker disappeared while running this analysis (process restart or crash).",
+          })
+          .eq("id", jobId)
+          .eq("status", "running")
+          .select("id")
+          .maybeSingle();
+
+        if (updateError) {
+          logger.error({ err: updateError, jobId }, "Watchdog: failed to mark stalled job");
+          continue;
+        }
+        if (updated) {
+          logger.warn({ jobId }, "Watchdog: marked stalled running job as failed");
+        }
+      }
+    }
+
+    const { data: queuedJobs, error: queuedError } = await supabaseAdmin
+      .from("analysis_jobs")
+      .select("id")
+      .eq("status", "queued")
+      .order("created_at", { ascending: true });
+
+    if (queuedError) {
+      logger.error({ err: queuedError }, "Watchdog: load queued failed");
+      return;
+    }
+
+    for (const job of queuedJobs ?? []) {
+      const jobId = job.id as string;
+      if (activeJobIds.has(jobId)) {
+        continue;
+      }
+      logger.info({ jobId }, "Watchdog: re-dispatching orphan queued job");
+      dispatchAnalysisJob(jobId);
+    }
+  } catch (error) {
+    logger.error({ err: error }, "Watchdog tick failed");
+  }
+}
+
+let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startAnalysisJobsWatchdog(): void {
+  if (watchdogTimer) {
+    return;
+  }
+  watchdogTimer = setInterval(() => {
+    void reconcileAnalysisJobsTick();
+  }, WATCHDOG_INTERVAL_MS);
+  if (typeof watchdogTimer.unref === "function") {
+    watchdogTimer.unref();
+  }
+}
+
+export function stopAnalysisJobsWatchdog(): void {
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
   }
 }

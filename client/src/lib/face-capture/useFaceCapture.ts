@@ -7,6 +7,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { CaptureSession, type CapturedPose, type CaptureSessionState } from './CaptureSession';
 import type { HeadPose, PoseId, PoseSessionState, PoseValidation } from './types';
 
+/** Durée minimale de l’overlay « Initialisation caméra » (modèle + flux). */
+const FACE_CAPTURE_LOAD_MIN_MS = 1400;
+
 export interface FaceCaptureState {
   sessionState: CaptureSessionState;
   currentPose: PoseSessionState | null;
@@ -96,7 +99,12 @@ export function useFaceCapture(
     });
 
     try {
+      const t0 = performance.now();
       await session.init(video, overlay);
+      const elapsed = performance.now() - t0;
+      if (elapsed < FACE_CAPTURE_LOAD_MIN_MS) {
+        await new Promise((r) => setTimeout(r, FACE_CAPTURE_LOAD_MIN_MS - elapsed));
+      }
       setState(prev => ({ ...prev, isLoading: false }));
       await session.start();
       syncState(session);

@@ -28,14 +28,14 @@ import Billing from "@/pages/Billing";
 import MentionsLegales from "@/pages/MentionsLegales";
 import CGU from "@/pages/CGU";
 import Confidentialite from "@/pages/Confidentialite";
-import { Loader2 } from "lucide-react";
 import { AUTH_CONFIG } from "@/config/auth";
 import { LanguageProvider } from "@/lib/i18n";
+import { BrandLoader } from "@/components/ui/brand-loader";
 
 function FullScreenLoader() {
   return (
-    <div className="flex h-screen w-full items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    <div className="flex h-[100dvh] w-full items-center justify-center bg-[hsl(var(--background))]">
+      <BrandLoader size="lg" tone="on-dark" label="Chargement" />
     </div>
   );
 }
@@ -102,9 +102,18 @@ function Router() {
       <Switch>
         {/* Public Routes */}
         <Route path={AUTH_CONFIG.LANDING_PATH} component={Landing} />
-        <Route path="/mentions-legales" component={MentionsLegales} />
-        <Route path="/cgu" component={CGU} />
-        <Route path="/confidentialite" component={Confidentialite} />
+        <Route path="/legal-notice" component={MentionsLegales} />
+        <Route path="/terms" component={CGU} />
+        <Route path="/privacy" component={Confidentialite} />
+        <Route path="/mentions-legales">
+          <Redirect to="/legal-notice" />
+        </Route>
+        <Route path="/cgu">
+          <Redirect to="/terms" />
+        </Route>
+        <Route path="/confidentialite">
+          <Redirect to="/privacy" />
+        </Route>
 
         <Route path={AUTH_CONFIG.LOGIN_PATH}>
           {user ? (

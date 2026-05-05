@@ -8,26 +8,76 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /* ----------------------------------------------------------------------------
- * Shared building blocks for worker visualizations.
- *
- * These keep a consistent ScoreMax design across worker pages while still
- * letting each view ship its own custom charts.
+ * Shared building blocks for worker visualizations + analysis “glass” surfaces.
  * ------------------------------------------------------------------------- */
 
-export const workerSectionCardClassName =
-  "relative overflow-hidden border-white/15 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.14),transparent_36%),linear-gradient(145deg,rgba(10,16,22,0.85)_0%,rgba(20,31,39,0.81)_48%,rgba(185,204,209,0.2)_100%)] text-zinc-50 shadow-[0_24px_80px_-55px_rgba(0,0,0,0.95)] backdrop-blur-sm";
+/* ----------------------------------------------------------------------------
+ * Analysis “glass” surfaces — one family (semi-transparent + radial + blur).
+ *
+ * `Card` applies `bg-card`; transparent stops in gradients would otherwise show
+ * the theme card colour. `!bg-transparent` keeps only the gradient + true bleed
+ * to the page background.
+ * ------------------------------------------------------------------------- */
 
 /**
- * Premium analysis “surface” — Overview worker cards, global score, recommendations
- * tab, protocol hero: radial highlight + dark gradient, border-white/20, blur.
+ * Canonical frosted panel: centered top radial (no bright left patch on wide
+ * cards) + diagonal glass. Edge is intentionally soft: low-opacity border +
+ * inner top highlight (avoids a harsh ring on blurred backgrounds).
  */
-export const analysisSurfaceCardClassName =
-  "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.83)_0%,rgba(20,31,39,0.79)_48%,rgba(185,204,209,0.25)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)] backdrop-blur-sm";
+export const analysisGlassPanelClassName =
+  "relative overflow-hidden border !border-white/[0.08] !bg-transparent bg-[radial-gradient(ellipse_110%_95%_at_50%_-35%,rgba(255,255,255,0.2),transparent_52%),linear-gradient(145deg,rgba(9,15,22,0.86)_0%,rgba(24,34,43,0.8)_48%,rgba(155,181,190,0.22)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_35px_110px_-70px_rgba(0,0,0,0.95)] backdrop-blur-sm";
+
+/** @alias — tab bars use the same panel as cards (single source of truth). */
+export const analysisTabBarGlassClassName = analysisGlassPanelClassName;
+
+/** NewAnalysis hero section — same glass as analysis cards. */
+export const analysisHeroGlassClassName = analysisGlassPanelClassName;
+
+/**
+ * Background for tier title pills — same color stops as ScoreRing arc SVG
+ * (`linearGradient` x1 12% y1 88% → x2 88% y2 12% ≈ to top right).
+ */
+export const scoreRingMatchBadgeBackgroundClassName =
+  "bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]";
+
+/**
+ * Rank title pill + similar CTAs — gradient + border + inset shadow + gloss `::before`.
+ * Set `rounded-xl` or `rounded-2xl` on the same element; `before` uses `rounded-[inherit]`.
+ */
+export const scoreRingMatchMetallicPillClassName = cn(
+  "relative overflow-hidden border border-white/40 ring-1 ring-slate-900/15",
+  scoreRingMatchBadgeBackgroundClassName,
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_8px_rgba(71,85,105,0.22),0_10px_28px_-12px_rgba(0,0,0,0.5),0_4px_12px_-6px_rgba(0,0,0,0.18)]",
+  "before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-[inherit] before:bg-[linear-gradient(118deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(15,23,42,0.06)_100%)] before:content-['']",
+);
+
+/**
+ * Radix `TabsTrigger` active state — same metallic read as rank pills / Mon protocole.
+ */
+export const analysisTabActiveMetallicTriggerClassName = cn(
+  "data-[state=active]:relative data-[state=active]:z-0 data-[state=active]:overflow-hidden",
+  "data-[state=active]:border data-[state=active]:border-white/40 data-[state=active]:ring-1 data-[state=active]:ring-slate-900/15",
+  "data-[state=active]:bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+  "data-[state=active]:font-semibold data-[state=active]:text-zinc-950",
+  "data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_8px_rgba(71,85,105,0.22),0_10px_28px_-12px_rgba(0,0,0,0.5),0_4px_12px_-6px_rgba(0,0,0,0.18)]",
+  "data-[state=active]:before:pointer-events-none data-[state=active]:before:absolute data-[state=active]:before:inset-0 data-[state=active]:before:z-0 data-[state=active]:before:rounded-[inherit] data-[state=active]:before:bg-[linear-gradient(118deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(15,23,42,0.06)_100%)] data-[state=active]:before:content-['']",
+);
+
+/**
+ * Overview / worker / recommendations shells — glass panel + default text.
+ */
+export const analysisSurfaceCardClassName = cn(
+  analysisGlassPanelClassName,
+  "text-zinc-50",
+);
+
+/** Worker subsection cards — identical surface to overview cards. */
+export const workerSectionCardClassName = analysisSurfaceCardClassName;
 
 /** Pill « Retour » — même surface sombre (Button `ghost` + `asChild` / Link). */
 export const analysisBackNavButtonClassName = cn(
   analysisSurfaceCardClassName,
-  "no-default-hover-elevate no-default-active-elevate inline-flex min-h-0 items-center justify-center gap-2 rounded-full border-white/20 px-5 py-2.5 text-sm font-medium text-white transition hover:border-white/35 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+  "no-default-hover-elevate no-default-active-elevate inline-flex min-h-0 items-center justify-center gap-2 rounded-full !border-white/[0.12] px-5 py-2.5 text-sm font-medium text-white transition hover:!border-white/[0.2] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
 );
 
 /* ----------------------------------------------------------------------------
