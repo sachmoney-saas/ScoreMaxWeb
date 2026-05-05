@@ -85,12 +85,22 @@ export function AnalysisProcessingState({
   const loaderSize = backdrop ? "lg" : minimalChrome ? "md" : "lg";
   const trackGap = "mt-7";
 
-  const panelClass = cn(
-    "mx-auto flex w-full max-w-[min(100%,22rem)] flex-col items-center rounded-[2rem] px-8 py-10 sm:max-w-md sm:px-10 sm:py-11",
-    tone === "on-dark"
-      ? cn(analysisGlassPanelClassName, "text-zinc-50")
-      : "border border-slate-200/90 bg-white/95 text-slate-900 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.35)] backdrop-blur-md",
-  );
+  /**
+   * `minimalChrome` = pas de panneau intérieur (le parent fournit déjà la box).
+   * Évite la « double box » dans Onboarding / NewAnalysis qui rendent le loader
+   * dans une carte vitrée.
+   */
+  const panelClass = minimalChrome
+    ? cn(
+        "mx-auto flex w-full flex-col items-center px-4 py-6 sm:px-6 sm:py-8",
+        tone === "on-dark" ? "text-zinc-50" : "text-slate-900",
+      )
+    : cn(
+        "mx-auto flex w-full max-w-[min(100%,22rem)] flex-col items-center rounded-[2rem] px-8 py-10 sm:max-w-md sm:px-10 sm:py-11",
+        tone === "on-dark"
+          ? cn(analysisGlassPanelClassName, "text-zinc-50")
+          : "border border-slate-200/90 bg-white/95 text-slate-900 shadow-[0_24px_60px_-40px_rgba(15,23,42,0.35)] backdrop-blur-md",
+      );
 
   const outerClass = "flex w-full flex-col items-center justify-center px-2 py-2 text-center sm:px-3";
 
