@@ -3,7 +3,10 @@ import {
   ANALYSIS_TIER_RUNS,
   type AnalysisTier,
 } from "@shared/oneshot";
-import type { OnboardingScanAssetCode } from "@shared/schema";
+import {
+  SCAN_ASSET_TO_CANONICAL_SLOT,
+  type OnboardingScanAssetCode,
+} from "@shared/schema";
 import { ApiError } from "./errors";
 import { downloadR2Object, getDefaultR2Bucket } from "./r2-storage";
 import { supabaseAdmin } from "./supabase-admin";
@@ -19,24 +22,29 @@ export const requiredAssetCodes: OnboardingScanAssetCode[] = [
   "EYE_CLOSEUP",
 ];
 
-const workerImageMap: Record<string, OnboardingScanAssetCode> = {
-  age: "FACE_FRONT",
-  bodyfat: "FACE_FRONT",
-  cheeks: "FACE_FRONT",
-  chin: "FACE_FRONT",
-  coloring: "FACE_FRONT",
-  eye_brows: "FACE_FRONT",
-  eyes: "FACE_FRONT",
-  hair: "HAIR_BACK",
-  jaw: "FACE_FRONT",
-  lips: "FACE_FRONT",
-  neck: "PROFILE_LEFT",
-  nose: "PROFILE_LEFT",
-  skin: "FACE_FRONT",
-  skin_tint: "FACE_FRONT",
-  smile: "SMILE",
-  symmetry_shape: "FACE_FRONT",
-};
+/**
+ * Workers we request on every full analysis. ScanFace decides which slot
+ * images each worker actually receives via the prompt's
+ * `requiredImageSlots`, so we don't bind a worker to a single image here.
+ */
+const SCANFACE_WORKERS = [
+  "age",
+  "bodyfat",
+  "cheeks",
+  "chin",
+  "coloring",
+  "eye_brows",
+  "eyes",
+  "hair",
+  "jaw",
+  "lips",
+  "neck",
+  "nose",
+  "skin",
+  "skin_tint",
+  "smile",
+  "symmetry_shape",
+] as const;
 
 export type ScanSessionRow = {
   id: string;
@@ -143,7 +151,7 @@ async function buildAnalysisImages(assets: ScanAssetRow[]) {
       }
 
       return {
-        imageId: asset.asset_type_code,
+        imageId: SCAN_ASSET_TO_CANONICAL_SLOT[asset.asset_type_code],
         mimeType: asset.mime_type,
         base64: await blobToBase64(data),
       };
@@ -166,10 +174,13 @@ export async function buildPayload(params: {
   return analysesRequestSchema.parse({
     requestId: `${params.userId}-${params.sessionId}-${Date.now()}`,
     images: await buildAnalysisImages(params.assets),
-    analyses: Object.entries(workerImageMap).map(([worker, imageId]) => ({
+    /**
+     * No `imageId` per worker: ScanFace pulls the slots its prompt
+     * declares from `images[]`. We just hand it the workers + run count.
+     */
+    analyses: SCANFACE_WORKERS.map((worker) => ({
       worker,
-      imageId,
-      promptVersion: "latest",
+      promptVersion: "latest" as const,
       runs,
     })),
     metadata: {

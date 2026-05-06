@@ -1,7 +1,10 @@
 import { apiRequest } from "@/lib/queryClient";
 import { clientEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
-import type { OnboardingScanAssetCode } from "@shared/schema";
+import {
+  SCAN_ASSET_TO_CANONICAL_SLOT,
+  type OnboardingScanAssetCode,
+} from "@shared/schema";
 import {
   ANALYSIS_TIER_RUNS,
   type AnalysesRequest,
@@ -174,24 +177,29 @@ export type PersistedAnalysisDetailResponse = {
 export type LatestAnalysisResponse = PersistedAnalysisDetailResponse;
 export type AnalysisDetailResponse = PersistedAnalysisDetailResponse;
 
-const workerImageMap: Record<string, OnboardingScanAssetCode> = {
-  age: "FACE_FRONT",
-  bodyfat: "FACE_FRONT",
-  cheeks: "FACE_FRONT",
-  chin: "FACE_FRONT",
-  coloring: "FACE_FRONT",
-  eye_brows: "FACE_FRONT",
-  eyes: "FACE_FRONT",
-  hair: "HAIR_BACK",
-  jaw: "FACE_FRONT",
-  lips: "FACE_FRONT",
-  neck: "PROFILE_LEFT",
-  nose: "PROFILE_LEFT",
-  skin: "FACE_FRONT",
-  skin_tint: "FACE_FRONT",
-  smile: "SMILE",
-  symmetry_shape: "FACE_FRONT",
-};
+/**
+ * Workers we request on every full analysis. ScanFace decides which slot
+ * images each worker actually receives via the prompt's
+ * `requiredImageSlots`, so we don't bind a worker to a single image here.
+ */
+const SCANFACE_WORKERS = [
+  "age",
+  "bodyfat",
+  "cheeks",
+  "chin",
+  "coloring",
+  "eye_brows",
+  "eyes",
+  "hair",
+  "jaw",
+  "lips",
+  "neck",
+  "nose",
+  "skin",
+  "skin_tint",
+  "smile",
+  "symmetry_shape",
+] as const;
 
 /**
  * Build the per-worker analyses array sent to the API.
@@ -199,12 +207,14 @@ const workerImageMap: Record<string, OnboardingScanAssetCode> = {
  * `tier` controls the number of runs requested per worker:
  *   - "freemium" → 1 run  (used during onboarding, ~5× cheaper)
  *   - "standard" → 5 runs (default for paid re-analyses)
+ *
+ * `imageId` is intentionally omitted — ScanFace resolves images from
+ * `images[]` using the prompt's `requiredImageSlots`.
  */
 export function buildFaceAnalysisWorkers(tier: AnalysisTier = "standard") {
   const runs = ANALYSIS_TIER_RUNS[tier];
-  return Object.entries(workerImageMap).map(([worker, imageId]) => ({
+  return SCANFACE_WORKERS.map((worker) => ({
     worker,
-    imageId,
     promptVersion: "latest" as const,
     runs,
   }));
@@ -377,7 +387,7 @@ export async function buildFaceAnalysisRequest(params: {
       const data = await response.blob();
 
       return {
-        imageId: asset.asset_type_code,
+        imageId: SCAN_ASSET_TO_CANONICAL_SLOT[asset.asset_type_code],
         mimeType: asset.mime_type,
         base64: await blobToBase64(data),
       };

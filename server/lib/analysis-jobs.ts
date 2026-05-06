@@ -3,6 +3,11 @@ import {
   type AnalysesRequest,
   type AnalysesResponse,
 } from "@shared/oneshot";
+import {
+  CANONICAL_SLOT_TO_SCAN_ASSET,
+  type OnboardingScanAssetCode,
+  type ScanFaceCanonicalSlot,
+} from "@shared/schema";
 import { mapUnknownError } from "./errors";
 import { logger } from "./logger";
 import { runScoreMaxAnalyses } from "./scoremax-client";
@@ -65,8 +70,45 @@ export async function persistAnalysisJobAssets(params: {
   sessionId: string;
   payload: AnalysesRequest;
 }): Promise<void> {
+  /**
+   * Slot-driven payloads no longer carry `analyses[].imageId`. The set of
+   * referenced assets is the union of every uploaded slot in `images[]`
+   * (translated back from canonical slot names to our internal asset
+   * codes). Legacy single-image fallback payloads with `imageId` still
+   * land via the same `images[]` entry, so this covers both shapes.
+   */
   const referencedAssetCodes = Array.from(
-    new Set(params.payload.analyses.map((analysis) => analysis.imageId)),
+    new Set(
+      params.payload.images
+        .map((image) => image.imageId as ScanFaceCanonicalSlot | string)
+        .map((slotOrCode) => {
+          const mapped = CANONICAL_SLOT_TO_SCAN_ASSET[
+            slotOrCode as ScanFaceCanonicalSlot
+          ];
+          if (mapped) return mapped;
+          // Legacy callers may pass an asset code directly as imageId.
+          if (
+            (
+              [
+                "FACE_FRONT",
+                "PROFILE_LEFT",
+                "PROFILE_RIGHT",
+                "LOOK_UP",
+                "LOOK_DOWN",
+                "SMILE",
+                "HAIR_BACK",
+                "EYE_CLOSEUP",
+              ] as const
+            ).includes(slotOrCode as OnboardingScanAssetCode)
+          ) {
+            return slotOrCode as OnboardingScanAssetCode;
+          }
+          return null;
+        })
+        .filter(
+          (code): code is OnboardingScanAssetCode => code !== null,
+        ),
+    ),
   );
 
   if (referencedAssetCodes.length === 0) {

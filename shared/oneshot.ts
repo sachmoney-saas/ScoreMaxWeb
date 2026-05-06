@@ -11,6 +11,8 @@ export const scoreMaxErrorCodeSchema = z.enum([
   "UNSUPPORTED_WORKER",
   "PROMPT_NOT_FOUND",
   "IMAGE_NOT_FOUND",
+  "MISSING_REQUIRED_IMAGE_SLOT",
+  "TOO_MANY_REQUIRED_IMAGE_SLOTS",
   "RUNS_LIMIT_EXCEEDED",
   "UNSUPPORTED_LANGUAGE",
   "ANALYSIS_WEEKLY_LIMIT",
@@ -54,9 +56,14 @@ const analysesImageSchema = z.object({
   base64: z.string().min(1),
 });
 
+/**
+ * `imageId` is **optional**: ScanFace decides which images each worker
+ * receives based on the prompt's `requiredImageSlots`. It only needs to
+ * be set on the legacy single-image fallback path (prompt with no slots).
+ */
 const analysesItemSchema = z.object({
   worker: z.string().min(1),
-  imageId: z.string().min(1),
+  imageId: z.string().min(1).optional(),
   promptVersion: promptVersionSchema,
   runs: z.number().int().min(1).max(10).optional(),
 });
@@ -90,9 +97,15 @@ export const analysesRequestSchema = z
     lang: analysisLangFieldSchema.optional(),
   })
   .superRefine((payload, ctx) => {
+    /**
+     * Legacy single-image fallback only: when an analysis explicitly
+     * sets `imageId`, it must reference one of the uploaded images.
+     * The slot-driven path leaves `imageId` undefined and ScanFace
+     * resolves the matching slots itself.
+     */
     const imageIds = new Set(payload.images.map((image) => image.imageId));
     payload.analyses.forEach((analysis, index) => {
-      if (!imageIds.has(analysis.imageId)) {
+      if (analysis.imageId !== undefined && !imageIds.has(analysis.imageId)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["analyses", index, "imageId"],

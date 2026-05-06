@@ -193,6 +193,55 @@ export type OnboardingScanAssetCode =
   | "HAIR_BACK"
   | "EYE_CLOSEUP";
 
+/**
+ * Canonical ScanFace image slot names (cf. ScanFace API docs).
+ *
+ * The API expects `images[].imageId` to use these names so it can match
+ * each worker prompt's `requiredImageSlots`. Keeping the mapping
+ * centralized lets server + client + shared schemas stay aligned.
+ */
+export const SCANFACE_CANONICAL_IMAGE_SLOTS = [
+  "front_face",
+  "left_profile",
+  "right_profile",
+  "look_up",
+  "look_down",
+  "smile",
+  "hair_back_hand",
+  "closeup_eye",
+] as const;
+
+export type ScanFaceCanonicalSlot =
+  (typeof SCANFACE_CANONICAL_IMAGE_SLOTS)[number];
+
+export const SCAN_ASSET_TO_CANONICAL_SLOT: Record<
+  OnboardingScanAssetCode,
+  ScanFaceCanonicalSlot
+> = {
+  FACE_FRONT: "front_face",
+  PROFILE_LEFT: "left_profile",
+  PROFILE_RIGHT: "right_profile",
+  LOOK_UP: "look_up",
+  LOOK_DOWN: "look_down",
+  SMILE: "smile",
+  HAIR_BACK: "hair_back_hand",
+  EYE_CLOSEUP: "closeup_eye",
+};
+
+export const CANONICAL_SLOT_TO_SCAN_ASSET: Record<
+  ScanFaceCanonicalSlot,
+  OnboardingScanAssetCode
+> = {
+  front_face: "FACE_FRONT",
+  left_profile: "PROFILE_LEFT",
+  right_profile: "PROFILE_RIGHT",
+  look_up: "LOOK_UP",
+  look_down: "LOOK_DOWN",
+  smile: "SMILE",
+  hair_back_hand: "HAIR_BACK",
+  closeup_eye: "EYE_CLOSEUP",
+};
+
 export type OnboardingScanStatus = {
   session_id: string;
   required_asset_count: number;
