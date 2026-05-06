@@ -91,7 +91,6 @@ const WORKER_DISPLAY_ORDER = [
   "neck",
   "eyes",
   "nose",
-  "ear",
   "skin_tint",
   "symmetry_shape",
 ] as const;
@@ -1000,7 +999,6 @@ export function AnalysisResultsSection({
   const eyesResult = results.find((r) => r.worker === "eyes");
   const noseResult = results.find((r) => r.worker === "nose");
   const neckResult = results.find((r) => r.worker === "neck");
-  const earResult = results.find((r) => r.worker === "ear");
   const skinTintResult = results.find((r) => r.worker === "skin_tint");
   const resultsAfterPinnedPairs = results.filter(
     (r) =>
@@ -1018,7 +1016,6 @@ export function AnalysisResultsSection({
       r.worker !== "eyes" &&
       r.worker !== "nose" &&
       r.worker !== "neck" &&
-      r.worker !== "ear" &&
       r.worker !== "skin_tint",
   );
 
@@ -1333,36 +1330,7 @@ export function AnalysisResultsSection({
                 scoreHighlight={workerPreviewScoreHighlight(noseResult.worker)}
               />
             ) : null}
-            {earResult && skinTintResult ? (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-                <div className="min-w-0">
-                  <WorkerResultCard
-                    key={`${earResult.worker}-${earResult.promptVersion}`}
-                    result={earResult}
-                    href={buildWorkerHref(earResult.worker)}
-                    language={language}
-                    scoreHighlight={workerPreviewScoreHighlight(earResult.worker)}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <WorkerResultCard
-                    key={`${skinTintResult.worker}-${skinTintResult.promptVersion}`}
-                    result={skinTintResult}
-                    href={buildWorkerHref(skinTintResult.worker)}
-                    language={language}
-                    scoreHighlight={workerPreviewScoreHighlight(skinTintResult.worker)}
-                  />
-                </div>
-              </div>
-            ) : earResult ? (
-              <WorkerResultCard
-                key={`${earResult.worker}-${earResult.promptVersion}`}
-                result={earResult}
-                href={buildWorkerHref(earResult.worker)}
-                language={language}
-                scoreHighlight={workerPreviewScoreHighlight(earResult.worker)}
-              />
-            ) : skinTintResult ? (
+            {skinTintResult ? (
               <WorkerResultCard
                 key={`${skinTintResult.worker}-${skinTintResult.promptVersion}`}
                 result={skinTintResult}

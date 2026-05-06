@@ -10,7 +10,7 @@ const BODYFAT_WORKER = "bodyfat";
 
 /** All leaf scores under facial body fat (same set as the worker detail bars). */
 const BODYFAT_LEAF_SCORE_PATHS = [
-  "body_fat_estimation.facial_leanness_score",
+  "global_estimation.facial_leanness_score",
   "lower_face_neck.jawline_definition",
   "lower_face_neck.submental_fat_tightness",
   "midface_buccal.buccal_leanness",
@@ -343,7 +343,7 @@ export function BodyfatWeakestScoreCallout({
  *
  * Les valeurs `leanness` / `sharpness` pilotent la grille et le quadrant, mais ne sont plus
  * affichées en chips /10 ici (doublon avec les barres du worker). Détail :
- * - Minceur → `body_fat_estimation.facial_leanness_score`
+ * - Minceur → `global_estimation.facial_leanness_score`
  * - Marqué → `getBodyfatCompositionSharpness` (moyenne mâchoire, pommettes, angularité)
  * ------------------------------------------------------------------------- */
 

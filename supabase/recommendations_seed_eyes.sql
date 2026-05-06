@@ -34,10 +34,10 @@ WITH recs AS (
         jsonb_build_object('en', 'Sleep on your back; side/stomach sleeping deepens creases.',         'fr', 'Dors sur le dos ; le ventre/côté creuse les plis.')
       ),
       4, 'weeks', 0, 0, 'EUR', 'none', 'studies',
-      ARRAY['under_eye_health.support_and_hollows','under_eye_health.pigmentation','details_and_color.sclera_clarity'],
+      ARRAY['under_eye_health.under_eye_support','under_eye_health.under_eye_pigmentation','iris_sclera_and_lashes.sclera_clarity'],
       jsonb_build_object('or', jsonb_build_array(
-        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.support_and_hollows','value',7)),
-        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.pigmentation','value',7))
+        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_support','value',7)),
+        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_pigmentation','value',7))
       ))
     ),
     (
@@ -52,7 +52,7 @@ WITH recs AS (
         jsonb_build_object('en', 'Add 500 mg vitamin C + zinc 15 mg if not in your diet.',  'fr', 'Ajoute 500 mg vitamine C + 15 mg zinc si absents de l''alimentation.')
       ),
       8, 'weeks', 10, 40, 'EUR', 'none', 'studies',
-      ARRAY['details_and_color.sclera_clarity','under_eye_health.pigmentation'],
+      ARRAY['iris_sclera_and_lashes.sclera_clarity','under_eye_health.under_eye_pigmentation'],
       jsonb_build_object('all', true)
     ),
     (
@@ -67,7 +67,7 @@ WITH recs AS (
         jsonb_build_object('en', 'Avoid peak sun (11h–15h) when possible.',             'fr', 'Évite le soleil entre 11 h et 15 h quand possible.')
       ),
       12, 'weeks', 30, 80, 'EUR', 'none', 'medical',
-      ARRAY['under_eye_health.pigmentation','details_and_color.sclera_clarity'],
+      ARRAY['under_eye_health.under_eye_pigmentation','iris_sclera_and_lashes.sclera_clarity'],
       jsonb_build_object('all', true)
     ),
     (
@@ -82,10 +82,10 @@ WITH recs AS (
         jsonb_build_object('en', 'Roll inner → outer corner to follow lymphatic drainage.',     'fr', 'Roule du coin interne vers l''externe pour suivre le drainage lymphatique.')
       ),
       4, 'weeks', 0, 25, 'EUR', 'none', 'community',
-      ARRAY['under_eye_health.support_and_hollows','under_eye_health.pigmentation'],
+      ARRAY['under_eye_health.under_eye_support','under_eye_health.under_eye_pigmentation'],
       jsonb_build_object('or', jsonb_build_array(
-        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.support_and_hollows','value',6)),
-        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.pigmentation','value',6))
+        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_support','value',6)),
+        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_pigmentation','value',6))
       ))
     ),
     (
@@ -133,8 +133,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Allow 8–12 weeks before assessing results.',                 'fr', 'Compte 8 à 12 semaines avant d''évaluer.')
       ),
       10, 'weeks', 25, 80, 'EUR', 'low', 'studies',
-      ARRAY['under_eye_health.pigmentation','details_and_color.sclera_clarity'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.pigmentation','value',6))
+      ARRAY['under_eye_health.under_eye_pigmentation','iris_sclera_and_lashes.sclera_clarity'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_pigmentation','value',6))
     ),
     (
       'eyes.peptide_hyaluronic_cream', 'eyes', 'soft', 'topical', 65,
@@ -147,7 +147,7 @@ WITH recs AS (
         jsonb_build_object('en', 'Layer under a richer cream during winter.',              'fr', 'Couche sous une crème plus riche en hiver.')
       ),
       10, 'weeks', 30, 90, 'EUR', 'low', 'studies',
-      ARRAY['under_eye_health.support_and_hollows','under_eye_health.pigmentation'],
+      ARRAY['under_eye_health.under_eye_support','under_eye_health.under_eye_pigmentation'],
       jsonb_build_object('all', true)
     ),
     (
@@ -177,8 +177,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Expect 8–12 weeks before noticing density gains.',                          'fr', 'Compte 8 à 12 semaines avant un gain de densité visible.')
       ),
       12, 'weeks', 5, 15, 'EUR', 'low', 'community',
-      ARRAY['details_and_color.eyelash_density'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','details_and_color.eyelash_density','value',6))
+      ARRAY['iris_sclera_and_lashes.eyelash_density'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','iris_sclera_and_lashes.eyelash_density','value',6))
     ),
     (
       'eyes.eyelash_dyeing', 'eyes', 'soft', 'cosmetic', 50,
@@ -192,8 +192,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Refresh every 4–6 weeks.',                                  'fr', 'Renouvelle toutes les 4 à 6 semaines.')
       ),
       6, 'weeks', 15, 40, 'EUR', 'low', 'community',
-      ARRAY['details_and_color.eyelash_density'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','details_and_color.eyelash_density','value',5))
+      ARRAY['iris_sclera_and_lashes.eyelash_density'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','iris_sclera_and_lashes.eyelash_density','value',5))
     ),
     (
       'eyes.eye_patching', 'eyes', 'soft', 'device', 60,
@@ -222,7 +222,7 @@ WITH recs AS (
         jsonb_build_object('en', 'Treat allergies (antihistamines) to remove the urge.',  'fr', 'Traite les allergies (antihistaminiques) pour supprimer l''envie.')
       ),
       8, 'weeks', 0, 30, 'EUR', 'none', 'medical',
-      ARRAY['under_eye_health.support_and_hollows','under_eye_health.pigmentation','eyelids_and_sclera.upper_eyelid_exposure'],
+      ARRAY['under_eye_health.under_eye_support','under_eye_health.under_eye_pigmentation','eyelids_and_sclera.upper_eyelid_exposure'],
       jsonb_build_object('all', true)
     ),
     (
@@ -268,8 +268,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Touch-up at 6 weeks; results last 12–18 months.',              'fr', 'Retouche à 6 semaines ; résultats 12 à 18 mois.')
       ),
       1, 'session', 400, 900, 'EUR', 'medium', 'medical',
-      ARRAY['under_eye_health.support_and_hollows'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.support_and_hollows','value',5))
+      ARRAY['under_eye_health.under_eye_support'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_support','value',5))
     ),
     (
       'eyes.upper_blepharoplasty', 'eyes', 'hard', 'surgery', 75,
@@ -298,8 +298,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Try cold therapy + fillers first if hollowness is the issue.',  'fr', 'Essaie d''abord froid + filler si le problème est le creux.')
       ),
       1, 'session', 3000, 6500, 'EUR', 'high', 'medical',
-      ARRAY['under_eye_health.support_and_hollows'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.support_and_hollows','value',3))
+      ARRAY['under_eye_health.under_eye_support'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_support','value',3))
     ),
     (
       'eyes.canthoplasty', 'eyes', 'hard', 'surgery', 80,
@@ -343,9 +343,9 @@ WITH recs AS (
         jsonb_build_object('en', 'Reserved for clearly negative orbital vectors.',              'fr', 'Réservé aux vecteurs orbitaires clairement négatifs.')
       ),
       1, 'session', 8000, 18000, 'EUR', 'high', 'medical',
-      ARRAY['under_eye_health.support_and_hollows','morphology_and_tilt.orbital_depth'],
+      ARRAY['under_eye_health.under_eye_support','morphology_and_tilt.orbital_depth'],
       jsonb_build_object('and', jsonb_build_array(
-        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.support_and_hollows','value',3)),
+        jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_support','value',3)),
         jsonb_build_object('score_lte', jsonb_build_object('key','morphology_and_tilt.orbital_depth','value',5))
       ))
     ),
@@ -376,8 +376,8 @@ WITH recs AS (
         jsonb_build_object('en', '2–3 sessions spaced 4 weeks apart for full effect.',   'fr', '2 à 3 séances espacées de 4 semaines pour l''effet complet.')
       ),
       3, 'session', 600, 1500, 'EUR', 'medium', 'medical',
-      ARRAY['under_eye_health.pigmentation','details_and_color.sclera_clarity'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.pigmentation','value',5))
+      ARRAY['under_eye_health.under_eye_pigmentation','iris_sclera_and_lashes.sclera_clarity'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_pigmentation','value',5))
     ),
     (
       'eyes.microneedling_pro', 'eyes', 'hard', 'device_clinical', 55,
@@ -391,8 +391,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Combine with PRP for added regeneration.', 'fr', 'À combiner avec PRP pour plus de régénération.')
       ),
       4, 'session', 200, 500, 'EUR', 'low', 'medical',
-      ARRAY['under_eye_health.support_and_hollows','under_eye_health.pigmentation'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.pigmentation','value',6))
+      ARRAY['under_eye_health.under_eye_support','under_eye_health.under_eye_pigmentation'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_pigmentation','value',6))
     ),
     (
       'eyes.prp_periocular', 'eyes', 'hard', 'injectable', 60,
@@ -406,8 +406,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Pairs well with microneedling.',     'fr', 'Bien complémentaire au microneedling.')
       ),
       3, 'session', 250, 600, 'EUR', 'low', 'medical',
-      ARRAY['under_eye_health.pigmentation','details_and_color.sclera_clarity'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.pigmentation','value',6))
+      ARRAY['under_eye_health.under_eye_pigmentation','iris_sclera_and_lashes.sclera_clarity'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','under_eye_health.under_eye_pigmentation','value',6))
     ),
     (
       'eyes.eyelash_extensions', 'eyes', 'hard', 'cosmetic', 45,
@@ -421,8 +421,8 @@ WITH recs AS (
         jsonb_build_object('en', 'Avoid water and steam for 24h after each session.',   'fr', 'Évite eau et vapeur 24 h après chaque séance.')
       ),
       1, 'session', 80, 200, 'EUR', 'low', 'community',
-      ARRAY['details_and_color.eyelash_density'],
-      jsonb_build_object('score_lte', jsonb_build_object('key','details_and_color.eyelash_density','value',5))
+      ARRAY['iris_sclera_and_lashes.eyelash_density'],
+      jsonb_build_object('score_lte', jsonb_build_object('key','iris_sclera_and_lashes.eyelash_density','value',5))
     ),
     (
       'eyes.colored_contacts', 'eyes', 'hard', 'cosmetic', 40,
@@ -436,7 +436,7 @@ WITH recs AS (
         jsonb_build_object('en', 'Replace per manufacturer schedule (daily / monthly).',                'fr', 'Remplace selon le calendrier (journalier / mensuel).')
       ),
       1, 'session', 20, 80, 'EUR', 'medium', 'medical',
-      ARRAY['details_and_color.iris_color'],
+      ARRAY['iris_sclera_and_lashes.iris_color'],
       jsonb_build_object('all', true)
     )
   ) AS t (

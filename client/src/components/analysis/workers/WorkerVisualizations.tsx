@@ -22,23 +22,58 @@ export type WorkerSignatureRadarPoint = {
   score: number;
 };
 
+const WORKER_RADAR_PRESETS = {
+  default: {
+    viewPadX: 64,
+    viewPadY: 56,
+    size: 400,
+    maxRadius: 144,
+    labelOffset: 34,
+    fontSize: 11,
+    dotR: 3.4,
+    polygonStroke: 1.6,
+    maxWClass: "max-w-[420px]",
+  },
+  large: {
+    viewPadX: 72,
+    viewPadY: 64,
+    size: 460,
+    maxRadius: 168,
+    labelOffset: 40,
+    fontSize: 13,
+    dotR: 4,
+    polygonStroke: 1.8,
+    maxWClass: "max-w-[min(100%,520px)]",
+  },
+} as const;
+
 export function WorkerSignatureRadar({
   data,
   ariaLabel,
   className,
   scale = 10,
+  sizePreset = "default",
 }: {
   data: readonly WorkerSignatureRadarPoint[];
   ariaLabel: string;
   className?: string;
   /** Score max attendu (10 par défaut sur ScoreMax). */
   scale?: number;
+  /** `large` : même échelle que le radar peau (toile et libellés plus lisibles). */
+  sizePreset?: keyof typeof WORKER_RADAR_PRESETS;
 }) {
-  const viewPadX = 64;
-  const viewPadY = 50;
-  const size = 400;
+  const {
+    viewPadX,
+    viewPadY,
+    size,
+    maxRadius,
+    labelOffset,
+    fontSize,
+    dotR,
+    polygonStroke,
+    maxWClass,
+  } = WORKER_RADAR_PRESETS[sizePreset];
   const center = size / 2;
-  const maxRadius = 144;
   const n = data.length;
 
   if (n < 3) {
@@ -56,7 +91,7 @@ export function WorkerSignatureRadar({
 
   const labelPolar = (index: number) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
-    const r = maxRadius + 26;
+    const r = maxRadius + labelOffset;
     return {
       x: center + r * Math.cos(angle),
       y: center + r * Math.sin(angle),
@@ -77,7 +112,11 @@ export function WorkerSignatureRadar({
   return (
     <svg
       viewBox={`-${viewPadX} -${viewPadY} ${size + 2 * viewPadX} ${size + 2 * viewPadY}`}
-      className={cn("mx-auto block h-auto w-full max-w-[420px] overflow-visible", className)}
+      className={cn(
+        "mx-auto block h-auto w-full overflow-visible",
+        maxWClass,
+        className,
+      )}
       role="img"
       aria-label={ariaLabel}
     >
@@ -119,7 +158,7 @@ export function WorkerSignatureRadar({
         points={polygon}
         fill="url(#workerRadarFill)"
         stroke="#cfdde2"
-        strokeWidth="1.6"
+        strokeWidth={polygonStroke}
         strokeLinejoin="round"
       />
 
@@ -130,7 +169,7 @@ export function WorkerSignatureRadar({
             key={`pt-${i}`}
             cx={p.x}
             cy={p.y}
-            r={3.4}
+            r={dotR}
             fill={paint.dotFill}
             stroke={paint.dotStroke}
             strokeWidth="1.5"
@@ -141,20 +180,41 @@ export function WorkerSignatureRadar({
       {data.map((d, i) => {
         const lp = labelPolar(i);
         const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        const scoreTxt = d.score.toFixed(d.score % 1 === 0 ? 0 : 1);
+        const scoreFont = Math.max(9, fontSize - 2.25);
+        const labelLift = fontSize * 0.52;
+        const scoreDrop = fontSize * 0.72;
         return (
-          <text
-            key={`label-${i}`}
-            x={lp.x}
-            y={lp.y}
-            textAnchor={lp.anchor}
-            dominantBaseline="middle"
-            fontSize="11"
-            fontWeight="600"
-            fill={paint.labelFill}
-            letterSpacing="0.04em"
-          >
-            {d.label}
-          </text>
+          <React.Fragment key={`label-${i}`}>
+            <text
+              x={lp.x}
+              y={lp.y - labelLift}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize={fontSize}
+              fontWeight="600"
+              fill={paint.labelFill}
+              letterSpacing="0.04em"
+            >
+              {d.label}
+            </text>
+            <text
+              x={lp.x}
+              y={lp.y + scoreDrop}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize={scoreFont}
+              fontWeight="700"
+              fill={paint.previewScoreFill}
+              letterSpacing="0.03em"
+            >
+              {scoreTxt}
+              <tspan fill={paint.previewMutedFill} fontWeight="600">
+                {" "}
+                /{scale}
+              </tspan>
+            </text>
+          </React.Fragment>
         );
       })}
     </svg>
@@ -318,7 +378,7 @@ export function MorphologyBadge({
  * WorkerSpectrumMeter
  *
  * Spectre horizontal segmenté (n niveaux) avec un (ou deux) curseurs. Style
- * identique à `JawWorkerView.DefinitionMeter` / `BodyfatWorkerView.VisualTierScale`,
+ * identique à `BodyfatWorkerView.VisualTierScale`,
  * mais réutilisable.
  * ------------------------------------------------------------------------- */
 

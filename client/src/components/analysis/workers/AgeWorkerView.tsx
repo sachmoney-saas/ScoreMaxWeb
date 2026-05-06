@@ -6,9 +6,14 @@ import {
 } from "@/lib/face-analysis-display";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
+  skinRadarAxisHighlights,
+  skinRadarAxisPaint,
+} from "@/lib/face-analysis-score";
+import {
   getNumber,
   getScore,
   getString,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   workerSectionCardClassName,
@@ -161,12 +166,14 @@ function NeotenyComposite({
 
   /** Same letterboxing as `SkinRadarChart` so axis labels are not clipped. */
   const viewPadX = 62;
-  const viewPadY = 50;
+  const viewPadY = 58;
   const size = 400;
   const center = size / 2;
   const maxRadius = 146;
   const n = signals.length;
   const hubR = 30;
+
+  const highlights = skinRadarAxisHighlights(signals.map((s) => s.score));
 
   const polar = (index: number, value: number) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
@@ -179,7 +186,7 @@ function NeotenyComposite({
 
   const labelPolar = (index: number) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
-    const r = maxRadius + 26;
+    const r = maxRadius + 34;
     return {
       x: center + r * Math.cos(angle),
       y: center + r * Math.sin(angle),
@@ -245,17 +252,20 @@ function NeotenyComposite({
         strokeLinejoin="round"
       />
 
-      {valuePoints.map((p, i) => (
-        <circle
-          key={`pt-${i}`}
-          cx={p.x}
-          cy={p.y}
-          r={3.4}
-          fill="#ffffff"
-          stroke="#9aaeb5"
-          strokeWidth="1.5"
-        />
-      ))}
+      {valuePoints.map((p, i) => {
+        const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        return (
+          <circle
+            key={`pt-${i}`}
+            cx={p.x}
+            cy={p.y}
+            r={3.4}
+            fill={paint.dotFill}
+            stroke={paint.dotStroke}
+            strokeWidth="1.5"
+          />
+        );
+      })}
 
       <circle
         cx={center}
@@ -292,20 +302,38 @@ function NeotenyComposite({
 
       {signals.map((s, i) => {
         const lp = labelPolar(i);
+        const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        const scoreTxt = s.score.toFixed(s.score % 1 === 0 ? 0 : 1);
         return (
-          <text
-            key={`lbl-${i}`}
-            x={lp.x}
-            y={lp.y}
-            textAnchor={lp.anchor}
-            dominantBaseline="middle"
-            fontSize="11"
-            fontWeight="600"
-            fill="#aab2bd"
-            letterSpacing="0.04em"
-          >
-            {s.label}
-          </text>
+          <React.Fragment key={`lbl-${i}`}>
+            <text
+              x={lp.x}
+              y={lp.y - 6}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize="11"
+              fontWeight="600"
+              fill={paint.labelFill}
+              letterSpacing="0.04em"
+            >
+              {s.label}
+            </text>
+            <text
+              x={lp.x}
+              y={lp.y + 10}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize="9.5"
+              fontWeight="700"
+              fill={paint.previewScoreFill}
+              letterSpacing="0.03em"
+            >
+              {scoreTxt}
+              <tspan fill={paint.previewMutedFill} fontWeight="600">
+                {" /10"}
+              </tspan>
+            </text>
+          </React.Fragment>
         );
       })}
     </svg>
@@ -491,6 +519,7 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
       {/* Detail signal cards — grouped by category */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(fatRoundness.score, lowerFaceSoftness.score)}
           eyebrow={i18n(language, {
             en: "Facial neoteny",
             fr: "Néoténie faciale",
@@ -523,6 +552,7 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(epidermalPlumpness.score, periorbital.score)}
           eyebrow={i18n(language, {
             en: "Skin quality",
             fr: "Qualité de la peau",
@@ -557,6 +587,7 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(facialHair.score, hairlineMaturation.score)}
           eyebrow={i18n(language, {
             en: "Hair maturation",
             fr: "Maturation capillaire",
@@ -590,6 +621,7 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(lipPlumpness.score, cartilage.score)}
           eyebrow={i18n(language, {
             en: "Structural neoteny",
             fr: "Néoténie structurelle",

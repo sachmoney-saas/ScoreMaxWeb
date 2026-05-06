@@ -21,6 +21,7 @@ import {
   fetchLatestFaceAnalysis,
   fetchManualAnalysisSessionStatus,
   fetchRecentScanStatus,
+  fetchSubscriberStandardQuota,
   launchManualAnalysis,
   type AnalysisDetailResponse,
   type AnalysisHistoryItem,
@@ -458,6 +459,31 @@ export function useLaunchManualAnalysis() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["analysis-history", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["latest-face-analysis", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["subscriber-standard-quota", user?.id] });
+    },
+  });
+}
+
+export function useSubscriberStandardAnalysisQuota(options?: { enabled?: boolean }) {
+  const { user, profile, isAdmin } = useAuth();
+
+  const enabled =
+    Boolean(user?.id) &&
+    profile?.is_subscriber === true &&
+    !isAdmin &&
+    (options?.enabled ?? true);
+
+  return useQuery({
+    queryKey: ["subscriber-standard-quota", user?.id],
+    queryFn: async () => fetchSubscriberStandardQuota(await getAccessToken()),
+    enabled,
+    staleTime: 30_000,
+    refetchInterval: (query) => {
+      const row = query.state.data;
+      if (!row?.weekly_limit_applies || row.can_launch_standard_now) {
+        return false;
+      }
+      return 60_000;
     },
   });
 }

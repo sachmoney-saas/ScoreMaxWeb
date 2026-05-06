@@ -83,7 +83,6 @@ French (`fr`) is the default display locale today. The display metadata is local
 - [cheeks.md](cheeks.md)
 - [chin.md](chin.md)
 - [coloring.md](coloring.md)
-- [ear.md](ear.md)
 - [eye_brows.md](eye_brows.md)
 - [eyes.md](eyes.md)
 - [hair.md](hair.md)

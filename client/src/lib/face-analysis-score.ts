@@ -23,27 +23,41 @@ export const SCOREMAX_WORKER_WEIGHTS: Record<string, number> = {
   lips: 0.95,
   chin: 0.65,
   nose: 0.45,
-  ear: 0.45,
   eyes: 0.45,
   symmetry_shape: 0.45,
 };
 
 export const SCOREMAX_OVERALL_SCORE_KEYS: Record<string, string[]> = {
   coloring: ["global_coloring_score", "global_coloring"],
-  skin: ["overall_skin_score", "overall_skin"],
-  jaw: ["overall_jaw_score", "overall_jaw"],
-  eye_brows: ["overall_brow_score", "overall_brow"],
-  cheeks: ["overall_cheek_score", "overall_cheek"],
-  smile: ["overall_smile_score", "overall_smile"],
-  hair: ["overall_hair_score", "overall_hair"],
-  skin_tint: ["overall_colorimetry_score", "overall_colorimetry"],
-  neck: ["overall_neck_score", "overall_neck"],
+  skin: ["global_score.overall_skin_score", "overall_skin_score", "overall_skin"],
+  jaw: ["global_score.overall_jaw_score", "overall_jaw_score", "overall_jaw"],
+  eye_brows: [
+    "global_score.overall_brow_score",
+    "overall_brow_score",
+    "overall_brow",
+  ],
+  cheeks: ["global_score.overall_cheek_score", "overall_cheek_score", "overall_cheek"],
+  smile: ["global_score.overall_smile_score", "overall_smile_score", "overall_smile"],
+  hair: [
+    "global_score.overall_hair_score",
+    "overall_hair_score",
+    "overall_hair",
+  ],
+  skin_tint: ["global_score.overall_colorimetry_score", "overall_colorimetry_score", "overall_colorimetry"],
+  neck: ["global_score.overall_neck_score", "overall_neck_score", "overall_neck"],
   lips: ["overall_lip_score", "overall_lip"],
-  chin: ["overall_chin_score", "overall_chin"],
-  nose: ["overall_nose_score", "overall_nose"],
-  ear: ["overall_ear_score", "overall_ear"],
-  eyes: ["overall_eye_score", "overall_eye"],
-  symmetry_shape: ["overall_face_structure_score", "overall_face_structure"],
+  chin: ["global_score.overall_chin_score", "overall_chin_score", "overall_chin"],
+  nose: [
+    "global_score.overall_nose_score",
+    "overall_nose_score",
+    "overall_nose",
+  ],
+  eyes: ["global_score.overall_eye_score", "overall_eye_score", "overall_eye"],
+  symmetry_shape: [
+    "global_score.overall_face_structure_score",
+    "overall_face_structure_score",
+    "overall_face_structure",
+  ],
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,23 +107,24 @@ function getNestedValue(record: Record<string, unknown>, dottedPath: string): un
 }
 
 /**
- * Nine radar metrics used to derive the skin worker overall (mean), aligned with `SkinWorkerView`.
+ * Radar metrics used to derive the skin worker overall (mean), aligned with `SkinWorkerView`.
  */
 export const SKIN_RADAR_METRIC_KEYS = [
-  "texture_and_pores.pore_size_visibility",
-  "texture_and_pores.blackheads_and_congestion",
-  "texture_and_pores.surface_smoothness",
+  "texture_pores_and_congestion.pore_size_and_visibility",
+  "texture_pores_and_congestion.blackheads_and_congestion",
+  "texture_pores_and_congestion.surface_smoothness",
   "acne_and_scarring.active_acne",
+  "acne_and_scarring.post_inflammatory_marks",
   "acne_and_scarring.atrophic_scarring",
-  "pigmentation_and_tone.color_uniformity",
-  "pigmentation_and_tone.redness_and_erythema",
+  "pigmentation_tone_and_redness.color_uniformity",
+  "pigmentation_tone_and_redness.redness_and_erythema",
   "hydration_and_vitality.sebum_hydration_balance",
   "hydration_and_vitality.firmness_and_elasticity",
 ] as const;
 
 /**
- * Mean of all nine skin radar metrics (0–10). All nine must be present; otherwise returns null
- * and callers fall back to API `overall_skin*`.
+ * Mean of all skin radar metrics (0–10). All must be present; otherwise returns null
+ * and callers fall back to API overall keys (`global_score.overall_skin_score`, …).
  */
 export function computeSkinDerivedOverall10(
   aggregates: Record<string, unknown>,

@@ -13,6 +13,7 @@ export const scoreMaxErrorCodeSchema = z.enum([
   "IMAGE_NOT_FOUND",
   "RUNS_LIMIT_EXCEEDED",
   "UNSUPPORTED_LANGUAGE",
+  "ANALYSIS_WEEKLY_LIMIT",
   "INTERNAL_SERVER_ERROR",
 ]);
 

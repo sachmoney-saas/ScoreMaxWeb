@@ -10,6 +10,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -91,6 +92,30 @@ function WhitenessScale({
   );
 }
 
+/** Read-only row for API `value` fields (enum / descriptor strings). */
+function ValueFieldRow({
+  label,
+  display,
+  argument,
+}: {
+  label: string;
+  display: string | null;
+  argument: string | null;
+}) {
+  if (!display) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-medium text-zinc-200">{label}</span>
+        <span className="text-sm font-semibold text-white">{display}</span>
+      </div>
+      {argument ? (
+        <p className="text-xs leading-relaxed text-zinc-400">{argument}</p>
+      ) : null}
+    </div>
+  );
+}
+
 /* ----------------------------------------------------------------------------
  * Main view
  * ------------------------------------------------------------------------- */
@@ -117,28 +142,37 @@ export function SmileWorkerView({
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_smile");
+  const overallNested = getScore(aggregates, "global_score.overall_smile_score");
+  const overallFlat = getScore(aggregates, "overall_smile_score");
+  const overallLegacy = getScore(aggregates, "overall_smile");
+  const heroArgument =
+    overallNested.argument ?? overallFlat.argument ?? overallLegacy.argument;
 
   // Dental quality
   const whiteness = getScore(aggregates, "dental_quality.shade_and_whiteness");
+  const toothColorDesc = getEnum(aggregates, "dental_quality.tooth_color_descriptor");
   const surface = getScore(aggregates, "dental_quality.surface_integrity");
   const proportions = getScore(aggregates, "dental_quality.tooth_proportions");
 
   // Smile architecture
-  const alignment = getScore(aggregates, "smile_architecture.alignment");
+  const alignment = getScore(aggregates, "smile_architecture.dental_alignment");
   const midline = getScore(aggregates, "smile_architecture.midline_alignment");
-  const smileArc = getScore(aggregates, "smile_architecture.smile_arc");
+  const smileArc = getEnum(aggregates, "smile_architecture.smile_arc");
 
   // Dynamics
   const symmetry = getScore(aggregates, "smile_dynamics.smile_symmetry");
   const corridors = getScore(aggregates, "smile_dynamics.buccal_corridors");
-  const visibility = getScore(aggregates, "smile_dynamics.teeth_visibility_count");
+  const visibility = getEnum(aggregates, "smile_dynamics.teeth_visibility_count");
+  const lowerTeethVisibility = getEnum(
+    aggregates,
+    "smile_dynamics.lower_teeth_visibility",
+  );
   const gingival = getScore(aggregates, "smile_dynamics.gingival_display");
-  const lipCurve = getScore(aggregates, "smile_dynamics.upper_lip_curvature");
+  const lipCurve = getEnum(aggregates, "smile_dynamics.upper_lip_curvature");
 
   // Facial impact
   const duchenneEnum = getEnum(aggregates, "facial_impact.duchenne_activation");
-  const dimples = getScore(aggregates, "facial_impact.cheek_dimples");
+  const dimples = getEnum(aggregates, "facial_impact.cheek_dimples");
 
   return (
     <div className="space-y-4">
@@ -148,7 +182,7 @@ export function SmileWorkerView({
           en: "Your smile signature",
           fr: "Ta signature de sourire",
         })}
-        argument={overall.argument}
+        argument={heroArgument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
         rightSlot={
@@ -188,12 +222,27 @@ export function SmileWorkerView({
               {whiteness.argument}
             </p>
           ) : null}
+          {toothColorDesc.value ? (
+            <div className="border-t border-white/10 pt-4">
+              <ValueFieldRow
+                label={formatLabel("dental_quality.tooth_color_descriptor")}
+                display={
+                  formatEnumValue(
+                    "dental_quality.tooth_color_descriptor",
+                    toothColorDesc.value,
+                  ) ?? toothColorDesc.value
+                }
+                argument={toothColorDesc.argument}
+              />
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
       {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(surface.score, proportions.score)}
           eyebrow={i18n(language, { en: "Dental quality", fr: "Qualité dentaire" })}
           title={i18n(language, {
             en: "Surface & proportions",
@@ -215,6 +264,10 @@ export function SmileWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(alignment.score, midline.score) ||
+            Boolean(smileArc.value)
+          }
           eyebrow={i18n(language, {
             en: "Architecture",
             fr: "Architecture",
@@ -225,7 +278,7 @@ export function SmileWorkerView({
           })}
         >
           <ScoreBar
-            label={formatLabel("smile_architecture.alignment")}
+            label={formatLabel("smile_architecture.dental_alignment")}
             score={alignment.score}
             argument={alignment.argument}
             language={language}
@@ -236,15 +289,27 @@ export function SmileWorkerView({
             argument={midline.argument}
             language={language}
           />
-          <ScoreBar
-            label={formatLabel("smile_architecture.smile_arc")}
-            score={smileArc.score}
-            argument={smileArc.argument}
-            language={language}
-          />
+          {smileArc.value ? (
+            <ValueFieldRow
+              label={formatLabel("smile_architecture.smile_arc")}
+              display={
+                formatEnumValue(
+                  "smile_architecture.smile_arc",
+                  smileArc.value,
+                ) ?? smileArc.value
+              }
+              argument={smileArc.argument}
+            />
+          ) : null}
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(symmetry.score, corridors.score, gingival.score) ||
+            Boolean(visibility.value) ||
+            Boolean(lowerTeethVisibility.value) ||
+            Boolean(lipCurve.value)
+          }
           eyebrow={i18n(language, { en: "Smile dynamics", fr: "Dynamique du sourire" })}
           title={i18n(language, {
             en: "Symmetry & exposure",
@@ -263,27 +328,52 @@ export function SmileWorkerView({
             argument={corridors.argument}
             language={language}
           />
-          <ScoreBar
-            label={formatLabel("smile_dynamics.teeth_visibility_count")}
-            score={visibility.score}
-            argument={visibility.argument}
-            language={language}
-          />
+          {visibility.value ? (
+            <ValueFieldRow
+              label={formatLabel("smile_dynamics.teeth_visibility_count")}
+              display={
+                formatEnumValue(
+                  "smile_dynamics.teeth_visibility_count",
+                  visibility.value,
+                ) ?? visibility.value
+              }
+              argument={visibility.argument}
+            />
+          ) : null}
+          {lowerTeethVisibility.value ? (
+            <ValueFieldRow
+              label={formatLabel("smile_dynamics.lower_teeth_visibility")}
+              display={
+                formatEnumValue(
+                  "smile_dynamics.lower_teeth_visibility",
+                  lowerTeethVisibility.value,
+                ) ?? lowerTeethVisibility.value
+              }
+              argument={lowerTeethVisibility.argument}
+            />
+          ) : null}
           <ScoreBar
             label={formatLabel("smile_dynamics.gingival_display")}
             score={gingival.score}
             argument={gingival.argument}
             language={language}
           />
-          <ScoreBar
-            label={formatLabel("smile_dynamics.upper_lip_curvature")}
-            score={lipCurve.score}
-            argument={lipCurve.argument}
-            language={language}
-          />
+          {lipCurve.value ? (
+            <ValueFieldRow
+              label={formatLabel("smile_dynamics.upper_lip_curvature")}
+              display={
+                formatEnumValue(
+                  "smile_dynamics.upper_lip_curvature",
+                  lipCurve.value,
+                ) ?? lipCurve.value
+              }
+              argument={lipCurve.argument}
+            />
+          ) : null}
         </SectionShell>
 
         <SectionShell
+          when={Boolean(duchenneEnum.value) || Boolean(dimples.value)}
           eyebrow={i18n(language, { en: "Facial impact", fr: "Impact facial" })}
           title={i18n(language, {
             en: "Authenticity & dimples",
@@ -310,12 +400,18 @@ export function SmileWorkerView({
               ) : null}
             </div>
           ) : null}
-          <ScoreBar
-            label={formatLabel("facial_impact.cheek_dimples")}
-            score={dimples.score}
-            argument={dimples.argument}
-            language={language}
-          />
+          {dimples.value ? (
+            <ValueFieldRow
+              label={formatLabel("facial_impact.cheek_dimples")}
+              display={
+                formatEnumValue(
+                  "facial_impact.cheek_dimples",
+                  dimples.value,
+                ) ?? dimples.value
+              }
+              argument={dimples.argument}
+            />
+          ) : null}
         </SectionShell>
       </div>
     </div>

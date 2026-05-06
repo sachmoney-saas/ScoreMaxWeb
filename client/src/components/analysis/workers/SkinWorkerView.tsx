@@ -12,6 +12,7 @@ import {
 } from "@/lib/face-analysis-score";
 import {
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -21,7 +22,7 @@ import {
 const WORKER_KEY = "skin";
 
 /* ----------------------------------------------------------------------------
- * Radar chart — 9 axes snapshot (specific to skin)
+ * Radar chart — skin metrics snapshot (specific to skin)
  * ------------------------------------------------------------------------- */
 
 function SkinRadarChart({
@@ -30,11 +31,11 @@ function SkinRadarChart({
   data: { label: string; score: number }[];
 }) {
   /** Horizontal pad for clipped labels; vertical pad slightly smaller to tighten the SVG letterbox. */
-  const viewPadX = 62;
-  const viewPadY = 50;
-  const size = 400;
+  const viewPadX = 84;
+  const viewPadY = 76;
+  const size = 520;
   const center = size / 2;
-  const maxRadius = 146;
+  const maxRadius = 192;
   const n = data.length;
 
   /** Polar → cartesian, angle starts at the top (-90deg) and goes clockwise. */
@@ -49,7 +50,7 @@ function SkinRadarChart({
 
   const labelPolar = (index: number) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
-    const r = maxRadius + 26;
+    const r = maxRadius + 42;
     return {
       x: center + r * Math.cos(angle),
       y: center + r * Math.sin(angle),
@@ -71,7 +72,7 @@ function SkinRadarChart({
   return (
     <svg
       viewBox={`-${viewPadX} -${viewPadY} ${size + 2 * viewPadX} ${size + 2 * viewPadY}`}
-      className="mx-auto block h-auto w-full max-w-[420px] overflow-visible"
+      className="mx-auto block h-auto w-full max-w-[min(100%,600px)] overflow-visible"
       role="img"
       aria-label="Skin radar chart"
     >
@@ -116,7 +117,7 @@ function SkinRadarChart({
         points={polygon}
         fill="url(#skinRadarFill)"
         stroke="#cfdde2"
-        strokeWidth="1.6"
+        strokeWidth="2"
         strokeLinejoin="round"
       />
 
@@ -128,32 +129,52 @@ function SkinRadarChart({
             key={`pt-${i}`}
             cx={p.x}
             cy={p.y}
-            r={3.4}
+            r={4.6}
             fill={paint.dotFill}
             stroke={paint.dotStroke}
-            strokeWidth="1.5"
+            strokeWidth="1.65"
           />
         );
       })}
 
-      {/* Axis labels */}
+      {/* Axis labels + scores */}
       {data.map((d, i) => {
         const lp = labelPolar(i);
         const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        const scoreTxt = d.score.toFixed(d.score % 1 === 0 ? 0 : 1);
+        const labelFont = 15;
+        const scoreFont = 12.5;
         return (
-          <text
-            key={`label-${i}`}
-            x={lp.x}
-            y={lp.y}
-            textAnchor={lp.anchor}
-            dominantBaseline="middle"
-            fontSize="11"
-            fontWeight="600"
-            fill={paint.labelFill}
-            letterSpacing="0.04em"
-          >
-            {d.label}
-          </text>
+          <React.Fragment key={`label-${i}`}>
+            <text
+              x={lp.x}
+              y={lp.y - 8}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize={labelFont}
+              fontWeight="600"
+              fill={paint.labelFill}
+              letterSpacing="0.04em"
+            >
+              {d.label}
+            </text>
+            <text
+              x={lp.x}
+              y={lp.y + 12}
+              textAnchor={lp.anchor}
+              dominantBaseline="middle"
+              fontSize={scoreFont}
+              fontWeight="700"
+              fill={paint.previewScoreFill}
+              letterSpacing="0.03em"
+            >
+              {scoreTxt}
+              <tspan fill={paint.previewMutedFill} fontWeight="600">
+                {" "}
+                /10
+              </tspan>
+            </text>
+          </React.Fragment>
         );
       })}
     </svg>
@@ -176,35 +197,39 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
     [locale],
   );
 
-  // ---- Texture & pores
+  // ---- Texture, pores & congestion
   const poreVisibility = getScore(
     aggregates,
-    "texture_and_pores.pore_size_visibility",
+    "texture_pores_and_congestion.pore_size_and_visibility",
   );
   const blackheads = getScore(
     aggregates,
-    "texture_and_pores.blackheads_and_congestion",
+    "texture_pores_and_congestion.blackheads_and_congestion",
   );
   const surfaceSmoothness = getScore(
     aggregates,
-    "texture_and_pores.surface_smoothness",
+    "texture_pores_and_congestion.surface_smoothness",
   );
 
   // ---- Acne & scarring
   const activeAcne = getScore(aggregates, "acne_and_scarring.active_acne");
+  const postInflammatory = getScore(
+    aggregates,
+    "acne_and_scarring.post_inflammatory_marks",
+  );
   const atrophicScarring = getScore(
     aggregates,
     "acne_and_scarring.atrophic_scarring",
   );
 
-  // ---- Pigmentation & tone
+  // ---- Pigmentation, tone & redness
   const colorUniformity = getScore(
     aggregates,
-    "pigmentation_and_tone.color_uniformity",
+    "pigmentation_tone_and_redness.color_uniformity",
   );
   const redness = getScore(
     aggregates,
-    "pigmentation_and_tone.redness_and_erythema",
+    "pigmentation_tone_and_redness.redness_and_erythema",
   );
 
   // ---- Hydration & vitality
@@ -217,32 +242,39 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
     "hydration_and_vitality.firmness_and_elasticity",
   );
 
-  // ---- Global (supports legacy & doc'd keys)
-  const globalScore =
-    getScore(aggregates, "overall_skin_score").score !== null
-      ? getScore(aggregates, "overall_skin_score")
-      : getScore(aggregates, "overall_skin");
+  const overallNested = getScore(aggregates, "global_score.overall_skin_score");
+  const overallFlat = getScore(aggregates, "overall_skin_score");
+  const overallLegacy = getScore(aggregates, "overall_skin");
+  const heroArgument =
+    overallNested.argument ?? overallFlat.argument ?? overallLegacy.argument;
 
   const heroSkinScore = calculateWorkerFaceScore(WORKER_KEY, aggregates);
 
   // Compact axis labels for the radar (keep them short)
   const radarLabels: Record<string, { en: string; fr: string }> = {
-    "texture_and_pores.pore_size_visibility": { en: "Pores", fr: "Pores" },
-    "texture_and_pores.blackheads_and_congestion": {
+    "texture_pores_and_congestion.pore_size_and_visibility": {
+      en: "Pores",
+      fr: "Pores",
+    },
+    "texture_pores_and_congestion.blackheads_and_congestion": {
       en: "Congestion",
       fr: "Congestion",
     },
-    "texture_and_pores.surface_smoothness": {
+    "texture_pores_and_congestion.surface_smoothness": {
       en: "Smoothness",
       fr: "Lissage",
     },
     "acne_and_scarring.active_acne": { en: "Acne", fr: "Acné" },
+    "acne_and_scarring.post_inflammatory_marks": {
+      en: "PIH",
+      fr: "Marques",
+    },
     "acne_and_scarring.atrophic_scarring": { en: "Scarring", fr: "Cicatrices" },
-    "pigmentation_and_tone.color_uniformity": {
+    "pigmentation_tone_and_redness.color_uniformity": {
       en: "Uniformity",
       fr: "Uniformité",
     },
-    "pigmentation_and_tone.redness_and_erythema": {
+    "pigmentation_tone_and_redness.redness_and_erythema": {
       en: "Redness",
       fr: "Rougeurs",
     },
@@ -257,15 +289,40 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
   };
 
   const radarData = [
-    { key: "texture_and_pores.pore_size_visibility", value: poreVisibility.score },
-    { key: "texture_and_pores.blackheads_and_congestion", value: blackheads.score },
-    { key: "texture_and_pores.surface_smoothness", value: surfaceSmoothness.score },
+    {
+      key: "texture_pores_and_congestion.pore_size_and_visibility",
+      value: poreVisibility.score,
+    },
+    {
+      key: "texture_pores_and_congestion.blackheads_and_congestion",
+      value: blackheads.score,
+    },
+    {
+      key: "texture_pores_and_congestion.surface_smoothness",
+      value: surfaceSmoothness.score,
+    },
     { key: "acne_and_scarring.active_acne", value: activeAcne.score },
+    {
+      key: "acne_and_scarring.post_inflammatory_marks",
+      value: postInflammatory.score,
+    },
     { key: "acne_and_scarring.atrophic_scarring", value: atrophicScarring.score },
-    { key: "pigmentation_and_tone.color_uniformity", value: colorUniformity.score },
-    { key: "pigmentation_and_tone.redness_and_erythema", value: redness.score },
-    { key: "hydration_and_vitality.sebum_hydration_balance", value: sebumHydration.score },
-    { key: "hydration_and_vitality.firmness_and_elasticity", value: firmness.score },
+    {
+      key: "pigmentation_tone_and_redness.color_uniformity",
+      value: colorUniformity.score,
+    },
+    {
+      key: "pigmentation_tone_and_redness.redness_and_erythema",
+      value: redness.score,
+    },
+    {
+      key: "hydration_and_vitality.sebum_hydration_balance",
+      value: sebumHydration.score,
+    },
+    {
+      key: "hydration_and_vitality.firmness_and_elasticity",
+      value: firmness.score,
+    },
   ]
     .filter((d): d is { key: string; value: number } => d.value !== null)
     .map((d) => ({
@@ -281,7 +338,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
           en: "Your skin profile",
           fr: "Ton profil de peau",
         })}
-        argument={globalScore.argument}
+        argument={heroArgument}
         score={heroSkinScore}
         scoreFractionDigits={heroSkinScore != null ? 2 : undefined}
       />
@@ -289,28 +346,14 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
       {/* Radar snapshot */}
       {radarData.length >= 3 ? (
         <Card className={workerSectionCardClassName}>
-          <CardContent className="p-5 sm:p-6">
-            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:items-start lg:gap-5">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  {i18n(language, {
-                    en: "Skin radar",
-                    fr: "Radar peau",
-                  })}
-                </p>
-                <h3 className="mt-1 font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                  {i18n(language, {
-                    en: "All dimensions at a glance",
-                    fr: "Toutes les dimensions d'un coup d'œil",
-                  })}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  {i18n(language, {
-                    en: "The shape of the polygon shows where your skin currently shines and where it can improve. The closer a vertex is to the outer edge, the better the score on that dimension.",
-                    fr: "La forme du polygone montre où ta peau brille déjà et où elle peut s'améliorer. Plus un sommet s'approche du bord extérieur, plus le score est élevé sur cette dimension.",
-                  })}
-                </p>
-              </div>
+          <CardContent className="p-7 sm:p-9">
+            <div className="flex flex-col gap-5 sm:gap-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-400 sm:text-base sm:tracking-[0.18em]">
+                {i18n(language, {
+                  en: "Skin radar",
+                  fr: "Radar peau",
+                })}
+              </p>
               <SkinRadarChart data={radarData} />
             </div>
           </CardContent>
@@ -319,6 +362,11 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(
+            poreVisibility.score,
+            blackheads.score,
+            surfaceSmoothness.score,
+          )}
           eyebrow={i18n(language, { en: "Texture & Pores", fr: "Texture et pores" })}
           title={i18n(language, {
             en: "Surface quality",
@@ -326,19 +374,23 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
           })}
         >
           <ScoreBar
-            label={formatLabel("texture_and_pores.pore_size_visibility")}
+            label={formatLabel(
+              "texture_pores_and_congestion.pore_size_and_visibility",
+            )}
             score={poreVisibility.score}
             argument={poreVisibility.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("texture_and_pores.blackheads_and_congestion")}
+            label={formatLabel(
+              "texture_pores_and_congestion.blackheads_and_congestion",
+            )}
             score={blackheads.score}
             argument={blackheads.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("texture_and_pores.surface_smoothness")}
+            label={formatLabel("texture_pores_and_congestion.surface_smoothness")}
             score={surfaceSmoothness.score}
             argument={surfaceSmoothness.argument}
             language={language}
@@ -346,6 +398,11 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(
+            activeAcne.score,
+            postInflammatory.score,
+            atrophicScarring.score,
+          )}
           eyebrow={i18n(language, {
             en: "Acne & Scarring",
             fr: "Acné et cicatrices",
@@ -362,6 +419,12 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             language={language}
           />
           <ScoreBar
+            label={formatLabel("acne_and_scarring.post_inflammatory_marks")}
+            score={postInflammatory.score}
+            argument={postInflammatory.argument}
+            language={language}
+          />
+          <ScoreBar
             label={formatLabel("acne_and_scarring.atrophic_scarring")}
             score={atrophicScarring.score}
             argument={atrophicScarring.argument}
@@ -370,6 +433,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(colorUniformity.score, redness.score)}
           eyebrow={i18n(language, {
             en: "Pigmentation & Tone",
             fr: "Pigmentation et teint",
@@ -380,13 +444,15 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
           })}
         >
           <ScoreBar
-            label={formatLabel("pigmentation_and_tone.color_uniformity")}
+            label={formatLabel("pigmentation_tone_and_redness.color_uniformity")}
             score={colorUniformity.score}
             argument={colorUniformity.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("pigmentation_and_tone.redness_and_erythema")}
+            label={formatLabel(
+              "pigmentation_tone_and_redness.redness_and_erythema",
+            )}
             score={redness.score}
             argument={redness.argument}
             language={language}
@@ -394,6 +460,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(sebumHydration.score, firmness.score)}
           eyebrow={i18n(language, {
             en: "Hydration & Vitality",
             fr: "Hydratation et vitalité",

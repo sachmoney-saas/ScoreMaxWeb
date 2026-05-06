@@ -9,6 +9,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   bandFromScore,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -17,11 +18,18 @@ import {
 
 const WORKER_KEY = "cheeks";
 
+function resolveOverallCheek(aggregates: Record<string, unknown>) {
+  const primary = getScore(aggregates, "global_score.overall_cheek_score");
+  if (primary.score !== null || primary.argument) {
+    return primary;
+  }
+  return getScore(aggregates, "overall_cheek");
+}
+
 /* ----------------------------------------------------------------------------
  * Cheekbone heatmap face
  *
- * A stylised face outline with a glowing cheekbone "highlight zone" whose
- * intensity reflects projection + bone definition.
+ * Glow follows projection/arch + malar prominence; dashed curve = ogee.
  * ------------------------------------------------------------------------- */
 
 function colorForScore(score: number | null, alpha: number): string {
@@ -39,22 +47,17 @@ function colorForScore(score: number | null, alpha: number): string {
 }
 
 function CheekHeatmap({
-  projection,
-  definition,
+  projectionArch,
+  malarProminence,
   ogee,
-  fullness,
-  hollowing,
   language,
 }: {
-  projection: number | null;
-  definition: number | null;
+  projectionArch: number | null;
+  malarProminence: number | null;
   ogee: number | null;
-  fullness: number | null;
-  hollowing: number | null;
   language: AppLanguage;
 }) {
-  // Combined cheekbone glow intensity
-  const cheekSignals = [projection, definition].filter(
+  const cheekSignals = [projectionArch, malarProminence].filter(
     (v): v is number => v !== null,
   );
   const cheekScore =
@@ -62,13 +65,6 @@ function CheekHeatmap({
       ? cheekSignals.reduce((a, b) => a + b, 0) / cheekSignals.length
       : null;
   const cheekGlow = cheekScore === null ? 0.18 : 0.18 + (cheekScore / 10) * 0.6;
-
-  // Hollowing shadow under the cheekbones
-  const hollowAlpha =
-    hollowing === null ? 0.05 : 0.05 + (hollowing / 10) * 0.32;
-
-  // Mid-cheek volume tint
-  const midAlpha = fullness === null ? 0.08 : 0.08 + (fullness / 10) * 0.28;
 
   return (
     <div className="space-y-3">
@@ -93,17 +89,8 @@ function CheekHeatmap({
             />
             <stop offset="100%" stopColor="rgba(154,174,181,0)" />
           </radialGradient>
-          <radialGradient id="hollowL" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor={`rgba(0,0,0,${hollowAlpha})`} />
-            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-          </radialGradient>
-          <radialGradient id="hollowR" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor={`rgba(0,0,0,${hollowAlpha})`} />
-            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-          </radialGradient>
         </defs>
 
-        {/* Face outline */}
         <path
           d="M100 14 C140 14 160 50 160 110 C160 180 134 230 100 234 C66 230 40 180 40 110 C40 50 60 14 100 14 Z"
           fill="rgba(154,174,181,0.06)"
@@ -111,19 +98,9 @@ function CheekHeatmap({
           strokeWidth={1.4}
         />
 
-        {/* Mid-cheek tint */}
-        <ellipse cx={66} cy={132} rx={22} ry={16} fill={`rgba(255,255,255,${midAlpha})`} />
-        <ellipse cx={134} cy={132} rx={22} ry={16} fill={`rgba(255,255,255,${midAlpha})`} />
-
-        {/* Cheekbone glow */}
         <ellipse cx={56} cy={114} rx={28} ry={16} fill="url(#cheekL)" />
         <ellipse cx={144} cy={114} rx={28} ry={16} fill="url(#cheekR)" />
 
-        {/* Under-cheek hollowing */}
-        <ellipse cx={66} cy={150} rx={20} ry={10} fill="url(#hollowL)" />
-        <ellipse cx={134} cy={150} rx={20} ry={10} fill="url(#hollowR)" />
-
-        {/* Ogee curve overlay */}
         {ogee !== null ? (
           <>
             <path
@@ -143,11 +120,9 @@ function CheekHeatmap({
           </>
         ) : null}
 
-        {/* Eye markers */}
         <ellipse cx={78} cy={104} rx={6} ry={3} fill="rgba(255,255,255,0.3)" />
         <ellipse cx={122} cy={104} rx={6} ry={3} fill="rgba(255,255,255,0.3)" />
 
-        {/* Mouth marker */}
         <path
           d="M84 188 Q100 196 116 188"
           stroke="rgba(255,255,255,0.35)"
@@ -164,14 +139,6 @@ function CheekHeatmap({
             style={{ backgroundColor: colorForScore(cheekScore, 0.8) }}
           />
           {i18n(language, { en: "Cheekbone", fr: "Pommette" })}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-4 rounded-sm bg-white/30" />
-          {i18n(language, { en: "Volume", fr: "Volume" })}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-4 rounded-sm bg-black/40" />
-          {i18n(language, { en: "Hollow", fr: "Creux" })}
         </span>
         {ogee !== null ? (
           <span className="flex items-center gap-1.5">
@@ -206,52 +173,32 @@ export function CheeksWorkerView({
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_cheek");
+  const overall = resolveOverallCheek(aggregates);
 
-  // Zygomatic placement
-  const heightPeak = getScore(
-    aggregates,
-    "zygomatic_placement.cheekbone_height_peak",
-  );
   const bizygomatic = getScore(
     aggregates,
-    "zygomatic_placement.bizygomatic_width",
+    "frontal_structure.bizygomatic_width",
   );
-  const cheekToEye = getScore(
+  const malarProminence = getScore(
     aggregates,
-    "zygomatic_placement.cheek_to_eye_support",
-  );
-
-  // Projection & contour
-  const projection = getScore(
-    aggregates,
-    "projection_and_contour.zygomatic_projection",
-  );
-  const definition = getScore(
-    aggregates,
-    "projection_and_contour.bone_definition",
-  );
-  const ogee = getScore(aggregates, "projection_and_contour.ogee_curve");
-
-  // Soft tissue
-  const fullness = getScore(
-    aggregates,
-    "soft_tissue_and_hollowing.mid_cheek_fullness",
-  );
-  const hollowing = getScore(
-    aggregates,
-    "soft_tissue_and_hollowing.under_cheek_hollowing",
-  );
-
-  // Harmony
-  const cheekToJaw = getScore(
-    aggregates,
-    "harmony_and_balance.cheek_to_jaw_balance",
+    "frontal_structure.malar_eminence_prominence",
   );
   const cheekSymmetry = getScore(
     aggregates,
-    "harmony_and_balance.cheek_symmetry",
+    "frontal_structure.cheek_symmetry",
   );
+
+  const heightPeak = getScore(
+    aggregates,
+    "profile_structure.cheekbone_height_peak",
+  );
+  const zygomaticProjectionArch = getScore(
+    aggregates,
+    "profile_structure.zygomatic_projection_and_arch",
+  );
+  const ogee = getScore(aggregates, "profile_structure.ogee_curve");
+
+  const midfaceDominance = getScore(aggregates, "harmony.midface_dominance");
 
   return (
     <div className="space-y-4">
@@ -266,7 +213,6 @@ export function CheeksWorkerView({
         scoreFractionDigits={2}
       />
 
-      {/* Heatmap */}
       <Card className={workerSectionCardClassName}>
         <CardContent className="p-6 sm:p-8">
           <div className="grid gap-6 lg:grid-cols-[1fr_1fr] lg:items-center">
@@ -276,85 +222,94 @@ export function CheeksWorkerView({
               </p>
               <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
                 {i18n(language, {
-                  en: "Bone × volume × shadow",
-                  fr: "Os × volume × ombre",
+                  en: "Bone × arch × ogee",
+                  fr: "Os × arc × ogee",
                 })}
               </h3>
               <p className="text-sm leading-relaxed text-zinc-400">
                 {i18n(language, {
-                  en: "The cheekbone glow brightens with projection and bone definition. Mid-cheek fullness adds subtle volume, and shadows under the cheekbones reflect the hollowing score. The dashed S-curve traces your ogee.",
-                  fr: "L'éclat de la pommette s'intensifie avec la projection et la définition osseuse. Le volume des joues ajoute de la rondeur, et les ombres sous les pommettes reflètent le score de creux. La courbe pointillée trace ton arc en S.",
+                  en: "The cheekbone glow tracks projection and malar prominence. The dashed S-curve reflects ogee balance.",
+                  fr: "L'éclat des pommettes suit la projection zygomatique et la prominence des malars. La courbe en pointillés reflète l'équilibre de l'ogee.",
                 })}
               </p>
             </div>
             <CheekHeatmap
-              projection={projection.score}
-              definition={definition.score}
+              projectionArch={zygomaticProjectionArch.score}
+              malarProminence={malarProminence.score}
               ogee={ogee.score}
-              fullness={fullness.score}
-              hollowing={hollowing.score}
               language={language}
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(
+            bizygomatic.score,
+            malarProminence.score,
+            cheekSymmetry.score,
+          )}
           eyebrow={i18n(language, {
-            en: "Zygomatic placement",
-            fr: "Placement zygomatique",
+            en: "Frontal structure",
+            fr: "Structure frontale",
           })}
           title={i18n(language, {
-            en: "Position & width",
-            fr: "Position et largeur",
+            en: "Width, malars & symmetry",
+            fr: "Largeur, malars et symétrie",
           })}
         >
           <ScoreBar
-            label={formatLabel("zygomatic_placement.cheekbone_height_peak")}
-            score={heightPeak.score}
-            argument={heightPeak.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("zygomatic_placement.bizygomatic_width")}
+            label={formatLabel("frontal_structure.bizygomatic_width")}
             score={bizygomatic.score}
             argument={bizygomatic.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("zygomatic_placement.cheek_to_eye_support")}
-            score={cheekToEye.score}
-            argument={cheekToEye.argument}
+            label={formatLabel("frontal_structure.malar_eminence_prominence")}
+            score={malarProminence.score}
+            argument={malarProminence.argument}
+            language={language}
+          />
+          <ScoreBar
+            label={formatLabel("frontal_structure.cheek_symmetry")}
+            score={cheekSymmetry.score}
+            argument={cheekSymmetry.argument}
             language={language}
           />
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(
+            heightPeak.score,
+            zygomaticProjectionArch.score,
+            ogee.score,
+          )}
           eyebrow={i18n(language, {
-            en: "Projection & contour",
-            fr: "Projection et contour",
+            en: "Profile structure",
+            fr: "Structure de profil",
           })}
           title={i18n(language, {
-            en: "Bone & curve",
-            fr: "Os et courbe",
+            en: "Height, arch & curve",
+            fr: "Hauteur, arc et courbe",
           })}
         >
           <ScoreBar
-            label={formatLabel("projection_and_contour.zygomatic_projection")}
-            score={projection.score}
-            argument={projection.argument}
+            label={formatLabel("profile_structure.cheekbone_height_peak")}
+            score={heightPeak.score}
+            argument={heightPeak.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("projection_and_contour.bone_definition")}
-            score={definition.score}
-            argument={definition.argument}
+            label={formatLabel(
+              "profile_structure.zygomatic_projection_and_arch",
+            )}
+            score={zygomaticProjectionArch.score}
+            argument={zygomaticProjectionArch.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("projection_and_contour.ogee_curve")}
+            label={formatLabel("profile_structure.ogee_curve")}
             score={ogee.score}
             argument={ogee.argument}
             language={language}
@@ -362,49 +317,20 @@ export function CheeksWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(midfaceDominance.score)}
           eyebrow={i18n(language, {
-            en: "Soft tissue",
-            fr: "Tissus mous",
+            en: "Harmony",
+            fr: "Harmonie",
           })}
           title={i18n(language, {
-            en: "Volume & hollowing",
-            fr: "Volume et creux",
+            en: "Midface dominance",
+            fr: "Dominance du midface",
           })}
         >
           <ScoreBar
-            label={formatLabel("soft_tissue_and_hollowing.mid_cheek_fullness")}
-            score={fullness.score}
-            argument={fullness.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("soft_tissue_and_hollowing.under_cheek_hollowing")}
-            score={hollowing.score}
-            argument={hollowing.argument}
-            language={language}
-          />
-        </SectionShell>
-
-        <SectionShell
-          eyebrow={i18n(language, {
-            en: "Harmony & balance",
-            fr: "Harmonie et équilibre",
-          })}
-          title={i18n(language, {
-            en: "Cheek-to-jaw & symmetry",
-            fr: "Joue-mâchoire et symétrie",
-          })}
-        >
-          <ScoreBar
-            label={formatLabel("harmony_and_balance.cheek_to_jaw_balance")}
-            score={cheekToJaw.score}
-            argument={cheekToJaw.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("harmony_and_balance.cheek_symmetry")}
-            score={cheekSymmetry.score}
-            argument={cheekSymmetry.argument}
+            label={formatLabel("harmony.midface_dominance")}
+            score={midfaceDominance.score}
+            argument={midfaceDominance.argument}
             language={language}
           />
         </SectionShell>

@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   useAnalysisHistory,
   useDeleteAnalysisJob,
+  useSubscriberStandardAnalysisQuota,
 } from "@/hooks/use-supabase";
 import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
 import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
@@ -24,6 +25,7 @@ import {
   Plus,
   Trash2,
   ClipboardList,
+  CalendarClock,
 } from "lucide-react";
 import {
   Sidebar,
@@ -49,7 +51,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,6 +70,7 @@ import {
   formatAnalysisElapsedLabel,
 } from "@/components/analysis/AnalysisProcessingState";
 import { useAppLanguage } from "@/lib/i18n";
+import { formatSubscriberStandardQuotaSidebarLine } from "@/lib/subscriber-standard-analysis-copy";
 
 type SidebarNavItem = {
   href: string;
@@ -153,13 +155,20 @@ const SIDEBAR_SURFACE_CLASS =
 
 function ModernAppSidebar() {
   const [location] = useLocation();
+  const language = useAppLanguage();
   const { user, profile, isAdmin, signOut } = useAuth();
   const { data: analysisHistory = [], isLoading: isHistoryLoading } =
     useAnalysisHistory({ enabled: !!user?.id });
+  const { data: subscriberQuota } = useSubscriberStandardAnalysisQuota();
   const deleteAnalysisMutation = useDeleteAnalysisJob();
   const { state, isMobile, toggleSidebar } = useSidebar();
 
   const isCollapsed = state === "collapsed" && !isMobile;
+
+  const subscriberQuotaSidebarLine =
+    subscriberQuota != null
+      ? formatSubscriberStandardQuotaSidebarLine(language, subscriberQuota)
+      : null;
 
   const lastCompletedAnalysisTierLabel = React.useMemo(() => {
     const completed = analysisHistory
@@ -283,11 +292,6 @@ function ModernAppSidebar() {
               size="lg"
               className="h-11 w-full rounded-xl border border-white/15 bg-white/[0.06] px-3 transition-all duration-200 hover:border-white/25 hover:bg-white/[0.12] hover:text-zinc-100 data-[state=open]:border-white/25 data-[state=open]:bg-white/[0.12] data-[state=open]:text-zinc-100 data-[state=open]:hover:border-white/25 data-[state=open]:hover:bg-white/[0.12] data-[state=open]:hover:text-zinc-100"
             >
-              <Avatar className="h-8 w-8 rounded-lg shrink-0">
-                <AvatarFallback className="rounded-lg bg-primary/15 text-primary text-xs">
-                  {profile?.email?.substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
               {!isCollapsed ? (
                 <>
                   <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
@@ -346,57 +350,72 @@ function ModernAppSidebar() {
         </DropdownMenu>
       </SidebarFooter>
 
+      {!isCollapsed ? (
+        <div className="shrink-0 px-2">
+          <SidebarGroup className="p-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem className="w-full">
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/app/protocol"}
+                    tooltip="Mon protocole"
+                    className={cn(
+                      scoreRingMatchMetallicPillClassName,
+                      "h-11 w-full rounded-xl px-3 !text-zinc-950",
+                      "transition-[transform,filter] duration-150 ease-out",
+                      "hover:!text-zinc-950 hover:!brightness-[1.04]",
+                      "hover:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+                      "active:!text-zinc-950 active:!brightness-[0.98] active:translate-y-px",
+                      "active:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+                      "data-[active=true]:!text-zinc-950 data-[active=true]:!brightness-[0.99] data-[active=true]:translate-y-px",
+                      "data-[active=true]:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+                    )}
+                  >
+                    <Link
+                      href="/app/protocol"
+                      className="relative z-10 flex w-full items-center justify-center gap-2.5 text-center select-none !text-zinc-950"
+                    >
+                      <ClipboardList className="h-4 w-4 shrink-0 !text-zinc-900" />
+                      <span className="font-semibold text-zinc-950">
+                        Mon protocole
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarSeparator className="my-2 bg-white/10" />
+        </div>
+      ) : null}
+
       <SidebarContent className={isCollapsed ? "hidden" : "px-2 pb-2"}>
         {/* p-0: match footer email strip width (SidebarGroup defaults to p-2 and narrows rows). */}
-        <SidebarGroup className="p-0">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem className="w-full">
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/app/protocol"}
-                  tooltip="Mon protocole"
-                  className={cn(
-                    scoreRingMatchMetallicPillClassName,
-                    "h-11 w-full rounded-xl px-3 !text-zinc-950",
-                    "transition-[transform,filter] duration-150 ease-out",
-                    "hover:!text-zinc-950 hover:!brightness-[1.04]",
-                    "hover:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
-                    "active:!text-zinc-950 active:!brightness-[0.98] active:translate-y-px",
-                    "active:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
-                    "data-[active=true]:!text-zinc-950 data-[active=true]:!brightness-[0.99] data-[active=true]:translate-y-px",
-                    "data-[active=true]:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
-                  )}
-                >
-                  <Link
-                    href="/app/protocol"
-                    className="relative z-10 flex w-full items-center justify-center gap-2.5 text-center select-none !text-zinc-950"
-                  >
-                    <ClipboardList className="h-4 w-4 shrink-0 !text-zinc-900" />
-                    <span className="font-semibold text-zinc-950">
-                      Mon protocole
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarSeparator className="my-2 bg-white/10" />
-
         <SidebarGroup className="p-0">
           <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-white">
             Mes analyses
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <Link
-              href="/app/new-analysis"
-              className="mb-3 flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.09] px-3 text-sm font-semibold text-zinc-100 transition hover:border-white/25 hover:bg-white/[0.14]"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Nouvelle analyse
-            </Link>
+            <div className="mb-3 space-y-1.5">
+              <Link
+                href="/app/new-analysis"
+                className="flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.09] px-3 text-sm font-semibold text-zinc-100 transition hover:border-white/25 hover:bg-white/[0.14]"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nouvelle analyse
+              </Link>
+              {subscriberQuotaSidebarLine ? (
+                <p className="flex items-start gap-1.5 px-1 text-[11px] leading-snug text-zinc-400">
+                  <CalendarClock
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500"
+                    aria-hidden
+                  />
+                  <span>{subscriberQuotaSidebarLine}</span>
+                </p>
+              ) : null}
+            </div>
             <SidebarMenu className="space-y-1.5">
               {isHistoryLoading ? (
                 <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-zinc-400">

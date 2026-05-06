@@ -10,6 +10,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -17,6 +18,14 @@ import {
 } from "./_shared";
 
 const WORKER_KEY = "chin";
+
+function resolveOverallChin(aggregates: Record<string, unknown>) {
+  const primary = getScore(aggregates, "global_score.overall_chin_score");
+  if (primary.score !== null || primary.argument) {
+    return primary;
+  }
+  return getScore(aggregates, "overall_chin");
+}
 
 /* ----------------------------------------------------------------------------
  * Chin shape gallery
@@ -186,38 +195,31 @@ function ChinShapeGallery({
  * Profile projection diagram
  *
  * Shows the lower-face profile with a projection arrow that slides forward as
- * chin_projection score grows. Visualises Riedel's plane visually.
+ * chin_projection score grows.
  * ------------------------------------------------------------------------- */
 
 function ChinProjectionDiagram({
   projection,
-  inclination,
   height,
-  language,
 }: {
   projection: number | null;
-  inclination: number | null;
   height: number | null;
-  language: AppLanguage;
 }) {
   const p = projection !== null ? Math.max(0, Math.min(10, projection)) : 5;
-  const i = inclination !== null ? Math.max(0, Math.min(10, inclination)) : 5;
   const h = height !== null ? Math.max(0, Math.min(10, height)) : 5;
 
-  // Reference line (lip→nose tip) at x=70. Chin tip x = 50 + (p-5)*4 -> 30..70
   const chinTipX = 56 + (p - 5) * 4;
-  const chinTipY = 110 + (h - 5) * 2; // slight vertical adjustment with height
-  const chinAngle = (i - 5) * 4; // forward tilt indicator
+  const chinTipY = 110 + (h - 5) * 2;
 
   return (
-    <div className="space-y-3">
+    <div className="flex w-full justify-center">
       <svg
         viewBox="0 0 200 160"
         className="mx-auto block h-auto w-full max-w-[320px]"
         role="img"
         aria-label="Chin projection"
       >
-        {/* Riedel plane reference */}
+        {/* Reference vertical (dashed) */}
         <line
           x1={70}
           y1={50}
@@ -227,17 +229,6 @@ function ChinProjectionDiagram({
           strokeWidth={1}
           strokeDasharray="4 4"
         />
-        <text
-          x={74}
-          y={62}
-          fontSize="8"
-          fontWeight="600"
-          fill="#aab2bd"
-          letterSpacing="0.08em"
-        >
-          {i18n(language, { en: "REFERENCE", fr: "RÉFÉRENCE" }).toUpperCase()}
-        </text>
-
         {/* Stylised lower-face profile */}
         <path
           d={`M70 30
@@ -251,12 +242,10 @@ function ChinProjectionDiagram({
           strokeLinejoin="round"
         />
 
-        {/* Lip / nose markers */}
         <circle cx={86} cy={80} r={2} fill="#cfdde2" />
         <circle cx={80} cy={100} r={2} fill="#cfdde2" />
         <circle cx={chinTipX} cy={chinTipY} r={3.5} fill="#e9f1f4" />
 
-        {/* Projection arrow */}
         <line
           x1={70}
           y1={chinTipY}
@@ -269,28 +258,7 @@ function ChinProjectionDiagram({
           points={`${chinTipX - 6},${chinTipY - 3} ${chinTipX},${chinTipY} ${chinTipX - 6},${chinTipY + 3}`}
           fill="#86efac"
         />
-
-        {/* Inclination indicator */}
-        <line
-          x1={chinTipX}
-          y1={chinTipY}
-          x2={chinTipX + Math.cos((chinAngle * Math.PI) / 180) * 18}
-          y2={chinTipY + Math.sin((chinAngle * Math.PI) / 180) * 18}
-          stroke="#fcd34d"
-          strokeWidth={1.4}
-          strokeLinecap="round"
-        />
       </svg>
-      <div className="flex items-center justify-center gap-5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-4 rounded-sm bg-[#86efac]" />
-          {i18n(language, { en: "Projection", fr: "Projection" })}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-4 rounded-sm bg-[#fcd34d]" />
-          {i18n(language, { en: "Inclination", fr: "Inclinaison" })}
-        </span>
-      </div>
     </div>
   );
 }
@@ -318,27 +286,24 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_chin");
+  const overall = resolveOverallChin(aggregates);
 
   // Shape & contour
   const shapeEnum = getEnum(aggregates, "shape_and_contour.chin_shape");
   const shapeKey = normalizeChin(shapeEnum.value);
   const shapeDisplay = formatEnumValue("shape_and_contour.chin_shape", shapeEnum.value);
   const contour = getScore(aggregates, "shape_and_contour.chin_contour");
-  const fullness = getScore(aggregates, "shape_and_contour.chin_fullness");
   const dimpleEnum = getEnum(aggregates, "shape_and_contour.chin_dimple");
 
   // Projection
   const projection = getScore(aggregates, "projection_and_profile.chin_projection");
-  const inclination = getScore(aggregates, "projection_and_profile.chin_inclination");
   const height = getScore(aggregates, "projection_and_profile.chin_height");
 
-  // Width
-  const width = getScore(aggregates, "width_and_balance.chin_width");
-  const harmony = getScore(aggregates, "width_and_balance.chin_to_jaw_harmony");
-  const lowerFaceBalance = getScore(
+  // Width & integration
+  const width = getScore(aggregates, "width_and_integration.chin_width");
+  const lowerFaceIntegration = getScore(
     aggregates,
-    "width_and_balance.lower_face_balance",
+    "width_and_integration.lower_face_integration",
   );
 
   return (
@@ -389,56 +354,30 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
         </CardContent>
       </Card>
 
-      {/* Projection diagram */}
+      {/* Projection diagram (visual only; scores detail lives in bars below) */}
       <Card className={workerSectionCardClassName}>
         <CardContent className="p-6 sm:p-8">
-          <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-            <div className="space-y-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                {i18n(language, { en: "Profile read", fr: "Lecture de profil" })}
-              </p>
-              <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                {i18n(language, {
-                  en: "Projection × inclination",
-                  fr: "Projection × inclinaison",
-                })}
-              </h3>
-              <p className="text-sm leading-relaxed text-zinc-400">
-                {i18n(language, {
-                  en: "The dashed line is your reference vertical (Riedel plane). The chin tip moves forward or backward depending on your projection score.",
-                  fr: "La ligne pointillée est ta verticale de référence (plan de Riedel). La pointe du menton avance ou recule selon ta projection.",
-                })}
-              </p>
-            </div>
-            <ChinProjectionDiagram
-              projection={projection.score}
-              inclination={inclination.score}
-              height={height.score}
-              language={language}
-            />
-          </div>
+          <ChinProjectionDiagram
+            projection={projection.score}
+            height={height.score}
+          />
         </CardContent>
       </Card>
 
       {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(contour.score) || Boolean(dimpleEnum.value)}
           eyebrow={i18n(language, { en: "Shape & contour", fr: "Forme et contour" })}
           title={i18n(language, {
-            en: "Volume & detail",
-            fr: "Volume et détail",
+            en: "Contour & detail",
+            fr: "Contour et détail",
           })}
         >
           <ScoreBar
             label={formatLabel("shape_and_contour.chin_contour")}
             score={contour.score}
             argument={contour.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("shape_and_contour.chin_fullness")}
-            score={fullness.score}
-            argument={fullness.argument}
             language={language}
           />
           {dimpleEnum.value ? (
@@ -461,6 +400,7 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(projection.score, height.score)}
           eyebrow={i18n(language, { en: "Projection", fr: "Projection" })}
           title={i18n(language, {
             en: "Forward push & height",
@@ -474,12 +414,6 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
             language={language}
           />
           <ScoreBar
-            label={formatLabel("projection_and_profile.chin_inclination")}
-            score={inclination.score}
-            argument={inclination.argument}
-            language={language}
-          />
-          <ScoreBar
             label={formatLabel("projection_and_profile.chin_height")}
             score={height.score}
             argument={height.argument}
@@ -488,28 +422,26 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
-          eyebrow={i18n(language, { en: "Width & balance", fr: "Largeur et équilibre" })}
+          when={hasAnyScore(width.score, lowerFaceIntegration.score)}
+          eyebrow={i18n(language, {
+            en: "Width & integration",
+            fr: "Largeur et intégration",
+          })}
           title={i18n(language, {
-            en: "Harmony with the jaw",
-            fr: "Harmonie avec la mâchoire",
+            en: "Lower-face integration",
+            fr: "Intégration du bas du visage",
           })}
         >
           <ScoreBar
-            label={formatLabel("width_and_balance.chin_width")}
+            label={formatLabel("width_and_integration.chin_width")}
             score={width.score}
             argument={width.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("width_and_balance.chin_to_jaw_harmony")}
-            score={harmony.score}
-            argument={harmony.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("width_and_balance.lower_face_balance")}
-            score={lowerFaceBalance.score}
-            argument={lowerFaceBalance.argument}
+            label={formatLabel("width_and_integration.lower_face_integration")}
+            score={lowerFaceIntegration.score}
+            argument={lowerFaceIntegration.argument}
             language={language}
           />
         </SectionShell>

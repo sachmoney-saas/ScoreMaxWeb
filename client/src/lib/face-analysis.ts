@@ -180,7 +180,6 @@ const workerImageMap: Record<string, OnboardingScanAssetCode> = {
   cheeks: "FACE_FRONT",
   chin: "FACE_FRONT",
   coloring: "FACE_FRONT",
-  ear: "PROFILE_LEFT",
   eye_brows: "FACE_FRONT",
   eyes: "FACE_FRONT",
   hair: "HAIR_BACK",
@@ -515,6 +514,29 @@ export async function fetchRecentScanStatus(
     latest_captured_at: row.latest_captured_at ?? null,
     is_ready: Boolean(row.is_ready),
   };
+}
+
+export type SubscriberStandardQuotaWire = {
+  weekly_limit_applies: boolean;
+  can_launch_standard_now: boolean;
+  next_available_at: string | null;
+  has_standard_in_flight: boolean;
+};
+
+export async function fetchSubscriberStandardQuota(
+  accessToken: string,
+): Promise<SubscriberStandardQuotaWire> {
+  const response = await apiRequest(
+    "GET",
+    "/v1/analyses/subscriber-standard-quota",
+    undefined,
+    { Authorization: `Bearer ${accessToken}` },
+  );
+  const json = (await response.json()) as {
+    data: SubscriberStandardQuotaWire;
+  };
+
+  return json.data;
 }
 
 export async function createManualAnalysisSession(

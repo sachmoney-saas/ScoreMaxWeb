@@ -22,7 +22,11 @@ import {
   type ScanSessionRow,
 } from "../lib/analysis-orchestration";
 import { requireUserId } from "../lib/auth";
-import { hasPremiumAccess } from "../lib/subscriptions";
+import { hasPremiumAccess, requirePremiumAccess } from "../lib/subscriptions";
+import {
+  assertSubscriberStandardAnalysisAllowed,
+  getSubscriberStandardAnalysisQuota,
+} from "../lib/subscriber-standard-analysis-quota";
 import {
   downloadR2Object,
   getDefaultR2Bucket,
@@ -161,9 +165,27 @@ async function getManualSessionStatus(params: {
 export function createV1AnalysesRouter(): Router {
   const router = Router();
 
+  router.get("/analyses/subscriber-standard-quota", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const quota = await getSubscriberStandardAnalysisQuota(userId);
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: quota,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/analyses/manual-session", async (req, res, next) => {
     try {
       const userId = await requireUserId(req.headers.authorization);
+      await requirePremiumAccess(userId);
+      await assertSubscriberStandardAnalysisAllowed(userId);
       const { data: session, error } = await supabaseAdmin
         .from("scan_sessions")
         .insert({
@@ -203,6 +225,28 @@ export function createV1AnalysesRouter(): Router {
     try {
       const userId = await requireUserId(req.headers.authorization);
       const body = signedUploadBodySchema.parse(req.body);
+
+      const { data: scanSession, error: sessionLookupError } = await supabaseAdmin
+        .from("scan_sessions")
+        .select("source")
+        .eq("id", body.sessionId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (sessionLookupError || !scanSession) {
+        throw new ApiError({
+          code: "VALIDATION_ERROR",
+          status: 404,
+          message: "Scan session not found",
+          details: sessionLookupError,
+        });
+      }
+
+      if (scanSession.source === "manual_rescan") {
+        await requirePremiumAccess(userId);
+        await assertSubscriberStandardAnalysisAllowed(userId);
+      }
+
       const extension = body.mimeType === "image/png" ? "png" : "jpg";
       const key = `${userId}/scans/${body.sessionId}/${body.assetTypeCode.toLowerCase()}-${Date.now()}.${extension}`;
       const bucket = getDefaultR2Bucket();
@@ -230,6 +274,7 @@ export function createV1AnalysesRouter(): Router {
   router.get("/analyses/manual-session/:sessionId/status", async (req, res, next) => {
     try {
       const userId = await requireUserId(req.headers.authorization);
+      await requirePremiumAccess(userId);
       const params = manualSessionParamsSchema.parse(req.params);
       const status = await getManualSessionStatus({
         sessionId: params.sessionId,
@@ -256,6 +301,9 @@ export function createV1AnalysesRouter(): Router {
         const params = manualSessionParamsSchema.parse(req.params);
         const { lang } = req.body as { lang?: string };
         assertSupportedAnalysisLang(lang);
+
+        await requirePremiumAccess(userId);
+        await assertSubscriberStandardAnalysisAllowed(userId);
 
         const session = await loadManualSession({ sessionId: params.sessionId, userId });
         const status = await getManualSessionStatus({ sessionId: session.id, userId });

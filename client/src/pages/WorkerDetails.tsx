@@ -25,7 +25,6 @@ import { SmileWorkerView } from "@/components/analysis/workers/SmileWorkerView";
 import { HairWorkerView } from "@/components/analysis/workers/HairWorkerView";
 import { SkinTintWorkerView } from "@/components/analysis/workers/SkinTintWorkerView";
 import { NeckWorkerView } from "@/components/analysis/workers/NeckWorkerView";
-import { EarWorkerView } from "@/components/analysis/workers/EarWorkerView";
 import { RecommendationsSection } from "@/components/analysis/RecommendationsSection";
 import {
   analysisBackNavButtonClassName,
@@ -154,7 +153,6 @@ const DEDICATED_WORKER_VIEWS = new Set([
   "hair",
   "skin_tint",
   "neck",
-  "ear",
 ]);
 
 function renderWorkerBody({
@@ -187,7 +185,6 @@ function renderWorkerBody({
     case "hair":          return <HairWorkerView aggregates={outputAggregates} language={language} />;
     case "skin_tint":     return <SkinTintWorkerView aggregates={outputAggregates} language={language} />;
     case "neck":          return <NeckWorkerView aggregates={outputAggregates} language={language} />;
-    case "ear":           return <EarWorkerView aggregates={outputAggregates} language={language} />;
   }
 
   if (DEDICATED_WORKER_VIEWS.has(worker)) {

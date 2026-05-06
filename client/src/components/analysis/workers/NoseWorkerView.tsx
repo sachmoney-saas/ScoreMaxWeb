@@ -10,6 +10,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -47,7 +48,7 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_nose");
+  const overall = getScore(aggregates, "global_score.overall_nose_score");
 
   // Frontal
   const symmetry = getScore(aggregates, "frontal_symmetry_and_width.nose_symmetry");
@@ -66,7 +67,10 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
     "profile_dorsum_and_angles.bridge_shape",
     bridgeEnum.value,
   );
-  const supratip = getScore(aggregates, "profile_dorsum_and_angles.supratip_break");
+  const supratipEnum = getEnum(
+    aggregates,
+    "profile_dorsum_and_angles.supratip_break",
+  );
   const nasofrontal = getScore(
     aggregates,
     "profile_dorsum_and_angles.nasofrontal_angle",
@@ -77,17 +81,21 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
   );
 
   // Tip
-  const tipDef = getScore(aggregates, "tip_morphology_and_projection.tip_definition");
-  const tipProj = getScore(aggregates, "tip_morphology_and_projection.tip_projection");
+  const tipDef = getScore(aggregates, "tip_morphology.tip_definition");
+  const tipProj = getScore(aggregates, "tip_morphology.tip_projection");
 
   // Base
-  const nostrilEnum = getEnum(aggregates, "base_and_nostrils.nostril_shape");
+  const nostrilEnum = getEnum(aggregates, "base_nostrils_and_surface.nostril_shape");
   const nostrilDisplay = formatEnumValue(
-    "base_and_nostrils.nostril_shape",
+    "base_nostrils_and_surface.nostril_shape",
     nostrilEnum.value,
   );
-  const columella = getScore(aggregates, "base_and_nostrils.columella_alignment");
-  const noseLength = getScore(aggregates, "base_and_nostrils.nose_length");
+  const columella = getScore(aggregates, "base_nostrils_and_surface.columella_alignment");
+  const noseLength = getScore(aggregates, "base_nostrils_and_surface.nose_length");
+  const nasalSkinEnum = getEnum(
+    aggregates,
+    "base_nostrils_and_surface.nasal_skin_surface",
+  );
 
   /** Radar — signature complète du nez (toutes dimensions). */
   const radarLabels: Record<string, { en: string; fr: string }> = {
@@ -111,23 +119,19 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
       en: "Nasolabial",
       fr: "Nasolabial",
     },
-    "profile_dorsum_and_angles.supratip_break": {
-      en: "Supratip",
-      fr: "Supratip",
-    },
-    "tip_morphology_and_projection.tip_definition": {
+    "tip_morphology.tip_definition": {
       en: "Tip def.",
       fr: "Pointe",
     },
-    "tip_morphology_and_projection.tip_projection": {
+    "tip_morphology.tip_projection": {
       en: "Projection",
       fr: "Projection",
     },
-    "base_and_nostrils.columella_alignment": {
+    "base_nostrils_and_surface.columella_alignment": {
       en: "Columella",
       fr: "Columelle",
     },
-    "base_and_nostrils.nose_length": { en: "Length", fr: "Longueur" },
+    "base_nostrils_and_surface.nose_length": { en: "Length", fr: "Longueur" },
   };
 
   const radarSource: { key: string; score: number | null }[] = [
@@ -139,11 +143,10 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
       key: "profile_dorsum_and_angles.nasolabial_angle_rotation",
       score: nasolabial.score,
     },
-    { key: "profile_dorsum_and_angles.supratip_break", score: supratip.score },
-    { key: "tip_morphology_and_projection.tip_definition", score: tipDef.score },
-    { key: "tip_morphology_and_projection.tip_projection", score: tipProj.score },
-    { key: "base_and_nostrils.columella_alignment", score: columella.score },
-    { key: "base_and_nostrils.nose_length", score: noseLength.score },
+    { key: "tip_morphology.tip_definition", score: tipDef.score },
+    { key: "tip_morphology.tip_projection", score: tipProj.score },
+    { key: "base_nostrils_and_surface.columella_alignment", score: columella.score },
+    { key: "base_nostrils_and_surface.nose_length", score: noseLength.score },
   ];
   const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
     d.score === null
@@ -221,7 +224,9 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
                     fr: "De la géométrie de l'arête à la définition de la pointe — le polygone trace la performance de ton nez sur tous les axes mesurés.",
                   })}
                 </p>
-                {(bridgeEnum.argument || nostrilEnum.argument) && (
+                {(bridgeEnum.argument ||
+                  nostrilEnum.argument ||
+                  supratipEnum.argument) && (
                   <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     {bridgeEnum.argument ? (
                       <div>
@@ -230,6 +235,16 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
                         </p>
                         <p className="mt-1 text-xs leading-relaxed text-zinc-400">
                           {bridgeEnum.argument}
+                        </p>
+                      </div>
+                    ) : null}
+                    {supratipEnum.argument ? (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          {i18n(language, { en: "Supratip", fr: "Supratip" })}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                          {supratipEnum.argument}
                         </p>
                       </div>
                     ) : null}
@@ -304,6 +319,11 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
       {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(
+            bridgeWidth.score,
+            alarWidth.score,
+            symmetry.score,
+          )}
           eyebrow={i18n(language, {
             en: "Frontal width",
             fr: "Largeur frontale",
@@ -334,6 +354,10 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(nasofrontal.score, nasolabial.score) ||
+            Boolean(supratipEnum.value)
+          }
           eyebrow={i18n(language, {
             en: "Profile angles",
             fr: "Angles de profil",
@@ -355,15 +379,30 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             argument={nasolabial.argument}
             language={language}
           />
-          <ScoreBar
-            label={formatLabel("profile_dorsum_and_angles.supratip_break")}
-            score={supratip.score}
-            argument={supratip.argument}
-            language={language}
-          />
+          {supratipEnum.value ? (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-200">
+                  {formatLabel("profile_dorsum_and_angles.supratip_break")}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {formatEnumValue(
+                    "profile_dorsum_and_angles.supratip_break",
+                    supratipEnum.value,
+                  )}
+                </span>
+              </div>
+              {supratipEnum.argument ? (
+                <p className="text-xs leading-relaxed text-zinc-400">
+                  {supratipEnum.argument}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(tipDef.score, tipProj.score)}
           eyebrow={i18n(language, {
             en: "Tip morphology",
             fr: "Morphologie de la pointe",
@@ -374,13 +413,13 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
           })}
         >
           <ScoreBar
-            label={formatLabel("tip_morphology_and_projection.tip_definition")}
+            label={formatLabel("tip_morphology.tip_definition")}
             score={tipDef.score}
             argument={tipDef.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("tip_morphology_and_projection.tip_projection")}
+            label={formatLabel("tip_morphology.tip_projection")}
             score={tipProj.score}
             argument={tipProj.argument}
             language={language}
@@ -388,27 +427,51 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(columella.score, noseLength.score) ||
+            Boolean(nasalSkinEnum.value)
+          }
           eyebrow={i18n(language, {
             en: "Base & length",
             fr: "Base et longueur",
           })}
           title={i18n(language, {
-            en: "Columella & length",
-            fr: "Columelle et longueur",
+            en: "Columella, length & skin",
+            fr: "Columelle, longueur et peau",
           })}
         >
           <ScoreBar
-            label={formatLabel("base_and_nostrils.columella_alignment")}
+            label={formatLabel("base_nostrils_and_surface.columella_alignment")}
             score={columella.score}
             argument={columella.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("base_and_nostrils.nose_length")}
+            label={formatLabel("base_nostrils_and_surface.nose_length")}
             score={noseLength.score}
             argument={noseLength.argument}
             language={language}
           />
+          {nasalSkinEnum.value ? (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-200">
+                  {formatLabel("base_nostrils_and_surface.nasal_skin_surface")}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {formatEnumValue(
+                    "base_nostrils_and_surface.nasal_skin_surface",
+                    nasalSkinEnum.value,
+                  )}
+                </span>
+              </div>
+              {nasalSkinEnum.argument ? (
+                <p className="text-xs leading-relaxed text-zinc-400">
+                  {nasalSkinEnum.argument}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </SectionShell>
       </div>
     </div>

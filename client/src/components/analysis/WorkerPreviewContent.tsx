@@ -33,8 +33,9 @@ import {
 
 /** Centered preview hero: copy + visuals (headline score ring lives on the card title row). */
 const PREVIEW_HERO = "flex w-full flex-col items-center gap-3 text-center";
-/** Tighter stack so the skin radar sits closer to the copy (less dead vertical space). */
-const PREVIEW_HERO_SKIN_RADAR = "flex w-full flex-col items-center gap-1 text-center";
+/** Tighter stack so signature preview radars (peau, mâchoire) sit closer to the copy. */
+const PREVIEW_HERO_SIGNATURE_RADAR =
+  "flex w-full flex-col items-center gap-3 text-center sm:gap-4";
 const PREVIEW_COPY = "w-full max-w-md text-balance";
 
 export type MiniRingHighlight = "default" | "strength" | "weakness";
@@ -279,17 +280,27 @@ const HAIR_COLOR_HEX: Record<string, string> = {
 
 const IRIS_COLOR_HEX: Record<string, string> = {
   black: "#1a1413",
+  almost_black: "#1a1410",
   dark_brown: "#3a261a",
   medium_brown: "#6a4528",
   brown: "#6a4528",
   light_brown: "#a06f43",
   hazel: "#9a7a3f",
-  amber: "#a06f1f",
+  hazel_brown: "#8b6f47",
+  hazel_green: "#7a8f5c",
+  amber: "#b8860b",
   green: "#4f7d4f",
+  light_green: "#8fbc8f",
+  dark_green: "#2d5a3a",
   blue_grey: "#7488a0",
+  grey_blue: "#6b7d8f",
   grey: "#9da4ad",
+  pure_grey: "#9da4ad",
   blue: "#3d6a9c",
+  dark_blue: "#2a5080",
   light_blue: "#7cb1d6",
+  central_heterochromia: "#6a5acd",
+  sectoral_heterochromia: "#9370db",
 };
 
 const LIP_COLOR_HEX: Record<string, string> = {
@@ -477,25 +488,32 @@ function ColoringPreview({ aggregates, language }: PreviewProps) {
 
 /** Compact axis labels — aligned with `SkinWorkerView` radar. */
 const SKIN_PREVIEW_RADAR_LABELS: Record<string, { en: string; fr: string }> = {
-  "texture_and_pores.pore_size_visibility": { en: "Pores", fr: "Pores" },
-  "texture_and_pores.blackheads_and_congestion": {
+  "texture_pores_and_congestion.pore_size_and_visibility": {
+    en: "Pores",
+    fr: "Pores",
+  },
+  "texture_pores_and_congestion.blackheads_and_congestion": {
     en: "Congestion",
     fr: "Congestion",
   },
-  "texture_and_pores.surface_smoothness": {
+  "texture_pores_and_congestion.surface_smoothness": {
     en: "Smoothness",
     fr: "Lissage",
   },
   "acne_and_scarring.active_acne": { en: "Acne", fr: "Acné" },
+  "acne_and_scarring.post_inflammatory_marks": {
+    en: "PIH",
+    fr: "Marques",
+  },
   "acne_and_scarring.atrophic_scarring": {
     en: "Scarring",
     fr: "Cicatrices",
   },
-  "pigmentation_and_tone.color_uniformity": {
+  "pigmentation_tone_and_redness.color_uniformity": {
     en: "Uniformity",
     fr: "Uniformité",
   },
-  "pigmentation_and_tone.redness_and_erythema": {
+  "pigmentation_tone_and_redness.redness_and_erythema": {
     en: "Redness",
     fr: "Rougeurs",
   },
@@ -509,7 +527,8 @@ const SKIN_PREVIEW_RADAR_LABELS: Record<string, { en: string; fr: string }> = {
   },
 };
 
-function SkinPreviewRadar({
+/** 3+ axes, same geometry/styling as the skin preview radar (DRY). */
+function PreviewSignatureRadar({
   data,
   language,
 }: {
@@ -518,11 +537,11 @@ function SkinPreviewRadar({
 }) {
   const gradientId = React.useId().replace(/:/g, "");
   /** Horizontal pad for long labels; slightly tighter vertically to reduce empty bands in the SVG. */
-  const viewPadX = 70;
-  const viewPadY = 56;
-  const size = 320;
+  const viewPadX = 102;
+  const viewPadY = 84;
+  const size = 510;
   const center = size / 2;
-  const maxRadius = 106;
+  const maxRadius = 176;
   const n = data.length;
   if (n < 3) return null;
 
@@ -537,7 +556,7 @@ function SkinPreviewRadar({
 
   const labelPolar = (index: number) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / n;
-    const r = maxRadius + 30;
+    const r = maxRadius + 44;
     return {
       x: center + r * Math.cos(angle),
       y: center + r * Math.sin(angle),
@@ -563,7 +582,7 @@ function SkinPreviewRadar({
   return (
     <svg
       viewBox={`-${viewPadX} -${viewPadY} ${size + 2 * viewPadX} ${size + 2 * viewPadY}`}
-      className="mx-auto h-auto w-full max-w-[min(100%,440px)] shrink-0 overflow-visible"
+      className="mx-auto h-auto w-full max-w-[min(100%,640px)] shrink-0 overflow-visible"
       role="img"
       aria-label={scaleHint}
     >
@@ -581,8 +600,8 @@ function SkinPreviewRadar({
           cy={center}
           r={(value / 10) * maxRadius}
           fill="none"
-          stroke="rgba(255,255,255,0.09)"
-          strokeWidth="1"
+          stroke="rgba(255,255,255,0.14)"
+          strokeWidth="1.35"
         />
       ))}
 
@@ -595,8 +614,8 @@ function SkinPreviewRadar({
             y1={center}
             x2={end.x}
             y2={end.y}
-            stroke="rgba(255,255,255,0.07)"
-            strokeWidth="1"
+            stroke="rgba(255,255,255,0.11)"
+            strokeWidth="1.25"
           />
         );
       })}
@@ -605,7 +624,7 @@ function SkinPreviewRadar({
         points={polygon}
         fill={`url(#${gradientId})`}
         stroke="#cfdde2"
-        strokeWidth="1.5"
+        strokeWidth="2.25"
         strokeLinejoin="round"
       />
 
@@ -616,10 +635,10 @@ function SkinPreviewRadar({
             key={`pt-${i}`}
             cx={p.x}
             cy={p.y}
-            r={3.5}
+            r={5.2}
             fill={paint.dotFill}
             stroke={paint.dotStroke}
-            strokeWidth="1.4"
+            strokeWidth="1.65"
           />
         );
       })}
@@ -628,7 +647,7 @@ function SkinPreviewRadar({
       {[0, 2.5, 5, 7.5, 10].map((v) => {
         const ang = Math.PI / 2;
         const r = (v / 10) * maxRadius;
-        const pad = v === 0 ? 16 : v === 10 ? 16 : 13;
+        const pad = v === 0 ? 20 : v === 10 ? 20 : 17;
         const xo = center + (r + pad) * Math.cos(ang);
         const yo = center + (r + pad) * Math.sin(ang);
         return (
@@ -638,7 +657,7 @@ function SkinPreviewRadar({
             y={yo}
             textAnchor="middle"
             dominantBaseline="middle"
-            fontSize="8.25"
+            fontSize="12.5"
             fontWeight="600"
             fill="#6b7280"
           >
@@ -655,10 +674,10 @@ function SkinPreviewRadar({
           <React.Fragment key={`label-${i}`}>
             <text
               x={lp.x}
-              y={lp.y - 7}
+              y={lp.y - 9}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
-              fontSize="10"
+              fontSize="16"
               fontWeight="600"
               fill={paint.labelFill}
               letterSpacing="0.03em"
@@ -667,10 +686,10 @@ function SkinPreviewRadar({
             </text>
             <text
               x={lp.x}
-              y={lp.y + 10}
+              y={lp.y + 14}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
-              fontSize="9"
+              fontSize="13.5"
               fontWeight="700"
               fill={paint.previewScoreFill}
             >
@@ -688,35 +707,47 @@ function SkinPreviewRadar({
 }
 
 function SkinPreview({ aggregates, language }: PreviewProps) {
-  const global =
-    getScore(aggregates, "overall_skin_score").score !== null
-      ? getScore(aggregates, "overall_skin_score")
-      : getScore(aggregates, "overall_skin");
+  const overallNested = getScore(aggregates, "global_score.overall_skin_score");
+  const overallFlat = getScore(aggregates, "overall_skin_score");
+  const overallLegacy = getScore(aggregates, "overall_skin");
+  const global = {
+    score:
+      overallNested.score ?? overallFlat.score ?? overallLegacy.score ?? null,
+    argument:
+      overallNested.argument ??
+      overallFlat.argument ??
+      overallLegacy.argument ??
+      null,
+  };
 
   const poreVisibility = getScore(
     aggregates,
-    "texture_and_pores.pore_size_visibility",
+    "texture_pores_and_congestion.pore_size_and_visibility",
   );
   const blackheads = getScore(
     aggregates,
-    "texture_and_pores.blackheads_and_congestion",
+    "texture_pores_and_congestion.blackheads_and_congestion",
   );
   const surfaceSmoothness = getScore(
     aggregates,
-    "texture_and_pores.surface_smoothness",
+    "texture_pores_and_congestion.surface_smoothness",
   );
   const activeAcne = getScore(aggregates, "acne_and_scarring.active_acne");
+  const postInflammatory = getScore(
+    aggregates,
+    "acne_and_scarring.post_inflammatory_marks",
+  );
   const atrophicScarring = getScore(
     aggregates,
     "acne_and_scarring.atrophic_scarring",
   );
   const colorUniformity = getScore(
     aggregates,
-    "pigmentation_and_tone.color_uniformity",
+    "pigmentation_tone_and_redness.color_uniformity",
   );
   const redness = getScore(
     aggregates,
-    "pigmentation_and_tone.redness_and_erythema",
+    "pigmentation_tone_and_redness.redness_and_erythema",
   );
   const sebumHydration = getScore(
     aggregates,
@@ -729,28 +760,32 @@ function SkinPreview({ aggregates, language }: PreviewProps) {
 
   const radarData = [
     {
-      key: "texture_and_pores.pore_size_visibility",
+      key: "texture_pores_and_congestion.pore_size_and_visibility",
       value: poreVisibility.score,
     },
     {
-      key: "texture_and_pores.blackheads_and_congestion",
+      key: "texture_pores_and_congestion.blackheads_and_congestion",
       value: blackheads.score,
     },
     {
-      key: "texture_and_pores.surface_smoothness",
+      key: "texture_pores_and_congestion.surface_smoothness",
       value: surfaceSmoothness.score,
     },
     { key: "acne_and_scarring.active_acne", value: activeAcne.score },
+    {
+      key: "acne_and_scarring.post_inflammatory_marks",
+      value: postInflammatory.score,
+    },
     {
       key: "acne_and_scarring.atrophic_scarring",
       value: atrophicScarring.score,
     },
     {
-      key: "pigmentation_and_tone.color_uniformity",
+      key: "pigmentation_tone_and_redness.color_uniformity",
       value: colorUniformity.score,
     },
     {
-      key: "pigmentation_and_tone.redness_and_erythema",
+      key: "pigmentation_tone_and_redness.redness_and_erythema",
       value: redness.score,
     },
     {
@@ -770,7 +805,7 @@ function SkinPreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className={PREVIEW_HERO_SKIN_RADAR}>
+      <div className={PREVIEW_HERO_SIGNATURE_RADAR}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Skin radar", fr: "Radar peau" })}
@@ -783,9 +818,9 @@ function SkinPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <div className="flex w-full justify-center px-0.5">
+        <div className="flex w-full justify-center px-0 sm:px-1">
           {radarData.length >= 3 ? (
-            <SkinPreviewRadar data={radarData} language={language} />
+            <PreviewSignatureRadar data={radarData} language={language} />
           ) : null}
         </div>
       </div>
@@ -799,32 +834,66 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const global = getScore(
     aggregates,
-    "body_fat_estimation.facial_leanness_score",
+    "global_estimation.facial_leanness_score",
   );
-  const tierEnum = getEnum(
+  const globalLegacy =
+    global.score === null && !global.argument
+      ? getScore(aggregates, "body_fat_estimation.facial_leanness_score")
+      : global;
+  const facial =
+    globalLegacy.score !== null || globalLegacy.argument
+      ? globalLegacy
+      : global;
+
+  const bfNum = getNumber(
     aggregates,
-    "body_fat_estimation.visual_estimate_tier",
+    "global_estimation.estimated_body_fat_percentage.value",
   );
-  const tierDisplay = tierEnum.value
+  const bfRaw = getString(
+    aggregates,
+    "global_estimation.estimated_body_fat_percentage.value",
+  );
+  const bfDisplay =
+    bfNum !== null
+      ? `${bfNum % 1 === 0 ? String(bfNum) : bfNum.toFixed(1)} %`
+      : bfRaw
+        ? bfRaw.includes("%")
+          ? bfRaw
+          : `${bfRaw} %`
+        : null;
+
+  const waterEnum = getEnum(aggregates, "water_retention_flag.level");
+  const waterDisplay = waterEnum.value
     ? formatAggregateDisplayValue(
         "bodyfat",
-        "body_fat_estimation.visual_estimate_tier",
-        tierEnum.value,
+        "water_retention_flag.level",
+        waterEnum.value,
         locale,
-      )
+      ) ?? waterEnum.value
     : null;
+
   const sharpness = getBodyfatCompositionSharpness(aggregates);
+
+  const headline = bfDisplay ?? waterDisplay ?? "—";
 
   return (
     <div className="space-y-4">
       <div className={PREVIEW_HERO}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
-            {i18n(language, { en: "Visual tier", fr: "Niveau visuel" })}
+            {i18n(language, {
+              en: "Global estimation",
+              fr: "Estimation globale",
+            })}
           </p>
           <p className="mt-1 font-display text-base font-bold text-white">
-            {tierDisplay ?? "—"}
+            {headline}
           </p>
+          {facial.argument ? (
+            <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
+              {facial.argument}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="space-y-2">
@@ -835,7 +904,7 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
           })}
         </p>
         <BodyfatCompositionMatrixVisual
-          leanness={global.score}
+          leanness={facial.score}
           sharpness={sharpness}
           language={language}
           compact
@@ -868,8 +937,21 @@ const FACE_SHAPE_PATHS: Record<string, string> = {
 
 function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-  const overall = getScore(aggregates, "overall_face_structure_score");
-  const shapeEnum = getEnum(aggregates, "face_shape.shape");
+  const overallNested = getScore(
+    aggregates,
+    "global_score.overall_face_structure_score",
+  );
+  const overallFlat = getScore(aggregates, "overall_face_structure_score");
+  const overallLegacy = getScore(aggregates, "overall_face_structure");
+  const summaryArg =
+    overallNested.argument ??
+    overallFlat.argument ??
+    overallLegacy.argument;
+  const shapeEnum = getEnum(
+    aggregates,
+    "face_shape.overall_shape",
+    "face_shape.shape",
+  );
   const shapeKey = normalizeKey(shapeEnum.value);
   const shapePath =
     shapeKey && FACE_SHAPE_PATHS[shapeKey]
@@ -880,10 +962,10 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
   const shapeDisplay = shapeEnum.value
     ? formatAggregateDisplayValue(
         "symmetry_shape",
-        "face_shape.shape",
+        "face_shape.overall_shape",
         shapeEnum.value,
         locale,
-      )
+      ) ?? shapeEnum.value
     : null;
 
   const eyeSym = getScore(aggregates, "symmetry.eye_symmetry").score;
@@ -901,7 +983,7 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
             {shapeDisplay ?? "—"}
           </p>
           <p className="mt-1 text-xs leading-snug text-zinc-400 line-clamp-2">
-            {overall.argument ??
+            {summaryArg ??
               i18n(language, {
                 en: "Morphology and bilateral symmetry synthesis.",
                 fr: "Synthèse morphologie et symétrie bilatérale.",
@@ -945,15 +1027,14 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
 
 function JawPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-  const overall = getScore(aggregates, "overall_jaw");
-  const definition = getScore(
-    aggregates,
-    "definition_and_contrast.jawline_definition",
-  );
   const width = getScore(aggregates, "frontal_geometry.jaw_width");
-  const cheekRatio = getScore(
+  const jawFace = getScore(
     aggregates,
-    "frontal_geometry.jaw_to_cheek_ratio",
+    "frontal_geometry.jaw_to_face_proportion",
+  );
+  const jawSymmetry = getScore(
+    aggregates,
+    "symmetry_and_flare.jaw_symmetry",
   );
   const shapeEnum = getEnum(aggregates, "frontal_geometry.jaw_shape_frontal");
   const shapeDisplay =
@@ -966,24 +1047,35 @@ function JawPreview({ aggregates, language }: PreviewProps) {
         ) ?? shapeEnum.value
       : null;
 
-  // Pick a matching jawline icon for the detected shape (default = tapered).
-  const shapeKey = normalizeKey(shapeEnum.value);
-  const jawIcons: Record<string, string> = {
-    square: "M18 6 H82 V58 Q82 86 50 102 Q18 86 18 58 Z",
-    round: "M22 6 H78 Q78 78 50 102 Q22 78 22 6 Z",
-    tapered:
-      "M22 6 H78 Q78 50 64 78 Q56 96 50 102 Q44 96 36 78 Q22 50 22 6 Z",
-    effilée: "M22 6 H78 Q78 50 64 78 Q56 96 50 102 Q44 96 36 78 Q22 50 22 6 Z",
-    oblong: "M22 6 H78 V70 Q78 92 50 104 Q22 92 22 70 Z",
-    angular:
-      "M22 6 H78 V52 L66 78 L52 100 L48 100 L34 78 L22 52 Z",
-  };
-  const iconPath =
-    (shapeKey && jawIcons[shapeKey]) ?? jawIcons.tapered;
+  const jawRadarRows: { score: number | null; label: { en: string; fr: string } }[] =
+    [
+      {
+        score: width.score,
+        label: { en: "Width", fr: "Largeur" },
+      },
+      {
+        score: jawFace.score,
+        label: { en: "Face proportion", fr: "Prop. visage" },
+      },
+      {
+        score: jawSymmetry.score,
+        label: { en: "Symmetry", fr: "Symétrie" },
+      },
+    ];
+
+  const radarData = jawRadarRows
+    .filter(
+      (d): d is { score: number; label: { en: string; fr: string } } =>
+        d.score !== null,
+    )
+    .map((d) => ({
+      label: i18n(language, d.label),
+      score: d.score,
+    }));
 
   return (
     <div className="space-y-3">
-      <div className={PREVIEW_HERO}>
+      <div className={PREVIEW_HERO_SIGNATURE_RADAR}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Frontal jaw shape", fr: "Forme frontale" })}
@@ -991,41 +1083,20 @@ function JawPreview({ aggregates, language }: PreviewProps) {
           <p className="mt-1 font-display text-base font-bold text-white">
             {shapeDisplay ?? "—"}
           </p>
-          <p className="mt-1 text-xs leading-snug text-zinc-400 line-clamp-2">
-            {definition.argument ??
+          <p className="mt-0.5 text-xs leading-snug text-zinc-400 line-clamp-3">
+            {width.argument ??
+              jawFace.argument ??
               i18n(language, {
-                en: "Jawline reading combining shape, width and definition.",
-                fr: "Lecture mâchoire : forme, largeur et définition.",
+                en: "Jawline: frontal shape, width and face proportion.",
+                fr: "Mâchoire : forme frontale, largeur et proportion au visage.",
               })}
           </p>
         </div>
-        <svg
-          viewBox="0 0 100 110"
-          className="mx-auto h-20 w-16 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d={iconPath}
-            fill="rgba(154,174,181,0.18)"
-            stroke="rgba(255,255,255,0.55)"
-            strokeWidth="1.4"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <MiniBar
-          label={i18n(language, { en: "Definition", fr: "Définition" })}
-          score={definition.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Width", fr: "Largeur" })}
-          score={width.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Jaw / cheek", fr: "Mâchoire / joues" })}
-          score={cheekRatio.score}
-        />
+        <div className="flex w-full justify-center px-0 sm:px-1">
+          {radarData.length >= 3 ? (
+            <PreviewSignatureRadar data={radarData} language={language} />
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -1035,26 +1106,26 @@ function JawPreview({ aggregates, language }: PreviewProps) {
 
 function BrowsPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-  const overall = getScore(aggregates, "overall_brow");
+  const overall = getScore(aggregates, "global_score.overall_brow_score");
   const elevation = getScore(
     aggregates,
-    "placement_and_spacing.elevation_brow_to_eye",
+    "placement_and_symmetry.eyebrow_elevation",
   );
   const symmetry = getScore(
     aggregates,
-    "placement_and_spacing.eyebrow_symmetry",
+    "placement_and_symmetry.eyebrow_symmetry",
   );
-  const distance = getScore(
+  const density = getScore(
     aggregates,
-    "placement_and_spacing.inter_brow_distance",
+    "density_grooming_and_glabella.eyebrow_density",
   );
-  const shapeEnum = getEnum(aggregates, "geometry_and_tilt.eyebrow_shape");
-  const tiltEnum = getEnum(aggregates, "geometry_and_tilt.eyebrow_tilt");
+  const shapeEnum = getEnum(aggregates, "geometry_and_shape.eyebrow_shape");
+  const tiltEnum = getEnum(aggregates, "geometry_and_shape.eyebrow_tilt");
   const shapeDisplay =
     shapeEnum.value && !isUnknownEnumValue(shapeEnum.value)
       ? formatAggregateDisplayValue(
           "eye_brows",
-          "geometry_and_tilt.eyebrow_shape",
+          "geometry_and_shape.eyebrow_shape",
           shapeEnum.value,
           locale,
         )
@@ -1063,7 +1134,7 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
     tiltEnum.value && !isUnknownEnumValue(tiltEnum.value)
       ? formatAggregateDisplayValue(
           "eye_brows",
-          "geometry_and_tilt.eyebrow_tilt",
+          "geometry_and_shape.eyebrow_tilt",
           tiltEnum.value,
           locale,
         )
@@ -1077,7 +1148,8 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
             {i18n(language, { en: "Brow profile", fr: "Profil des sourcils" })}
           </p>
           <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
-            {symmetry.argument ??
+            {overall.argument ??
+              symmetry.argument ??
               i18n(language, {
                 en: "Shape, tilt, symmetry and frame around the eyes.",
                 fr: "Forme, inclinaison, symétrie et cadre autour des yeux.",
@@ -1125,8 +1197,8 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
           score={symmetry.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Distance", fr: "Distance" })}
-          score={distance.score}
+          label={i18n(language, { en: "Density", fr: "Densité" })}
+          score={density.score}
         />
         <MiniBar
           label={i18n(language, { en: "Elevation", fr: "Hauteur" })}
@@ -1140,11 +1212,18 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Smile ------------------------------------- */
 
 function SmilePreview({ aggregates, language }: PreviewProps) {
-  const overall = getScore(aggregates, "overall_smile");
+  const overallNested = getScore(aggregates, "global_score.overall_smile_score");
+  const overallFlat = getScore(aggregates, "overall_smile_score");
+  const overallLegacy = getScore(aggregates, "overall_smile");
+  const summaryArg =
+    overallNested.argument ??
+    overallFlat.argument ??
+    overallLegacy.argument;
+
   const whiteness = getScore(aggregates, "dental_quality.shade_and_whiteness");
   const integrity = getScore(aggregates, "dental_quality.surface_integrity");
   const proportions = getScore(aggregates, "dental_quality.tooth_proportions");
-  const alignment = getScore(aggregates, "smile_architecture.alignment");
+  const alignment = getScore(aggregates, "smile_architecture.dental_alignment");
 
   const shadePct =
     whiteness.score !== null
@@ -1159,7 +1238,8 @@ function SmilePreview({ aggregates, language }: PreviewProps) {
             {i18n(language, { en: "Tooth shade", fr: "Teinte des dents" })}
           </p>
           <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
-            {whiteness.argument ??
+            {summaryArg ??
+              whiteness.argument ??
               i18n(language, {
                 en: "Whiteness, integrity, proportions and alignment.",
                 fr: "Blancheur, intégrité, proportions et alignement.",
@@ -1209,16 +1289,29 @@ function SmilePreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Cheeks ------------------------------------- */
 
 function CheeksPreview({ aggregates, language }: PreviewProps) {
-  const overall = getScore(aggregates, "overall_cheek");
-  const height = getScore(aggregates, "zygomatic_placement.cheekbone_height_peak");
-  const width = getScore(aggregates, "zygomatic_placement.bizygomatic_width");
-  const support = getScore(
+  const primaryOverall = getScore(
     aggregates,
-    "zygomatic_placement.cheek_to_eye_support",
+    "global_score.overall_cheek_score",
   );
-  const projection = getScore(
+  const overall =
+    primaryOverall.score !== null || primaryOverall.argument
+      ? primaryOverall
+      : getScore(aggregates, "overall_cheek");
+  const height = getScore(
     aggregates,
-    "projection_and_contour.zygomatic_projection",
+    "profile_structure.cheekbone_height_peak",
+  );
+  const width = getScore(
+    aggregates,
+    "frontal_structure.bizygomatic_width",
+  );
+  const projectionArch = getScore(
+    aggregates,
+    "profile_structure.zygomatic_projection_and_arch",
+  );
+  const symmetry = getScore(
+    aggregates,
+    "frontal_structure.cheek_symmetry",
   );
 
   return (
@@ -1229,11 +1322,12 @@ function CheeksPreview({ aggregates, language }: PreviewProps) {
             {i18n(language, { en: "Cheekbones", fr: "Pommettes" })}
           </p>
           <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-3">
-            {projection.argument ??
+            {projectionArch.argument ??
+              overall.argument ??
               height.argument ??
               i18n(language, {
-                en: "Placement, projection and support of the zygomatic.",
-                fr: "Placement, projection et soutien des pommettes.",
+                en: "Frontal and profile structure of the midface.",
+                fr: "Structure frontale et de profil du midface.",
               })}
           </p>
         </div>
@@ -1248,12 +1342,12 @@ function CheeksPreview({ aggregates, language }: PreviewProps) {
           score={width.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Eye support", fr: "Soutien œil" })}
-          score={support.score}
+          label={i18n(language, { en: "Zygomatic arch", fr: "Arc zygomatique" })}
+          score={projectionArch.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Projection", fr: "Projection" })}
-          score={projection.score}
+          label={i18n(language, { en: "Symmetry", fr: "Symétrie" })}
+          score={symmetry.score}
         />
       </div>
     </div>
@@ -1264,10 +1358,16 @@ function CheeksPreview({ aggregates, language }: PreviewProps) {
 
 function HairPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-  const overall = getScore(aggregates, "overall_hair");
-  const density = getScore(aggregates, "hair_quality.density");
-  const thickness = getScore(aggregates, "hair_quality.strand_thickness");
-  const shine = getScore(aggregates, "hair_quality.shine");
+  const overall = getScore(aggregates, "global_score.overall_hair_score");
+  const density = getScore(aggregates, "hair_quality_and_health.density");
+  const shineDry = getScore(
+    aggregates,
+    "hair_quality_and_health.shine_and_dryness",
+  );
+  const health = getScore(
+    aggregates,
+    "hair_quality_and_health.health_appearance",
+  );
   const textureEnum = getEnum(aggregates, "hair_characteristics.texture_type");
   const textureDisplay =
     textureEnum.value && !isUnknownEnumValue(textureEnum.value)
@@ -1287,10 +1387,11 @@ function HairPreview({ aggregates, language }: PreviewProps) {
             {i18n(language, { en: "Hair quality", fr: "Qualité capillaire" })}
           </p>
           <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
-            {density.argument ??
+            {overall.argument ??
+              density.argument ??
               i18n(language, {
-                en: "Density, thickness, shine and texture profile.",
-                fr: "Densité, épaisseur, brillance et type de texture.",
+                en: "Density, shine balance, health and texture.",
+                fr: "Densité, équilibre brillance/sécheresse, santé et texture.",
               })}
           </p>
           {textureDisplay ? (
@@ -1309,12 +1410,12 @@ function HairPreview({ aggregates, language }: PreviewProps) {
           score={density.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Thickness", fr: "Épaisseur" })}
-          score={thickness.score}
+          label={i18n(language, { en: "Shine & dryness", fr: "Brillance / sécheresse" })}
+          score={shineDry.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Shine", fr: "Brillance" })}
-          score={shine.score}
+          label={i18n(language, { en: "Health", fr: "Santé" })}
+          score={health.score}
         />
       </div>
     </div>
@@ -1325,10 +1426,13 @@ function HairPreview({ aggregates, language }: PreviewProps) {
 
 function SkinTintPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-  const overall =
-    getScore(aggregates, "overall_colorimetry_score").score !== null
-      ? getScore(aggregates, "overall_colorimetry_score")
-      : getScore(aggregates, "overall_colorimetry");
+  const overallNested = getScore(aggregates, "global_score.overall_colorimetry_score");
+  const overallFlat = getScore(aggregates, "overall_colorimetry_score");
+  const overallLegacy = getScore(aggregates, "overall_colorimetry");
+  const summaryArg =
+    overallNested.argument ??
+    overallFlat.argument ??
+    overallLegacy.argument;
   const fitzEnum = getEnum(
     aggregates,
     "phenotype_and_undertone.fitzpatrick_type",
@@ -1345,6 +1449,15 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
     aggregates,
     "vitality_and_radiance.sallowness_absence",
   );
+  const tanUniformity = getScore(
+    aggregates,
+    "sun_exposure_aesthetic.tan_uniformity",
+  );
+  const tanHarmony = getScore(
+    aggregates,
+    "sun_exposure_aesthetic.tan_phototype_harmony",
+  );
+  const tanLevel = getEnum(aggregates, "sun_exposure_aesthetic.tan_level");
 
   const fitzKey = fitzpatrickKey(fitzEnum.value);
   const fitzColor = fitzKey ? FITZPATRICK_HEX[fitzKey] : null;
@@ -1367,6 +1480,16 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
         ) ?? undertoneEnum.value
       : null;
 
+  const tanLevelDisplay =
+    tanLevel.value && !isUnknownEnumValue(tanLevel.value)
+      ? formatAggregateDisplayValue(
+          "skin_tint",
+          "sun_exposure_aesthetic.tan_level",
+          tanLevel.value,
+          locale,
+        ) ?? tanLevel.value
+      : null;
+
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO}>
@@ -1384,6 +1507,17 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
               value={undertoneDisplay}
             />
           ) : null}
+          {tanLevelDisplay ? (
+            <StatChip
+              label={i18n(language, { en: "Tan level", fr: "Niveau de bronzage" })}
+              value={tanLevelDisplay}
+            />
+          ) : null}
+          {summaryArg ? (
+            <p className="mt-0.5 w-full text-center text-xs leading-snug text-zinc-400 line-clamp-2">
+              {summaryArg}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -1396,6 +1530,16 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
           score={sallowness.score}
         />
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <MiniBar
+          label={i18n(language, { en: "Tan even", fr: "Bronzage homogène" })}
+          score={tanUniformity.score}
+        />
+        <MiniBar
+          label={i18n(language, { en: "Tan fit", fr: "Harmonie phototype" })}
+          score={tanHarmony.score}
+        />
+      </div>
     </div>
   );
 }
@@ -1403,13 +1547,15 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Neck ------------------------------------- */
 
 function NeckPreview({ aggregates, language }: PreviewProps) {
-  const overall = getScore(aggregates, "overall_neck");
   const length = getScore(aggregates, "dimensions_and_proportions.neck_length");
   const width = getScore(aggregates, "dimensions_and_proportions.neck_width");
-  const taper = getScore(aggregates, "dimensions_and_proportions.neck_taper");
-  const definition = getScore(
+  const shapeTaper = getScore(
     aggregates,
-    "musculature_and_soft_tissue.muscle_definition",
+    "dimensions_and_proportions.neck_shape_and_taper",
+  );
+  const scm = getScore(
+    aggregates,
+    "musculature_and_soft_tissue.scm_muscle_definition",
   );
 
   return (
@@ -1422,23 +1568,11 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
           <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
             {length.argument ??
               i18n(language, {
-                en: "Length, width, taper and muscle definition.",
-                fr: "Longueur, largeur, affinement et définition musculaire.",
+                en: "Length, width, shape and SCM.",
+                fr: "Longueur, largeur, forme et SCM.",
               })}
           </p>
         </div>
-        <svg
-          viewBox="0 0 60 80"
-          className="mx-auto h-16 w-12 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d="M18 4 H42 V32 Q42 56 30 76 Q18 56 18 32 Z"
-            fill="rgba(154,174,181,0.18)"
-            stroke="rgba(255,255,255,0.45)"
-            strokeWidth="1.4"
-          />
-        </svg>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <MiniBar
@@ -1450,12 +1584,12 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
           score={width.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Taper", fr: "Affinement" })}
-          score={taper.score}
+          label={i18n(language, { en: "Shape", fr: "Forme" })}
+          score={shapeTaper.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Definition", fr: "Définition" })}
-          score={definition.score}
+          label={i18n(language, { en: "SCM", fr: "SCM" })}
+          score={scm.score}
         />
       </div>
     </div>
@@ -1465,25 +1599,9 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Lips ------------------------------------- */
 
 function LipsPreview({ aggregates, language }: PreviewProps) {
-  const overall =
-    getScore(aggregates, "overall_lip_score").score !== null
-      ? getScore(aggregates, "overall_lip_score")
-      : getScore(aggregates, "overall_lip");
   const fullness = getScore(aggregates, "proportions_and_width.lip_fullness");
   const ratio = getScore(aggregates, "proportions_and_width.upper_lower_ratio");
   const widthScore = getScore(aggregates, "proportions_and_width.lip_width");
-  const lipColorEnum = getEnum(
-    aggregates,
-    "texture_and_color.exact_lip_color",
-    "lip_color_phenotype.exact_lip_color",
-  );
-
-  const colorKey = normalizeKey(lipColorEnum.value);
-  const lipHex = colorKey
-    ? LIP_COLOR_HEX[colorKey] ??
-      // soft fallback: try first word
-      LIP_COLOR_HEX[colorKey.split("_")[0]]
-    : null;
 
   return (
     <div className="space-y-3">
@@ -1500,25 +1618,6 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg
-          viewBox="0 0 80 50"
-          className="mx-auto h-14 w-20 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d="M10 22 Q 22 8 40 18 Q 58 8 70 22 Q 60 38 40 38 Q 20 38 10 22 Z"
-            fill={lipHex ?? "rgba(192,114,123,0.7)"}
-            stroke="rgba(255,255,255,0.45)"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M10 22 Q 30 26 40 24 Q 50 26 70 22"
-            stroke="rgba(0,0,0,0.4)"
-            strokeWidth="1"
-            fill="none"
-          />
-        </svg>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <MiniBar
@@ -1542,13 +1641,12 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
 
 function ChinPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-  const overall = getScore(aggregates, "overall_chin");
   const contour = getScore(aggregates, "shape_and_contour.chin_contour");
-  const fullness = getScore(aggregates, "shape_and_contour.chin_fullness");
   const projection = getScore(
     aggregates,
     "projection_and_profile.chin_projection",
   );
+  const width = getScore(aggregates, "width_and_integration.chin_width");
   const shapeEnum = getEnum(aggregates, "shape_and_contour.chin_shape");
   const shapeDisplay =
     shapeEnum.value && !isUnknownEnumValue(shapeEnum.value)
@@ -1573,8 +1671,8 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
           <p className="mt-1 text-xs leading-snug text-zinc-400 line-clamp-2">
             {contour.argument ??
               i18n(language, {
-                en: "Contour, fullness and projection of the chin.",
-                fr: "Contour, volume et projection du menton.",
+                en: "Contour, width integration and projection.",
+                fr: "Contour, intégration en largeur et projection.",
               })}
           </p>
         </div>
@@ -1585,12 +1683,12 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
           score={contour.score}
         />
         <MiniBar
-          label={i18n(language, { en: "Volume", fr: "Volume" })}
-          score={fullness.score}
-        />
-        <MiniBar
           label={i18n(language, { en: "Projection", fr: "Projection" })}
           score={projection.score}
+        />
+        <MiniBar
+          label={i18n(language, { en: "Width", fr: "Largeur" })}
+          score={width.score}
         />
       </div>
     </div>
@@ -1600,7 +1698,6 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Nose ------------------------------------- */
 
 function NosePreview({ aggregates, language }: PreviewProps) {
-  const overall = getScore(aggregates, "overall_nose");
   const symmetry = getScore(
     aggregates,
     "frontal_symmetry_and_width.nose_symmetry",
@@ -1615,7 +1712,7 @@ function NosePreview({ aggregates, language }: PreviewProps) {
   );
   const tipDef = getScore(
     aggregates,
-    "tip_morphology_and_projection.tip_definition",
+    "tip_morphology.tip_definition",
   );
 
   // If all key signals are missing, show a partial-data hint
@@ -1639,18 +1736,6 @@ function NosePreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg
-          viewBox="0 0 60 80"
-          className="mx-auto h-16 w-12 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d="M30 6 Q 26 30 22 50 Q 18 64 30 70 Q 42 64 38 50 Q 34 30 30 6 Z"
-            fill="rgba(154,174,181,0.18)"
-            stroke="rgba(255,255,255,0.45)"
-            strokeWidth="1.4"
-          />
-        </svg>
       </div>
       {hasAny ? (
         <div className="grid grid-cols-2 gap-2">
@@ -1683,82 +1768,16 @@ function NosePreview({ aggregates, language }: PreviewProps) {
   );
 }
 
-/* ----------------------------------- Ear ------------------------------------- */
-
-function EarPreview({ aggregates, language }: PreviewProps) {
-  const overall = getScore(aggregates, "overall_ear");
-  const sizeHarmony = getScore(
-    aggregates,
-    "proportions_and_placement.size_harmony",
-  );
-  const placement = getScore(
-    aggregates,
-    "proportions_and_placement.vertical_placement",
-  );
-  const tilt = getScore(aggregates, "proportions_and_placement.axis_tilt");
-  const symmetry = getScore(aggregates, "morphology.ear_symmetry");
-
-  return (
-    <div className="space-y-3">
-      <div className={PREVIEW_HERO}>
-        <div className={PREVIEW_COPY}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
-            {i18n(language, { en: "Ears", fr: "Oreilles" })}
-          </p>
-          <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
-            {sizeHarmony.argument ??
-              tilt.argument ??
-              i18n(language, {
-                en: "Placement, size harmony and axis tilt.",
-                fr: "Placement, harmonie de taille et inclinaison.",
-              })}
-          </p>
-        </div>
-        <svg
-          viewBox="0 0 60 80"
-          className="mx-auto h-16 w-12 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d="M22 6 Q 50 6 50 36 Q 50 62 38 70 Q 28 76 22 64 Q 12 60 14 44 Q 14 18 22 6 Z"
-            fill="rgba(154,174,181,0.18)"
-            stroke="rgba(255,255,255,0.45)"
-            strokeWidth="1.4"
-          />
-        </svg>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <MiniBar
-          label={i18n(language, { en: "Size harmony", fr: "Harmonie" })}
-          score={sizeHarmony.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Placement", fr: "Placement" })}
-          score={placement.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Axis tilt", fr: "Inclinaison" })}
-          score={tilt.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Symmetry", fr: "Symétrie" })}
-          score={symmetry.score}
-        />
-      </div>
-    </div>
-  );
-}
-
 /* ----------------------------------- Eyes ------------------------------------- */
 
 function EyesPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-  const overall = getScore(aggregates, "overall_eye_score");
+  const overall = getScore(aggregates, "global_score.overall_eye_score");
   const symmetry = getScore(aggregates, "morphology_and_tilt.eye_symmetry");
-  const support = getScore(aggregates, "under_eye_health.support_and_hollows");
-  const lashes = getScore(aggregates, "details_and_color.eyelash_density");
+  const support = getScore(aggregates, "under_eye_health.under_eye_support");
+  const lashes = getScore(aggregates, "iris_sclera_and_lashes.eyelash_density");
   const tiltEnum = getEnum(aggregates, "morphology_and_tilt.canthal_tilt");
-  const irisEnum = getEnum(aggregates, "details_and_color.iris_color");
+  const irisEnum = getEnum(aggregates, "iris_sclera_and_lashes.iris_color");
 
   const tiltDisplay =
     tiltEnum.value && !isUnknownEnumValue(tiltEnum.value)
@@ -1967,8 +1986,6 @@ export function WorkerPreviewContent({
       return <ChinPreview aggregates={aggregates} language={language} />;
     case "nose":
       return <NosePreview aggregates={aggregates} language={language} />;
-    case "ear":
-      return <EarPreview aggregates={aggregates} language={language} />;
     case "eyes":
       return <EyesPreview aggregates={aggregates} language={language} />;
     default:

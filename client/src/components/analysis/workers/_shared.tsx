@@ -121,7 +121,16 @@ export function getString(
   key: string,
 ): string | null {
   const v = resolveAggregateValue(aggs, key);
-  return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+  if (typeof v === "string" && v.trim().length > 0) {
+    return v.trim();
+  }
+  if (Array.isArray(v) && v.length > 0) {
+    const first = v[0];
+    if (typeof first === "string" && first.trim().length > 0) {
+      return first.trim();
+    }
+  }
+  return null;
 }
 
 export function getNumber(
@@ -229,6 +238,13 @@ export function bandLabel(band: QualityBand, language: AppLanguage): string {
   }
 }
 
+/** True if at least one numeric score is present (for conditional `SectionShell`). */
+export function hasAnyScore(
+  ...scores: ReadonlyArray<number | null | undefined>
+): boolean {
+  return scores.some((s) => s != null);
+}
+
 /* ----------------------------------------------------------------------------
  * Section shell (consistent card header)
  * ------------------------------------------------------------------------- */
@@ -237,11 +253,17 @@ export function SectionShell({
   eyebrow,
   title,
   children,
+  when = true,
 }: {
   eyebrow: string;
   title: string;
   children: React.ReactNode;
+  /** Si `false`, la carte n'est pas rendue (évite les panneaux vides si tous les `ScoreBar` sont absents). */
+  when?: boolean;
 }) {
+  if (!when) {
+    return null;
+  }
   return (
     <Card className={workerSectionCardClassName}>
       <CardContent className="space-y-5 p-6">

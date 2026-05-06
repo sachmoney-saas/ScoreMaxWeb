@@ -10,6 +10,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -147,14 +148,30 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_hair");
+  const overall = getScore(aggregates, "global_score.overall_hair_score");
 
-  // Quality
-  const density = getScore(aggregates, "hair_quality.density");
-  const strand = getScore(aggregates, "hair_quality.strand_thickness");
-  const shine = getScore(aggregates, "hair_quality.shine");
-  const health = getScore(aggregates, "hair_quality.health_appearance");
-  const uniformity = getScore(aggregates, "hair_quality.uniformity");
+  const density = getScore(aggregates, "hair_quality_and_health.density");
+  const shineDry = getScore(
+    aggregates,
+    "hair_quality_and_health.shine_and_dryness",
+  );
+  const health = getScore(
+    aggregates,
+    "hair_quality_and_health.health_appearance",
+  );
+  const uniformity = getScore(
+    aggregates,
+    "hair_quality_and_health.uniformity",
+  );
+
+  const groomingQuality = getScore(
+    aggregates,
+    "grooming_and_haircut.grooming_quality",
+  );
+  const haircutControl = getScore(
+    aggregates,
+    "grooming_and_haircut.haircut_control",
+  );
 
   // Characteristics
   const textureEnum = getEnum(aggregates, "hair_characteristics.texture_type");
@@ -166,7 +183,8 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
   const curlDef = getScore(aggregates, "hair_characteristics.curl_definition");
   const lengthEnum = getEnum(aggregates, "hair_characteristics.length_category");
 
-  // Hairline (metrics only — shape gallery removed)
+  // Hairline
+  const hairlineShape = getEnum(aggregates, "hairline.shape");
   const hairlineSym = getScore(aggregates, "hairline.symmetry");
   const hairlineDensity = getScore(aggregates, "hairline.density");
   const recession = getScore(aggregates, "hairline.recession_level");
@@ -222,38 +240,41 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
       {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
-          eyebrow={i18n(language, { en: "Hair quality", fr: "Qualité capillaire" })}
+          when={hasAnyScore(
+            density.score,
+            shineDry.score,
+            health.score,
+            uniformity.score,
+          )}
+          eyebrow={i18n(language, {
+            en: "Hair quality & health",
+            fr: "Qualité et santé",
+          })}
           title={i18n(language, {
-            en: "Strand & shine",
-            fr: "Mèches et brillance",
+            en: "Density, shine & uniformity",
+            fr: "Densité, brillance et uniformité",
           })}
         >
           <ScoreBar
-            label={formatLabel("hair_quality.density")}
+            label={formatLabel("hair_quality_and_health.density")}
             score={density.score}
             argument={density.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("hair_quality.strand_thickness")}
-            score={strand.score}
-            argument={strand.argument}
+            label={formatLabel("hair_quality_and_health.shine_and_dryness")}
+            score={shineDry.score}
+            argument={shineDry.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("hair_quality.shine")}
-            score={shine.score}
-            argument={shine.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("hair_quality.health_appearance")}
+            label={formatLabel("hair_quality_and_health.health_appearance")}
             score={health.score}
             argument={health.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("hair_quality.uniformity")}
+            label={formatLabel("hair_quality_and_health.uniformity")}
             score={uniformity.score}
             argument={uniformity.argument}
             language={language}
@@ -261,6 +282,32 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(groomingQuality.score, haircutControl.score)}
+          eyebrow={i18n(language, {
+            en: "Grooming & haircut",
+            fr: "Toilettage et coupe",
+          })}
+          title={i18n(language, {
+            en: "Finish and control",
+            fr: "Finition et contrôle",
+          })}
+        >
+          <ScoreBar
+            label={formatLabel("grooming_and_haircut.grooming_quality")}
+            score={groomingQuality.score}
+            argument={groomingQuality.argument}
+            language={language}
+          />
+          <ScoreBar
+            label={formatLabel("grooming_and_haircut.haircut_control")}
+            score={haircutControl.score}
+            argument={haircutControl.argument}
+            language={language}
+          />
+        </SectionShell>
+
+        <SectionShell
+          when={hasAnyScore(curlDef.score) || Boolean(lengthEnum.value)}
           eyebrow={i18n(language, {
             en: "Characteristics",
             fr: "Caractéristiques",
@@ -299,12 +346,36 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(
+              hairlineSym.score,
+              hairlineDensity.score,
+              recession.score,
+            ) || Boolean(hairlineShape.value)
+          }
           eyebrow={i18n(language, { en: "Hairline detail", fr: "Détail de la ligne" })}
           title={i18n(language, {
-            en: "Symmetry & recession",
-            fr: "Symétrie et recul",
+            en: "Shape, symmetry & recession",
+            fr: "Forme, symétrie et recul",
           })}
         >
+          {hairlineShape.value ? (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-200">
+                  {formatLabel("hairline.shape")}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {formatEnumValue("hairline.shape", hairlineShape.value)}
+                </span>
+              </div>
+              {hairlineShape.argument ? (
+                <p className="text-xs leading-relaxed text-zinc-400">
+                  {hairlineShape.argument}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <ScoreBar
             label={formatLabel("hairline.symmetry")}
             score={hairlineSym.score}

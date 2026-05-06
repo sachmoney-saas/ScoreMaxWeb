@@ -10,6 +10,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -285,10 +286,11 @@ export function SkinTintWorkerView({
     [locale],
   );
 
-  const overall =
-    getScore(aggregates, "overall_colorimetry_score").score !== null
-      ? getScore(aggregates, "overall_colorimetry_score")
-      : getScore(aggregates, "overall_colorimetry");
+  const overallNested = getScore(aggregates, "global_score.overall_colorimetry_score");
+  const overallFlat = getScore(aggregates, "overall_colorimetry_score");
+  const overallLegacy = getScore(aggregates, "overall_colorimetry");
+  const heroArgument =
+    overallNested.argument ?? overallFlat.argument ?? overallLegacy.argument;
 
   // Phenotype & undertone
   const fitzEnum = getEnum(aggregates, "phenotype_and_undertone.fitzpatrick_type");
@@ -317,10 +319,15 @@ export function SkinTintWorkerView({
     "pigment_distribution.periorbital_perioral_match",
   );
 
-  // Sun
-  const uvAesthetic = getScore(
+  // Sun / tan
+  const tanLevel = getEnum(aggregates, "sun_exposure_aesthetic.tan_level");
+  const tanUniformity = getScore(
     aggregates,
-    "sun_exposure_aesthetic.uv_exposure_aesthetic",
+    "sun_exposure_aesthetic.tan_uniformity",
+  );
+  const tanHarmony = getScore(
+    aggregates,
+    "sun_exposure_aesthetic.tan_phototype_harmony",
   );
 
   return (
@@ -331,7 +338,7 @@ export function SkinTintWorkerView({
           en: "Your skin colorimetry",
           fr: "Ta colorimétrie de peau",
         })}
-        argument={overall.argument}
+        argument={heroArgument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
         rightSlot={
@@ -399,6 +406,7 @@ export function SkinTintWorkerView({
       {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(radiance.score, sallowness.score)}
           eyebrow={i18n(language, { en: "Vitality & radiance", fr: "Vitalité et éclat" })}
           title={i18n(language, {
             en: "Glow & freshness",
@@ -420,6 +428,7 @@ export function SkinTintWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(melanin.score, periMatch.score)}
           eyebrow={i18n(language, { en: "Pigment distribution", fr: "Distribution pigmentaire" })}
           title={i18n(language, {
             en: "Uniformity & match",
@@ -443,16 +452,46 @@ export function SkinTintWorkerView({
         </SectionShell>
 
         <SectionShell
-          eyebrow={i18n(language, { en: "Sun exposure", fr: "Exposition solaire" })}
+          when={
+            hasAnyScore(tanUniformity.score, tanHarmony.score) ||
+            Boolean(tanLevel.value)
+          }
+          eyebrow={i18n(language, { en: "Sun & tan", fr: "Soleil et bronzage" })}
           title={i18n(language, {
-            en: "UV aesthetic mark",
-            fr: "Marques esthétiques UV",
+            en: "Tan level & phototype harmony",
+            fr: "Bronzage et harmonie phototype",
           })}
         >
+          {tanLevel.value ? (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-200">
+                  {formatLabel("sun_exposure_aesthetic.tan_level")}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {formatEnumValue(
+                    "sun_exposure_aesthetic.tan_level",
+                    tanLevel.value,
+                  ) ?? tanLevel.value}
+                </span>
+              </div>
+              {tanLevel.argument ? (
+                <p className="text-xs leading-relaxed text-zinc-400">
+                  {tanLevel.argument}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <ScoreBar
-            label={formatLabel("sun_exposure_aesthetic.uv_exposure_aesthetic")}
-            score={uvAesthetic.score}
-            argument={uvAesthetic.argument}
+            label={formatLabel("sun_exposure_aesthetic.tan_uniformity")}
+            score={tanUniformity.score}
+            argument={tanUniformity.argument}
+            language={language}
+          />
+          <ScoreBar
+            label={formatLabel("sun_exposure_aesthetic.tan_phototype_harmony")}
+            score={tanHarmony.score}
+            argument={tanHarmony.argument}
             language={language}
           />
         </SectionShell>

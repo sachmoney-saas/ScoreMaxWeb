@@ -9,6 +9,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   LevelScale,
   ScoreBar,
   SectionShell,
@@ -226,6 +227,12 @@ export function ColoringWorkerView({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={
+            Boolean(hairColor.value) ||
+            hasAnyScore(hairDepth.score) ||
+            Boolean(hairWarmthEnum.value) ||
+            hasAnyScore(hairWarmthScore.score)
+          }
           eyebrow={i18n(language, { en: "Hair", fr: "Cheveux" })}
           title={i18n(language, {
             en: "Hair coloring",
@@ -268,6 +275,10 @@ export function ColoringWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={
+            Boolean(skinTone.value) ||
+            hasAnyScore(skinClarity.score, skinEvenness.score)
+          }
           eyebrow={i18n(language, { en: "Skin", fr: "Peau" })}
           title={i18n(language, {
             en: "Skin tone & clarity",
@@ -300,6 +311,10 @@ export function ColoringWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={
+            Boolean(browColor.value) ||
+            hasAnyScore(browDepth.score, browContrast.score)
+          }
           eyebrow={i18n(language, { en: "Eyebrows", fr: "Sourcils" })}
           title={i18n(language, {
             en: "Eyebrow definition",
@@ -332,6 +347,9 @@ export function ColoringWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={
+            Boolean(lipColor.value) || hasAnyScore(lipSaturation.score)
+          }
           eyebrow={i18n(language, { en: "Lips", fr: "Lèvres" })}
           title={i18n(language, {
             en: "Lip coloring",
@@ -358,6 +376,7 @@ export function ColoringWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(eyeWhitesClarity.score)}
           eyebrow={i18n(language, { en: "Eyes", fr: "Yeux" })}
           title={i18n(language, {
             en: "Sclera (whites)",
@@ -373,6 +392,16 @@ export function ColoringWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={
+            Boolean(contrastType.value) ||
+            hasAnyScore(
+              contrastOverall.score,
+              contrastHair.score,
+              contrastEyes.score,
+              contrastBrows.score,
+              contrastLips.score,
+            )
+          }
           eyebrow={i18n(language, { en: "Contrasts", fr: "Contrastes" })}
           title={i18n(language, {
             en: "How features stand out",

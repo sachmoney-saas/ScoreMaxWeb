@@ -25,7 +25,6 @@ const workerImageMap: Record<string, OnboardingScanAssetCode> = {
   cheeks: "FACE_FRONT",
   chin: "FACE_FRONT",
   coloring: "FACE_FRONT",
-  ear: "PROFILE_LEFT",
   eye_brows: "FACE_FRONT",
   eyes: "FACE_FRONT",
   hair: "HAIR_BACK",

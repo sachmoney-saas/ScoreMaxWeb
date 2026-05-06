@@ -29,12 +29,12 @@ export const AGGREGATE_VALUE_REGISTRY: AggregateValueRegistry = {
       "downward",
     ],
     "eyelids_and_sclera.epicanthic_fold": ["present", "absent"],
-    "details_and_color.limbal_ring_visibility": [
+    "iris_sclera_and_lashes.limbal_ring_visibility": [
       "absent",
       "faint",
       "prominent",
     ],
-    "details_and_color.iris_color": [
+    "iris_sclera_and_lashes.iris_color": [
       "light_blue",
       "dark_blue",
       "grey_blue",
@@ -54,15 +54,21 @@ export const AGGREGATE_VALUE_REGISTRY: AggregateValueRegistry = {
   },
 
   eye_brows: {
-    "geometry_and_tilt.eyebrow_tilt": ["negative", "neutral", "positive"],
-    "geometry_and_tilt.eyebrow_shape": [
+    "geometry_and_shape.eyebrow_tilt": ["negative", "neutral", "positive"],
+    "geometry_and_shape.eyebrow_shape": [
       "straight",
       "soft_arch",
       "high_arch",
       "rounded",
     ],
-    "geometry_and_tilt.inner_start_shape": ["squared", "rounded", "faded"],
-    "thickness_and_density.hair_color": [
+    "geometry_and_shape.inner_start_shape": ["squared", "rounded", "faded"],
+    "density_grooming_and_glabella.grooming_quality": [
+      "natural_untouched",
+      "well_groomed",
+      "over_groomed",
+      "unkempt",
+    ],
+    "density_grooming_and_glabella.brow_color": [
       "light_blonde",
       "dark_blonde",
       "red",

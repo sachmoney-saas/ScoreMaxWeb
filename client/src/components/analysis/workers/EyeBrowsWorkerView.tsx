@@ -10,6 +10,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -24,7 +25,7 @@ const WORKER_KEY = "eye_brows";
  * Each card draws a stylised brow on a 100x40 canvas.
  * ------------------------------------------------------------------------- */
 
-type BrowShape = "straight" | "soft_arch" | "high_arch" | "rounded" | "squared";
+type BrowShape = "straight" | "soft_arch" | "high_arch" | "rounded";
 
 const BROW_SHAPES: {
   key: BrowShape;
@@ -58,12 +59,6 @@ const BROW_SHAPES: {
     upper: "M6 26 Q50 12 94 26",
     lower: "L94 32 Q50 20 6 32 Z",
   },
-  {
-    key: "squared",
-    label: { en: "Squared", fr: "Carré" },
-    upper: "M6 22 L20 18 L80 18 L94 22",
-    lower: "L94 28 L80 26 L20 26 L6 28 Z",
-  },
 ];
 
 const BROW_SHAPE_ALIASES: Record<string, BrowShape> = {
@@ -80,10 +75,6 @@ const BROW_SHAPE_ALIASES: Record<string, BrowShape> = {
   rounded: "rounded",
   arrondi: "rounded",
   curved: "rounded",
-  squared: "squared",
-  square: "squared",
-  carré: "squared",
-  carre: "squared",
 };
 
 function normalizeBrowShape(value: string | null): BrowShape | null {
@@ -100,7 +91,7 @@ function BrowShapeGallery({
   language: AppLanguage;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {BROW_SHAPES.map((shape) => {
         const isActive = shape.key === selected;
         return (
@@ -288,18 +279,20 @@ function BoldFeminineMatrix({
  * Tilt indicator — small visual showing brow angle
  * ------------------------------------------------------------------------- */
 
-type TiltKey = "downturned" | "neutral" | "upturned";
+type TiltKey = "negative" | "neutral" | "positive";
 
 const TILT_ALIASES: Record<string, TiltKey> = {
-  downturned: "downturned",
-  downward: "downturned",
-  down: "downturned",
+  negative: "negative",
+  downturned: "negative",
+  downward: "negative",
+  down: "negative",
   neutral: "neutral",
   straight: "neutral",
   flat: "neutral",
-  upturned: "upturned",
-  upward: "upturned",
-  up: "upturned",
+  positive: "positive",
+  upturned: "positive",
+  upward: "positive",
+  up: "positive",
 };
 
 function normalizeTilt(value: string | null): TiltKey | null {
@@ -316,9 +309,9 @@ function TiltIndicator({
   language: AppLanguage;
 }) {
   const items: { key: TiltKey; label: { en: string; fr: string }; angle: number }[] = [
-    { key: "downturned", label: { en: "Downward", fr: "Descendant" }, angle: 14 },
+    { key: "negative", label: { en: "Negative", fr: "Négative" }, angle: 14 },
     { key: "neutral", label: { en: "Neutral", fr: "Neutre" }, angle: 0 },
-    { key: "upturned", label: { en: "Upward", fr: "Ascendant" }, angle: -14 },
+    { key: "positive", label: { en: "Positive", fr: "Positive" }, angle: -14 },
   ];
 
   return (
@@ -380,58 +373,64 @@ export function EyeBrowsWorkerView({
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_brow");
+  const overall = getScore(aggregates, "global_score.overall_brow_score");
 
-  // Placement & spacing
   const elevation = getScore(
     aggregates,
-    "placement_and_spacing.elevation_brow_to_eye",
-  );
-  const interBrow = getScore(
-    aggregates,
-    "placement_and_spacing.inter_brow_distance",
+    "placement_and_symmetry.eyebrow_elevation",
   );
   const symmetry = getScore(
     aggregates,
-    "placement_and_spacing.eyebrow_symmetry",
+    "placement_and_symmetry.eyebrow_symmetry",
   );
 
-  // Geometry & tilt
-  const tiltEnum = getEnum(aggregates, "geometry_and_tilt.eyebrow_tilt");
+  const tiltEnum = getEnum(aggregates, "geometry_and_shape.eyebrow_tilt");
   const tiltKey = normalizeTilt(tiltEnum.value);
-  const shapeEnum = getEnum(aggregates, "geometry_and_tilt.eyebrow_shape");
+  const shapeEnum = getEnum(aggregates, "geometry_and_shape.eyebrow_shape");
   const shapeKey = normalizeBrowShape(shapeEnum.value);
   const shapeDisplay = shapeEnum.value
     ? formatAggregateDisplayValue(
         WORKER_KEY,
-        "geometry_and_tilt.eyebrow_shape",
+        "geometry_and_shape.eyebrow_shape",
         shapeEnum.value,
         locale,
       )
     : null;
-  const tailLength = getScore(aggregates, "geometry_and_tilt.tail_length");
+  const tailLength = getScore(
+    aggregates,
+    "geometry_and_shape.tail_length_and_direction",
+  );
   const innerStartEnum = getEnum(
     aggregates,
-    "geometry_and_tilt.inner_start_shape",
+    "geometry_and_shape.inner_start_shape",
   );
 
-  // Thickness & density
   const thickness = getScore(
     aggregates,
-    "thickness_and_density.eyebrow_thickness",
+    "density_grooming_and_glabella.eyebrow_thickness",
   );
   const density = getScore(
     aggregates,
-    "thickness_and_density.eyebrow_density",
+    "density_grooming_and_glabella.eyebrow_density",
   );
-  const lashes = getScore(aggregates, "thickness_and_density.eyelash_density");
+  const glabellarHair = getScore(
+    aggregates,
+    "density_grooming_and_glabella.glabellar_hair",
+  );
+  const groomingEnum = getEnum(
+    aggregates,
+    "density_grooming_and_glabella.grooming_quality",
+  );
+  const browColorEnum = getEnum(
+    aggregates,
+    "density_grooming_and_glabella.brow_color",
+  );
 
   // Arch score is a synthetic signal for the matrix (0=flat, 10=high arch)
   const archScore = (() => {
     if (!shapeKey) return null;
     if (shapeKey === "straight") return 1;
     if (shapeKey === "rounded") return 4;
-    if (shapeKey === "squared") return 3;
     if (shapeKey === "soft_arch") return 6;
     if (shapeKey === "high_arch") return 9;
     return null;
@@ -527,7 +526,7 @@ export function EyeBrowsWorkerView({
             <div className="space-y-3 border-t border-white/10 pt-5">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-medium text-zinc-200">
-                  {formatLabel("geometry_and_tilt.eyebrow_tilt")}
+                  {formatLabel("geometry_and_shape.eyebrow_tilt")}
                 </span>
               </div>
               <TiltIndicator tilt={tiltKey} language={language} />
@@ -544,29 +543,24 @@ export function EyeBrowsWorkerView({
       {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(elevation.score, symmetry.score)}
           eyebrow={i18n(language, {
-            en: "Placement & spacing",
-            fr: "Placement et espacement",
+            en: "Placement & symmetry",
+            fr: "Placement et symétrie",
           })}
           title={i18n(language, {
-            en: "Position on the face",
-            fr: "Position sur le visage",
+            en: "Frame around the eyes",
+            fr: "Cadre autour des yeux",
           })}
         >
           <ScoreBar
-            label={formatLabel("placement_and_spacing.elevation_brow_to_eye")}
+            label={formatLabel("placement_and_symmetry.eyebrow_elevation")}
             score={elevation.score}
             argument={elevation.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("placement_and_spacing.inter_brow_distance")}
-            score={interBrow.score}
-            argument={interBrow.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("placement_and_spacing.eyebrow_symmetry")}
+            label={formatLabel("placement_and_symmetry.eyebrow_symmetry")}
             score={symmetry.score}
             argument={symmetry.argument}
             language={language}
@@ -574,36 +568,92 @@ export function EyeBrowsWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(
+              thickness.score,
+              density.score,
+              glabellarHair.score,
+            ) ||
+            Boolean(groomingEnum.value) ||
+            Boolean(browColorEnum.value)
+          }
           eyebrow={i18n(language, {
-            en: "Thickness & density",
-            fr: "Épaisseur et densité",
+            en: "Density, grooming & glabella",
+            fr: "Densité, toilettage et glabelle",
           })}
           title={i18n(language, {
-            en: "Hair volume",
-            fr: "Volume capillaire",
+            en: "Volume and finish",
+            fr: "Volume et finition",
           })}
         >
           <ScoreBar
-            label={formatLabel("thickness_and_density.eyebrow_thickness")}
+            label={formatLabel("density_grooming_and_glabella.eyebrow_thickness")}
             score={thickness.score}
             argument={thickness.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("thickness_and_density.eyebrow_density")}
+            label={formatLabel("density_grooming_and_glabella.eyebrow_density")}
             score={density.score}
             argument={density.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("thickness_and_density.eyelash_density")}
-            score={lashes.score}
-            argument={lashes.argument}
+            label={formatLabel("density_grooming_and_glabella.glabellar_hair")}
+            score={glabellarHair.score}
+            argument={glabellarHair.argument}
             language={language}
           />
+          {groomingEnum.value ? (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-200">
+                  {formatLabel("density_grooming_and_glabella.grooming_quality")}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {formatAggregateDisplayValue(
+                    WORKER_KEY,
+                    "density_grooming_and_glabella.grooming_quality",
+                    groomingEnum.value,
+                    locale,
+                  ) ?? groomingEnum.value}
+                </span>
+              </div>
+              {groomingEnum.argument ? (
+                <p className="text-xs leading-relaxed text-zinc-400">
+                  {groomingEnum.argument}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {browColorEnum.value ? (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-200">
+                  {formatLabel("density_grooming_and_glabella.brow_color")}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {formatAggregateDisplayValue(
+                    WORKER_KEY,
+                    "density_grooming_and_glabella.brow_color",
+                    browColorEnum.value,
+                    locale,
+                  ) ?? browColorEnum.value}
+                </span>
+              </div>
+              {browColorEnum.argument ? (
+                <p className="text-xs leading-relaxed text-zinc-400">
+                  {browColorEnum.argument}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(tailLength.score) || Boolean(innerStartEnum.value)
+          }
           eyebrow={i18n(language, {
             en: "Geometry details",
             fr: "Détails géométriques",
@@ -614,7 +664,7 @@ export function EyeBrowsWorkerView({
           })}
         >
           <ScoreBar
-            label={formatLabel("geometry_and_tilt.tail_length")}
+            label={formatLabel("geometry_and_shape.tail_length_and_direction")}
             score={tailLength.score}
             argument={tailLength.argument}
             language={language}
@@ -623,12 +673,12 @@ export function EyeBrowsWorkerView({
             <div className="space-y-2">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-sm font-medium text-zinc-200">
-                  {formatLabel("geometry_and_tilt.inner_start_shape")}
+                  {formatLabel("geometry_and_shape.inner_start_shape")}
                 </span>
                 <span className="text-sm font-semibold text-white">
                   {formatAggregateDisplayValue(
                     WORKER_KEY,
-                    "geometry_and_tilt.inner_start_shape",
+                    "geometry_and_shape.inner_start_shape",
                     innerStartEnum.value,
                     locale,
                   ) ?? innerStartEnum.value}

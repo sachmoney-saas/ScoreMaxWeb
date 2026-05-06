@@ -11,6 +11,7 @@ import {
   bandFromScore,
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -469,20 +470,35 @@ export function SymmetryShapeWorkerView({
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
     [locale],
   );
+  const formatEnumValue = React.useCallback(
+    (key: string, value: string | null) =>
+      value
+        ? formatAggregateDisplayValue(WORKER_KEY, key, value, locale)
+        : null,
+    [locale],
+  );
 
-  // Global
-  const overall = getScore(aggregates, "overall_face_structure_score");
+  const overallNested = getScore(
+    aggregates,
+    "global_score.overall_face_structure_score",
+  );
+  const overallFlat = getScore(aggregates, "overall_face_structure_score");
+  const overallLegacy = getScore(aggregates, "overall_face_structure");
+  const heroArgument =
+    overallNested.argument ??
+    overallFlat.argument ??
+    overallLegacy.argument;
 
   // Shape
-  const shapeEnum = getEnum(aggregates, "face_shape.shape");
+  const shapeEnum = getEnum(
+    aggregates,
+    "face_shape.overall_shape",
+    "face_shape.shape",
+  );
+  const widthHierarchy = getEnum(aggregates, "face_shape.width_hierarchy");
   const shapeKey = normalizeShape(shapeEnum.value);
   const shapeDisplay = shapeEnum.value
-    ? formatAggregateDisplayValue(
-        WORKER_KEY,
-        "face_shape.shape",
-        shapeEnum.value,
-        locale,
-      )
+    ? formatEnumValue("face_shape.overall_shape", shapeEnum.value)
     : null;
 
   // Symmetry scores
@@ -495,22 +511,10 @@ export function SymmetryShapeWorkerView({
 
   // Proportions
   const thirds = getScore(aggregates, "proportions.vertical_thirds_balance");
-  const lowerThird = getScore(
-    aggregates,
-    "proportions.lower_third_subdivision",
-  );
   const fifths = getScore(aggregates, "proportions.horizontal_fifths_balance");
   const eyeIntercanthal = getScore(
     aggregates,
     "proportions.eye_to_intercanthal_ratio",
-  );
-  const noseInnerEye = getScore(
-    aggregates,
-    "proportions.nose_to_inner_eye_alignment",
-  );
-  const mouthPupil = getScore(
-    aggregates,
-    "proportions.mouth_to_pupil_alignment",
   );
 
   // Signed ratios (face_shape)
@@ -577,7 +581,7 @@ export function SymmetryShapeWorkerView({
           en: "Your facial structure",
           fr: "Ta structure faciale",
         })}
-        argument={overall.argument}
+        argument={heroArgument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
         rightSlot={
@@ -618,6 +622,27 @@ export function SymmetryShapeWorkerView({
           </div>
 
           <FaceShapeGallery selected={shapeKey} language={language} />
+
+          {widthHierarchy.value ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-200">
+                  {formatLabel("face_shape.width_hierarchy")}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {formatEnumValue(
+                    "face_shape.width_hierarchy",
+                    widthHierarchy.value,
+                  ) ?? widthHierarchy.value}
+                </span>
+              </div>
+              {widthHierarchy.argument ? (
+                <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                  {widthHierarchy.argument}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mt-2 grid gap-5 border-t border-white/10 pt-6 lg:grid-cols-2">
             <BipolarBar
@@ -678,6 +703,7 @@ export function SymmetryShapeWorkerView({
       {/* Symmetry detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(browSym.score, eyeSym.score, noseAxis.score)}
           eyebrow={i18n(language, {
             en: "Upper face symmetry",
             fr: "Symétrie haut du visage",
@@ -708,6 +734,7 @@ export function SymmetryShapeWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(mouthSym.score, jawAxis.score, cheekBalance.score)}
           eyebrow={i18n(language, {
             en: "Lower face symmetry",
             fr: "Symétrie bas du visage",
@@ -774,25 +801,20 @@ export function SymmetryShapeWorkerView({
       {/* Proportions detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(thirds.score, fifths.score)}
           eyebrow={i18n(language, {
             en: "Vertical balance",
             fr: "Équilibre vertical",
           })}
           title={i18n(language, {
-            en: "Thirds & subdivisions",
-            fr: "Tiers et subdivisions",
+            en: "Thirds & fifths",
+            fr: "Tiers et cinquièmes",
           })}
         >
           <ScoreBar
             label={formatLabel("proportions.vertical_thirds_balance")}
             score={thirds.score}
             argument={thirds.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("proportions.lower_third_subdivision")}
-            score={lowerThird.score}
-            argument={lowerThird.argument}
             language={language}
           />
           <ScoreBar
@@ -804,31 +826,20 @@ export function SymmetryShapeWorkerView({
         </SectionShell>
 
         <SectionShell
+          when={hasAnyScore(eyeIntercanthal.score)}
           eyebrow={i18n(language, {
-            en: "Alignment ratios",
-            fr: "Ratios d'alignement",
+            en: "Eye proportion",
+            fr: "Proportion des yeux",
           })}
           title={i18n(language, {
-            en: "Eyes, nose & mouth alignment",
-            fr: "Alignement yeux, nez et bouche",
+            en: "Eye / intercanthal ratio",
+            fr: "Rapport œil / intercanthal",
           })}
         >
           <ScoreBar
             label={formatLabel("proportions.eye_to_intercanthal_ratio")}
             score={eyeIntercanthal.score}
             argument={eyeIntercanthal.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("proportions.nose_to_inner_eye_alignment")}
-            score={noseInnerEye.score}
-            argument={noseInnerEye.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("proportions.mouth_to_pupil_alignment")}
-            score={mouthPupil.score}
-            argument={mouthPupil.argument}
             language={language}
           />
         </SectionShell>

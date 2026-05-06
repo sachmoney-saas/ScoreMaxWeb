@@ -3,8 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowLeft,
+  CalendarClock,
   Camera,
   Loader2,
+  Lock,
   Upload,
 } from "lucide-react";
 import type { OnboardingScanAssetCode } from "@shared/schema";
@@ -23,6 +25,7 @@ import {
   useAnalysisJobStatus,
   useCreateManualAnalysisSession,
   useLaunchManualAnalysis,
+  useSubscriberStandardAnalysisQuota,
 } from "@/hooks/use-supabase";
 import {
   getScanAssetLabels,
@@ -37,6 +40,7 @@ import {
   analysisHeroGlassClassName,
 } from "@/components/analysis/workers/_shared";
 import { queryClient } from "@/lib/queryClient";
+import { formatSubscriberStandardQuotaSidebarLine } from "@/lib/subscriber-standard-analysis-copy";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
 function getErrorMessage(error: unknown, language: AppLanguage): string {
@@ -50,7 +54,36 @@ function getErrorMessage(error: unknown, language: AppLanguage): string {
 export default function NewAnalysis() {
   const language = useAppLanguage();
   const scanAssetLabels = getScanAssetLabels(language);
-  const { user } = useAuth();
+  const { user, hasPremiumAccess, profile, isAdmin, isLoading: authLoading } = useAuth();
+  const isManualAnalysisLocked = !authLoading && !hasPremiumAccess;
+
+  const { data: subscriberQuota, isLoading: subscriberQuotaLoading } =
+    useSubscriberStandardAnalysisQuota();
+
+  const isWeeklyAnalysisLocked =
+    !authLoading &&
+    hasPremiumAccess &&
+    Boolean(profile?.is_subscriber) &&
+    !isAdmin &&
+    subscriberQuota?.weekly_limit_applies === true &&
+    subscriberQuota.can_launch_standard_now === false;
+
+  const subscriberQuotaBlockingUi =
+    Boolean(profile?.is_subscriber) &&
+    !isAdmin &&
+    hasPremiumAccess &&
+    subscriberQuotaLoading;
+
+  const weeklyQuotaOverlayLine =
+    subscriberQuota && isWeeklyAnalysisLocked
+      ? formatSubscriberStandardQuotaSidebarLine(language, subscriberQuota)
+      : null;
+
+  const heroContentLocked =
+    isManualAnalysisLocked ||
+    isWeeklyAnalysisLocked ||
+    subscriberQuotaBlockingUi;
+
   const [, navigate] = useLocation();
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -165,7 +198,15 @@ export default function NewAnalysis() {
    * `jobStatus` fetch reporting "queued".
    */
   async function handleUploadAllCaptured() {
-    if (!user?.id || !sessionId) return;
+    if (
+      !user?.id ||
+      !sessionId ||
+      !hasPremiumAccess ||
+      isWeeklyAnalysisLocked ||
+      subscriberQuotaBlockingUi
+    ) {
+      return;
+    }
     setIsUploadingAll(true);
     setErrorMessage(null);
 
@@ -217,8 +258,16 @@ export default function NewAnalysis() {
   /** Opens the live camera capture flow. */
   function openCameraCapture() {
     setErrorMessage(null);
+    if (authLoading || !hasPremiumAccess) return;
+    if (subscriberQuotaBlockingUi || isWeeklyAnalysisLocked) return;
     void ensureManualSession().then(() => setShowCameraCapture(true));
   }
+
+  useEffect(() => {
+    if (!heroContentLocked) return;
+    setShowCameraCapture(false);
+    setShowCapturedPreview(false);
+  }, [heroContentLocked]);
 
   /**
    * When the job completes, refresh dashboard queries then navigate.
@@ -294,7 +343,7 @@ export default function NewAnalysis() {
         <section
           className={cn(
             analysisHeroGlassClassName,
-            "w-full max-w-lg overflow-hidden rounded-[2.5rem] p-6 text-white md:max-w-xl md:p-10",
+            "relative w-full max-w-lg overflow-hidden rounded-[2.5rem] p-6 text-white md:max-w-xl md:p-10",
           )}
         >
         {shouldShowProcessing ? (
@@ -307,75 +356,184 @@ export default function NewAnalysis() {
             )}
           />
         ) : (
-          <div className="mx-auto w-full max-w-lg px-1">
-            <div className="text-center">
-              <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/55">
-                {i18n(language, {
-                  en: "New analysis",
-                  fr: "Nouvelle analyse",
-                })}
-              </p>
-              <h1 className="mt-2 text-[1.65rem] font-extrabold leading-[1.1] tracking-tight text-white sm:text-[2rem]">
-                {i18n(language, {
-                  en: "Start your new analysis",
-                  fr: "Lance ta nouvelle analyse",
-                })}
-              </h1>
-            </div>
+          <>
+            <div
+              className={cn(
+                "mx-auto w-full max-w-lg px-1 transition-[filter,opacity]",
+                heroContentLocked &&
+                  "pointer-events-none select-none blur-[7px] opacity-[0.55]",
+              )}
+            >
+              <div className="text-center">
+                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/55">
+                  {i18n(language, {
+                    en: "New analysis",
+                    fr: "Nouvelle analyse",
+                  })}
+                </p>
+                <h1 className="mt-2 text-[1.65rem] font-extrabold leading-[1.1] tracking-tight text-white sm:text-[2rem]">
+                  {i18n(language, {
+                    en: "Start your new analysis",
+                    fr: "Lance ta nouvelle analyse",
+                  })}
+                </h1>
+              </div>
 
-            <div className="mt-8">
-              <button
-                type="button"
-                onClick={() => void openCameraCapture()}
-                disabled={createSessionMutation.isPending}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3.5 text-white shadow-[0_16px_30px_-18px_rgba(0,0,0,0.95)] transition hover:bg-[#050505] disabled:pointer-events-none disabled:opacity-55"
-              >
-                {createSessionMutation.isPending ? (
-                  <span className="flex w-full items-center justify-center py-1">
-                    <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
-                  </span>
-                ) : (
-                  <>
-                    <img
-                      src="/favicon.png"
-                      alt=""
-                      className="h-10 w-10 shrink-0 rounded-lg bg-black object-contain"
-                    />
-                    <span className="text-sm font-semibold tracking-tight sm:text-base">
-                      {i18n(language, {
-                        en: "Launch analysis",
-                        fr: "Lancer l'analyse",
-                      })}
+              <div className="mt-8">
+                <button
+                  type="button"
+                  onClick={() => void openCameraCapture()}
+                  disabled={
+                    authLoading ||
+                    createSessionMutation.isPending ||
+                    isManualAnalysisLocked ||
+                    subscriberQuotaBlockingUi ||
+                    isWeeklyAnalysisLocked
+                  }
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3.5 text-white shadow-[0_16px_30px_-18px_rgba(0,0,0,0.95)] transition hover:bg-[#050505] disabled:pointer-events-none disabled:opacity-55"
+                >
+                  {createSessionMutation.isPending ? (
+                    <span className="flex w-full items-center justify-center py-1">
+                      <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
                     </span>
-                  </>
-                )}
-              </button>
+                  ) : (
+                    <>
+                      <img
+                        src="/favicon.png"
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-lg bg-black object-contain"
+                      />
+                      <span className="text-sm font-semibold tracking-tight sm:text-base">
+                        {i18n(language, {
+                          en: "Launch analysis",
+                          fr: "Lancer l'analyse",
+                        })}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {message ? (
+                <p className="mt-6 text-center text-sm text-white/55">{message}</p>
+              ) : null}
+              {errorMessage ? (
+                <p className="mt-6 text-center text-sm font-medium text-red-300">
+                  {errorMessage}
+                </p>
+              ) : null}
             </div>
 
-            {message ? (
-              <p className="mt-6 text-center text-sm text-white/55">{message}</p>
+            {isManualAnalysisLocked ? (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-[2.5rem] bg-[#0b1220]/55 px-6 py-8 text-center backdrop-blur-md sm:px-10"
+                role="region"
+                aria-label={i18n(language, {
+                  en: "Subscription required",
+                  fr: "Abonnement requis",
+                })}
+              >
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/25 bg-white/10 shadow-[0_12px_40px_-18px_rgba(0,0,0,0.65)]">
+                  <Lock
+                    className="h-7 w-7 text-white"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                </div>
+                <p className="max-w-sm text-sm font-semibold leading-relaxed text-white">
+                  {i18n(language, {
+                    en: "Your free onboarding analysis is included. Subscribe to run full analyses anytime.",
+                    fr: "Ton analyse d’accueil gratuite est incluse. Abonne-toi pour lancer des analyses complètes quand tu veux.",
+                  })}
+                </p>
+                <Button
+                  asChild
+                  className="mt-1 rounded-full border border-white/30 bg-white/95 px-6 text-sm font-semibold text-slate-950 shadow-[0_12px_32px_-14px_rgba(0,0,0,0.55)] hover:bg-white"
+                >
+                  <Link href="/billing">
+                    {i18n(language, {
+                      en: "View plans",
+                      fr: "Voir les offres",
+                    })}
+                  </Link>
+                </Button>
+              </div>
             ) : null}
-            {errorMessage ? (
-              <p className="mt-6 text-center text-sm font-medium text-red-300">
-                {errorMessage}
-              </p>
+
+            {!isManualAnalysisLocked && isWeeklyAnalysisLocked ? (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-[2.5rem] bg-[#0b1220]/55 px-6 py-8 text-center backdrop-blur-md sm:px-10"
+                role="region"
+                aria-label={i18n(language, {
+                  en: "Weekly analysis limit",
+                  fr: "Limite d’analyses hebdomadaire",
+                })}
+              >
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/25 bg-white/10 shadow-[0_12px_40px_-18px_rgba(0,0,0,0.65)]">
+                  <CalendarClock
+                    className="h-7 w-7 text-white"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                </div>
+                <p className="max-w-sm text-sm font-semibold leading-relaxed text-white">
+                  {weeklyQuotaOverlayLine ??
+                    i18n(language, {
+                      en: "Subscribers can run one full analysis per week.",
+                      fr: "Les abonnés peuvent lancer une analyse complète par semaine.",
+                    })}
+                </p>
+              </div>
             ) : null}
-          </div>
+
+            {!isManualAnalysisLocked &&
+            !isWeeklyAnalysisLocked &&
+            subscriberQuotaBlockingUi ? (
+              <div
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-[2.5rem] bg-[#0b1220]/45 px-6 py-8 text-center backdrop-blur-md"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <Loader2
+                  className="h-8 w-8 shrink-0 animate-spin text-white"
+                  aria-hidden
+                />
+                <p className="text-xs font-medium text-white/80">
+                  {i18n(language, {
+                    en: "Checking your weekly quota…",
+                    fr: "Vérification du quota hebdomadaire…",
+                  })}
+                </p>
+              </div>
+            ) : null}
+          </>
         )}
         </section>
       </div>
 
       {/* ── Camera capture flow ── */}
-      {showCameraCapture && (
+      {showCameraCapture &&
+      hasPremiumAccess &&
+      !subscriberQuotaBlockingUi &&
+      !isWeeklyAnalysisLocked ? (
         <FaceCaptureView
           language={language}
           onComplete={handleCapturedComplete}
           onCancel={() => setShowCameraCapture(false)}
         />
-      )}
+      ) : null}
 
       {/* ── Captured preview: show 8 images + upload button ── */}
-      <Dialog open={showCapturedPreview} onOpenChange={setShowCapturedPreview}>
+      <Dialog
+        open={
+          showCapturedPreview &&
+          hasPremiumAccess &&
+          !subscriberQuotaBlockingUi &&
+          !isWeeklyAnalysisLocked
+        }
+        onOpenChange={setShowCapturedPreview}
+      >
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/15 bg-[linear-gradient(135deg,rgba(10,16,22,0.98)_0%,rgba(18,27,35,0.96)_55%,rgba(255,255,255,0.06)_100%)] text-zinc-50 shadow-[0_35px_110px_-70px_rgba(0,0,0,0.95)] sm:rounded-[2rem]">
           <DialogHeader>
             <DialogTitle className="font-display text-3xl tracking-tight text-zinc-50">

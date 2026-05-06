@@ -10,6 +10,7 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
   getScore,
+  hasAnyScore,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -23,6 +24,14 @@ import {
 } from "./WorkerVisualizations";
 
 const WORKER_KEY = "neck";
+
+function resolveOverallNeck(aggregates: Record<string, unknown>) {
+  const primary = getScore(aggregates, "global_score.overall_neck_score");
+  if (primary.score !== null || primary.argument) {
+    return primary;
+  }
+  return getScore(aggregates, "overall_neck");
+}
 
 export interface NeckWorkerViewProps {
   aggregates: Record<string, unknown>;
@@ -43,73 +52,73 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
     [locale],
   );
 
-  const overall = getScore(aggregates, "overall_neck");
+  const overall = resolveOverallNeck(aggregates);
 
   const length = getScore(aggregates, "dimensions_and_proportions.neck_length");
   const width = getScore(aggregates, "dimensions_and_proportions.neck_width");
-  const taper = getScore(aggregates, "dimensions_and_proportions.neck_taper");
-
-  const definition = getScore(
+  const shapeTaper = getScore(
     aggregates,
-    "musculature_and_soft_tissue.muscle_definition",
+    "dimensions_and_proportions.neck_shape_and_taper",
   );
-  const submentalFat = getScore(
+  const shapeDescriptorEnum = getEnum(
     aggregates,
-    "musculature_and_soft_tissue.submental_fat",
+    "dimensions_and_proportions.neck_shape_and_taper.descriptor",
+  );
+  const shapeDescriptorDisplay = shapeDescriptorEnum.value
+    ? formatEnumValue(
+        "dimensions_and_proportions.neck_shape_and_taper.descriptor",
+        shapeDescriptorEnum.value,
+      )
+    : null;
+
+  const scmDefinition = getScore(
+    aggregates,
+    "musculature_and_soft_tissue.scm_muscle_definition",
+  );
+  const firmness = getScore(
+    aggregates,
+    "musculature_and_soft_tissue.neck_firmness",
   );
   const adamEnum = getEnum(
     aggregates,
     "musculature_and_soft_tissue.adams_apple_visibility",
   );
 
-  const firmness = getScore(
-    aggregates,
-    "skin_firmness_and_texture.neck_firmness",
-  );
-  const texture = getScore(aggregates, "skin_firmness_and_texture.skin_texture");
-
   const posture = getScore(aggregates, "posture_and_alignment.neck_posture");
-  const shapeEnum = getEnum(aggregates, "posture_and_alignment.neck_shape");
-  const shapeDisplay = formatEnumValue(
-    "posture_and_alignment.neck_shape",
-    shapeEnum.value,
-  );
 
-  /** Radar signature 8 axes pour le cou. */
   const radarLabels: Record<string, { en: string; fr: string }> = {
     "dimensions_and_proportions.neck_length": { en: "Length", fr: "Longueur" },
     "dimensions_and_proportions.neck_width": { en: "Width", fr: "Largeur" },
-    "dimensions_and_proportions.neck_taper": { en: "Taper", fr: "Affinement" },
-    "musculature_and_soft_tissue.muscle_definition": {
-      en: "Muscle",
-      fr: "Muscles",
+    "dimensions_and_proportions.neck_shape_and_taper": {
+      en: "Shape & taper",
+      fr: "Forme & affin.",
     },
-    "musculature_and_soft_tissue.submental_fat": {
-      en: "Submental",
-      fr: "Sous-menton",
+    "musculature_and_soft_tissue.scm_muscle_definition": {
+      en: "SCM",
+      fr: "SCM",
     },
-    "skin_firmness_and_texture.neck_firmness": {
+    "musculature_and_soft_tissue.neck_firmness": {
       en: "Firmness",
       fr: "Fermeté",
     },
-    "skin_firmness_and_texture.skin_texture": { en: "Texture", fr: "Texture" },
     "posture_and_alignment.neck_posture": { en: "Posture", fr: "Posture" },
   };
 
   const radarSource: { key: string; score: number | null }[] = [
     { key: "dimensions_and_proportions.neck_length", score: length.score },
     { key: "dimensions_and_proportions.neck_width", score: width.score },
-    { key: "dimensions_and_proportions.neck_taper", score: taper.score },
     {
-      key: "musculature_and_soft_tissue.muscle_definition",
-      score: definition.score,
+      key: "dimensions_and_proportions.neck_shape_and_taper",
+      score: shapeTaper.score,
     },
     {
-      key: "musculature_and_soft_tissue.submental_fat",
-      score: submentalFat.score,
+      key: "musculature_and_soft_tissue.scm_muscle_definition",
+      score: scmDefinition.score,
     },
-    { key: "skin_firmness_and_texture.neck_firmness", score: firmness.score },
-    { key: "skin_firmness_and_texture.skin_texture", score: texture.score },
+    {
+      key: "musculature_and_soft_tissue.neck_firmness",
+      score: firmness.score,
+    },
     { key: "posture_and_alignment.neck_posture", score: posture.score },
   ];
   const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
@@ -118,9 +127,11 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
       : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
   );
 
-  /** Matrice : Définition musculaire (X) × Fermeté tissulaire (Y). */
   const showStanceMatrix =
-    definition.score !== null && firmness.score !== null;
+    scmDefinition.score !== null && firmness.score !== null;
+
+  const shapeTaperAside =
+    shapeTaper.argument ?? shapeDescriptorEnum.argument ?? null;
 
   return (
     <div className="space-y-4">
@@ -134,17 +145,19 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
         rightSlot={
-          shapeDisplay ? (
+          shapeDescriptorDisplay ? (
             <MorphologyBadge
-              eyebrow={i18n(language, { en: "Shape", fr: "Forme" })}
-              value={shapeDisplay ?? shapeEnum.value ?? ""}
+              eyebrow={i18n(language, {
+                en: "Shape & taper",
+                fr: "Forme & affinement",
+              })}
+              value={shapeDescriptorDisplay ?? shapeDescriptorEnum.value ?? ""}
               className="text-right"
             />
           ) : null
         }
       />
 
-      {/* Signature cou — radar */}
       {radarData.length >= 3 ? (
         <Card className={workerSectionCardClassName}>
           <CardContent className="p-5 sm:p-6">
@@ -158,23 +171,26 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
                 </p>
                 <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
                   {i18n(language, {
-                    en: "Architecture, muscle & skin",
-                    fr: "Architecture, muscle et peau",
+                    en: "Proportions, muscle & posture",
+                    fr: "Proportions, muscle et posture",
                   })}
                 </h3>
                 <p className="text-sm leading-relaxed text-zinc-400">
                   {i18n(language, {
-                    en: "Eight signals — proportions, musculature, skin and posture — fused into a single polygon to read your neck at a glance.",
-                    fr: "Huit signaux — proportions, musculature, peau et posture — fusionnés en un polygone pour lire ton cou d'un coup d'œil.",
+                    en: "Six signals — length, width, shape, SCM definition, tissue firmness and posture — in one polygon.",
+                    fr: "Six signaux — longueur, largeur, forme, définition SCM, fermeté des tissus et posture — dans un polygone.",
                   })}
                 </p>
-                {shapeEnum.argument ? (
+                {shapeTaperAside ? (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                      {i18n(language, { en: "Shape", fr: "Forme" })}
+                      {i18n(language, {
+                        en: "Shape & taper",
+                        fr: "Forme et affinement",
+                      })}
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-                      {shapeEnum.argument}
+                      {shapeTaperAside}
                     </p>
                   </div>
                 ) : null}
@@ -191,7 +207,6 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
         </Card>
       ) : null}
 
-      {/* Matrice : Définition musculaire × Fermeté tissulaire */}
       {showStanceMatrix ? (
         <Card className={workerSectionCardClassName}>
           <CardContent className="p-6 sm:p-8">
@@ -205,19 +220,19 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
                 </p>
                 <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
                   {i18n(language, {
-                    en: "Definition × firmness",
-                    fr: "Définition × fermeté",
+                    en: "SCM × firmness",
+                    fr: "SCM × fermeté",
                   })}
                 </h3>
                 <p className="text-sm leading-relaxed text-zinc-400">
                   {i18n(language, {
-                    en: "How visible the underlying musculature is, paired with the firmness of the skin and tissue around it.",
-                    fr: "À quel point la musculature ressort, croisé avec la fermeté de la peau et des tissus autour.",
+                    en: "How visible the SCM is, paired with overall neck tissue firmness.",
+                    fr: "Visibilité du SCM, croisée avec la fermeté globale des tissus du cou.",
                   })}
                 </p>
               </div>
               <WorkerStanceMatrix
-                xScore={definition.score}
+                xScore={scmDefinition.score}
                 yScore={firmness.score}
                 xLeft={{ en: "Soft", fr: "Doux" }}
                 xRight={{ en: "Defined", fr: "Défini" }}
@@ -234,16 +249,16 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
         </Card>
       ) : null}
 
-      {/* Detailed bars */}
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
+          when={hasAnyScore(length.score, width.score, shapeTaper.score)}
           eyebrow={i18n(language, {
             en: "Dimensions",
             fr: "Dimensions",
           })}
           title={i18n(language, {
-            en: "Length, width, taper",
-            fr: "Longueur, largeur, affinement",
+            en: "Length, width, shape",
+            fr: "Longueur, largeur, forme",
           })}
         >
           <ScoreBar
@@ -259,33 +274,39 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
             language={language}
           />
           <ScoreBar
-            label={formatLabel("dimensions_and_proportions.neck_taper")}
-            score={taper.score}
-            argument={taper.argument}
+            label={formatLabel("dimensions_and_proportions.neck_shape_and_taper")}
+            score={shapeTaper.score}
+            argument={shapeTaper.argument}
             language={language}
           />
         </SectionShell>
 
         <SectionShell
+          when={
+            hasAnyScore(scmDefinition.score, firmness.score) ||
+            Boolean(adamEnum.value)
+          }
           eyebrow={i18n(language, {
-            en: "Musculature",
-            fr: "Musculature",
+            en: "Musculature & tissue",
+            fr: "Musculature et tissus",
           })}
           title={i18n(language, {
-            en: "SCM definition & fat",
-            fr: "SCM, définition et gras",
+            en: "SCM, firmness & larynx",
+            fr: "SCM, fermeté et pomme d'Adam",
           })}
         >
           <ScoreBar
-            label={formatLabel("musculature_and_soft_tissue.muscle_definition")}
-            score={definition.score}
-            argument={definition.argument}
+            label={formatLabel(
+              "musculature_and_soft_tissue.scm_muscle_definition",
+            )}
+            score={scmDefinition.score}
+            argument={scmDefinition.argument}
             language={language}
           />
           <ScoreBar
-            label={formatLabel("musculature_and_soft_tissue.submental_fat")}
-            score={submentalFat.score}
-            argument={submentalFat.argument}
+            label={formatLabel("musculature_and_soft_tissue.neck_firmness")}
+            score={firmness.score}
+            argument={firmness.argument}
             language={language}
           />
           {adamEnum.value ? (
@@ -313,30 +334,7 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
         </SectionShell>
 
         <SectionShell
-          eyebrow={i18n(language, {
-            en: "Skin firmness",
-            fr: "Fermeté de la peau",
-          })}
-          title={i18n(language, {
-            en: "Quality of the surface",
-            fr: "Qualité de la surface",
-          })}
-        >
-          <ScoreBar
-            label={formatLabel("skin_firmness_and_texture.neck_firmness")}
-            score={firmness.score}
-            argument={firmness.argument}
-            language={language}
-          />
-          <ScoreBar
-            label={formatLabel("skin_firmness_and_texture.skin_texture")}
-            score={texture.score}
-            argument={texture.argument}
-            language={language}
-          />
-        </SectionShell>
-
-        <SectionShell
+          when={hasAnyScore(posture.score)}
           eyebrow={i18n(language, { en: "Posture", fr: "Posture" })}
           title={i18n(language, {
             en: "Alignment",

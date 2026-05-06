@@ -4,36 +4,35 @@
 
 - `eye_brows`
 
-## Expected output fields v1
+## Expected output (nested v1)
+
+The API may return **nested objects**; the app reads dotted paths (e.g. `placement_and_symmetry.eyebrow_elevation.score`). Équivalent aplati possible côté agrégateur.
 
 ```json
 {
-  "placement_and_spacing.elevation_brow_to_eye.score": "number",
-  "placement_and_spacing.elevation_brow_to_eye.argument": "concise summary text",
-  "placement_and_spacing.inter_brow_distance.score": "number",
-  "placement_and_spacing.inter_brow_distance.argument": "concise summary text",
-  "placement_and_spacing.eyebrow_symmetry.score": "number",
-  "placement_and_spacing.eyebrow_symmetry.argument": "concise summary text",
-  "geometry_and_tilt.eyebrow_tilt": "value",
-  "geometry_and_tilt.eyebrow_shape": "value",
-  "geometry_and_tilt.tail_length.score": "number",
-  "geometry_and_tilt.tail_length.argument": "concise summary text",
-  "geometry_and_tilt.inner_start_shape": "value",
-  "thickness_and_density.eyebrow_thickness.score": "number",
-  "thickness_and_density.eyebrow_thickness.argument": "concise summary text",
-  "thickness_and_density.eyebrow_density.score": "number",
-  "thickness_and_density.eyebrow_density.argument": "concise summary text",
-  "thickness_and_density.eyelash_density.score": "number",
-  "thickness_and_density.eyelash_density.argument": "concise summary text",
-  "thickness_and_density.hair_color": "value",
-  "overall_brow_score.score": "number",
-  "overall_brow_score.argument": "concise summary text"
+  "placement_and_symmetry": {
+    "eyebrow_elevation": { "score": 1, "argument": "string" },
+    "eyebrow_symmetry": { "score": 1, "argument": "string" }
+  },
+  "geometry_and_shape": {
+    "eyebrow_tilt": "negative | neutral | positive",
+    "eyebrow_shape": "straight | soft_arch | high_arch | rounded",
+    "tail_length_and_direction": { "score": 1, "argument": "string" },
+    "inner_start_shape": "squared | rounded | faded"
+  },
+  "density_grooming_and_glabella": {
+    "eyebrow_thickness": { "score": 1, "argument": "string" },
+    "eyebrow_density": { "score": 1, "argument": "string" },
+    "glabellar_hair": { "score": 1, "argument": "string" },
+    "grooming_quality": "natural_untouched | well_groomed | over_groomed | unkempt",
+    "brow_color": "light_blonde | dark_blonde | red | light_brown | dark_brown | black | grey"
+  },
+  "global_score": {
+    "overall_brow_score": { "score": 1, "argument": "string" }
+  }
 }
 ```
 
-## Output possibles renvoyés
+## Rétrocompatibilité (agrégats aplatis hérités)
 
-- `geometry_and_tilt.eyebrow_tilt`: `negative | neutral | positive`
-- `geometry_and_tilt.eyebrow_shape`: `straight | soft_arch | high_arch | rounded`
-- `geometry_and_tilt.inner_start_shape`: `squared | rounded | faded`
-- `thickness_and_density.hair_color`: `light_blonde | dark_blonde | red | light_brown | dark_brown | black | grey`
+Les clés historiques (`placement_and_spacing.*`, `geometry_and_tilt.*`, `thickness_and_density.*`, `overall_brow*`) ne sont plus documentées comme contrat courant ; l’UI attend la structure ci-dessus.
