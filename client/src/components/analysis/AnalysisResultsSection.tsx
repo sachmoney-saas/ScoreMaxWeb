@@ -982,6 +982,31 @@ export function AnalysisResultsSection({
     [analysis, search, setLocation],
   );
 
+  /** Toujours dérivé de la même façon — avant tout return — pour respecter l’ordre des hooks. */
+  const results = React.useMemo((): NormalizedWorkerResult[] => {
+    if (!analysis) return [];
+    return sortWorkerResults(analysis.results.map(normalizeWorkerResult));
+  }, [analysis]);
+
+  const { strengthSet: takeawayStrengthWorkers, weaknessSet: takeawayWeaknessWorkers } =
+    React.useMemo(() => {
+      const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
+      const { strengths, weaknesses } = buildWorkerScoreboard(results, locale);
+      return {
+        strengthSet: new Set(strengths.map((e) => e.worker)),
+        weaknessSet: new Set(weaknesses.map((e) => e.worker)),
+      };
+    }, [results, language]);
+
+  const workerPreviewScoreHighlight = React.useCallback(
+    (worker: string): MiniRingHighlight => {
+      if (takeawayStrengthWorkers.has(worker)) return "strength";
+      if (takeawayWeaknessWorkers.has(worker)) return "weakness";
+      return "default";
+    },
+    [takeawayStrengthWorkers, takeawayWeaknessWorkers],
+  );
+
   if (isLoading) {
     return <AnalysisSkeleton />;
   }
@@ -1008,7 +1033,6 @@ export function AnalysisResultsSection({
     );
   }
 
-  const results = sortWorkerResults(analysis.results.map(normalizeWorkerResult));
   const globalScore = calculateGlobalFaceScore(results);
   const buildWorkerHref = (worker: string) =>
     `/app/analyses/${analysis.job.id}/workers/${encodeURIComponent(worker)}`;
@@ -1046,22 +1070,6 @@ export function AnalysisResultsSection({
       r.worker !== "neck" &&
       r.worker !== "skin_tint",
   );
-
-  const { strengthSet: takeawayStrengthWorkers, weaknessSet: takeawayWeaknessWorkers } =
-    React.useMemo(() => {
-      const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
-      const { strengths, weaknesses } = buildWorkerScoreboard(results, locale);
-      return {
-        strengthSet: new Set(strengths.map((e) => e.worker)),
-        weaknessSet: new Set(weaknesses.map((e) => e.worker)),
-      };
-    }, [results, language]);
-
-  const workerPreviewScoreHighlight = (worker: string): MiniRingHighlight => {
-    if (takeawayStrengthWorkers.has(worker)) return "strength";
-    if (takeawayWeaknessWorkers.has(worker)) return "weakness";
-    return "default";
-  };
 
   return (
     <section className="space-y-5">

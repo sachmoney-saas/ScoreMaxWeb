@@ -42,16 +42,34 @@ const STEP_INSTRUCTION: Record<PoseId, { en: string; fr: string }> = {
     en: 'Lower your head slightly to include the top of your head.',
   },
   'closeup-eye': {
-    fr: 'Cadrez un œil au centre — vous pouvez rester à distance modérée.',
-    en: 'Frame one eye in the centre — a moderate distance is fine.',
+    fr: "Rapprochez l'appareil et cadrez un œil au centre, en gros plan.",
+    en: 'Move the device closer and frame one eye in the centre, close-up.',
   },
   'closeup-smile': {
     fr: 'Rapprochez-vous et souriez naturellement.',
     en: 'Move closer and give a natural smile.',
   },
   'closeup-hairline': {
-    fr: 'Dégagez le front — distance modérée, hairline visible.',
-    en: 'Show your forehead — moderate distance is fine if the hairline is visible.',
+    fr: "Rapprochez l'appareil et dégagez bien le front, hairline visible.",
+    en: 'Move the device closer and clear your forehead so the hairline is visible.',
+  },
+};
+
+/**
+ * Court bandeau affiché pendant la pause de transition (~1 s) avant les gros
+ * plans qui exigent un changement physique de distance. Sans cet écran, après
+ * le flash de capture l'utilisateur voit la barre d'alignement de la pose
+ * suivante repartir immédiatement et ne comprend pas pourquoi il est invité à
+ * « se rapprocher ». On verbalise la consigne à ce moment précis.
+ */
+const TRANSITION_PROMPT: Partial<Record<PoseId, { en: string; fr: string }>> = {
+  'closeup-eye': {
+    fr: "Rapprochez l'appareil de votre œil pour le prochain gros plan.",
+    en: 'Move the device closer to your eye for the next close-up.',
+  },
+  'closeup-hairline': {
+    fr: "Rapprochez l'appareil de votre front pour le prochain gros plan.",
+    en: 'Move the device closer to your forehead for the next close-up.',
   },
 };
 
@@ -126,6 +144,21 @@ export function FaceCaptureView({
     activePoseId !== null
       ? i18n(language, STEP_INSTRUCTION[activePoseId])
       : '';
+
+  /**
+   * Pause de transition entre une pose terminée et la pose suivante quand
+   * cette dernière exige un changement physique de distance (gros plans œil
+   * et hairline). On affiche alors un bandeau dédié pendant `Cooldown` /
+   * `NextPose` au lieu de laisser apparaître l'instruction de la pose
+   * suivante avec un avertissement « Rapprochez davantage » qui surgit
+   * brutalement.
+   */
+  const isTransitioning =
+    state.sessionState === 'Cooldown' || state.sessionState === 'NextPose';
+  const transitionCopy =
+    isTransitioning && activePoseId && TRANSITION_PROMPT[activePoseId]
+      ? i18n(language, TRANSITION_PROMPT[activePoseId]!)
+      : null;
 
   /** Indique de quel côté pivoter pour entrer dans la plage de yaw (profils). */
   const profileTurnArrow = useMemo((): 'left' | 'right' | null => {
@@ -349,7 +382,27 @@ export function FaceCaptureView({
             </div>
           )}
 
-          {!isLoading && !hasError && state.validation && state.faceInView && instruction ? (
+          {!isLoading && !hasError && transitionCopy ? (
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-[35] flex justify-center px-5 pt-8">
+              <div
+                className="flex max-w-md items-center gap-3 rounded-2xl border border-white/15 bg-black/65 px-5 py-4 backdrop-blur-md"
+                style={{
+                  boxShadow:
+                    '0 12px 40px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+              >
+                <div
+                  className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-300"
+                  aria-hidden
+                />
+                <p className="font-display text-base font-semibold leading-snug tracking-tight text-white sm:text-lg">
+                  {transitionCopy}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {!isLoading && !hasError && !transitionCopy && state.validation && state.faceInView && instruction ? (
             <>
               {profileTurnArrow === 'left' ? (
                 <div

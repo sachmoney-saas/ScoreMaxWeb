@@ -18,6 +18,12 @@ import { hairlineProgress } from "./helpers";
  * entry: that would let users start the hold from a clearly wrong pose.
  */
 const HOLDING_ANGLE_EXPAND_DEG = 10;
+/**
+ * Pendant le hold, on tolère ~15 % de moins en taille de visage (le gros plan
+ * dérive un peu quand l'utilisateur incline la tête pour exposer le front).
+ * Le seuil d'entrée — désormais aligné sur celui de l'œil (0.5) — reste lui
+ * strict, pour éviter de démarrer la barre depuis une distance de selfie.
+ */
 const HOLDING_FACE_RATIO_FACTOR = 0.85;
 /** Un peu plus tolérant quand le visage est plus petit dans le cadre (prise un peu plus loin). */
 const HOLDING_HAIRLINE_THRESHOLD = 0.46;
@@ -44,7 +50,7 @@ export class HairlineStrategy implements PoseStrategy {
     if (!inRange(frame.headPose.pitch, pitchRange)) hints.push("Penchez moins la tête");
     if (!inRange(frame.headPose.roll, rollRange)) hints.push("Redressez la tête");
     if (hairline < hairlineThreshold) hints.push("Dégagez davantage le front");
-    if (faceRatio(frame) < minFaceRatio) hints.push("Rapprochez-vous un peu ou inclinez pour le front");
+    if (faceRatio(frame) < minFaceRatio) hints.push("Rapprochez davantage l'appareil du front");
     const progress =
       (rangeProgress(frame.headPose.yaw, yawRange, 10) +
         rangeProgress(frame.headPose.pitch, pitchRange, 10) +

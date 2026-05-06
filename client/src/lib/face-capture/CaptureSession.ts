@@ -651,8 +651,19 @@ export class CaptureSession {
 
     this.transitionPoseId = poseState.poseId;
     this.transitionThumbnailUrl = thumbnailUrl;
-    /** Re-arm from now: the await may have eaten part of the budget. */
-    this.cooldownUntil = performance.now() + cooldownMs;
+    /**
+     * Re-arm from now: the await may have eaten part of the budget.
+     * Si la pose suivante définit un `entryDelayMs` (ex. gros plans œil /
+     * hairline qui exigent un rapprochement physique de l'appareil), on
+     * substitue ce délai au cooldown standard pour éviter que la barre
+     * d'alignement suivante ne redémarre immédiatement après le flash.
+     */
+    const nextPoseDef = CAPTURE_POSES[idx + 1];
+    const transitionMs = Math.max(
+      cooldownMs,
+      nextPoseDef?.entryDelayMs ?? 0,
+    );
+    this.cooldownUntil = performance.now() + transitionMs;
     this.holdStartAt = null;
     this.holdProgress = 0;
     this.holdStartHeadPose = null;
