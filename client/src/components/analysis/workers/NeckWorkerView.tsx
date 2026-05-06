@@ -6,6 +6,7 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import { workerMetricAnchorId, workerSectionAnchorId } from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
@@ -124,11 +125,19 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
   const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
     d.score === null
       ? []
-      : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
+      : [
+          {
+            label: i18n(language, radarLabels[d.key]),
+            score: d.score,
+            anchorId: workerMetricAnchorId(WORKER_KEY, d.key),
+          },
+        ],
   );
 
   const showStanceMatrix =
     scmDefinition.score !== null && firmness.score !== null;
+
+  const muscSectionId = workerSectionAnchorId(WORKER_KEY, "musculature-tissue");
 
   const shapeTaperAside =
     shapeTaper.argument ?? shapeDescriptorEnum.argument ?? null;
@@ -243,6 +252,7 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
                   en: "Neck composition matrix",
                   fr: "Matrice de composition du cou",
                 }}
+                resolveCellTargetId={() => muscSectionId}
               />
             </div>
           </CardContent>
@@ -252,6 +262,7 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
           when={hasAnyScore(length.score, width.score, shapeTaper.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "dimensions")}
           eyebrow={i18n(language, {
             en: "Dimensions",
             fr: "Dimensions",
@@ -266,18 +277,30 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
             score={length.score}
             argument={length.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "dimensions_and_proportions.neck_length",
+            )}
           />
           <ScoreBar
             label={formatLabel("dimensions_and_proportions.neck_width")}
             score={width.score}
             argument={width.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "dimensions_and_proportions.neck_width",
+            )}
           />
           <ScoreBar
             label={formatLabel("dimensions_and_proportions.neck_shape_and_taper")}
             score={shapeTaper.score}
             argument={shapeTaper.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "dimensions_and_proportions.neck_shape_and_taper",
+            )}
           />
         </SectionShell>
 
@@ -286,6 +309,7 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
             hasAnyScore(scmDefinition.score, firmness.score) ||
             Boolean(adamEnum.value)
           }
+          sectionId={muscSectionId}
           eyebrow={i18n(language, {
             en: "Musculature & tissue",
             fr: "Musculature et tissus",
@@ -302,12 +326,20 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
             score={scmDefinition.score}
             argument={scmDefinition.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "musculature_and_soft_tissue.scm_muscle_definition",
+            )}
           />
           <ScoreBar
             label={formatLabel("musculature_and_soft_tissue.neck_firmness")}
             score={firmness.score}
             argument={firmness.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "musculature_and_soft_tissue.neck_firmness",
+            )}
           />
           {adamEnum.value ? (
             <div className="space-y-2">
@@ -335,6 +367,7 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
 
         <SectionShell
           when={hasAnyScore(posture.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "posture")}
           eyebrow={i18n(language, { en: "Posture", fr: "Posture" })}
           title={i18n(language, {
             en: "Alignment",
@@ -346,6 +379,10 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
             score={posture.score}
             argument={posture.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "posture_and_alignment.neck_posture",
+            )}
           />
         </SectionShell>
       </div>

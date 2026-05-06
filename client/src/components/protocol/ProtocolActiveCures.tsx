@@ -17,9 +17,9 @@ import { ProtocolSection } from "@/components/protocol/ProtocolSection";
 function CureProgressBar({ progress }: { progress: number }) {
   const pct = Math.round(progress * 100);
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200">
       <div
-        className="h-full rounded-full bg-gradient-to-r from-emerald-400/70 to-emerald-200/80"
+        className="h-full rounded-full bg-gradient-to-r from-emerald-600/85 to-emerald-500/90"
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -35,7 +35,7 @@ function CureTrailing({
 }) {
   if (cure.totalDays === null) {
     return (
-      <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-300">
+      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-700 ring-1 ring-zinc-200/80">
         {i18n(language, { en: "Ongoing", fr: "En cours" })}
       </span>
     );
@@ -48,8 +48,8 @@ function CureTrailing({
     <span
       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ring-inset ${
         isDone
-          ? "bg-emerald-400/15 text-emerald-200 ring-emerald-300/25"
-          : "bg-white/[0.06] text-zinc-300 ring-white/10"
+          ? "bg-emerald-100 text-emerald-900 ring-emerald-200"
+          : "bg-zinc-100 text-zinc-700 ring-zinc-200/80"
       }`}
     >
       {isDone
@@ -75,14 +75,10 @@ export function ProtocolActiveCures({
 
   return (
     <ProtocolSection
-      eyebrow={i18n(language, { en: "In progress", fr: "En cours" })}
+      variant="sheet"
       title={i18n(language, {
-        en: "Active cures",
-        fr: "Cures actives",
-      })}
-      description={i18n(language, {
-        en: "Time-bounded interventions you've started — surgeries, injectable cycles, sessions and the like.",
-        fr: "Interventions à durée définie que tu as commencées — chirurgies, cycles d'injectables, séances, etc.",
+        en: "Cures",
+        fr: "Cures",
       })}
       icon={Hourglass}
       count={cures.length}
@@ -98,7 +94,7 @@ export function ProtocolActiveCures({
             {cure.progress !== null ? (
               <div className="px-1">
                 <CureProgressBar progress={cure.progress} />
-                <p className="mt-1 text-[10px] text-zinc-500 tabular-nums">
+                <p className="mt-1 text-[10px] text-zinc-600 tabular-nums">
                   {i18n(language, {
                     en: `${cure.elapsedDays} / ${cure.totalDays} days`,
                     fr: `${cure.elapsedDays} / ${cure.totalDays} jours`,

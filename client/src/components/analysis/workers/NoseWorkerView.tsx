@@ -6,6 +6,7 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import { workerMetricAnchorId, workerSectionAnchorId } from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
@@ -151,7 +152,13 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
   const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
     d.score === null
       ? []
-      : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
+      : [
+          {
+            label: i18n(language, radarLabels[d.key]),
+            score: d.score,
+            anchorId: workerMetricAnchorId(WORKER_KEY, d.key),
+          },
+        ],
   );
 
   /** Matrice de balance nasale : Largeur (X) × Projection (Y) — un coup d'œil de la dynamique frontale + profil. */
@@ -166,6 +173,14 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
 
   const showStanceMatrix =
     widthAxisScore !== null && projectionAxisScore !== null;
+
+  const sectionFrontal = workerSectionAnchorId(WORKER_KEY, "frontal-width");
+  const sectionTip = workerSectionAnchorId(WORKER_KEY, "tip-morphology");
+  const resolveNoseMatrixCellTarget = (cx: number, ry: number): string => {
+    const mid = 4.5;
+    if (Math.abs(cx - mid) >= Math.abs(ry - mid)) return sectionFrontal;
+    return sectionTip;
+  };
 
   return (
     <div className="space-y-4">
@@ -310,6 +325,7 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
                   en: "Nasal balance matrix",
                   fr: "Matrice de balance nasale",
                 }}
+                resolveCellTargetId={(cx, ry) => resolveNoseMatrixCellTarget(cx, ry)}
               />
             </div>
           </CardContent>
@@ -324,6 +340,7 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             alarWidth.score,
             symmetry.score,
           )}
+          sectionId={sectionFrontal}
           eyebrow={i18n(language, {
             en: "Frontal width",
             fr: "Largeur frontale",
@@ -338,18 +355,30 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             score={bridgeWidth.score}
             argument={bridgeWidth.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "frontal_symmetry_and_width.bridge_width",
+            )}
           />
           <ScoreBar
             label={formatLabel("frontal_symmetry_and_width.overall_alar_width")}
             score={alarWidth.score}
             argument={alarWidth.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "frontal_symmetry_and_width.overall_alar_width",
+            )}
           />
           <ScoreBar
             label={formatLabel("frontal_symmetry_and_width.nose_symmetry")}
             score={symmetry.score}
             argument={symmetry.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "frontal_symmetry_and_width.nose_symmetry",
+            )}
           />
         </SectionShell>
 
@@ -358,6 +387,7 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             hasAnyScore(nasofrontal.score, nasolabial.score) ||
             Boolean(supratipEnum.value)
           }
+          sectionId={workerSectionAnchorId(WORKER_KEY, "profile-angles")}
           eyebrow={i18n(language, {
             en: "Profile angles",
             fr: "Angles de profil",
@@ -372,12 +402,20 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             score={nasofrontal.score}
             argument={nasofrontal.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "profile_dorsum_and_angles.nasofrontal_angle",
+            )}
           />
           <ScoreBar
             label={formatLabel("profile_dorsum_and_angles.nasolabial_angle_rotation")}
             score={nasolabial.score}
             argument={nasolabial.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "profile_dorsum_and_angles.nasolabial_angle_rotation",
+            )}
           />
           {supratipEnum.value ? (
             <div className="space-y-2">
@@ -403,6 +441,7 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
 
         <SectionShell
           when={hasAnyScore(tipDef.score, tipProj.score)}
+          sectionId={sectionTip}
           eyebrow={i18n(language, {
             en: "Tip morphology",
             fr: "Morphologie de la pointe",
@@ -417,12 +456,20 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             score={tipDef.score}
             argument={tipDef.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "tip_morphology.tip_definition",
+            )}
           />
           <ScoreBar
             label={formatLabel("tip_morphology.tip_projection")}
             score={tipProj.score}
             argument={tipProj.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "tip_morphology.tip_projection",
+            )}
           />
         </SectionShell>
 
@@ -431,6 +478,7 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             hasAnyScore(columella.score, noseLength.score) ||
             Boolean(nasalSkinEnum.value)
           }
+          sectionId={workerSectionAnchorId(WORKER_KEY, "base-length")}
           eyebrow={i18n(language, {
             en: "Base & length",
             fr: "Base et longueur",
@@ -445,12 +493,20 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
             score={columella.score}
             argument={columella.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "base_nostrils_and_surface.columella_alignment",
+            )}
           />
           <ScoreBar
             label={formatLabel("base_nostrils_and_surface.nose_length")}
             score={noseLength.score}
             argument={noseLength.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "base_nostrils_and_surface.nose_length",
+            )}
           />
           {nasalSkinEnum.value ? (
             <div className="space-y-2">

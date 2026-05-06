@@ -37,6 +37,7 @@ import {
   type RecommendationDurationUnit,
   type RecommendationRisk,
 } from "@/lib/recommendations";
+import { useIsRecommendationDocumentSurface } from "@/components/analysis/recommendations/RecommendationDocumentContext";
 
 /* ============================================================================
  * Visual helpers — kept here so any consumer (worker page, analysis tab) gets
@@ -85,6 +86,15 @@ export function riskClasses(risk: RecommendationRisk): string {
     case "low":    return "bg-lime-400/12 text-lime-200 ring-lime-300/20";
     case "medium": return "bg-amber-400/15 text-amber-200 ring-amber-300/25";
     case "high":   return "bg-rose-400/15 text-rose-200 ring-rose-300/25";
+  }
+}
+
+function riskClassesDocument(risk: RecommendationRisk): string {
+  switch (risk) {
+    case "none":   return "bg-emerald-50 text-emerald-900 ring-emerald-200";
+    case "low":    return "bg-lime-50 text-lime-900 ring-lime-200";
+    case "medium": return "bg-amber-50 text-amber-950 ring-amber-200";
+    case "high":   return "bg-rose-50 text-rose-900 ring-rose-200";
   }
 }
 
@@ -219,6 +229,7 @@ export function RecommendationCard({
   action,
   hideReason,
 }: RecommendationCardProps) {
+  const isDocument = useIsRecommendationDocumentSurface();
   const upsert = useUpsertRecommendationAction();
   const remove = useDeleteRecommendationAction();
 
@@ -244,51 +255,92 @@ export function RecommendationCard({
   return (
     <Card
       className={cn(
-        analysisSurfaceCardClassName,
-        "rounded-xl transition duration-300 hover:border-white/35",
+        isDocument
+          ? "rounded-lg border border-zinc-200 bg-white text-zinc-900 shadow-none"
+          : analysisSurfaceCardClassName,
+        !isDocument && "rounded-xl transition duration-300 hover:border-white/35",
       )}
     >
       <CardContent className="space-y-4 p-5">
         <div className="flex items-start gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <div
-              className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+              className={cn(
+                "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
                 isHard
-                  ? "bg-rose-400/12 text-rose-200"
-                  : "bg-emerald-400/12 text-emerald-200"
-              }`}
+                  ? isDocument
+                    ? "bg-rose-50 text-rose-700"
+                    : "bg-rose-400/12 text-rose-200"
+                  : isDocument
+                    ? "bg-emerald-50 text-emerald-800"
+                    : "bg-emerald-400/12 text-emerald-200",
+              )}
             >
               {categoryIcon(rec.category)}
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h4 className="font-display text-base font-semibold leading-tight tracking-tight text-white">
+                <h4
+                  className={cn(
+                    "font-display text-base font-semibold leading-tight tracking-tight",
+                    isDocument ? "text-zinc-900" : "text-white",
+                  )}
+                >
                   {title}
                 </h4>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ring-1 ring-inset ${
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ring-1 ring-inset",
                     isHard
-                      ? "bg-rose-400/12 text-rose-200 ring-rose-300/20"
-                      : "bg-emerald-400/12 text-emerald-200 ring-emerald-300/20"
-                  }`}
+                      ? isDocument
+                        ? "bg-rose-50 text-rose-900 ring-rose-200"
+                        : "bg-rose-400/12 text-rose-200 ring-rose-300/20"
+                      : isDocument
+                        ? "bg-emerald-50 text-emerald-900 ring-emerald-200"
+                        : "bg-emerald-400/12 text-emerald-200 ring-emerald-300/20",
+                  )}
                 >
                   {isHard
                     ? i18n(language, { en: "Hard", fr: "Hard" })
                     : i18n(language, { en: "Soft", fr: "Soft" })}
                 </span>
               </div>
-              <p className="mt-1 text-xs uppercase tracking-[0.12em] text-zinc-500">
+              <p
+                className={cn(
+                  "mt-1 text-xs uppercase tracking-[0.12em]",
+                  isDocument ? "text-zinc-500" : "text-zinc-500",
+                )}
+              >
                 {categoryLabel(rec.category, language)}
               </p>
             </div>
           </div>
         </div>
 
-        <p className="text-sm leading-relaxed text-zinc-300">{summary}</p>
+        <p
+          className={cn(
+            "text-sm leading-relaxed",
+            isDocument ? "text-zinc-700" : "text-zinc-300",
+          )}
+        >
+          {summary}
+        </p>
 
         {reason ? (
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs leading-relaxed text-zinc-300">
-            <span className="mr-1 font-semibold text-white">
+          <div
+            className={cn(
+              "rounded-lg px-3 py-2 text-xs leading-relaxed",
+              isDocument
+                ? "border border-zinc-200 bg-zinc-50 text-zinc-800"
+                : "rounded-xl border border-white/10 bg-white/[0.04] text-zinc-300",
+            )}
+          >
+            <span
+              className={cn(
+                "mr-1 font-semibold",
+                isDocument ? "text-zinc-900" : "text-white",
+              )}
+            >
               {i18n(language, { en: "Why:", fr: "Pourquoi :" })}
             </span>
             {reason}
@@ -297,20 +349,34 @@ export function RecommendationCard({
 
         <div className="flex flex-wrap items-center gap-2 text-[11px]">
           {duration ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-zinc-300">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+                isDocument
+                  ? "border border-zinc-200 bg-zinc-50 text-zinc-700"
+                  : "border border-white/10 bg-white/[0.04] text-zinc-300",
+              )}
+            >
               <Waves className="h-3 w-3" />
               {duration}
             </span>
           ) : null}
           {cost ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-zinc-300">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+                isDocument
+                  ? "border border-zinc-200 bg-zinc-50 text-zinc-700"
+                  : "border border-white/10 bg-white/[0.04] text-zinc-300",
+              )}
+            >
               {cost}
             </span>
           ) : null}
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-inset ${riskClasses(
-              rec.risk,
-            )}`}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-inset ${
+              isDocument ? riskClassesDocument(rec.risk) : riskClasses(rec.risk)
+            }`}
           >
             {riskLabel(rec.risk, language)}
           </span>
@@ -318,7 +384,12 @@ export function RecommendationCard({
 
         {rec.steps.length > 0 ? (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            <p
+              className={cn(
+                "text-[10px] font-semibold uppercase tracking-[0.14em]",
+                isDocument ? "text-zinc-500" : "text-zinc-500",
+              )}
+            >
               {i18n(language, {
                 en: "Steps",
                 fr: "Étapes",
@@ -328,9 +399,19 @@ export function RecommendationCard({
               {rec.steps.map((step, idx) => (
                 <li
                   key={idx}
-                  className="flex gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-xs leading-relaxed text-zinc-300"
+                  className={cn(
+                    "flex gap-3 rounded-lg px-3 py-2 text-xs leading-relaxed",
+                    isDocument
+                      ? "border border-zinc-100 bg-zinc-50 text-zinc-800"
+                      : "bg-white/[0.03] text-zinc-300",
+                  )}
                 >
-                  <span className="mt-px font-display text-sm font-bold tabular-nums text-zinc-500">
+                  <span
+                    className={cn(
+                      "mt-px font-display text-sm font-bold tabular-nums",
+                      isDocument ? "text-zinc-500" : "text-zinc-500",
+                    )}
+                  >
                     {idx + 1}.
                   </span>
                   <span>{language === "fr" ? step.fr : step.en}</span>
@@ -344,15 +425,32 @@ export function RecommendationCard({
           <Button
             type="button"
             size="sm"
-            variant={isInProtocol ? "secondary" : "ghost"}
+            variant={
+              isDocument
+                ? isInProtocol
+                  ? "secondary"
+                  : "outline"
+                : isInProtocol
+                  ? "secondary"
+                  : "ghost"
+            }
             disabled={isPending}
             onClick={toggleProtocol}
-            className="h-8 gap-1.5 px-3 text-xs"
+            className={cn(
+              "h-8 gap-1.5 px-3 text-xs",
+              isDocument &&
+                "border-zinc-300 text-zinc-800 hover:bg-zinc-100 hover:text-zinc-900",
+            )}
           >
             {isPending ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : isInProtocol ? (
-              <Check className="h-3 w-3 text-emerald-300" />
+              <Check
+                className={cn(
+                  "h-3 w-3",
+                  isDocument ? "text-emerald-700" : "text-emerald-300",
+                )}
+              />
             ) : (
               <BookmarkCheck className="h-3 w-3" />
             )}
@@ -367,7 +465,12 @@ export function RecommendationCard({
                 })}
           </Button>
           {isInProtocol ? (
-            <span className="text-[11px] text-zinc-500">
+            <span
+              className={cn(
+                "text-[11px]",
+                isDocument ? "text-zinc-500" : "text-zinc-500",
+              )}
+            >
               {i18n(language, {
                 en: "Manage from your protocol",
                 fr: "Gérable depuis ton protocole",

@@ -16,6 +16,33 @@ import {
 import { requireUserId } from "../lib/auth";
 import { supabaseAdmin } from "../lib/supabase-admin";
 
+/**
+ * Marque l'utilisateur comme "onboardé" dès qu'un job d'analyse a été créé /
+ * réutilisé depuis la séance d'onboarding. On ne peut PAS attendre la
+ * complétion du worker ScanFace : si l'API tombe, si le process est tué, ou
+ * si l'utilisateur recharge la page pendant le run, on enverrait sinon
+ * l'utilisateur revoir l'intro (perte d'état React local + flag profil
+ * encore false). L'acte « j'ai capturé mes photos + j'ai cliqué lancer »
+ * est l'événement qui clôt l'onboarding, indépendamment du résultat.
+ *
+ * Idempotent : un UPDATE sur un profil déjà flaggé ne change rien.
+ */
+async function markOnboardingCompleted(userId: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("profiles")
+    .update({ has_completed_onboarding: true })
+    .eq("id", userId);
+
+  if (error) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to mark onboarding as completed",
+      details: error,
+    });
+  }
+}
+
 async function loadReadyOnboardingSession(userId: string): Promise<ScanSessionRow> {
   const { data, error } = await supabaseAdmin
     .from("scan_sessions")
@@ -121,6 +148,12 @@ export function createV1OnboardingRouter(): Router {
             dispatchAnalysisJob(existingFreemium.id);
           }
 
+          // Un job freemium existe déjà → l'utilisateur a forcément déjà
+          // franchi la capture. On garantit que le flag profil reflète
+          // cet état même si un précédent run a échoué et n'a jamais flippé
+          // le flag (ancien comportement de markSessionCompleted).
+          await markOnboardingCompleted(userId);
+
           res.status(200).json({
             ok: true,
             httpStatus: 200,
@@ -162,6 +195,11 @@ export function createV1OnboardingRouter(): Router {
           sessionId: session.id,
           payload,
         });
+
+        // Onboarding terminé du point de vue produit dès que le job est
+        // persisté. Le succès / échec du worker ScanFace ne doit JAMAIS
+        // renvoyer l'utilisateur sur la page d'intro.
+        await markOnboardingCompleted(userId);
 
         dispatchAnalysisJob(jobId);
 

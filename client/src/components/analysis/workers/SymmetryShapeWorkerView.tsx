@@ -6,6 +6,11 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import {
+  scrollToWorkerAnchor,
+  workerMetricAnchorId,
+  workerSectionAnchorId,
+} from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   bandFromScore,
@@ -79,18 +84,22 @@ function normalizeShape(value: string | null): FaceShapeKey | null {
 function FaceShapeGallery({
   selected,
   language,
+  taxonomyAnchorId,
 }: {
   selected: FaceShapeKey | null;
   language: AppLanguage;
+  taxonomyAnchorId: string;
 }) {
   return (
     <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
       {FACE_SHAPE_ORDER.map((shape) => {
         const isActive = shape === selected;
         return (
-          <div
+          <button
             key={shape}
-            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
+            type="button"
+            onClick={() => scrollToWorkerAnchor(taxonomyAnchorId)}
+            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 text-left transition hover:border-white/25 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${
               isActive
                 ? "border-white/45 bg-white/[0.08] shadow-[0_0_28px_rgba(255,255,255,0.08)]"
                 : "border-white/10 bg-white/[0.025]"
@@ -121,7 +130,7 @@ function FaceShapeGallery({
             {isActive ? (
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.7)]" />
             ) : null}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -283,7 +292,14 @@ function SymmetryMirror({
   regions,
   language,
 }: {
-  regions: { key: string; label: { en: string; fr: string }; x: number; y: number; score: number | null }[];
+  regions: {
+    key: string;
+    label: { en: string; fr: string };
+    x: number;
+    y: number;
+    score: number | null;
+    scrollTargetId: string;
+  }[];
   language: AppLanguage;
 }) {
   return (
@@ -302,7 +318,7 @@ function SymmetryMirror({
       </FaceCanvas>
 
       {/* Region chips positioned absolutely */}
-      <div className="pointer-events-none absolute inset-0">
+      <div className="absolute inset-0">
         {regions
           .filter((r): r is typeof r & { score: number } => r.score !== null)
           .map((r) => {
@@ -324,9 +340,11 @@ function SymmetryMirror({
                     ? "ring-amber-300/40"
                     : "ring-rose-300/40";
             return (
-              <div
+              <button
                 key={r.key}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-950/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white ring-1 backdrop-blur ${ringColor}`}
+                type="button"
+                onClick={() => scrollToWorkerAnchor(r.scrollTargetId)}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full bg-zinc-950/80 px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-white ring-1 backdrop-blur transition hover:brightness-125 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${ringColor}`}
                 style={{ left: `${r.x}%`, top: `${r.y}%` }}
               >
                 <span className="flex items-center gap-1.5">
@@ -338,7 +356,7 @@ function SymmetryMirror({
                     {r.score.toFixed(r.score % 1 === 0 ? 0 : 1)}
                   </span>
                 </span>
-              </div>
+              </button>
             );
           })}
       </div>
@@ -354,10 +372,14 @@ function ProportionsCanvas({
   thirdsScore,
   fifthsScore,
   language,
+  thirdsMetricId,
+  fifthsMetricId,
 }: {
   thirdsScore: number | null;
   fifthsScore: number | null;
   language: AppLanguage;
+  thirdsMetricId: string;
+  fifthsMetricId: string;
 }) {
   const thirdLines = [
     { y: 70, key: "upper", label: { en: "Upper third", fr: "Tiers sup." } },
@@ -433,20 +455,28 @@ function ProportionsCanvas({
       </FaceCanvas>
 
       <div className="flex items-center justify-center gap-5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
-        <span className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => scrollToWorkerAnchor(thirdsMetricId)}
+          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-1 py-0.5 transition hover:border-white/15 hover:text-zinc-200 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35"
+        >
           <span
             className="h-2 w-4 rounded-sm"
             style={{ backgroundColor: colorFor(thirdsBand) }}
           />
           {i18n(language, { en: "Vertical thirds", fr: "Tiers verticaux" })}
-        </span>
-        <span className="flex items-center gap-1.5">
+        </button>
+        <button
+          type="button"
+          onClick={() => scrollToWorkerAnchor(fifthsMetricId)}
+          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-1 py-0.5 transition hover:border-white/15 hover:text-zinc-200 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35"
+        >
           <span
             className="h-2 w-4 rounded-sm"
             style={{ backgroundColor: colorFor(fifthsBand) }}
           />
           {i18n(language, { en: "Horizontal fifths", fr: "Cinquièmes horizontaux" })}
-        </span>
+        </button>
       </div>
     </div>
   );
@@ -477,6 +507,10 @@ export function SymmetryShapeWorkerView({
         : null,
     [locale],
   );
+
+  const faceTaxonomyAnchor = workerSectionAnchorId(WORKER_KEY, "face-taxonomy");
+  const symUpperAnchor = workerSectionAnchorId(WORKER_KEY, "symmetry-upper");
+  const symLowerAnchor = workerSectionAnchorId(WORKER_KEY, "symmetry-lower");
 
   const overallNested = getScore(
     aggregates,
@@ -532,6 +566,7 @@ export function SymmetryShapeWorkerView({
       x: 50,
       y: 28,
       score: browSym.score,
+      scrollTargetId: symUpperAnchor,
     },
     {
       key: "eyes",
@@ -539,6 +574,7 @@ export function SymmetryShapeWorkerView({
       x: 50,
       y: 41,
       score: eyeSym.score,
+      scrollTargetId: symUpperAnchor,
     },
     {
       key: "cheekbones",
@@ -546,6 +582,7 @@ export function SymmetryShapeWorkerView({
       x: 18,
       y: 56,
       score: cheekBalance.score,
+      scrollTargetId: symLowerAnchor,
     },
     {
       key: "nose",
@@ -553,6 +590,7 @@ export function SymmetryShapeWorkerView({
       x: 82,
       y: 56,
       score: noseAxis.score,
+      scrollTargetId: symUpperAnchor,
     },
     {
       key: "mouth",
@@ -560,6 +598,7 @@ export function SymmetryShapeWorkerView({
       x: 50,
       y: 74,
       score: mouthSym.score,
+      scrollTargetId: symLowerAnchor,
     },
     {
       key: "jaw",
@@ -567,6 +606,7 @@ export function SymmetryShapeWorkerView({
       x: 50,
       y: 88,
       score: jawAxis.score,
+      scrollTargetId: symLowerAnchor,
     },
   ];
 
@@ -599,7 +639,10 @@ export function SymmetryShapeWorkerView({
       />
 
       {/* Face shape gallery + signed ratios */}
-      <Card className={workerSectionCardClassName}>
+      <Card
+        id={faceTaxonomyAnchor}
+        className={`${workerSectionCardClassName} scroll-mt-28 sm:scroll-mt-32`}
+      >
         <CardContent className="space-y-6 p-6 sm:p-8">
           <div className="space-y-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -621,7 +664,11 @@ export function SymmetryShapeWorkerView({
             ) : null}
           </div>
 
-          <FaceShapeGallery selected={shapeKey} language={language} />
+          <FaceShapeGallery
+            selected={shapeKey}
+            language={language}
+            taxonomyAnchorId={faceTaxonomyAnchor}
+          />
 
           {widthHierarchy.value ? (
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -704,6 +751,7 @@ export function SymmetryShapeWorkerView({
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
           when={hasAnyScore(browSym.score, eyeSym.score, noseAxis.score)}
+          sectionId={symUpperAnchor}
           eyebrow={i18n(language, {
             en: "Upper face symmetry",
             fr: "Symétrie haut du visage",
@@ -718,23 +766,27 @@ export function SymmetryShapeWorkerView({
             score={browSym.score}
             argument={browSym.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "symmetry.brow_symmetry")}
           />
           <ScoreBar
             label={formatLabel("symmetry.eye_symmetry")}
             score={eyeSym.score}
             argument={eyeSym.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "symmetry.eye_symmetry")}
           />
           <ScoreBar
             label={formatLabel("symmetry.nose_midline_alignment")}
             score={noseAxis.score}
             argument={noseAxis.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "symmetry.nose_midline_alignment")}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(mouthSym.score, jawAxis.score, cheekBalance.score)}
+          sectionId={symLowerAnchor}
           eyebrow={i18n(language, {
             en: "Lower face symmetry",
             fr: "Symétrie bas du visage",
@@ -749,18 +801,21 @@ export function SymmetryShapeWorkerView({
             score={mouthSym.score}
             argument={mouthSym.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "symmetry.mouth_symmetry")}
           />
           <ScoreBar
             label={formatLabel("symmetry.jaw_chin_midline")}
             score={jawAxis.score}
             argument={jawAxis.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "symmetry.jaw_chin_midline")}
           />
           <ScoreBar
             label={formatLabel("symmetry.cheekbone_balance")}
             score={cheekBalance.score}
             argument={cheekBalance.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "symmetry.cheekbone_balance")}
           />
         </SectionShell>
       </div>
@@ -793,6 +848,14 @@ export function SymmetryShapeWorkerView({
               thirdsScore={thirds.score}
               fifthsScore={fifths.score}
               language={language}
+              thirdsMetricId={workerMetricAnchorId(
+                WORKER_KEY,
+                "proportions.vertical_thirds_balance",
+              )}
+              fifthsMetricId={workerMetricAnchorId(
+                WORKER_KEY,
+                "proportions.horizontal_fifths_balance",
+              )}
             />
           </div>
         </CardContent>
@@ -802,6 +865,7 @@ export function SymmetryShapeWorkerView({
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
           when={hasAnyScore(thirds.score, fifths.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "proportions-vertical")}
           eyebrow={i18n(language, {
             en: "Vertical balance",
             fr: "Équilibre vertical",
@@ -816,17 +880,26 @@ export function SymmetryShapeWorkerView({
             score={thirds.score}
             argument={thirds.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "proportions.vertical_thirds_balance",
+            )}
           />
           <ScoreBar
             label={formatLabel("proportions.horizontal_fifths_balance")}
             score={fifths.score}
             argument={fifths.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "proportions.horizontal_fifths_balance",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(eyeIntercanthal.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "eye-proportion")}
           eyebrow={i18n(language, {
             en: "Eye proportion",
             fr: "Proportion des yeux",
@@ -841,6 +914,10 @@ export function SymmetryShapeWorkerView({
             score={eyeIntercanthal.score}
             argument={eyeIntercanthal.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "proportions.eye_to_intercanthal_ratio",
+            )}
           />
         </SectionShell>
       </div>

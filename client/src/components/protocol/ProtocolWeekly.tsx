@@ -16,14 +16,10 @@ export function ProtocolWeekly({ items, language }: ProtocolWeeklyProps) {
 
   return (
     <ProtocolSection
-      eyebrow={i18n(language, { en: "This week", fr: "Cette semaine" })}
+      variant="sheet"
       title={i18n(language, {
-        en: "Weekly cadence",
-        fr: "Cadence hebdomadaire",
-      })}
-      description={i18n(language, {
-        en: "Exercises, massages and care to repeat a few times a week — pick your own days.",
-        fr: "Exercices, massages et soins à répéter quelques fois par semaine — choisis tes jours.",
+        en: "Weekly",
+        fr: "Hebdomadaire",
       })}
       icon={CalendarDays}
       count={items.length}

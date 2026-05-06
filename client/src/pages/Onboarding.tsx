@@ -821,6 +821,14 @@ export default function Onboarding() {
   const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
   const [onboardingJobId, setOnboardingJobId] = React.useState<string | null>(null);
   const [isUploadingCaptures, setIsUploadingCaptures] = React.useState(false);
+  /**
+   * Une fois l'utilisateur a démarré un run depuis cette session de la page
+   * (upload + POST /onboarding/complete), on le garde sur la page tant
+   * qu'il n'a pas vu le résultat (succès → redirect via l'effect dédié,
+   * échec → message + retry) plutôt que d'être bumpé vers `/app` parce
+   * que le flag profil vient de flipper.
+   */
+  const [hasStartedRun, setHasStartedRun] = React.useState(false);
 
   React.useEffect(() => {
     for (const src of ONBOARDING_PRELOAD_IMAGE_URLS) {
@@ -836,10 +844,23 @@ export default function Onboarding() {
       return;
     }
 
+    /**
+     * Si l'utilisateur a démarré un run depuis CETTE page, on le laisse
+     * voir l'état de progression / le message d'erreur plutôt que de le
+     * bumper vers `/app` dès que le serveur a flippé
+     * `has_completed_onboarding=true`. Le redirect « officiel » se fera
+     * quand le job devient `completed` (effect plus bas) ou si
+     * l'utilisateur recharge la page (le gate l'enverra directement sur
+     * `/app`).
+     */
+    if (hasStartedRun) {
+      return;
+    }
+
     if (gateStatus === "ok") {
       setLocation(AUTH_CONFIG.REDIRECT_PATH);
     }
-  }, [gateStatus, setLocation, user]);
+  }, [gateStatus, hasStartedRun, setLocation, user]);
 
   const steps = React.useMemo(() => getOnboardingSteps(language), [language]);
   const currentStep = steps[stepIndex];
@@ -1009,6 +1030,18 @@ export default function Onboarding() {
       }
 
       setOnboardingJobId(jobId);
+      setHasStartedRun(true);
+
+      /**
+       * Le serveur a positionné `has_completed_onboarding=true` dès la
+       * création/réutilisation du job. On rafraîchit le profil tout de
+       * suite pour que :
+       * - le gate (`useOnboardingGate`) flippe en `ok` immédiatement,
+       *   évitant tout retour vers l'écran 0 sur refresh,
+       * - même en cas d'échec ultérieur du worker ScanFace, l'utilisateur
+       *   reste considéré comme onboardé.
+       */
+      await queryClient.refetchQueries({ queryKey: ["profile", user.id] });
     } catch (error) {
       console.error("Unable to complete onboarding:", error);
       setAnalysisMessage(

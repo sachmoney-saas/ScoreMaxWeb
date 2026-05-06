@@ -6,6 +6,7 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import { workerMetricAnchorId, workerSectionAnchorId } from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
@@ -109,7 +110,13 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
   const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
     d.score === null
       ? []
-      : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
+      : [
+          {
+            label: i18n(language, radarLabels[d.key]),
+            score: d.score,
+            anchorId: workerMetricAnchorId(WORKER_KEY, d.key),
+          },
+        ],
   );
 
   return (
@@ -198,6 +205,7 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
           when={hasAnyScore(jawWidth.score, jawFace.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "frontal-geometry")}
           eyebrow={i18n(language, {
             en: "Frontal geometry",
             fr: "Géométrie frontale",
@@ -212,17 +220,26 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
             score={jawWidth.score}
             argument={jawWidth.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "frontal_geometry.jaw_width",
+            )}
           />
           <ScoreBar
             label={formatLabel("frontal_geometry.jaw_to_face_proportion")}
             score={jawFace.score}
             argument={jawFace.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "frontal_geometry.jaw_to_face_proportion",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(ramus.score, length.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "profile-architecture")}
           eyebrow={i18n(language, {
             en: "Profile architecture",
             fr: "Architecture de profil",
@@ -237,17 +254,26 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
             score={ramus.score}
             argument={ramus.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "profile_architecture.jaw_height_ramus",
+            )}
           />
           <ScoreBar
             label={formatLabel("profile_architecture.jawline_length")}
             score={length.score}
             argument={length.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "profile_architecture.jawline_length",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(symmetry.score, gonialFlare.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "symmetry-flare")}
           eyebrow={i18n(language, {
             en: "Symmetry & flare",
             fr: "Symétrie et flare",
@@ -262,12 +288,20 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
             score={symmetry.score}
             argument={symmetry.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "symmetry_and_flare.jaw_symmetry",
+            )}
           />
           <ScoreBar
             label={formatLabel("symmetry_and_flare.gonial_flare_symmetry")}
             score={gonialFlare.score}
             argument={gonialFlare.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "symmetry_and_flare.gonial_flare_symmetry",
+            )}
           />
         </SectionShell>
       </div>

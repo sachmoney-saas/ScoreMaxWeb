@@ -6,6 +6,11 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import {
+  workerMetricAnchorId,
+  workerSectionAnchorId,
+  scrollToWorkerAnchor,
+} from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
@@ -76,18 +81,22 @@ function normalizeTexture(value: string | null): TextureKey | null {
 function TextureGallery({
   selected,
   language,
+  taxonomyAnchorId,
 }: {
   selected: TextureKey | null;
   language: AppLanguage;
+  taxonomyAnchorId: string;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {TEXTURES.map((t) => {
         const isActive = t.key === selected;
         return (
-          <div
+          <button
             key={t.key}
-            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
+            type="button"
+            onClick={() => scrollToWorkerAnchor(taxonomyAnchorId)}
+            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 text-left transition hover:border-white/25 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${
               isActive
                 ? "border-white/45 bg-white/[0.08] shadow-[0_0_28px_rgba(255,255,255,0.08)]"
                 : "border-white/10 bg-white/[0.025]"
@@ -118,7 +127,7 @@ function TextureGallery({
             {isActive ? (
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.7)]" />
             ) : null}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -189,6 +198,8 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
   const hairlineDensity = getScore(aggregates, "hairline.density");
   const recession = getScore(aggregates, "hairline.recession_level");
 
+  const textureTaxonomyAnchor = workerSectionAnchorId(WORKER_KEY, "texture-taxonomy");
+
   return (
     <div className="space-y-4">
       <WorkerHero
@@ -214,8 +225,10 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
         }
       />
 
-      {/* Texture gallery */}
-      <Card className={workerSectionCardClassName}>
+      <Card
+        id={textureTaxonomyAnchor}
+        className={`${workerSectionCardClassName} scroll-mt-28 sm:scroll-mt-32`}
+      >
         <CardContent className="space-y-6 p-6 sm:p-8">
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -233,7 +246,11 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
               </p>
             ) : null}
           </div>
-          <TextureGallery selected={textureKey} language={language} />
+          <TextureGallery
+            selected={textureKey}
+            language={language}
+            taxonomyAnchorId={textureTaxonomyAnchor}
+          />
         </CardContent>
       </Card>
 
@@ -246,6 +263,7 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
             health.score,
             uniformity.score,
           )}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "hair-quality")}
           eyebrow={i18n(language, {
             en: "Hair quality & health",
             fr: "Qualité et santé",
@@ -260,29 +278,46 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
             score={density.score}
             argument={density.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hair_quality_and_health.density",
+            )}
           />
           <ScoreBar
             label={formatLabel("hair_quality_and_health.shine_and_dryness")}
             score={shineDry.score}
             argument={shineDry.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hair_quality_and_health.shine_and_dryness",
+            )}
           />
           <ScoreBar
             label={formatLabel("hair_quality_and_health.health_appearance")}
             score={health.score}
             argument={health.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hair_quality_and_health.health_appearance",
+            )}
           />
           <ScoreBar
             label={formatLabel("hair_quality_and_health.uniformity")}
             score={uniformity.score}
             argument={uniformity.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hair_quality_and_health.uniformity",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(groomingQuality.score, haircutControl.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "grooming")}
           eyebrow={i18n(language, {
             en: "Grooming & haircut",
             fr: "Toilettage et coupe",
@@ -297,17 +332,26 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
             score={groomingQuality.score}
             argument={groomingQuality.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "grooming_and_haircut.grooming_quality",
+            )}
           />
           <ScoreBar
             label={formatLabel("grooming_and_haircut.haircut_control")}
             score={haircutControl.score}
             argument={haircutControl.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "grooming_and_haircut.haircut_control",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(curlDef.score) || Boolean(lengthEnum.value)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "characteristics")}
           eyebrow={i18n(language, {
             en: "Characteristics",
             fr: "Caractéristiques",
@@ -322,6 +366,10 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
             score={curlDef.score}
             argument={curlDef.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hair_characteristics.curl_definition",
+            )}
           />
           {lengthEnum.value ? (
             <div className="space-y-2">
@@ -353,6 +401,7 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
               recession.score,
             ) || Boolean(hairlineShape.value)
           }
+          sectionId={workerSectionAnchorId(WORKER_KEY, "hairline")}
           eyebrow={i18n(language, { en: "Hairline detail", fr: "Détail de la ligne" })}
           title={i18n(language, {
             en: "Shape, symmetry & recession",
@@ -381,18 +430,24 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
             score={hairlineSym.score}
             argument={hairlineSym.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "hairline.symmetry")}
           />
           <ScoreBar
             label={formatLabel("hairline.density")}
             score={hairlineDensity.score}
             argument={hairlineDensity.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(WORKER_KEY, "hairline.density")}
           />
           <ScoreBar
             label={formatLabel("hairline.recession_level")}
             score={recession.score}
             argument={recession.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hairline.recession_level",
+            )}
           />
         </SectionShell>
       </div>

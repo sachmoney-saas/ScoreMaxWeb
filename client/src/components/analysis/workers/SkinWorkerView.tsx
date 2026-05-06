@@ -11,6 +11,11 @@ import {
   skinRadarAxisPaint,
 } from "@/lib/face-analysis-score";
 import {
+  workerMetricAnchorId,
+  scrollToWorkerAnchor,
+  workerSectionAnchorId,
+} from "@/lib/worker-view-anchor";
+import {
   getScore,
   hasAnyScore,
   ScoreBar,
@@ -28,7 +33,7 @@ const WORKER_KEY = "skin";
 function SkinRadarChart({
   data,
 }: {
-  data: { label: string; score: number }[];
+  data: { label: string; score: number; anchorId?: string }[];
 }) {
   /** Horizontal pad for clipped labels; vertical pad slightly smaller to tighten the SVG letterbox. */
   const viewPadX = 84;
@@ -124,9 +129,8 @@ function SkinRadarChart({
       {/* Value markers */}
       {valuePoints.map((p, i) => {
         const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
-        return (
+        const circle = (
           <circle
-            key={`pt-${i}`}
             cx={p.x}
             cy={p.y}
             r={4.6}
@@ -134,6 +138,21 @@ function SkinRadarChart({
             stroke={paint.dotStroke}
             strokeWidth="1.65"
           />
+        );
+        const aid = data[i]?.anchorId;
+        if (!aid) return <g key={`pt-${i}`}>{circle}</g>;
+        return (
+          <a
+            key={`pt-${i}`}
+            href={`#${aid}`}
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToWorkerAnchor(aid);
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            {circle}
+          </a>
         );
       })}
 
@@ -144,8 +163,8 @@ function SkinRadarChart({
         const scoreTxt = d.score.toFixed(d.score % 1 === 0 ? 0 : 1);
         const labelFont = 15;
         const scoreFont = 12.5;
-        return (
-          <React.Fragment key={`label-${i}`}>
+        const labels = (
+          <>
             <text
               x={lp.x}
               y={lp.y - 8}
@@ -174,7 +193,21 @@ function SkinRadarChart({
                 /10
               </tspan>
             </text>
-          </React.Fragment>
+          </>
+        );
+        if (!d.anchorId) return <g key={`label-${i}`}>{labels}</g>;
+        return (
+          <a
+            key={`label-${i}`}
+            href={`#${d.anchorId}`}
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToWorkerAnchor(d.anchorId!);
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            {labels}
+          </a>
         );
       })}
     </svg>
@@ -328,6 +361,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
     .map((d) => ({
       label: i18n(language, radarLabels[d.key]),
       score: d.value,
+      anchorId: workerMetricAnchorId(WORKER_KEY, d.key),
     }));
 
   return (
@@ -367,6 +401,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             blackheads.score,
             surfaceSmoothness.score,
           )}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "texture-pores")}
           eyebrow={i18n(language, { en: "Texture & Pores", fr: "Texture et pores" })}
           title={i18n(language, {
             en: "Surface quality",
@@ -380,6 +415,10 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             score={poreVisibility.score}
             argument={poreVisibility.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "texture_pores_and_congestion.pore_size_and_visibility",
+            )}
           />
           <ScoreBar
             label={formatLabel(
@@ -388,12 +427,20 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             score={blackheads.score}
             argument={blackheads.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "texture_pores_and_congestion.blackheads_and_congestion",
+            )}
           />
           <ScoreBar
             label={formatLabel("texture_pores_and_congestion.surface_smoothness")}
             score={surfaceSmoothness.score}
             argument={surfaceSmoothness.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "texture_pores_and_congestion.surface_smoothness",
+            )}
           />
         </SectionShell>
 
@@ -403,6 +450,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             postInflammatory.score,
             atrophicScarring.score,
           )}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "acne-scarring")}
           eyebrow={i18n(language, {
             en: "Acne & Scarring",
             fr: "Acné et cicatrices",
@@ -417,23 +465,36 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             score={activeAcne.score}
             argument={activeAcne.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "acne_and_scarring.active_acne",
+            )}
           />
           <ScoreBar
             label={formatLabel("acne_and_scarring.post_inflammatory_marks")}
             score={postInflammatory.score}
             argument={postInflammatory.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "acne_and_scarring.post_inflammatory_marks",
+            )}
           />
           <ScoreBar
             label={formatLabel("acne_and_scarring.atrophic_scarring")}
             score={atrophicScarring.score}
             argument={atrophicScarring.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "acne_and_scarring.atrophic_scarring",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(colorUniformity.score, redness.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "pigmentation")}
           eyebrow={i18n(language, {
             en: "Pigmentation & Tone",
             fr: "Pigmentation et teint",
@@ -448,6 +509,10 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             score={colorUniformity.score}
             argument={colorUniformity.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "pigmentation_tone_and_redness.color_uniformity",
+            )}
           />
           <ScoreBar
             label={formatLabel(
@@ -456,11 +521,16 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             score={redness.score}
             argument={redness.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "pigmentation_tone_and_redness.redness_and_erythema",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(sebumHydration.score, firmness.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "hydration-vitality")}
           eyebrow={i18n(language, {
             en: "Hydration & Vitality",
             fr: "Hydratation et vitalité",
@@ -475,12 +545,20 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
             score={sebumHydration.score}
             argument={sebumHydration.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hydration_and_vitality.sebum_hydration_balance",
+            )}
           />
           <ScoreBar
             label={formatLabel("hydration_and_vitality.firmness_and_elasticity")}
             score={firmness.score}
             argument={firmness.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "hydration_and_vitality.firmness_and_elasticity",
+            )}
           />
         </SectionShell>
       </div>

@@ -4,6 +4,7 @@ import {
   skinRadarAxisPaint,
 } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { scrollToWorkerAnchor } from "@/lib/worker-view-anchor";
 import { cn } from "@/lib/utils";
 
 /* ----------------------------------------------------------------------------
@@ -20,6 +21,8 @@ import { cn } from "@/lib/utils";
 export type WorkerSignatureRadarPoint = {
   label: string;
   score: number;
+  /** Ancre (sans `#`) pour scroll vers la métrique détaillée. */
+  anchorId?: string;
 };
 
 const WORKER_RADAR_PRESETS = {
@@ -164,9 +167,9 @@ export function WorkerSignatureRadar({
 
       {valuePoints.map((p, i) => {
         const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
-        return (
+        const aid = data[i]?.anchorId;
+        const circle = (
           <circle
-            key={`pt-${i}`}
             cx={p.x}
             cy={p.y}
             r={dotR}
@@ -174,6 +177,22 @@ export function WorkerSignatureRadar({
             stroke={paint.dotStroke}
             strokeWidth="1.5"
           />
+        );
+        if (!aid) {
+          return <g key={`pt-${i}`}>{circle}</g>;
+        }
+        return (
+          <a
+            key={`pt-${i}`}
+            href={`#${aid}`}
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToWorkerAnchor(aid);
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            {circle}
+          </a>
         );
       })}
 
@@ -184,8 +203,8 @@ export function WorkerSignatureRadar({
         const scoreFont = Math.max(9, fontSize - 2.25);
         const labelLift = fontSize * 0.52;
         const scoreDrop = fontSize * 0.72;
-        return (
-          <React.Fragment key={`label-${i}`}>
+        const labels = (
+          <>
             <text
               x={lp.x}
               y={lp.y - labelLift}
@@ -214,7 +233,23 @@ export function WorkerSignatureRadar({
                 /{scale}
               </tspan>
             </text>
-          </React.Fragment>
+          </>
+        );
+        if (!d.anchorId) {
+          return <g key={`label-${i}`}>{labels}</g>;
+        }
+        return (
+          <a
+            key={`label-${i}`}
+            href={`#${d.anchorId}`}
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToWorkerAnchor(d.anchorId!);
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            {labels}
+          </a>
         );
       })}
     </svg>
@@ -245,6 +280,7 @@ export function WorkerStanceMatrix({
   yTop,
   language,
   ariaLabel,
+  resolveCellTargetId,
 }: {
   xScore: number | null;
   yScore: number | null;
@@ -254,6 +290,8 @@ export function WorkerStanceMatrix({
   yTop: AxisLabel;
   language: AppLanguage;
   ariaLabel: AxisLabel;
+  /** (col 0–9, row 0–9, top row = 0) → id d’ancre sans `#`, ou null pour cellule non cliquable */
+  resolveCellTargetId?: (cx: number, ry: number) => string | null;
 }) {
   const cols = 10;
   const rows = 10;
@@ -301,18 +339,36 @@ export function WorkerStanceMatrix({
                   ry - (rows - 1) / 2,
                 );
                 const baseOpacity = Math.max(0.04, 0.18 - distance * 0.019);
+                const tid = resolveCellTargetId?.(cx, ry) ?? null;
+                const cellStyle = {
+                  backgroundColor: isUser
+                    ? "#e9f1f4"
+                    : (`rgba(154,174,181,${baseOpacity})` as const),
+                  boxShadow: isUser
+                    ? "0 0 14px rgba(255,255,255,0.45)"
+                    : undefined,
+                };
+                const cellClass = cn(
+                  "rounded-[3px] sm:rounded-sm transition",
+                  isUser && "ring-2 ring-white/80",
+                  tid && "cursor-pointer hover:brightness-125 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/50",
+                );
+                if (!tid) {
+                  return (
+                    <div key={`cell-${ry}-${cx}`} className={cellClass} style={cellStyle} />
+                  );
+                }
                 return (
-                  <div
+                  <button
                     key={`cell-${ry}-${cx}`}
-                    className={`rounded-[3px] sm:rounded-sm transition ${isUser ? "ring-2 ring-white/80" : ""}`}
-                    style={{
-                      backgroundColor: isUser
-                        ? "#e9f1f4"
-                        : `rgba(154,174,181,${baseOpacity})`,
-                      boxShadow: isUser
-                        ? "0 0 14px rgba(255,255,255,0.45)"
-                        : undefined,
-                    }}
+                    type="button"
+                    className={cn(
+                      cellClass,
+                      "h-full min-h-0 w-full border-0 p-0",
+                    )}
+                    style={cellStyle}
+                    aria-label={i18n(language, ariaLabel)}
+                    onClick={() => scrollToWorkerAnchor(tid)}
                   />
                 );
               }),

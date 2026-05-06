@@ -4,6 +4,8 @@ import {
 } from "@/lib/face-analysis-display";
 import { skinRadarAxisPaint } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { scrollToWorkerAnchor } from "@/lib/worker-view-anchor";
+import { cn } from "@/lib/utils";
 import { getScore } from "./_shared";
 
 const BODYFAT_WORKER = "bodyfat";
@@ -150,11 +152,13 @@ export function BodyfatCompositionMatrixVisual({
   sharpness,
   language,
   compact = false,
+  resolveCellTargetId,
 }: {
   leanness: number | null;
   sharpness: number | null;
   language: AppLanguage;
   compact?: boolean;
+  resolveCellTargetId?: (cx: number, ry: number) => string | null;
 }) {
   const cols = 10;
   const rows = 10;
@@ -216,18 +220,44 @@ export function BodyfatCompositionMatrixVisual({
                   ry - (rows - 1) / 2,
                 );
                 const baseOpacity = Math.max(0.04, 0.18 - distance * 0.019);
+                const tid = resolveCellTargetId?.(cx, ry) ?? null;
+                const bg = isUser
+                  ? "#e9f1f4"
+                  : (`rgba(154,174,181,${baseOpacity})` as string);
+                const shadow = isUser ? "0 0 14px rgba(255,255,255,0.45)" : undefined;
+                const cellClass = cn(
+                  cellRound,
+                  "transition",
+                  isUser ? ringUser : "",
+                  tid &&
+                    "cursor-pointer hover:brightness-125 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/45",
+                );
+                if (!tid) {
+                  return (
+                    <div
+                      key={`cell-${ry}-${cx}`}
+                      className={cellClass}
+                      style={{
+                        backgroundColor: bg,
+                        boxShadow: shadow,
+                      }}
+                    />
+                  );
+                }
                 return (
-                  <div
+                  <button
                     key={`cell-${ry}-${cx}`}
-                    className={`${cellRound} transition ${isUser ? ringUser : ""}`}
+                    type="button"
+                    className={cn(cellClass, "h-full min-h-0 w-full border-0 p-0")}
                     style={{
-                      backgroundColor: isUser
-                        ? "#e9f1f4"
-                        : `rgba(154,174,181,${baseOpacity})`,
-                      boxShadow: isUser
-                        ? "0 0 14px rgba(255,255,255,0.45)"
-                        : undefined,
+                      backgroundColor: bg,
+                      boxShadow: shadow,
                     }}
+                    aria-label={i18n(language, {
+                      en: "Go to detailed metrics",
+                      fr: "Aller aux métriques détaillées",
+                    })}
+                    onClick={() => scrollToWorkerAnchor(tid)}
                   />
                 );
               }),
@@ -351,10 +381,12 @@ export function CompositionMatrix({
   leanness,
   sharpness,
   language,
+  resolveCellTargetId,
 }: {
   leanness: number | null;
   sharpness: number | null;
   language: AppLanguage;
+  resolveCellTargetId?: (cx: number, ry: number) => string | null;
 }) {
   const quadrant = compositionQuadrant(leanness, sharpness);
 
@@ -385,6 +417,7 @@ export function CompositionMatrix({
         sharpness={sharpness}
         language={language}
         compact={false}
+        resolveCellTargetId={resolveCellTargetId}
       />
 
       <p className="mx-auto max-w-xl text-center text-sm leading-relaxed text-zinc-400">

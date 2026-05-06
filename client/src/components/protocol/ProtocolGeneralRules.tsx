@@ -19,17 +19,10 @@ export function ProtocolGeneralRules({
 
   return (
     <ProtocolSection
-      eyebrow={i18n(language, {
-        en: "Always-on rules",
-        fr: "Règles permanentes",
-      })}
+      variant="sheet"
       title={i18n(language, {
-        en: "Principles to live by",
-        fr: "Principes à respecter",
-      })}
-      description={i18n(language, {
-        en: "Foundational habits that apply every day, all day. The base on which the rest of your protocol stands.",
-        fr: "Habitudes fondamentales qui s'appliquent en continu. La base sur laquelle repose le reste de ton protocole.",
+        en: "Rules",
+        fr: "Règles",
       })}
       icon={ShieldCheck}
       count={items.length}

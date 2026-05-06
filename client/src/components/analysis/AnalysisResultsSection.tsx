@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   Card,
   CardContent,
@@ -44,6 +44,10 @@ import {
 import { cn } from "@/lib/utils";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 import { getScoreRank, SCORE_TIERS } from "@/lib/global-score-tiers";
+import {
+  buildAnalysisViewHref,
+  parseAnalysisTabFromSearch,
+} from "@/lib/analysis-view-href";
 
 type AnalysisResultsSectionProps = {
   analysis: LatestAnalysisResponse | null | undefined;
@@ -953,6 +957,30 @@ export function AnalysisResultsSection({
   isLoading,
 }: AnalysisResultsSectionProps) {
   const language = useAppLanguage();
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+
+  const tabFromUrl = React.useMemo(
+    () => parseAnalysisTabFromSearch(search),
+    [search],
+  );
+  const [mainTab, setMainTab] = React.useState<
+    "overview" | "recommendations"
+  >(tabFromUrl);
+
+  React.useEffect(() => {
+    setMainTab(tabFromUrl);
+  }, [tabFromUrl]);
+
+  const onMainTabChange = React.useCallback(
+    (value: string) => {
+      if (value !== "overview" && value !== "recommendations") return;
+      if (!analysis) return;
+      setMainTab(value);
+      setLocation(buildAnalysisViewHref(analysis.job.id, search, value));
+    },
+    [analysis, search, setLocation],
+  );
 
   if (isLoading) {
     return <AnalysisSkeleton />;
@@ -1037,23 +1065,29 @@ export function AnalysisResultsSection({
 
   return (
     <section className="space-y-5">
-      <Tabs defaultValue="overview" className="space-y-5">
-        <TabsList
-          className={cn(
-            analysisTabBarGlassClassName,
-            "inline-flex h-auto w-fit max-w-full flex-wrap justify-start gap-1 self-start rounded-2xl p-1.5 text-zinc-300 sm:flex-nowrap",
-          )}
-        >
-          <TabsTrigger value="overview" className={ANALYSIS_TAB_TRIGGER_CLASS}>
-            <span className="relative z-10">Overview</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="recommendations"
-            className={ANALYSIS_TAB_TRIGGER_CLASS}
+      <Tabs
+        value={mainTab}
+        onValueChange={onMainTabChange}
+        className="space-y-5"
+      >
+        <div className="flex w-full justify-center">
+          <TabsList
+            className={cn(
+              analysisTabBarGlassClassName,
+              "inline-flex h-auto w-fit max-w-full flex-wrap justify-center gap-1 rounded-2xl p-1.5 text-zinc-300 sm:flex-nowrap",
+            )}
           >
-            <span className="relative z-10">Recommandations</span>
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value="overview" className={ANALYSIS_TAB_TRIGGER_CLASS}>
+              <span className="relative z-10">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="recommendations"
+              className={ANALYSIS_TAB_TRIGGER_CLASS}
+            >
+              <span className="relative z-10">Recommandations</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="overview" className="mt-0">
           <div className="flex flex-col gap-4">

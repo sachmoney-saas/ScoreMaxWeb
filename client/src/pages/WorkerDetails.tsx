@@ -2,8 +2,18 @@ import * as React from "react";
 import { Link, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAnalysisDetail } from "@/hooks/use-supabase";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import {
   buildAggregateDisplayEntries,
   getWorkerDisplayLabel,
@@ -30,7 +40,8 @@ import {
   analysisBackNavButtonClassName,
   analysisSurfaceCardClassName,
 } from "@/components/analysis/workers/_shared";
-import { ArrowLeft } from "lucide-react";
+import { AnalysisTopNavTabs } from "@/components/analysis/AnalysisTopNavTabs";
+import { ArrowLeft, Braces, Copy } from "lucide-react";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -66,18 +77,54 @@ export default function WorkerDetails() {
   const params = useParams<{ jobId: string; worker: string }>();
   const worker = params.worker ? decodeURIComponent(params.worker) : "";
   const language = useAppLanguage();
+  const { isAdmin } = useAuth();
+  const { toast } = useToast();
+  const [adminPayloadOpen, setAdminPayloadOpen] = React.useState(false);
   const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId);
 
-  if (isLoading) {
-    return <WorkerDetailsSkeleton />;
-  }
+  const row = React.useMemo(() => {
+    if (!analysis) return undefined;
+    return analysis.results.find((result) => result.worker === worker);
+  }, [analysis, worker]);
 
-  const row = analysis?.results.find((result) => result.worker === worker);
   const resultPayload = row && isRecord(row.result) ? row.result : null;
   const outputAggregates = resultPayload && isRecord(resultPayload.outputAggregates)
     ? resultPayload.outputAggregates
     : {};
   const entries = buildAggregateDisplayEntries(worker, outputAggregates);
+
+  const workerAdminPayload = React.useMemo(() => {
+    if (!row) return null;
+    return {
+      worker: row.worker,
+      prompt_version: row.prompt_version,
+      created_at: row.created_at,
+      result: row.result,
+    };
+  }, [row]);
+
+  const workerAdminPayloadJson = React.useMemo(() => {
+    if (!workerAdminPayload) return "";
+    try {
+      return JSON.stringify(workerAdminPayload, null, 2);
+    } catch {
+      return String(workerAdminPayload);
+    }
+  }, [workerAdminPayload]);
+
+  const copyAdminPayload = (): void => {
+    if (!workerAdminPayloadJson) return;
+    void navigator.clipboard.writeText(workerAdminPayloadJson).then(() => {
+      toast({
+        title: "JSON copié",
+        description: "Le payload du worker a été copié dans le presse-papiers.",
+      });
+    });
+  };
+
+  if (isLoading) {
+    return <WorkerDetailsSkeleton />;
+  }
 
   if (isError || !analysis || !row) {
     return (
@@ -102,6 +149,8 @@ export default function WorkerDetails() {
 
   return (
     <div className="space-y-5">
+      <AnalysisTopNavTabs jobId={analysis.job.id} active="worker" />
+
       <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
         <Link href={`/app/analyses/${analysis.job.id}`}>
           <ArrowLeft className="h-4 w-4 shrink-0" />
@@ -110,12 +159,57 @@ export default function WorkerDetails() {
       </Button>
 
       <Card className={analysisSurfaceCardClassName}>
-        <CardContent className="relative p-6">
+        <CardContent className="relative p-6 pr-24 sm:pr-44">
           <h1 className="font-display text-4xl font-bold tracking-tight text-white">
             {getWorkerDisplayLabel(worker)}
           </h1>
+          {isAdmin && workerAdminPayload ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="absolute right-4 top-4 max-w-[calc(100%-2rem)] gap-2 border-amber-500/40 text-xs text-amber-100 hover:bg-amber-500/10 hover:text-amber-50 sm:right-6 sm:top-6 sm:max-w-none sm:text-sm"
+              onClick={() => setAdminPayloadOpen(true)}
+            >
+              <Braces className="h-4 w-4 shrink-0" />
+              Données brutes (admin)
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
+
+      <Dialog open={adminPayloadOpen} onOpenChange={setAdminPayloadOpen}>
+        <DialogContent className="flex max-h-[85vh] max-w-[min(56rem,calc(100vw-2rem))] flex-col gap-0 border-zinc-700 bg-zinc-950 p-0 text-zinc-100">
+          <DialogHeader className="space-y-1 border-b border-zinc-800 px-6 py-4 text-left">
+            <DialogTitle className="text-white">Payload worker (admin)</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Valeurs persistées pour ce worker (même structure que l’API / la BDD) — pour comparaison
+              avec le rendu front.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto px-6 py-3">
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-emerald-100/95">
+              {workerAdminPayloadJson}
+            </pre>
+          </div>
+          <DialogFooter className="border-t border-zinc-800 px-6 py-4 sm:justify-between">
+            <p className="mr-auto hidden text-left text-[11px] text-zinc-500 sm:block">
+              Analyse&nbsp;: {analysis.job.id}
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-2"
+              onClick={copyAdminPayload}
+              disabled={!workerAdminPayloadJson}
+            >
+              <Copy className="h-4 w-4" />
+              Copier le JSON
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {renderWorkerBody({
         worker,

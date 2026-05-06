@@ -804,12 +804,15 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
     label: text("Teint", "Skin tone"),
     aggregates: {
       "phenotype_and_undertone.fitzpatrick_type": {
-        label: text("Type de peau Fitzpatrick", "Fitzpatrick skin type"),
+        label: text(
+          "Teint naturel au soleil (I à VI)",
+          "Natural tone in the sun (I–VI)",
+        ),
         kind: "enum",
         priority: 10,
       },
       "phenotype_and_undertone.skin_undertone": {
-        label: text("Sous-ton du teint", "Skin undertone"),
+        label: text("Reflet sous la peau", "Hue beneath the surface"),
         kind: "enum",
         priority: 20,
       },
@@ -1132,7 +1135,7 @@ const fallbackSegmentLabels: Record<FaceAnalysisLocale, Record<string, string>> 
     exposure: "exposition",
     facial: "faciale",
     fat: "gras",
-    fitzpatrick: "Fitzpatrick",
+    fitzpatrick: "teint au soleil",
     fullness: "volume",
     glow: "luminosité",
     hydration: "hydratation",
@@ -1175,7 +1178,9 @@ const fallbackSegmentLabels: Record<FaceAnalysisLocale, Record<string, string>> 
     width: "largeur",
     youthfulness: "jeunesse",
   },
-  en: {},
+  en: {
+    fitzpatrick: "sun tone",
+  },
 };
 
 function fallbackLabel(key: string, locale: FaceAnalysisLocale = DEFAULT_FACE_ANALYSIS_LOCALE): string {

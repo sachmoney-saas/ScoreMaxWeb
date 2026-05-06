@@ -17,6 +17,10 @@ import {
   getBodyfatCompositionSharpness,
 } from "./workers/BodyfatCompositionMatrix";
 import {
+  WorkerSignatureRadar,
+  type WorkerSignatureRadarPoint,
+} from "./workers/WorkerVisualizations";
+import {
   getEnum,
   getNumber,
   getScore,
@@ -1032,9 +1036,15 @@ function JawPreview({ aggregates, language }: PreviewProps) {
     aggregates,
     "frontal_geometry.jaw_to_face_proportion",
   );
+  const ramus = getScore(aggregates, "profile_architecture.jaw_height_ramus");
+  const length = getScore(aggregates, "profile_architecture.jawline_length");
   const jawSymmetry = getScore(
     aggregates,
     "symmetry_and_flare.jaw_symmetry",
+  );
+  const gonialFlare = getScore(
+    aggregates,
+    "symmetry_and_flare.gonial_flare_symmetry",
   );
   const shapeEnum = getEnum(aggregates, "frontal_geometry.jaw_shape_frontal");
   const shapeDisplay =
@@ -1047,31 +1057,38 @@ function JawPreview({ aggregates, language }: PreviewProps) {
         ) ?? shapeEnum.value
       : null;
 
-  const jawRadarRows: { score: number | null; label: { en: string; fr: string } }[] =
-    [
-      {
-        score: width.score,
-        label: { en: "Width", fr: "Largeur" },
-      },
-      {
-        score: jawFace.score,
-        label: { en: "Face proportion", fr: "Prop. visage" },
-      },
-      {
-        score: jawSymmetry.score,
-        label: { en: "Symmetry", fr: "Symétrie" },
-      },
-    ];
+  const radarLabels: Record<string, { en: string; fr: string }> = {
+    "frontal_geometry.jaw_width": { en: "Width", fr: "Largeur" },
+    "frontal_geometry.jaw_to_face_proportion": {
+      en: "Face proportion",
+      fr: "Prop. visage",
+    },
+    "profile_architecture.jaw_height_ramus": { en: "Ramus", fr: "Ramus" },
+    "profile_architecture.jawline_length": { en: "Length", fr: "Longueur" },
+    "symmetry_and_flare.jaw_symmetry": { en: "Symmetry", fr: "Symétrie" },
+    "symmetry_and_flare.gonial_flare_symmetry": {
+      en: "Gonial flare",
+      fr: "Flare gonial",
+    },
+  };
 
-  const radarData = jawRadarRows
-    .filter(
-      (d): d is { score: number; label: { en: string; fr: string } } =>
-        d.score !== null,
-    )
-    .map((d) => ({
-      label: i18n(language, d.label),
-      score: d.score,
-    }));
+  const radarSource: { key: string; score: number | null }[] = [
+    { key: "frontal_geometry.jaw_width", score: width.score },
+    { key: "frontal_geometry.jaw_to_face_proportion", score: jawFace.score },
+    { key: "profile_architecture.jaw_height_ramus", score: ramus.score },
+    { key: "profile_architecture.jawline_length", score: length.score },
+    { key: "symmetry_and_flare.jaw_symmetry", score: jawSymmetry.score },
+    {
+      key: "symmetry_and_flare.gonial_flare_symmetry",
+      score: gonialFlare.score,
+    },
+  ];
+
+  const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
+    d.score === null
+      ? []
+      : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
+  );
 
   return (
     <div className="space-y-3">
@@ -1094,7 +1111,14 @@ function JawPreview({ aggregates, language }: PreviewProps) {
         </div>
         <div className="flex w-full justify-center px-0 sm:px-1">
           {radarData.length >= 3 ? (
-            <PreviewSignatureRadar data={radarData} language={language} />
+            <WorkerSignatureRadar
+              data={radarData}
+              ariaLabel={i18n(language, {
+                en: "Jaw signature radar",
+                fr: "Radar de signature mandibulaire",
+              })}
+              sizePreset="large"
+            />
           ) : null}
         </div>
       </div>
@@ -1497,13 +1521,19 @@ function SkinTintPreview({ aggregates, language }: PreviewProps) {
           {fitzColor ? (
             <ColorChip
               color={fitzColor}
-              label={i18n(language, { en: "Fitzpatrick", fr: "Fitzpatrick" })}
+              label={i18n(language, {
+                en: "Natural depth (I–VI)",
+                fr: "Niveau naturel (I–VI)",
+              })}
               value={fitzDisplay}
             />
           ) : null}
           {undertoneDisplay ? (
             <StatChip
-              label={i18n(language, { en: "Undertone", fr: "Sous-ton" })}
+              label={i18n(language, {
+                en: "Undertone hint",
+                fr: "Reflet du teint",
+              })}
               value={undertoneDisplay}
             />
           ) : null}

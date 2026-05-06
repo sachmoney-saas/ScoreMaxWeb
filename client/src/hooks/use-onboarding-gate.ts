@@ -1,5 +1,4 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useLatestFaceAnalysis } from "@/hooks/use-supabase";
 
 export type OnboardingGateStatus =
   | "loading"
@@ -8,31 +7,31 @@ export type OnboardingGateStatus =
   | "ok";
 
 /**
- * Single source of truth for “should the user see the app shell or onboarding?”.
+ * Source de vérité unique pour « doit-on afficher l'app ou l'onboarding ? ».
  *
- * Onboardé = `has_completed_onboarding` ET au moins **un job d’analyse**
- * existant pour ce user (peu importe son statut courant). On accepte
- * `queued` / `running` / `completed` : ils prouvent qu’une session a déjà été
- * créée + lancée, donc l’onboarding (capture des assets) est forcément passé.
+ * Onboardé = `profiles.has_completed_onboarding === true`.
  *
- * Ne PAS renvoyer `needs_onboarding` quand un job est en cours, sinon dès
- * qu’un user lance une nouvelle analyse depuis `/app/new-analysis` la query
- * `latest-face-analysis` est invalidée, retourne un job `queued`, et le gate
- * redirige l’utilisateur (déjà onboardé) vers `/onboarding` — boucle confuse.
+ * Côté serveur (`POST /v1/onboarding/complete`), ce flag est positionné
+ * **dès que le job d'analyse est créé / réutilisé**, pas à la complétion
+ * du worker ScanFace. Le rationnel :
  *
- * - Pas de profil ou flag à `false` → onboarding.
- * - Flag à `true` mais **aucun** job persisté (API renvoie `null`) → onboarding
- *   (admin drift, jobs supprimés manuellement).
- * - Détermination en cours: `loading`.
+ * - Un échec d'analyse (timeout ScanFace, schéma invalide, slot manquant,
+ *   crash du process pendant le run, redéploiement Railway, etc.) ne doit
+ *   jamais renvoyer l'utilisateur sur la page marketing : il a déjà fait
+ *   tout son boulot (capture des 8 photos + clic « Lancer »).
+ * - Un refresh navigateur pendant l'analyse ne doit pas non plus le
+ *   piéger sur l'écran 0 : la state React locale (`onboardingJobId`,
+ *   `stepIndex`) est perdue, mais le flag DB persiste.
+ *
+ * On ne fait plus de double-check via `useLatestFaceAnalysis` : c'était
+ * une défense contre les drifts admin (suppressions manuelles de jobs)
+ * mais ça regressait sur le cas réel d'échec d'analyse.
+ *
+ * Le statut "premium / accès à l'app" reste totalement indépendant : il
+ * dépend de `is_subscriber` / `role=admin` côté `useAuth`, pas de ce gate.
  */
 export function useOnboardingGate(): { status: OnboardingGateStatus } {
   const { user, profile, isLoading: authLoading } = useAuth();
-  const onboardingFlag = profile?.has_completed_onboarding ?? false;
-
-  const latestEnabled = Boolean(user?.id && onboardingFlag);
-  const latestQuery = useLatestFaceAnalysis({
-    enabled: latestEnabled,
-  });
 
   if (authLoading) {
     return { status: "loading" };
@@ -42,35 +41,16 @@ export function useOnboardingGate(): { status: OnboardingGateStatus } {
     return { status: "anon" };
   }
 
-  if (!profile || !onboardingFlag) {
-    return { status: "needs_onboarding" };
-  }
-
-  if (latestQuery.isLoading) {
+  if (!profile) {
+    /**
+     * Le profil n'a pas encore été chargé (network slow / retry en cours).
+     * On évite de renvoyer l'utilisateur déjà onboardé vers /onboarding
+     * sur un faux négatif transitoire.
+     */
     return { status: "loading" };
   }
 
-  /**
-   * Ne pas faire échouer le gate sur une erreur réseau transitoire : si
-   * `has_completed_onboarding` est à `true`, on fait confiance au flag plutôt
-   * que de renvoyer un user déjà onboardé vers `/onboarding`.
-   */
-  if (latestQuery.isError) {
-    return { status: "ok" };
-  }
-
-  const latest = latestQuery.data;
-  if (!latest) {
-    return { status: "needs_onboarding" };
-  }
-
-  const jobStatus = latest.job.status;
-  const isPostOnboardingState =
-    jobStatus === "completed" ||
-    jobStatus === "queued" ||
-    jobStatus === "running";
-
-  if (!isPostOnboardingState) {
+  if (!profile.has_completed_onboarding) {
     return { status: "needs_onboarding" };
   }
 

@@ -6,6 +6,11 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import {
+  workerMetricAnchorId,
+  workerSectionAnchorId,
+  scrollToWorkerAnchor,
+} from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   getEnum,
@@ -149,18 +154,22 @@ function normalizeChin(value: string | null): ChinShape | null {
 function ChinShapeGallery({
   selected,
   language,
+  taxonomyAnchorId,
 }: {
   selected: ChinShape | null;
   language: AppLanguage;
+  taxonomyAnchorId: string;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
       {CHIN_SHAPES.map((shape) => {
         const isActive = shape.key === selected;
         return (
-          <div
+          <button
             key={shape.key}
-            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
+            type="button"
+            onClick={() => scrollToWorkerAnchor(taxonomyAnchorId)}
+            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 text-left transition hover:border-white/25 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${
               isActive
                 ? "border-white/45 bg-white/[0.08] shadow-[0_0_28px_rgba(255,255,255,0.08)]"
                 : "border-white/10 bg-white/[0.025]"
@@ -184,81 +193,9 @@ function ChinShapeGallery({
             {isActive ? (
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.7)]" />
             ) : null}
-          </div>
+          </button>
         );
       })}
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------------------
- * Profile projection diagram
- *
- * Shows the lower-face profile with a projection arrow that slides forward as
- * chin_projection score grows.
- * ------------------------------------------------------------------------- */
-
-function ChinProjectionDiagram({
-  projection,
-  height,
-}: {
-  projection: number | null;
-  height: number | null;
-}) {
-  const p = projection !== null ? Math.max(0, Math.min(10, projection)) : 5;
-  const h = height !== null ? Math.max(0, Math.min(10, height)) : 5;
-
-  const chinTipX = 56 + (p - 5) * 4;
-  const chinTipY = 110 + (h - 5) * 2;
-
-  return (
-    <div className="flex w-full justify-center">
-      <svg
-        viewBox="0 0 200 160"
-        className="mx-auto block h-auto w-full max-w-[320px]"
-        role="img"
-        aria-label="Chin projection"
-      >
-        {/* Reference vertical (dashed) */}
-        <line
-          x1={70}
-          y1={50}
-          x2={70}
-          y2={150}
-          stroke="rgba(255,255,255,0.18)"
-          strokeWidth={1}
-          strokeDasharray="4 4"
-        />
-        {/* Stylised lower-face profile */}
-        <path
-          d={`M70 30
-             Q90 60 86 80
-             Q90 92 80 100
-             Q ${chinTipX} ${chinTipY - 4} ${chinTipX} ${chinTipY}
-             Q ${chinTipX - 4} ${chinTipY + 12} 60 ${chinTipY + 16}`}
-          fill="rgba(154,174,181,0.16)"
-          stroke="rgba(255,255,255,0.45)"
-          strokeWidth={1.6}
-          strokeLinejoin="round"
-        />
-
-        <circle cx={86} cy={80} r={2} fill="#cfdde2" />
-        <circle cx={80} cy={100} r={2} fill="#cfdde2" />
-        <circle cx={chinTipX} cy={chinTipY} r={3.5} fill="#e9f1f4" />
-
-        <line
-          x1={70}
-          y1={chinTipY}
-          x2={chinTipX - 2}
-          y2={chinTipY}
-          stroke="#86efac"
-          strokeWidth={1.6}
-        />
-        <polygon
-          points={`${chinTipX - 6},${chinTipY - 3} ${chinTipX},${chinTipY} ${chinTipX - 6},${chinTipY + 3}`}
-          fill="#86efac"
-        />
-      </svg>
     </div>
   );
 }
@@ -306,6 +243,8 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
     "width_and_integration.lower_face_integration",
   );
 
+  const chinTaxonomyAnchor = workerSectionAnchorId(WORKER_KEY, "chin-taxonomy");
+
   return (
     <div className="space-y-4">
       <WorkerHero
@@ -332,7 +271,10 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
       />
 
       {/* Shape gallery */}
-      <Card className={workerSectionCardClassName}>
+      <Card
+        id={chinTaxonomyAnchor}
+        className={`${workerSectionCardClassName} scroll-mt-28 sm:scroll-mt-32`}
+      >
         <CardContent className="space-y-6 p-6 sm:p-8">
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -350,16 +292,10 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
               </p>
             ) : null}
           </div>
-          <ChinShapeGallery selected={shapeKey} language={language} />
-        </CardContent>
-      </Card>
-
-      {/* Projection diagram (visual only; scores detail lives in bars below) */}
-      <Card className={workerSectionCardClassName}>
-        <CardContent className="p-6 sm:p-8">
-          <ChinProjectionDiagram
-            projection={projection.score}
-            height={height.score}
+          <ChinShapeGallery
+            selected={shapeKey}
+            language={language}
+            taxonomyAnchorId={chinTaxonomyAnchor}
           />
         </CardContent>
       </Card>
@@ -368,6 +304,7 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
           when={hasAnyScore(contour.score) || Boolean(dimpleEnum.value)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "shape-contour")}
           eyebrow={i18n(language, { en: "Shape & contour", fr: "Forme et contour" })}
           title={i18n(language, {
             en: "Contour & detail",
@@ -379,6 +316,10 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
             score={contour.score}
             argument={contour.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "shape_and_contour.chin_contour",
+            )}
           />
           {dimpleEnum.value ? (
             <div className="space-y-2">
@@ -401,6 +342,7 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
 
         <SectionShell
           when={hasAnyScore(projection.score, height.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "projection")}
           eyebrow={i18n(language, { en: "Projection", fr: "Projection" })}
           title={i18n(language, {
             en: "Forward push & height",
@@ -412,17 +354,26 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
             score={projection.score}
             argument={projection.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "projection_and_profile.chin_projection",
+            )}
           />
           <ScoreBar
             label={formatLabel("projection_and_profile.chin_height")}
             score={height.score}
             argument={height.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "projection_and_profile.chin_height",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(width.score, lowerFaceIntegration.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "width-integration")}
           eyebrow={i18n(language, {
             en: "Width & integration",
             fr: "Largeur et intégration",
@@ -437,12 +388,20 @@ export function ChinWorkerView({ aggregates, language }: ChinWorkerViewProps) {
             score={width.score}
             argument={width.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "width_and_integration.chin_width",
+            )}
           />
           <ScoreBar
             label={formatLabel("width_and_integration.lower_face_integration")}
             score={lowerFaceIntegration.score}
             argument={lowerFaceIntegration.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "width_and_integration.lower_face_integration",
+            )}
           />
         </SectionShell>
       </div>

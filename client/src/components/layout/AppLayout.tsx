@@ -161,7 +161,11 @@ function ModernAppSidebar() {
     useAnalysisHistory({ enabled: !!user?.id });
   const { data: subscriberQuota } = useSubscriberStandardAnalysisQuota();
   const deleteAnalysisMutation = useDeleteAnalysisJob();
-  const { state, isMobile, toggleSidebar } = useSidebar();
+  const { state, isMobile, toggleSidebar, setOpenMobile } = useSidebar();
+
+  const closeMobileSidebar = React.useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+  }, [isMobile, setOpenMobile]);
 
   const isCollapsed = state === "collapsed" && !isMobile;
 
@@ -324,6 +328,7 @@ function ModernAppSidebar() {
               <Link
                 href="/settings"
                 className="flex w-full cursor-pointer items-center"
+                onClick={closeMobileSidebar}
               >
                 <SettingsIcon className="mr-2 h-4 w-4 text-zinc-400" />
                 <span>Paramètres</span>
@@ -333,6 +338,7 @@ function ModernAppSidebar() {
               <Link
                 href="/billing"
                 className="flex w-full cursor-pointer items-center"
+                onClick={closeMobileSidebar}
               >
                 <CreditCard className="mr-2 h-4 w-4 text-zinc-400" />
                 <span>Facturation</span>
@@ -375,6 +381,7 @@ function ModernAppSidebar() {
                     <Link
                       href="/app/protocol"
                       className="relative z-10 flex w-full items-center justify-center gap-2.5 text-center select-none !text-zinc-950"
+                      onClick={closeMobileSidebar}
                     >
                       <ClipboardList className="h-4 w-4 shrink-0 !text-zinc-900" />
                       <span className="font-semibold text-zinc-950">
@@ -402,6 +409,7 @@ function ModernAppSidebar() {
               <Link
                 href="/app/new-analysis"
                 className="flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.09] px-3 text-sm font-semibold text-zinc-100 transition hover:border-white/25 hover:bg-white/[0.14]"
+                onClick={closeMobileSidebar}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Nouvelle analyse
@@ -447,7 +455,11 @@ function ModernAppSidebar() {
                       ? "border-white/25 bg-white/[0.12]"
                       : "border-white/10 bg-white/[0.055]"
                   }`}>
-                    <Link href={analysisHref} className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <Link
+                      href={analysisHref}
+                      className="flex min-w-0 flex-1 items-center gap-1.5"
+                      onClick={closeMobileSidebar}
+                    >
                       <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
                         {analysis.has_thumbnail && user?.id ? (
                           <img
@@ -590,6 +602,7 @@ function ModernAppSidebar() {
                           <Link
                             href={item.href}
                             className="flex items-center gap-2 w-full"
+                            onClick={closeMobileSidebar}
                           >
                             <Icon className="shrink-0" />
                             <span className="truncate">{item.label}</span>

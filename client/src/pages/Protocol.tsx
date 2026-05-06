@@ -1,6 +1,7 @@
 import * as React from "react";
-import { AlertTriangle, Layers, Loader2 } from "lucide-react";
+import { AlertTriangle, Layers } from "lucide-react";
 
+import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAppLanguage, i18n } from "@/lib/i18n";
 import { useProtocolBreakdown } from "@/lib/protocol";
@@ -13,7 +14,7 @@ import { ProtocolActiveCures } from "@/components/protocol/ProtocolActiveCures";
 import { ProtocolEmptyExperience } from "@/components/protocol/ProtocolEmptyState";
 import { ProtocolItemCard } from "@/components/protocol/ProtocolItemCard";
 import { ProtocolSection } from "@/components/protocol/ProtocolSection";
-import { ProtocolHeaderStats } from "@/components/protocol/ProtocolHeader";
+import { ProtocolPageShell, ProtocolPageTitle } from "@/components/protocol/ProtocolPageShell";
 
 export default function ProtocolPage() {
   const language = useAppLanguage();
@@ -33,35 +34,48 @@ export default function ProtocolPage() {
   }, [history]);
 
   if (breakdown.isLoading) {
+    const loadingLabel = i18n(language, {
+      en: "Loading your protocol…",
+      fr: "Chargement de ton protocole…",
+    });
     return (
-      <div className="flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.04] p-12 text-sm text-zinc-300">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {i18n(language, {
-          en: "Loading your protocol…",
-          fr: "Chargement de ton protocole…",
-        })}
-      </div>
+      <ProtocolPageShell header={<ProtocolPageTitle language={language} />}>
+        <div
+          className="flex min-h-[min(400px,55vh)] w-full flex-col items-center justify-center gap-5 py-8"
+          role="status"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <BrandLoader size="lg" tone="on-light" label={loadingLabel} />
+          <BrandLoaderTrack tone="on-light" />
+          <p className="text-center text-sm font-medium tracking-tight text-zinc-600">
+            {loadingLabel}
+          </p>
+        </div>
+      </ProtocolPageShell>
     );
   }
 
   if (breakdown.error) {
     return (
-      <Card className="border-rose-300/30 bg-rose-500/[0.06]">
-        <CardContent className="flex items-start gap-3 p-6 text-sm text-rose-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4" />
-          <div>
-            <p className="font-semibold">
-              {i18n(language, {
-                en: "Couldn't load your protocol.",
-                fr: "Impossible de charger ton protocole.",
-              })}
-            </p>
-            <p className="mt-1 text-xs text-rose-200/80">
-              {breakdown.error.message}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <ProtocolPageShell header={<ProtocolPageTitle language={language} />}>
+        <Card className="border-rose-200 bg-rose-50/90 text-rose-950 shadow-none">
+          <CardContent className="flex items-start gap-3 p-6 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+            <div>
+              <p className="font-semibold text-rose-900">
+                {i18n(language, {
+                  en: "Couldn't load your protocol.",
+                  fr: "Impossible de charger ton protocole.",
+                })}
+              </p>
+              <p className="mt-1 text-xs text-rose-800/90">
+                {breakdown.error.message}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </ProtocolPageShell>
     );
   }
 
@@ -74,71 +88,52 @@ export default function ProtocolPage() {
     );
   }
 
-  const dailyCount =
-    (breakdown.bySlot.get("morning")?.length ?? 0) +
-    (breakdown.bySlot.get("midday")?.length ?? 0) +
-    (breakdown.bySlot.get("evening")?.length ?? 0) +
-    (breakdown.bySlot.get("night")?.length ?? 0);
-  const weeklyCount = breakdown.bySlot.get("weekly")?.length ?? 0;
-  const ruleCount = breakdown.bySlot.get("general")?.length ?? 0;
-
   return (
-    <div className="space-y-6">
-      <ProtocolHeaderStats
-        language={language}
-        total={breakdown.total}
-        dailyCount={dailyCount}
-        weeklyCount={weeklyCount}
-        cureCount={breakdown.cures.length}
-        ruleCount={ruleCount}
-      />
+    <ProtocolPageShell header={<ProtocolPageTitle language={language} />}>
+      <div className="space-y-8">
+        <ProtocolDay itemsBySlot={breakdown.bySlot} language={language} />
 
-      <ProtocolDay itemsBySlot={breakdown.bySlot} language={language} />
+        <ProtocolWeekly
+          items={breakdown.bySlot.get("weekly") ?? []}
+          language={language}
+        />
 
-      <ProtocolWeekly
-        items={breakdown.bySlot.get("weekly") ?? []}
-        language={language}
-      />
+        <ProtocolGeneralRules
+          items={breakdown.bySlot.get("general") ?? []}
+          language={language}
+        />
 
-      <ProtocolGeneralRules
-        items={breakdown.bySlot.get("general") ?? []}
-        language={language}
-      />
+        <ProtocolActiveCures cures={breakdown.cures} language={language} />
 
-      <ProtocolActiveCures cures={breakdown.cures} language={language} />
+        {breakdown.uncategorised.length > 0 ? (
+          <ProtocolSection
+            variant="sheet"
+            title={i18n(language, {
+              en: "Other items",
+              fr: "Autres éléments",
+            })}
+            icon={Layers}
+            count={breakdown.uncategorised.length}
+          >
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {breakdown.uncategorised.map((item) => (
+                <ProtocolItemCard
+                  key={item.action.id}
+                  item={item}
+                  language={language}
+                />
+              ))}
+            </div>
+          </ProtocolSection>
+        ) : null}
 
-      {breakdown.uncategorised.length > 0 ? (
-        <ProtocolSection
-          eyebrow={i18n(language, { en: "Saved", fr: "Sauvegardé" })}
-          title={i18n(language, {
-            en: "Other items in your protocol",
-            fr: "Autres éléments de ton protocole",
+        <p className="border-t border-zinc-200 pt-4 text-[11px] leading-relaxed text-zinc-500">
+          {i18n(language, {
+            en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
+            fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",
           })}
-          description={i18n(language, {
-            en: "Recommendations you saved that aren't tied to a fixed routine yet.",
-            fr: "Recommandations que tu as sauvegardées sans cadence fixe pour l'instant.",
-          })}
-          icon={Layers}
-          count={breakdown.uncategorised.length}
-        >
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {breakdown.uncategorised.map((item) => (
-              <ProtocolItemCard
-                key={item.action.id}
-                item={item}
-                language={language}
-              />
-            ))}
-          </div>
-        </ProtocolSection>
-      ) : null}
-
-      <p className="border-t border-white/5 pt-4 text-[11px] leading-relaxed text-zinc-500">
-        {i18n(language, {
-          en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
-          fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",
-        })}
-      </p>
-    </div>
+        </p>
+      </div>
+    </ProtocolPageShell>
   );
 }

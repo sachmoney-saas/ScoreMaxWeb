@@ -6,7 +6,13 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import {
+  workerMetricAnchorId,
+  workerSectionAnchorId,
+  scrollToWorkerAnchor,
+} from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import {
   getEnum,
   getScore,
@@ -86,18 +92,22 @@ function normalizeBrowShape(value: string | null): BrowShape | null {
 function BrowShapeGallery({
   selected,
   language,
+  taxonomyAnchorId,
 }: {
   selected: BrowShape | null;
   language: AppLanguage;
+  taxonomyAnchorId: string;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {BROW_SHAPES.map((shape) => {
         const isActive = shape.key === selected;
         return (
-          <div
+          <button
             key={shape.key}
-            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
+            type="button"
+            onClick={() => scrollToWorkerAnchor(taxonomyAnchorId)}
+            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 text-left transition hover:border-white/25 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${
               isActive
                 ? "border-white/45 bg-white/[0.08] shadow-[0_0_28px_rgba(255,255,255,0.08)]"
                 : "border-white/10 bg-white/[0.025]"
@@ -131,7 +141,7 @@ function BrowShapeGallery({
             {isActive ? (
               <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.7)]" />
             ) : null}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -150,11 +160,14 @@ function BoldFeminineMatrix({
   density,
   archScore,
   language,
+  cellTargetId,
 }: {
   thickness: number | null;
   density: number | null;
   archScore: number | null;
   language: AppLanguage;
+  /** Scroll target for matrix cells (sans `#`). */
+  cellTargetId?: string;
 }) {
   const cols = 7;
   const rows = 7;
@@ -234,20 +247,44 @@ function BoldFeminineMatrix({
                   ry - (rows - 1) / 2,
                 );
                 const baseOpacity = Math.max(0.04, 0.18 - distance * 0.025);
+                const bg = isUser
+                  ? "#e9f1f4"
+                  : (`rgba(154,174,181,${baseOpacity})` as string);
+                const sh = isUser
+                  ? "0 0 18px rgba(255,255,255,0.55)"
+                  : undefined;
+                const c = cn(
+                  "rounded-md transition",
+                  isUser && "ring-2 ring-white/80",
+                  cellTargetId &&
+                    "cursor-pointer hover:brightness-125 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35",
+                );
+                if (!cellTargetId) {
+                  return (
+                    <div
+                      key={`cell-${ry}-${cx}`}
+                      className={c}
+                      style={{
+                        backgroundColor: bg,
+                        boxShadow: sh,
+                      }}
+                    />
+                  );
+                }
                 return (
-                  <div
+                  <button
                     key={`cell-${ry}-${cx}`}
-                    className={`rounded-md transition ${
-                      isUser ? "ring-2 ring-white/80" : ""
-                    }`}
+                    type="button"
+                    className={cn(c, "h-full min-h-0 w-full border-0 p-0")}
                     style={{
-                      backgroundColor: isUser
-                        ? "#e9f1f4"
-                        : `rgba(154,174,181,${baseOpacity})`,
-                      boxShadow: isUser
-                        ? "0 0 18px rgba(255,255,255,0.55)"
-                        : undefined,
+                      backgroundColor: bg,
+                      boxShadow: sh,
                     }}
+                    aria-label={i18n(language, {
+                      en: "Go to density and grooming scores",
+                      fr: "Aller aux scores densité et toilettage",
+                    })}
+                    onClick={() => scrollToWorkerAnchor(cellTargetId)}
                   />
                 );
               }),
@@ -304,9 +341,12 @@ function normalizeTilt(value: string | null): TiltKey | null {
 function TiltIndicator({
   tilt,
   language,
+  taxonomyAnchorId,
 }: {
   tilt: TiltKey | null;
   language: AppLanguage;
+  /** Carte « taxonomie » où inclinaison et forme sont expliquées */
+  taxonomyAnchorId?: string;
 }) {
   const items: { key: TiltKey; label: { en: string; fr: string }; angle: number }[] = [
     { key: "negative", label: { en: "Negative", fr: "Négative" }, angle: 14 },
@@ -318,15 +358,16 @@ function TiltIndicator({
     <div className="grid grid-cols-3 gap-3">
       {items.map((item) => {
         const isActive = item.key === tilt;
-        return (
-          <div
-            key={item.key}
-            className={`flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${
-              isActive
-                ? "border-white/45 bg-white/[0.08]"
-                : "border-white/10 bg-white/[0.025]"
-            }`}
-          >
+        const tileClass = cn(
+          "flex flex-col items-center gap-2 rounded-2xl border p-3 transition",
+          isActive
+            ? "border-white/45 bg-white/[0.08]"
+            : "border-white/10 bg-white/[0.025]",
+          taxonomyAnchorId &&
+            "cursor-pointer hover:border-white/25 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35",
+        );
+        const inner = (
+          <>
             <svg viewBox="0 0 80 32" className="h-8 w-20" role="img">
               <line
                 x1={6}
@@ -347,7 +388,24 @@ function TiltIndicator({
             >
               {i18n(language, item.label)}
             </span>
-          </div>
+          </>
+        );
+        if (!taxonomyAnchorId) {
+          return (
+            <div key={item.key} className={tileClass}>
+              {inner}
+            </div>
+          );
+        }
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => scrollToWorkerAnchor(taxonomyAnchorId)}
+            className={cn(tileClass, "text-left")}
+          >
+            {inner}
+          </button>
         );
       })}
     </div>
@@ -436,6 +494,9 @@ export function EyeBrowsWorkerView({
     return null;
   })();
 
+  const browTaxonomyAnchor = workerSectionAnchorId(WORKER_KEY, "brow-taxonomy");
+  const densitySectionAnchor = workerSectionAnchorId(WORKER_KEY, "density-grooming");
+
   return (
     <div className="space-y-4">
       <WorkerHero
@@ -493,13 +554,16 @@ export function EyeBrowsWorkerView({
               density={density.score}
               archScore={archScore}
               language={language}
+              cellTargetId={densitySectionAnchor}
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Brow shape gallery */}
-      <Card className={workerSectionCardClassName}>
+      <Card
+        id={browTaxonomyAnchor}
+        className={`${workerSectionCardClassName} scroll-mt-28 sm:scroll-mt-32`}
+      >
         <CardContent className="space-y-6 p-6 sm:p-8">
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -520,7 +584,11 @@ export function EyeBrowsWorkerView({
               </p>
             ) : null}
           </div>
-          <BrowShapeGallery selected={shapeKey} language={language} />
+          <BrowShapeGallery
+            selected={shapeKey}
+            language={language}
+            taxonomyAnchorId={browTaxonomyAnchor}
+          />
 
           {tiltEnum.value ? (
             <div className="space-y-3 border-t border-white/10 pt-5">
@@ -529,7 +597,11 @@ export function EyeBrowsWorkerView({
                   {formatLabel("geometry_and_shape.eyebrow_tilt")}
                 </span>
               </div>
-              <TiltIndicator tilt={tiltKey} language={language} />
+              <TiltIndicator
+                tilt={tiltKey}
+                language={language}
+                taxonomyAnchorId={browTaxonomyAnchor}
+              />
               {tiltEnum.argument ? (
                 <p className="text-xs leading-relaxed text-zinc-400">
                   {tiltEnum.argument}
@@ -544,6 +616,7 @@ export function EyeBrowsWorkerView({
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionShell
           when={hasAnyScore(elevation.score, symmetry.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "placement-symmetry")}
           eyebrow={i18n(language, {
             en: "Placement & symmetry",
             fr: "Placement et symétrie",
@@ -558,12 +631,20 @@ export function EyeBrowsWorkerView({
             score={elevation.score}
             argument={elevation.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "placement_and_symmetry.eyebrow_elevation",
+            )}
           />
           <ScoreBar
             label={formatLabel("placement_and_symmetry.eyebrow_symmetry")}
             score={symmetry.score}
             argument={symmetry.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "placement_and_symmetry.eyebrow_symmetry",
+            )}
           />
         </SectionShell>
 
@@ -577,6 +658,7 @@ export function EyeBrowsWorkerView({
             Boolean(groomingEnum.value) ||
             Boolean(browColorEnum.value)
           }
+          sectionId={densitySectionAnchor}
           eyebrow={i18n(language, {
             en: "Density, grooming & glabella",
             fr: "Densité, toilettage et glabelle",
@@ -591,18 +673,30 @@ export function EyeBrowsWorkerView({
             score={thickness.score}
             argument={thickness.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "density_grooming_and_glabella.eyebrow_thickness",
+            )}
           />
           <ScoreBar
             label={formatLabel("density_grooming_and_glabella.eyebrow_density")}
             score={density.score}
             argument={density.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "density_grooming_and_glabella.eyebrow_density",
+            )}
           />
           <ScoreBar
             label={formatLabel("density_grooming_and_glabella.glabellar_hair")}
             score={glabellarHair.score}
             argument={glabellarHair.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "density_grooming_and_glabella.glabellar_hair",
+            )}
           />
           {groomingEnum.value ? (
             <div className="space-y-2">
@@ -654,6 +748,7 @@ export function EyeBrowsWorkerView({
           when={
             hasAnyScore(tailLength.score) || Boolean(innerStartEnum.value)
           }
+          sectionId={workerSectionAnchorId(WORKER_KEY, "geometry-detail")}
           eyebrow={i18n(language, {
             en: "Geometry details",
             fr: "Détails géométriques",
@@ -668,6 +763,10 @@ export function EyeBrowsWorkerView({
             score={tailLength.score}
             argument={tailLength.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "geometry_and_shape.tail_length_and_direction",
+            )}
           />
           {innerStartEnum.value ? (
             <div className="space-y-2">

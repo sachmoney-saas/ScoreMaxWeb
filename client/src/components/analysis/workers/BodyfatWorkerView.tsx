@@ -6,6 +6,10 @@ import {
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import {
+  workerMetricAnchorId,
+  workerSectionAnchorId,
+} from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
   CompositionMatrix,
@@ -114,6 +118,8 @@ export function BodyfatWorkerView({
   const angularity = getScore(aggregates, "upper_face_skin.facial_angularity");
 
   const sharpness = getBodyfatCompositionSharpness(aggregates);
+
+  const leafMetricsAnchor = workerSectionAnchorId(WORKER_KEY, "leaf-metrics");
 
   const showGlobalCard =
     Boolean(bfPctDisplay) ||
@@ -237,13 +243,18 @@ export function BodyfatWorkerView({
             leanness={facialLeanness.score}
             sharpness={sharpness}
             language={language}
+            resolveCellTargetId={() => leafMetricsAnchor}
           />
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div
+        id={leafMetricsAnchor}
+        className="grid gap-4 scroll-mt-28 sm:scroll-mt-32 lg:grid-cols-3"
+      >
         <SectionShell
           when={hasAnyScore(jawline.score, submental.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "lower-face")}
           eyebrow={i18n(language, {
             en: "Lower face & neck",
             fr: "Bas du visage et cou",
@@ -258,17 +269,26 @@ export function BodyfatWorkerView({
             score={jawline.score}
             argument={jawline.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "lower_face_neck.jawline_definition",
+            )}
           />
           <ScoreBar
             label={formatLabel("lower_face_neck.submental_fat_tightness")}
             score={submental.score}
             argument={submental.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "lower_face_neck.submental_fat_tightness",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(buccal.score, zygomatic.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "midface")}
           eyebrow={i18n(language, { en: "Midface", fr: "Milieu du visage" })}
           title={i18n(language, {
             en: "Cheeks & cheekbones",
@@ -280,17 +300,26 @@ export function BodyfatWorkerView({
             score={buccal.score}
             argument={buccal.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "midface_buccal.buccal_leanness",
+            )}
           />
           <ScoreBar
             label={formatLabel("midface_buccal.zygomatic_bone_visibility")}
             score={zygomatic.score}
             argument={zygomatic.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "midface_buccal.zygomatic_bone_visibility",
+            )}
           />
         </SectionShell>
 
         <SectionShell
           when={hasAnyScore(periocular.score, angularity.score)}
+          sectionId={workerSectionAnchorId(WORKER_KEY, "upper-face")}
           eyebrow={i18n(language, {
             en: "Upper face",
             fr: "Haut du visage",
@@ -305,12 +334,20 @@ export function BodyfatWorkerView({
             score={periocular.score}
             argument={periocular.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "upper_face_skin.periocular_leanness",
+            )}
           />
           <ScoreBar
             label={formatLabel("upper_face_skin.facial_angularity")}
             score={angularity.score}
             argument={angularity.argument}
             language={language}
+            scrollTargetId={workerMetricAnchorId(
+              WORKER_KEY,
+              "upper_face_skin.facial_angularity",
+            )}
           />
         </SectionShell>
       </div>

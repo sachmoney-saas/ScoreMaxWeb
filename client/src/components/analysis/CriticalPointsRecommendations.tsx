@@ -26,13 +26,28 @@ import {
   type Recommendation,
   type RecommendationAction,
 } from "@/lib/recommendations";
+import { cn } from "@/lib/utils";
+import { RecommendationCard } from "@/components/analysis/recommendations/RecommendationCard";
 import {
-  analysisSurfaceCardClassName,
+  RecommendationDocumentProvider,
+} from "@/components/analysis/recommendations/RecommendationDocumentContext";
+import {
+  recommendationsReportShellClassName,
+} from "@/components/analysis/recommendations/recommendations-report-theme";
+import {
   analysisTabActiveMetallicTriggerClassName,
   analysisTabBarGlassClassName,
 } from "@/components/analysis/workers/_shared";
-import { cn } from "@/lib/utils";
-import { RecommendationCard } from "@/components/analysis/recommendations/RecommendationCard";
+
+/** Même barre métal / fond verre que Overview | Recommandations. */
+const RECOMMENDATIONS_WORKER_TAB_TRIGGER_CLASS = cn(
+  "relative z-0 rounded-xl border border-transparent px-4 py-2.5 text-left text-sm font-medium text-zinc-400 transition-all sm:px-5",
+  "hover:text-zinc-200",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
+  analysisTabActiveMetallicTriggerClassName,
+  "data-[state=active]:hover:text-zinc-950",
+  "data-[state=active]:[&_span.font-display]:text-zinc-700 data-[state=active]:[&_span.font-display]:opacity-100",
+);
 
 /* ============================================================================
  * Types
@@ -56,11 +71,9 @@ export interface CriticalPointsRecommendationsProps {
  * ========================================================================= */
 
 function scoreBadgeClasses(score: number): string {
-  if (score < 3.5)
-    return "bg-rose-500/15 text-rose-200 ring-rose-300/30";
-  if (score < 5.5)
-    return "bg-orange-500/15 text-orange-200 ring-orange-300/30";
-  return "bg-amber-400/15 text-amber-200 ring-amber-300/25";
+  if (score < 3.5) return "border border-rose-200 bg-rose-50 text-rose-950";
+  if (score < 5.5) return "border border-orange-200 bg-orange-50 text-orange-950";
+  return "border border-amber-200 bg-amber-50 text-amber-950";
 }
 
 function scoreSeverityLabel(
@@ -98,9 +111,9 @@ function scoreSeverityBlurb(
 }
 
 function scoreHeroAccentBorder(score: number): string {
-  if (score < 3.5) return "border-l-rose-400/75";
-  if (score < 5.5) return "border-l-orange-400/70";
-  return "border-l-amber-300/60";
+  if (score < 3.5) return "border-l-4 border-l-rose-600";
+  if (score < 5.5) return "border-l-4 border-l-orange-500";
+  return "border-l-4 border-l-amber-500";
 }
 
 /* ============================================================================
@@ -120,14 +133,9 @@ function CriticalPointSection({
   language: AppLanguage;
   actionByRec: Map<string, RecommendationAction>;
   buildWorkerHref: (worker: string) => string;
-  /** When the parent tab is already scoped to this worker, hide the duplicate worker link chip. */
   suppressWorkerEyebrow?: boolean;
 }) {
   const aggregates = React.useMemo<Record<string, unknown>>(() => ({}), []);
-  // ^ Aggregates here are only used by RecommendationCard for the "why" copy.
-  // We feed empty so the card renders the soft fallback ("Reinforces this area
-  // of your face."), which is fine because the parent header already pins the
-  // exact aggregate label and score in much bigger type.
 
   const soft = point.matchedRecommendations.filter((r) => r.type === "soft");
   const hard = point.matchedRecommendations.filter((r) => r.type === "hard");
@@ -135,29 +143,23 @@ function CriticalPointSection({
   const recCount = point.matchedRecommendations.length;
 
   return (
-    <section className="space-y-6">
-      {/* Priority: diagnostic (score + argument), then how-to below */}
+    <section className="space-y-6 border-b border-zinc-200 pb-10 last:border-b-0 last:pb-0">
       <div
         className={cn(
-          analysisSurfaceCardClassName,
-          "rounded-2xl border-white/15 border-l-[4px] pl-4 pr-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:pl-5 sm:pr-5 sm:py-6 md:pl-6 md:pr-6",
+          "rounded-lg border border-zinc-200 bg-zinc-50/80 pl-4 pr-4 py-5 sm:pl-5 sm:pr-5 sm:py-6 md:pl-6 md:pr-6",
           scoreHeroAccentBorder(point.score),
         )}
       >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_100%_0%,rgba(255,255,255,0.07),transparent_55%)]"
-        />
         <div className="relative flex flex-col gap-5 md:flex-row md:items-start md:justify-between md:gap-8">
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08] font-display text-xs font-bold tabular-nums text-zinc-200 ring-1 ring-white/10">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-300 bg-white font-display text-xs font-bold tabular-nums text-zinc-800">
                 {index + 1}
               </span>
               {suppressWorkerEyebrow ? null : (
                 <Link
                   href={buildWorkerHref(point.worker)}
-                  className="group inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-white"
+                  className="group inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:text-zinc-900"
                 >
                   {getWorkerDisplayLabel(
                     point.worker,
@@ -174,10 +176,10 @@ function CriticalPointSection({
                   fr: "Axe à travailler",
                 })}
               </p>
-              <h3 className="mt-1.5 font-display text-2xl font-bold leading-tight tracking-tight text-white sm:text-[1.65rem] sm:leading-[1.15]">
+              <h3 className="mt-1.5 font-display text-2xl font-bold leading-tight tracking-tight text-zinc-950 sm:text-[1.65rem] sm:leading-[1.15]">
                 {point.aggregateLabel}
               </h3>
-              <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-300">
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-700">
                 {scoreSeverityBlurb(point.score, language)}
               </p>
             </div>
@@ -185,18 +187,21 @@ function CriticalPointSection({
 
           <div className="flex w-full shrink-0 flex-col gap-2 md:w-auto md:max-w-[13.5rem]">
             <div
-              className={`rounded-xl px-4 py-4 ring-1 ring-inset sm:px-5 sm:py-5 ${scoreBadgeClasses(point.score)}`}
+              className={cn(
+                "rounded-xl px-4 py-4 sm:px-5 sm:py-5",
+                scoreBadgeClasses(point.score),
+              )}
             >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
                 {i18n(language, { en: "Your score", fr: "Ta note" })}
               </p>
               <p className="mt-2 flex flex-wrap items-baseline gap-1 font-display tabular-nums">
-                <span className="text-4xl font-bold tracking-tight text-white sm:text-[2.65rem]">
+                <span className="text-4xl font-bold tracking-tight text-zinc-950 sm:text-[2.65rem]">
                   {point.score.toFixed(1)}
                 </span>
-                <span className="text-lg font-medium text-white/50">/10</span>
+                <span className="text-lg font-medium text-zinc-500">/10</span>
               </p>
-              <div className="mt-3 flex items-center gap-2 text-xs font-semibold">
+              <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-zinc-800">
                 <TrendingDown className="h-3.5 w-3.5 shrink-0 opacity-90" />
                 <span>{scoreSeverityLabel(point.score, language)}</span>
               </div>
@@ -206,8 +211,8 @@ function CriticalPointSection({
       </div>
 
       <div className="space-y-4">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-white/5 pt-4">
-          <h4 className="font-display text-sm font-semibold tracking-tight text-white">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-zinc-200 pt-4">
+          <h4 className="font-display text-sm font-semibold tracking-tight text-zinc-900">
             {i18n(language, {
               en: "How to improve",
               fr: "Comment progresser",
@@ -231,7 +236,7 @@ function CriticalPointSection({
       {soft.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-200 ring-1 ring-inset ring-emerald-300/20">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-900 ring-1 ring-inset ring-emerald-200">
               <Sparkles className="h-3 w-3" />
               {i18n(language, { en: "Softmaxxing", fr: "Softmaxxing" })}
             </span>
@@ -240,7 +245,7 @@ function CriticalPointSection({
               {i18n(language, { en: "actions", fr: "actions" })}
             </span>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {soft.map((rec) => (
               <RecommendationCard
                 key={rec.id}
@@ -259,7 +264,7 @@ function CriticalPointSection({
       {hard.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-rose-400/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-200 ring-1 ring-inset ring-rose-300/20">
+            <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-950 ring-1 ring-inset ring-rose-200">
               <Syringe className="h-3 w-3" />
               {i18n(language, { en: "Hardmaxxing", fr: "Hardmaxxing" })}
             </span>
@@ -268,7 +273,7 @@ function CriticalPointSection({
               {i18n(language, { en: "interventions", fr: "interventions" })}
             </span>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {hard.map((rec) => (
               <RecommendationCard
                 key={rec.id}
@@ -306,19 +311,19 @@ function WorkerOrphansUnderTab({
   if (!group?.recommendations.length) return null;
 
   return (
-    <section className="mt-8 space-y-3 border-t border-white/5 pt-8">
+    <section className="mt-8 space-y-3 border-t border-zinc-200 pt-8">
       <header className="space-y-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
           {i18n(language, { en: "Also matches you", fr: "Autres pistes" })}
         </p>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-600">
           {i18n(language, {
             en: "Suggestions linked to your profile but not pinned to one measure above.",
             fr: "Suggestions liées à ton profil, sans lien avec une mesure ci-dessus.",
           })}
         </p>
       </header>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {group.recommendations.map((rec: MatchedRecommendation) => (
           <RecommendationCard
             key={rec.id}
@@ -351,7 +356,7 @@ function WorkerDetailLink({
     <div className="mb-6">
       <Link
         href={buildWorkerHref(worker)}
-        className="group inline-flex items-center gap-1 text-xs font-medium text-zinc-400 transition-colors hover:text-white"
+        className="group inline-flex items-center gap-1 text-xs font-medium text-zinc-600 transition-colors hover:text-zinc-900"
       >
         {i18n(language, {
           en: `See full · ${label} analysis`,
@@ -381,21 +386,16 @@ function ComingSoonSection({
   if (workers.length === 0) return null;
 
   return (
-    <section
-      className={cn(
-        analysisSurfaceCardClassName,
-        "rounded-2xl border border-dashed border-white/15 p-4",
-      )}
-    >
+    <section className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/80 p-4">
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
         {i18n(language, { en: "Coming soon", fr: "Bientôt disponible" })}
       </p>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+      <p className="mt-2 text-xs leading-relaxed text-zinc-600">
         {i18n(language, {
           en: "Editorial recommendations are being written for: ",
           fr: "Les recommandations éditoriales arrivent pour : ",
         })}
-        <span className="text-zinc-300">
+        <span className="font-medium text-zinc-800">
           {workers
             .map((w) =>
               getWorkerDisplayLabel(w, language === "fr" ? "fr" : "en"),
@@ -412,7 +412,17 @@ function ComingSoonSection({
  * Public component
  * ========================================================================= */
 
-export function CriticalPointsRecommendations({
+export function CriticalPointsRecommendations(
+  props: CriticalPointsRecommendationsProps,
+) {
+  return (
+    <RecommendationDocumentProvider>
+      <CriticalPointsRecommendationsImpl {...props} />
+    </RecommendationDocumentProvider>
+  );
+}
+
+function CriticalPointsRecommendationsImpl({
   analysisJobId,
   results,
   language,
@@ -544,38 +554,32 @@ export function CriticalPointsRecommendations({
 
   if (isLoading) {
     return (
-      <div
-        className={cn(
-          analysisSurfaceCardClassName,
-          "flex items-center justify-center gap-2 rounded-2xl p-12 text-sm text-zinc-300",
-        )}
-      >
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {i18n(language, {
-          en: "Loading recommendations…",
-          fr: "Chargement des recommandations…",
-        })}
+      <div className={recommendationsReportShellClassName}>
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-600">
+          <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+          {i18n(language, {
+            en: "Loading recommendations…",
+            fr: "Chargement des recommandations…",
+          })}
+        </div>
       </div>
     );
   }
 
   if (firstError) {
     return (
-      <div
-        className={cn(
-          analysisSurfaceCardClassName,
-          "flex items-start gap-3 rounded-2xl p-6 text-sm text-rose-200",
-        )}
-      >
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <div>
-          <p className="font-semibold">
-            {i18n(language, {
-              en: "Couldn't load recommendations.",
-              fr: "Impossible de charger les recommandations.",
-            })}
-          </p>
-          <p className="mt-1 text-xs text-rose-200/85">{firstError.message}</p>
+      <div className={recommendationsReportShellClassName}>
+        <div className="flex items-start gap-3 py-6 text-sm text-rose-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+          <div>
+            <p className="font-semibold text-rose-900">
+              {i18n(language, {
+                en: "Couldn't load recommendations.",
+                fr: "Impossible de charger les recommandations.",
+              })}
+            </p>
+            <p className="mt-1 text-xs text-rose-700/90">{firstError.message}</p>
+          </div>
         </div>
       </div>
     );
@@ -590,56 +594,50 @@ export function CriticalPointsRecommendations({
 
   if (!hasAnyContent && hasContentInDb) {
     return (
-      <div
-        className={cn(
-          analysisSurfaceCardClassName,
-          "space-y-2 rounded-2xl p-6 text-sm",
-        )}
-      >
-        <p className="font-display text-lg font-semibold text-white">
-          {i18n(language, {
-            en: "Nothing critical to address",
-            fr: "Rien de critique à adresser",
-          })}
-        </p>
-        <p className="text-zinc-400">
-          {i18n(language, {
-            en: "Your scores are healthy across the board — keep your routine consistent.",
-            fr: "Tes scores sont sains dans l'ensemble — garde ta routine régulière.",
-          })}
-        </p>
-        <ComingSoonSection
-          workers={workersAwaitingContent}
-          language={language}
-        />
+      <div className={recommendationsReportShellClassName}>
+        <div className="space-y-4 py-2 text-sm">
+          <p className="font-display text-lg font-semibold text-zinc-900">
+            {i18n(language, {
+              en: "Nothing critical to address",
+              fr: "Rien de critique à adresser",
+            })}
+          </p>
+          <p className="text-zinc-600">
+            {i18n(language, {
+              en: "Your scores are healthy across the board — keep your routine consistent.",
+              fr: "Tes scores sont sains dans l'ensemble — garde ta routine régulière.",
+            })}
+          </p>
+          <ComingSoonSection
+            workers={workersAwaitingContent}
+            language={language}
+          />
+        </div>
       </div>
     );
   }
 
   if (!hasAnyContent && !hasContentInDb) {
     return (
-      <div
-        className={cn(
-          analysisSurfaceCardClassName,
-          "space-y-3 rounded-2xl p-6 text-sm",
-        )}
-      >
-        <p className="font-display text-lg font-semibold text-white">
-          {i18n(language, {
-            en: "Recommendations coming soon",
-            fr: "Recommandations bientôt disponibles",
-          })}
-        </p>
-        <p className="text-zinc-400">
-          {i18n(language, {
-            en: "We're writing personalised recommendations for every ScoreMax worker. The eyes module is already live; the rest is on its way.",
-            fr: "Nous rédigeons des recommandations personnalisées pour chaque worker ScoreMax. Le module yeux est déjà en ligne ; le reste arrive.",
-          })}
-        </p>
-        <ComingSoonSection
-          workers={workersAwaitingContent}
-          language={language}
-        />
+      <div className={recommendationsReportShellClassName}>
+        <div className="space-y-4 py-2 text-sm">
+          <p className="font-display text-lg font-semibold text-zinc-900">
+            {i18n(language, {
+              en: "Recommendations coming soon",
+              fr: "Recommandations bientôt disponibles",
+            })}
+          </p>
+          <p className="text-zinc-600">
+            {i18n(language, {
+              en: "We're writing personalised recommendations for every ScoreMax worker. The eyes module is already live; the rest is on its way.",
+              fr: "Nous rédigeons des recommandations personnalisées pour chaque worker ScoreMax. Le module yeux est déjà en ligne ; le reste arrive.",
+            })}
+          </p>
+          <ComingSoonSection
+            workers={workersAwaitingContent}
+            language={language}
+          />
+        </div>
       </div>
     );
   }
@@ -648,16 +646,17 @@ export function CriticalPointsRecommendations({
 
   return (
     <div className="relative space-y-10">
-        {visibleWorkerGroups.length > 0 ? (
-          <Tabs
-            defaultValue={visibleWorkerGroups[0]?.worker}
-            key={`${analysisJobId}:${visibleWorkerGroups.map((g) => g.worker).join("|")}`}
-            className="space-y-6"
-          >
+      {visibleWorkerGroups.length > 0 ? (
+        <Tabs
+          defaultValue={visibleWorkerGroups[0]?.worker}
+          key={`${analysisJobId}:${visibleWorkerGroups.map((g) => g.worker).join("|")}`}
+          className="space-y-5"
+        >
+          <div className="flex w-full justify-center">
             <TabsList
               className={cn(
                 analysisTabBarGlassClassName,
-                "inline-flex h-auto max-h-[none] min-h-[2.75rem] w-fit max-w-full flex-wrap justify-start gap-1.5 self-start rounded-2xl p-1.5 text-zinc-300 sm:flex-nowrap",
+                "inline-flex h-auto max-h-none min-h-[2.75rem] w-fit max-w-full flex-wrap justify-center gap-1 rounded-2xl p-1.5 text-zinc-300 sm:flex-nowrap",
               )}
             >
               {visibleWorkerGroups.map((group) => {
@@ -676,13 +675,7 @@ export function CriticalPointsRecommendations({
                     title={
                       worst !== null ? `${worst.toFixed(1)}/10` : undefined
                     }
-                    className={cn(
-                      "relative z-0 rounded-xl border border-transparent px-3 py-2 text-left text-xs font-medium text-zinc-400 shadow-none hover:text-zinc-200 sm:px-4 sm:text-sm",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
-                      analysisTabActiveMetallicTriggerClassName,
-                      "data-[state=active]:hover:text-zinc-950",
-                      "data-[state=active]:[&_span.font-display]:text-zinc-700 data-[state=active]:[&_span.font-display]:opacity-100",
-                    )}
+                    className={RECOMMENDATIONS_WORKER_TAB_TRIGGER_CLASS}
                   >
                     <span className="relative z-10 flex flex-col items-start gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
                       <span className="block max-w-[10rem] truncate sm:max-w-none">
@@ -698,60 +691,60 @@ export function CriticalPointsRecommendations({
                 );
               })}
             </TabsList>
+          </div>
 
-            {visibleWorkerGroups.map((group) => (
-              <TabsContent
-                key={group.worker}
-                value={group.worker}
-                className="mt-0 space-y-10"
-              >
-                <WorkerDetailLink
-                  worker={group.worker}
-                  language={language}
-                  buildWorkerHref={buildWorkerHref}
-                />
-                {group.criticalPoints.length === 0 ? (
-                  <p
-                    className={cn(
-                      analysisSurfaceCardClassName,
-                      "rounded-xl border border-dashed border-white/15 px-4 py-3 text-sm text-zinc-400",
-                    )}
-                  >
-                    {i18n(language, {
-                      en: "No single measure surfaced as critical here — see matching suggestions below if any.",
-                      fr: "Aucune mesure ressort comme critique dans cette zone — voir les suggestions ci-dessous le cas échéant.",
-                    })}
-                  </p>
-                ) : null}
-                {group.criticalPoints.map((point, idx) => (
-                  <CriticalPointSection
-                    key={`${point.worker}:${point.aggregateKey}`}
-                    index={idx}
-                    point={point}
+          {visibleWorkerGroups.map((group) => (
+            <TabsContent
+              key={group.worker}
+              value={group.worker}
+              className="mt-0 focus-visible:outline-none"
+            >
+              <div className={recommendationsReportShellClassName}>
+                <div className="space-y-10">
+                  <WorkerDetailLink
+                    worker={group.worker}
+                    language={language}
+                    buildWorkerHref={buildWorkerHref}
+                  />
+                  {group.criticalPoints.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                      {i18n(language, {
+                        en: "No single measure surfaced as critical here — see matching suggestions below if any.",
+                        fr: "Aucune mesure ressort comme critique dans cette zone — voir les suggestions ci-dessous le cas échéant.",
+                      })}
+                    </p>
+                  ) : null}
+                  {group.criticalPoints.map((point, idx) => (
+                    <CriticalPointSection
+                      key={`${point.worker}:${point.aggregateKey}`}
+                      index={idx}
+                      point={point}
+                      language={language}
+                      actionByRec={actionByRec}
+                      buildWorkerHref={buildWorkerHref}
+                      suppressWorkerEyebrow
+                    />
+                  ))}
+                  <WorkerOrphansUnderTab
+                    worker={group.worker}
+                    orphans={orphans}
                     language={language}
                     actionByRec={actionByRec}
-                    buildWorkerHref={buildWorkerHref}
-                    suppressWorkerEyebrow
+                    resultsByWorker={resultsByWorker}
                   />
-                ))}
-                <WorkerOrphansUnderTab
-                  worker={group.worker}
-                  orphans={orphans}
-                  language={language}
-                  actionByRec={actionByRec}
-                  resultsByWorker={resultsByWorker}
-                />
-              </TabsContent>
-            ))}
-          </Tabs>
-        ) : null}
+                </div>
+              </div>
+            </TabsContent>
+          ))}
+        </Tabs>
+      ) : null}
 
         <ComingSoonSection
           workers={workersAwaitingContent}
           language={language}
         />
 
-      <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
+      <p className="border-t border-zinc-200 pt-4 text-[11px] leading-relaxed text-zinc-500">
         {i18n(language, {
           en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
           fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",

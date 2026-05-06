@@ -33,37 +33,55 @@ const FITZPATRICK: {
     key: "i",
     label: "I",
     color: "#f4dccd",
-    description: { en: "Always burns", fr: "Brûle toujours" },
+    description: {
+      en: "Very fair — burns fast, almost never tans",
+      fr: "Très claire — brûle vite, ne bronze presque pas",
+    },
   },
   {
     key: "ii",
     label: "II",
     color: "#e8c0a3",
-    description: { en: "Burns easily", fr: "Brûle facilement" },
+    description: {
+      en: "Fair — burns easily, tans a little",
+      fr: "Claire — brûle facilement, bronze peu",
+    },
   },
   {
     key: "iii",
     label: "III",
     color: "#cf9874",
-    description: { en: "Sometimes burns", fr: "Brûle parfois" },
+    description: {
+      en: "Medium — sometimes burns, tans gradually",
+      fr: "Ni trop claire ni foncée — brûle parfois, bronze doucement",
+    },
   },
   {
     key: "iv",
     label: "IV",
     color: "#a87752",
-    description: { en: "Rarely burns", fr: "Brûle rarement" },
+    description: {
+      en: "Olive / brown tone — rarely burns, tans easily",
+      fr: "Mate — brûle rarement, bronze assez facilement",
+    },
   },
   {
     key: "v",
     label: "V",
     color: "#7c5634",
-    description: { en: "Very rarely burns", fr: "Brûle très rarement" },
+    description: {
+      en: "Brown — very rarely burns, tans very easily",
+      fr: "Brune — brûle très rarement, bronze vite",
+    },
   },
   {
     key: "vi",
     label: "VI",
     color: "#3d2418",
-    description: { en: "Never burns", fr: "Ne brûle jamais" },
+    description: {
+      en: "Deep brown — almost never burns",
+      fr: "Très foncée — ne brûle pratiquement jamais",
+    },
   },
 ];
 
@@ -143,7 +161,10 @@ function FitzpatrickScale({
       {selected ? (
         <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-            {i18n(language, { en: "Sun reaction", fr: "Réaction au soleil" })}
+            {i18n(language, {
+              en: "In plain words",
+              fr: "En clair",
+            })}
           </p>
           <p className="mt-0.5 text-sm font-medium text-white">
             {i18n(
@@ -203,21 +224,30 @@ function UndertoneWheel({
   }[] = [
     {
       key: "cool",
-      label: { en: "Cool", fr: "Froid" },
+      label: { en: "Rosy", fr: "Rosée" },
       color: "#a3b5d6",
-      description: { en: "Pink / blue base", fr: "Base rose / bleue" },
+      description: {
+        en: "Your skin leans pink or slightly blue underneath",
+        fr: "Sous la peau, ça tire plutôt rose ou légèrement bleuté",
+      },
     },
     {
       key: "neutral",
-      label: { en: "Neutral", fr: "Neutre" },
+      label: { en: "Balanced", fr: "Équilibré" },
       color: "#c8b89a",
-      description: { en: "Olive / mixed base", fr: "Base olive / mixte" },
+      description: {
+        en: "Not clearly pink or golden — in between",
+        fr: "Ni vraiment rose ni vraiment doré — un juste milieu",
+      },
     },
     {
       key: "warm",
-      label: { en: "Warm", fr: "Chaud" },
+      label: { en: "Golden", fr: "Dorée" },
       color: "#e3b87c",
-      description: { en: "Golden / peach base", fr: "Base dorée / pêche" },
+      description: {
+        en: "Your skin leans yellow, peach or gold underneath",
+        fr: "Sous la peau, ça tire plutôt doré ou pêche",
+      },
     },
   ];
 
@@ -345,7 +375,10 @@ export function SkinTintWorkerView({
           fitzDisplay ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                {i18n(language, { en: "Fitzpatrick", fr: "Fitzpatrick" })}
+                {i18n(language, {
+                  en: "Natural depth (I–VI)",
+                  fr: "Niveau naturel (I–VI)",
+                })}
               </p>
               <p className="mt-1 font-display text-base font-bold text-white">
                 {fitzDisplay}
@@ -360,14 +393,23 @@ export function SkinTintWorkerView({
         <CardContent className="space-y-6 p-6 sm:p-8">
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-              {i18n(language, { en: "Phototype", fr: "Phototype" })}
+              {i18n(language, {
+                en: "Natural skin depth",
+                fr: "Profondeur naturelle du teint",
+              })}
             </p>
             <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
               {i18n(language, {
-                en: "Where your skin sits on Fitzpatrick",
-                fr: "Où ta peau se situe sur Fitzpatrick",
+                en: "From very fair to deep — and how you react in the sun",
+                fr: "Du très clair au foncé — et ta peau au soleil",
               })}
             </h3>
+            <p className="text-sm leading-relaxed text-zinc-500">
+              {i18n(language, {
+                en: "Six steps for natural tone: mainly whether you burn easily or tan without burning — not makeup.",
+                fr: "Six repères sur ton teint naturel : surtout si tu brûles vite ou si tu bronzes sans brûler — pas le maquillage.",
+              })}
+            </p>
             {fitzEnum.argument ? (
               <p className="text-sm leading-relaxed text-zinc-400">
                 {fitzEnum.argument}
@@ -384,14 +426,23 @@ export function SkinTintWorkerView({
           <CardContent className="space-y-5 p-6 sm:p-8">
             <div className="space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                {i18n(language, { en: "Undertone", fr: "Sous-ton" })}
+                {i18n(language, {
+                  en: "Undertone",
+                  fr: "Reflet du teint",
+                })}
               </p>
               <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
                 {i18n(language, {
-                  en: "Cool, neutral or warm",
-                  fr: "Froid, neutre ou chaud",
+                  en: "Pinkish, balanced or golden underneath",
+                  fr: "Plutôt rosé, équilibré ou doré en dessous",
                 })}
               </h3>
+              <p className="text-sm leading-relaxed text-zinc-500">
+                {i18n(language, {
+                  en: "Under the surface color — the hue that shows through your skin.",
+                  fr: "Ce n’est pas la couleur qu’on voit tout de suite : c’est la nuance qui transparaît sous le teint.",
+                })}
+              </p>
               {undertoneEnum.argument ? (
                 <p className="text-sm leading-relaxed text-zinc-400">
                   {undertoneEnum.argument}

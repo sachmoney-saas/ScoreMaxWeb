@@ -254,18 +254,27 @@ export function SectionShell({
   title,
   children,
   when = true,
+  sectionId,
 }: {
   eyebrow: string;
   title: string;
   children: React.ReactNode;
   /** Si `false`, la carte n'est pas rendue (évite les panneaux vides si tous les `ScoreBar` sont absents). */
   when?: boolean;
+  /** Ancre pour scroll depuis radars / matrices (sans `#`). */
+  sectionId?: string;
 }) {
   if (!when) {
     return null;
   }
   return (
-    <Card className={workerSectionCardClassName}>
+    <Card
+      id={sectionId}
+      className={cn(
+        workerSectionCardClassName,
+        sectionId && "scroll-mt-28 sm:scroll-mt-32",
+      )}
+    >
       <CardContent className="space-y-5 p-6">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -296,20 +305,48 @@ export function ScoreBar({
   argument,
   language,
   scale = 10,
+  scrollTargetId,
 }: {
   label: string;
   score: number | null;
   argument: string | null;
   language: AppLanguage;
   scale?: number;
+  /** Ancre DOM pour scroll depuis radar / toile (sans `#`). */
+  scrollTargetId?: string;
 }) {
-  if (score === null) return null;
+  const wrap = (node: React.ReactElement) =>
+    scrollTargetId ? (
+      <div id={scrollTargetId} className="scroll-mt-28 sm:scroll-mt-32">
+        {node}
+      </div>
+    ) : (
+      node
+    );
+
+  if (score === null) {
+    if (!argument?.trim()) return null;
+    return wrap(
+      <div className="space-y-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-sm font-medium text-zinc-200">{label}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">
+            {i18n(language, {
+              en: "No numeric score",
+              fr: "Score non agrégé",
+            })}
+          </span>
+        </div>
+        <p className="text-xs leading-relaxed text-zinc-400">{argument}</p>
+      </div>,
+    );
+  }
   const clamped = Math.max(0, Math.min(score, scale));
   const score0to100 = localScoreToGlobal100(clamped, scale);
   const pct = score0to100;
   const band = bandFromScore(clamped);
 
-  return (
+  return wrap(
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-sm font-medium text-zinc-200">{label}</span>
@@ -356,7 +393,7 @@ export function ScoreBar({
       {argument ? (
         <p className="text-xs leading-relaxed text-zinc-400">{argument}</p>
       ) : null}
-    </div>
+    </div>,
   );
 }
 
@@ -553,6 +590,7 @@ export function WorkerHero({
   scale = 10,
   scoreFractionDigits,
   rightSlot,
+  anchorId,
 }: {
   eyebrow: string;
   title: string;
@@ -561,9 +599,16 @@ export function WorkerHero({
   scale?: number;
   scoreFractionDigits?: number;
   rightSlot?: React.ReactNode;
+  anchorId?: string;
 }) {
   return (
-    <Card className={workerSectionCardClassName}>
+    <Card
+      id={anchorId}
+      className={cn(
+        workerSectionCardClassName,
+        anchorId && "scroll-mt-28 sm:scroll-mt-32",
+      )}
+    >
       <CardContent className="p-6 sm:p-8">
         <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
           {score !== null && score !== undefined ? (
