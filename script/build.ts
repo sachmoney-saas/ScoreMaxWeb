@@ -33,6 +33,7 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  console.log(`[build] start ${new Date().toISOString()}`);
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");
@@ -59,9 +60,16 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  console.log(`[build] done ${new Date().toISOString()}`);
 }
 
-buildAll().catch((err) => {
-  console.error(err);
+buildAll().catch((err: unknown) => {
+  if (err instanceof Error) {
+    console.error("[build] failed:", err.message);
+    if (err.stack) console.error(err.stack);
+  } else {
+    console.error("[build] failed:", err);
+  }
   process.exit(1);
 });
