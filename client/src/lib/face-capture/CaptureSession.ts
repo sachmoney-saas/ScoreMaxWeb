@@ -14,6 +14,7 @@ import { FaceDetector } from "./FaceDetector";
 import { MaskRenderer } from "./MaskRenderer";
 import { MotionTracker } from "./MotionTracker";
 import { PoseValidator } from "./PoseValidator";
+import { evaluateFrameQualityMinimal } from "./QualityGate";
 
 export type CaptureSessionEvent =
   | { type: "pose_captured"; poseId: PoseId; blob: Blob }
@@ -49,8 +50,17 @@ const DEFAULT_CONFIG: CaptureSessionConfig = {
   holdFrames: 18,
 };
 
-/** After session start, pause alignment / hold on the first frontal pose so the user can settle. */
-const FIRST_POSE_WARMUP_MS = 1500;
+/**
+ * After session start, pause alignment / hold on the first frontal pose so:
+ *   1. the user can settle in front of the camera ;
+ *   2. **l'auto-exposition / balance des blancs de la caméra a le temps de
+ *      se stabiliser**. Sur mobile, l'AE met typiquement 1.5–2 s à converger
+ *      après ouverture du flux ; capturer plus tôt produit une image
+ *      visiblement plus sombre que les suivantes (le cas typique : « photo 1
+ *      de face plus sombre que les autres »). 2.5 s couvre la grande majorité
+ *      des téléphones sans rallonger artificiellement les autres poses.
+ */
+const FIRST_POSE_WARMUP_MS = 2500;
 
 export class CaptureSession {
   private readonly camera = new CameraManager();
@@ -605,7 +615,27 @@ export class CaptureSession {
      * is exactly the "bar finishes but nothing happens, then restarts"
      * symptom the user reported. We rely on the held-pose stability
      * window itself as the quality signal.
+     *
+     * **Exception : sous-exposition manifeste sur la 1ʳᵉ pose.** Quand la
+     * caméra vient d'ouvrir, l'AE peut ne pas avoir convergé et la frame
+     * peut sortir nettement plus sombre que les suivantes. On laisse
+     * jusqu'à `EXPOSURE_STABILIZATION_MS` à la caméra pour s'éclaircir
+     * avant de capturer ; au-delà, on capture quand même (le hold a déjà
+     * été tenu, on ne va pas faire poireauter l'utilisateur indéfiniment).
      */
+    const EXPOSURE_STABILIZATION_MS = 1000;
+    const EXPOSURE_POLL_MS = 100;
+    const MIN_ACCEPTABLE_LUMA = 35;
+    const exposureStartedAt = performance.now();
+    while (
+      this.videoEl &&
+      this.videoEl.videoWidth > 0 &&
+      performance.now() - exposureStartedAt < EXPOSURE_STABILIZATION_MS
+    ) {
+      const stats = evaluateFrameQualityMinimal(this.videoEl);
+      if (stats.meanLuma >= MIN_ACCEPTABLE_LUMA) break;
+      await new Promise((r) => setTimeout(r, EXPOSURE_POLL_MS));
+    }
 
     const cooldownMs = this.config.cooldownMs ?? 300;
     /** Pre-arm cooldown BEFORE the async takePhoto so subsequent frames can't sneak past. */

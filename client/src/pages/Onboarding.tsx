@@ -830,6 +830,9 @@ export default function Onboarding() {
    */
   const [hasStartedRun, setHasStartedRun] = React.useState(false);
 
+  /** Zone scrollable de la page (pas `window` — overflow sur ce conteneur). */
+  const onboardingScrollRootRef = React.useRef<HTMLDivElement>(null);
+
   React.useEffect(() => {
     for (const src of ONBOARDING_PRELOAD_IMAGE_URLS) {
       const img = new Image();
@@ -1111,15 +1114,23 @@ export default function Onboarding() {
     }
   }, [language, setLocation, user?.id]);
 
+  const scrollOnboardingToTop = React.useCallback(() => {
+    onboardingScrollRootRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
   const handleNext = React.useCallback(() => {
     setStepIndex((prev) => {
       if (prev >= steps.length - 1) return prev;
       return prev + 1;
     });
-  }, [steps.length]);
+    scrollOnboardingToTop();
+  }, [scrollOnboardingToTop, steps.length]);
 
   return (
-    <div className="relative min-h-dvh overflow-x-hidden overflow-y-auto">
+    <div
+      ref={onboardingScrollRootRef}
+      className="relative min-h-dvh overflow-x-hidden overflow-y-auto"
+    >
       <OnboardingWaveBackground />
       <div className={authPageOverlayClassName} aria-hidden />
 
