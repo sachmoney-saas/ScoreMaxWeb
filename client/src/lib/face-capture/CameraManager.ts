@@ -4,6 +4,11 @@
 
 import type { CameraConfig } from './types';
 
+/** `lib.dom` older than 2023 may omit `grabFrame` on ImageCapture — runtime support is common on mobile. */
+type ImageCaptureCompat = ImageCapture & {
+  grabFrame?: () => Promise<ImageBitmap>;
+};
+
 export type CameraState = 'idle' | 'requesting' | 'starting' | 'running' | 'stopped' | 'error';
 
 export class CameraManager {
@@ -155,11 +160,35 @@ export class CameraManager {
    * returns the camera's *native* resolution (often 4K) — even compressed,
    * 8 captures × 6–15 MB push the analysis payload past the server's 12 MB
    * body limit and the upstream ScoreMax API limit (PAYLOAD_TOO_LARGE).
+   *
+   * **Priority: `grabFrame()` before `takePhoto()`.** Sur téléphone, `takePhoto()`
+   * utilise souvent une voie « still » avec exposition/gain différents de
+   * l’aperçu ; la 1ʳᵉ image peut alors paraître nettement plus sombre que la
+   * suite. `grabFrame()` échantillonne le flux preview — aligné sur ce que
+   * l’utilisateur voit pendant l’alignement — ce qui suffit largement après
+   * redimensionnement à 1600 px.
    */
   async captureFrame(): Promise<Blob | null> {
     if (!this.stream) return null;
 
     if (this.processor) {
+      /** Échantillon direct du flux preview — même luminosité que l’UI. */
+      let previewFrame: ImageBitmap | null = null;
+      try {
+        const ic = this.processor as ImageCaptureCompat;
+        if (typeof ic.grabFrame === "function") {
+          previewFrame = await ic.grabFrame();
+          if (previewFrame) {
+            const bounded = await this._encodeBoundedJpeg(previewFrame);
+            if (bounded) return bounded;
+          }
+        }
+      } catch {
+        /* grabFrame indisponible ou erreur → takePhoto / canvas */
+      } finally {
+        previewFrame?.close();
+      }
+
       try {
         const rawBlob = await this.processor.takePhoto();
         const bounded = await this._encodeBoundedJpeg(rawBlob);
@@ -178,12 +207,12 @@ export class CameraManager {
   }
 
   /**
-   * Draws an `ImageBitmap`-decodable source (Blob) or `HTMLVideoElement` to
-   * a canvas, scaled so the long edge ≤ `MAX_CAPTURE_EDGE`, then encodes
-   * JPEG at `CAPTURE_JPEG_QUALITY`. Bounded output: ~150–500 KB per shot.
+   * Draws an `ImageBitmap`-decodable source (Blob), `ImageBitmap`, or
+   * `HTMLVideoElement` to a canvas, scaled so the long edge ≤ `MAX_CAPTURE_EDGE`,
+   * then encodes JPEG at `CAPTURE_JPEG_QUALITY`. Bounded output: ~150–500 KB per shot.
    */
   private async _encodeBoundedJpeg(
-    source: Blob | HTMLVideoElement,
+    source: Blob | HTMLVideoElement | ImageBitmap,
   ): Promise<Blob | null> {
     let srcW = 0;
     let srcH = 0;
@@ -199,6 +228,11 @@ export class CameraManager {
       srcW = bitmap.width;
       srcH = bitmap.height;
       drawSource = bitmap;
+    } else if (source instanceof ImageBitmap) {
+      srcW = source.width;
+      srcH = source.height;
+      if (!srcW || !srcH) return null;
+      drawSource = source;
     } else {
       srcW = source.videoWidth;
       srcH = source.videoHeight;
