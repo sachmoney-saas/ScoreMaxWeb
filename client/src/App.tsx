@@ -23,6 +23,7 @@ import {
   AdminRecommendationsWorker,
 } from "@/pages/AdminRecommendations";
 import Protocol from "@/pages/Protocol";
+import ProtocolRecommendations from "@/pages/ProtocolRecommendations";
 import Settings from "@/pages/Settings";
 import Billing from "@/pages/Billing";
 import MentionsLegales from "@/pages/MentionsLegales";
@@ -161,6 +162,10 @@ function Router() {
 
         <Route path="/app/analyses/:jobId">
           <ProtectedRoute component={AnalysisDetails} />
+        </Route>
+
+        <Route path="/app/protocol/recommendations">
+          <ProtectedRoute component={ProtocolRecommendations} />
         </Route>
 
         <Route path="/app/protocol">

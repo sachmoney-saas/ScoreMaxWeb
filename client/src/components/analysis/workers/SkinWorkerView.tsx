@@ -18,6 +18,7 @@ import {
 import {
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -221,9 +222,14 @@ function SkinRadarChart({
 export interface SkinWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
+export function SkinWorkerView({
+  aggregates,
+  language,
+  heroAside,
+}: SkinWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -375,6 +381,7 @@ export function SkinWorkerView({ aggregates, language }: SkinWorkerViewProps) {
         argument={heroArgument}
         score={heroSkinScore}
         scoreFractionDigits={heroSkinScore != null ? 2 : undefined}
+        rightSlot={mergeHeroRightSlot(undefined, heroAside)}
       />
 
       {/* Radar snapshot */}

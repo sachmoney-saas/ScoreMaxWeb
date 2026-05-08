@@ -12,6 +12,7 @@ import {
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -37,9 +38,14 @@ function resolveOverallNeck(aggregates: Record<string, unknown>) {
 export interface NeckWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
+export function NeckWorkerView({
+  aggregates,
+  language,
+  heroAside,
+}: NeckWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -153,7 +159,7 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
         argument={overall.argument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           shapeDescriptorDisplay ? (
             <MorphologyBadge
               eyebrow={i18n(language, {
@@ -163,8 +169,9 @@ export function NeckWorkerView({ aggregates, language }: NeckWorkerViewProps) {
               value={shapeDescriptorDisplay ?? shapeDescriptorEnum.value ?? ""}
               className="text-right"
             />
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {radarData.length >= 3 ? (

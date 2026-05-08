@@ -1,16 +1,27 @@
 import * as React from "react";
 
 type WaveBackgroundProps = {
+  canvasClassName?: string;
   className?: string;
   position?: "fixed" | "absolute";
+  useContainerSize?: boolean;
 };
 
-export function WaveBackground({ className = "", position = "fixed" }: WaveBackgroundProps) {
+export function WaveBackground({
+  canvasClassName = "",
+  className = "",
+  position = "fixed",
+  useContainerSize = false,
+}: WaveBackgroundProps) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) {
+    const wrap = wrapRef.current;
+    const bindSizeToContainer = position === "absolute" || useContainerSize;
+
+    if (!canvas || (bindSizeToContainer && !wrap)) {
       return;
     }
 
@@ -200,13 +211,23 @@ export function WaveBackground({ className = "", position = "fixed" }: WaveBackg
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const width = Math.floor(window.innerWidth * dpr);
-      const height = Math.floor(window.innerHeight * dpr);
+      const cssW = bindSizeToContainer
+        ? Math.max(1, Math.round(wrap!.clientWidth))
+        : window.innerWidth;
+      const cssH = bindSizeToContainer
+        ? Math.max(1, Math.round(wrap!.clientHeight))
+        : window.innerHeight;
+      const width = Math.floor(cssW * dpr);
+      const height = Math.floor(cssH * dpr);
+
+      if (canvas.width === width && canvas.height === height) {
+        return;
+      }
 
       canvas.width = width;
       canvas.height = height;
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
+      canvas.style.width = `${cssW}px`;
+      canvas.style.height = `${cssH}px`;
       gl.viewport(0, 0, width, height);
     };
 
@@ -228,12 +249,23 @@ export function WaveBackground({ className = "", position = "fixed" }: WaveBackg
       }
     };
 
+    const vv = window.visualViewport;
+    const onViewportResize = () => resize();
+    const ro =
+      bindSizeToContainer && wrap ? new ResizeObserver(() => resize()) : null;
+
     resize();
     animationFrameId = window.requestAnimationFrame(render);
-    window.addEventListener("resize", resize);
+    window.addEventListener("resize", onViewportResize);
+    vv?.addEventListener("resize", onViewportResize);
+    vv?.addEventListener("scroll", onViewportResize);
+    ro?.observe(wrap!);
 
     return () => {
-      window.removeEventListener("resize", resize);
+      window.removeEventListener("resize", onViewportResize);
+      vv?.removeEventListener("resize", onViewportResize);
+      vv?.removeEventListener("scroll", onViewportResize);
+      ro?.disconnect();
       if (animationFrameId) {
         window.cancelAnimationFrame(animationFrameId);
       }
@@ -243,13 +275,18 @@ export function WaveBackground({ className = "", position = "fixed" }: WaveBackg
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
     };
-  }, []);
+  }, [position, useContainerSize]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={`${position} inset-0 h-full w-full bg-[#9aaeb5] ${className}`}
+    <div
+      ref={wrapRef}
+      className={`${position} inset-0 ${className}`}
       aria-hidden="true"
-    />
+    >
+      <canvas
+        ref={canvasRef}
+        className={`block h-full w-full bg-[#9aaeb5] ${canvasClassName}`}
+      />
+    </div>
   );
 }

@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FaceCaptureView } from "@/components/FaceCaptureView";
+import { WaveBackground } from "@/components/background/WaveBackground";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
 import {
@@ -549,259 +550,6 @@ function getOnboardingSteps(language: AppLanguage): OnboardingStep[] {
   ];
 }
 
-function OnboardingWaveBackground() {
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    const gl = canvas.getContext("webgl", {
-      alpha: false,
-      antialias: true,
-      depth: false,
-      stencil: false,
-      premultipliedAlpha: false,
-      preserveDrawingBuffer: false,
-    });
-
-    if (!gl) {
-      return;
-    }
-
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-
-    const vertexShaderSource = `
-      attribute vec2 position;
-      void main() {
-        gl_Position = vec4(position, 0.0, 1.0);
-      }
-    `;
-
-    const fragmentShaderSource = `
-      precision mediump float;
-
-      uniform float u_time;
-      uniform vec2 u_resolution;
-
-      vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-      vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-      vec3 permute(vec3 x) { return mod289(((x * 34.0) + 1.0) * x); }
-
-      float snoise(vec2 v) {
-        const vec4 C = vec4(
-          0.211324865405187,
-          0.366025403784439,
-         -0.577350269189626,
-          0.024390243902439
-        );
-
-        vec2 i = floor(v + dot(v, C.yy));
-        vec2 x0 = v - i + dot(i, C.xx);
-        vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-        vec4 x12 = x0.xyxy + C.xxzz;
-        x12.xy -= i1;
-        i = mod289(i);
-
-        vec3 p = permute(
-          permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0)
-        );
-
-        vec3 m = max(
-          0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)),
-          0.0
-        );
-        m = m * m;
-        m = m * m;
-
-        vec3 x = 2.0 * fract(p * C.www) - 1.0;
-        vec3 h = abs(x) - 0.5;
-        vec3 ox = floor(x + 0.5);
-        vec3 a0 = x - ox;
-
-        m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
-
-        vec3 g;
-        g.x = a0.x * x0.x + h.x * x0.y;
-        g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-        return 130.0 * dot(m, g);
-      }
-
-      float fbm(vec2 p) {
-        float value = 0.0;
-        float amplitude = 0.55;
-        for (int i = 0; i < 4; i++) {
-          value += amplitude * snoise(p);
-          p = p * 1.85;
-          amplitude *= 0.52;
-        }
-        return value;
-      }
-
-      void main() {
-        vec2 st = gl_FragCoord.xy / u_resolution.xy;
-        vec2 uv = st - 0.5;
-        uv.x *= u_resolution.x / u_resolution.y;
-
-        float t = u_time * 0.11;
-
-        // Gros volumes lents (2-3 masses dominantes)
-        vec2 pA = uv * 1.28 + vec2(t * 0.18, -t * 0.11);
-        vec2 pB = uv * 1.05 + vec2(-t * 0.13, t * 0.09);
-
-        float nA = fbm(pA);
-        float nB = fbm(pB + nA * 0.28);
-        float fluid = nA * 0.68 + nB * 0.32;
-        fluid = fluid * 0.5 + 0.5;
-
-        vec3 colorLight = vec3(0.75, 0.82, 0.85);
-        vec3 colorDark = vec3(0.15, 0.25, 0.30);
-        vec3 baseColor = mix(colorDark, colorLight, smoothstep(0.22, 0.84, fluid));
-
-        // Contours doux modernes (2-3 lignes visibles, pas de géométrie angulaire)
-        float line1 = smoothstep(0.48, 0.505, fluid) - smoothstep(0.505, 0.54, fluid);
-        float line2 = smoothstep(0.64, 0.67, fluid) - smoothstep(0.67, 0.705, fluid);
-        float line3 = smoothstep(0.79, 0.815, fluid) - smoothstep(0.815, 0.845, fluid);
-        float lines = line1 * 0.8 + line2 * 0.65 + line3 * 0.5;
-
-        vec3 contourColor = vec3(0.90, 0.95, 0.98) * lines;
-        vec3 finalColor = baseColor + contourColor * 0.42;
-
-        float vignette = smoothstep(1.1, 0.18, length(uv));
-        finalColor = mix(vec3(0.10, 0.18, 0.22), finalColor, vignette);
-
-        gl_FragColor = vec4(finalColor, 1.0);
-      }
-    `;
-
-    const createShader = (type: number, source: string) => {
-      const shader = gl.createShader(type);
-      if (!shader) {
-        return null;
-      }
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        gl.deleteShader(shader);
-        return null;
-      }
-      return shader;
-    };
-
-    const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
-    const fragmentShader = createShader(
-      gl.FRAGMENT_SHADER,
-      fragmentShaderSource,
-    );
-
-    if (!vertexShader || !fragmentShader) {
-      return;
-    }
-
-    const program = gl.createProgram();
-    if (!program) {
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-      return;
-    }
-
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-      return;
-    }
-
-    gl.useProgram(program);
-
-    const positionBuffer = gl.createBuffer();
-    if (!positionBuffer) {
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-      return;
-    }
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
-      gl.STATIC_DRAW,
-    );
-
-    const positionLocation = gl.getAttribLocation(program, "position");
-    gl.enableVertexAttribArray(positionLocation);
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-    const timeLocation = gl.getUniformLocation(program, "u_time");
-    const resolutionLocation = gl.getUniformLocation(program, "u_resolution");
-
-    let animationFrameId = 0;
-    let startTime = performance.now();
-
-    const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const width = Math.floor(window.innerWidth * dpr);
-      const height = Math.floor(window.innerHeight * dpr);
-
-      canvas.width = width;
-      canvas.height = height;
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
-      gl.viewport(0, 0, width, height);
-    };
-
-    const render = (now: number) => {
-      const elapsed = (now - startTime) * 0.001;
-      const animatedTime = prefersReducedMotion ? 0 : elapsed;
-
-      if (timeLocation) {
-        gl.uniform1f(timeLocation, animatedTime);
-      }
-      if (resolutionLocation) {
-        gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
-      }
-
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-      if (!prefersReducedMotion) {
-        animationFrameId = window.requestAnimationFrame(render);
-      }
-    };
-
-    resize();
-    animationFrameId = window.requestAnimationFrame(render);
-    window.addEventListener("resize", resize);
-
-    return () => {
-      window.removeEventListener("resize", resize);
-      if (animationFrameId) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
-
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="DetailsForm-module-scss-module__Y0wOgG__background fixed inset-0 h-dvh w-dvw bg-[#9aaeb5]"
-      aria-hidden="true"
-    />
-  );
-}
 
 export default function Onboarding() {
   const language = useAppLanguage();
@@ -830,8 +578,22 @@ export default function Onboarding() {
    */
   const [hasStartedRun, setHasStartedRun] = React.useState(false);
 
-  /** Zone scrollable de la page (pas `window` — overflow sur ce conteneur). */
+  /** Zone scrollable de la page ; sur mobile le scroll peut aussi être porté par `window`. */
   const onboardingScrollRootRef = React.useRef<HTMLDivElement>(null);
+
+  React.useLayoutEffect(() => {
+    const snapScrollToTop = () => {
+      const el = onboardingScrollRootRef.current;
+      el?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    snapScrollToTop();
+    const raf = requestAnimationFrame(snapScrollToTop);
+    return () => cancelAnimationFrame(raf);
+  }, [stepIndex]);
 
   React.useEffect(() => {
     for (const src of ONBOARDING_PRELOAD_IMAGE_URLS) {
@@ -873,6 +635,13 @@ export default function Onboarding() {
     currentStep.category === "Vie sociale" || currentStep.category === "Social life";
   const isIntroStep = currentStep.category === "Introduction";
   const isLastStep = stepIndex === steps.length - 1;
+  const evidenceGridClassName = cn(
+    "grid gap-3 sm:gap-4",
+    currentStep.evidence.length <= 1 && "mx-auto max-w-xl grid-cols-1",
+    currentStep.evidence.length === 2 && "grid-cols-1 md:grid-cols-2",
+    currentStep.evidence.length === 3 && "grid-cols-1 md:grid-cols-3",
+    currentStep.evidence.length >= 4 && "grid-cols-1 md:grid-cols-2",
+  );
 
   const jobStatus = useAnalysisJobStatus(onboardingJobId, {
     enabled: Boolean(user?.id && onboardingJobId),
@@ -1144,6 +913,7 @@ export default function Onboarding() {
 
   const scrollOnboardingToTop = React.useCallback(() => {
     onboardingScrollRootRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, []);
 
   const handleNext = React.useCallback(() => {
@@ -1157,13 +927,17 @@ export default function Onboarding() {
   return (
     <div
       ref={onboardingScrollRootRef}
-      className="relative min-h-dvh overflow-x-hidden overflow-y-auto"
+      className="relative isolate min-h-dvh overflow-x-hidden overflow-y-auto bg-[#9aaeb5]"
     >
-      <OnboardingWaveBackground />
+      <WaveBackground
+        useContainerSize
+        className="pointer-events-none z-0 bg-[#9aaeb5]"
+        canvasClassName="bg-transparent"
+      />
       <div className={authPageOverlayClassName} aria-hidden />
 
       {/* Account Menu */}
-      <div className="absolute top-4 right-4 z-20">
+      <div className="absolute right-[max(1rem,env(safe-area-inset-right,0px))] top-[max(1rem,calc(env(safe-area-inset-top,0px)+0.5rem))] z-20">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -1226,8 +1000,8 @@ export default function Onboarding() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-center px-4 py-6 sm:px-6 sm:py-6">
-        <div className="my-auto space-y-3 py-3 sm:space-y-4 sm:py-4">
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-start px-4 pb-5 pt-[max(0.75rem,calc(env(safe-area-inset-top,0px)+0.5rem))] sm:px-6 sm:py-6">
+        <div className="space-y-2.5 py-2 sm:space-y-4 sm:py-4">
           <div className="flex justify-center">
             <img
               src="/favicon.png"
@@ -1245,9 +1019,10 @@ export default function Onboarding() {
             {steps.map((_, index) => (
               <div
                 key={`step-segment-${index}`}
-                className={`h-2 rounded-full transition-colors duration-200 ${
-                  index <= stepIndex ? "bg-white" : "bg-white/25"
-                }`}
+                className={cn(
+                  "h-2 rounded-full transition-colors duration-200",
+                  index <= stepIndex ? "bg-white" : "bg-white/25",
+                )}
               />
             ))}
           </div>
@@ -1263,7 +1038,7 @@ export default function Onboarding() {
                 saasGlassPanelClassName,
                 "text-white shadow-[0_24px_70px_-35px_rgba(0,0,0,0.65)]",
                 isIntroStep
-                  ? "flex min-h-[min(392px,72dvh)] flex-col overflow-hidden px-4 pb-4 pt-3 sm:min-h-[min(432px,70dvh)] sm:px-6 sm:pb-5 sm:pt-4"
+                  ? "flex flex-col overflow-hidden px-4 py-5 sm:px-6 sm:py-7"
                   : "p-5 sm:p-8",
                 isLastStep && "mx-auto w-full max-w-[430px]",
               )}
@@ -1283,7 +1058,7 @@ export default function Onboarding() {
                     isIntroStep ? "" : "space-y-5"
                   } ${
                     isIntroStep
-                      ? "flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto text-center"
+                      ? "flex flex-col items-center gap-4 overflow-x-hidden text-center sm:gap-5"
                       : ""
                   }`}
                 >
@@ -1320,7 +1095,7 @@ export default function Onboarding() {
                             isDatingStep
                               ? "mx-auto max-w-[18ch] text-xl font-hero font-semibold leading-snug tracking-[-0.015em] text-white sm:text-2xl md:text-[2rem]"
                               : isIntroStep
-                                ? "mx-auto w-full min-w-0 max-w-full text-balance text-center text-[clamp(1.2rem,3.4vw+0.45rem,2.35rem)] font-hero font-semibold leading-[1.1] tracking-[-0.02em] text-white sm:text-[clamp(1.28rem,2.6vw+0.55rem,2.65rem)] md:text-[clamp(1.35rem,2vw+0.65rem,3rem)]"
+                                ? "mx-auto w-full min-w-0 max-w-full px-0.5 text-balance text-center text-[clamp(1.42rem,5.5vw+0.42rem,2.75rem)] font-hero font-semibold leading-[1.08] tracking-[-0.02em] text-white sm:px-1 sm:text-[clamp(1.52rem,3.4vw+0.72rem,2.95rem)] md:text-[clamp(1.6rem,2.6vw+0.85rem,3.2rem)]"
                               : "mx-auto max-w-[min(100%,26ch)] text-2xl font-hero font-semibold leading-[1.08] tracking-[-0.015em] text-white sm:max-w-[28ch] sm:text-[2rem] md:text-[2.125rem]"
                           }
                         >
@@ -1360,21 +1135,20 @@ export default function Onboarding() {
                 !isSocialStep &&
                 !isLastStep &&
                 currentStep.evidence.length > 0 ? (
-                  <div className={cn(saasGlassInsetClassName, "p-4")}>
+                  <div className={evidenceGridClassName}>
                     {currentStep.evidence.map((block, index) => (
                       <div
                         key={`onboarding-evidence-${index}`}
-                        className={
-                          index > 0
-                            ? "mt-3 border-t border-white/10 pt-3"
-                            : undefined
-                        }
+                        className={cn(
+                          saasGlassInsetClassName,
+                          "flex min-h-full flex-col p-4 text-left sm:p-5",
+                        )}
                       >
                         <p className="text-sm font-semibold leading-relaxed text-zinc-100 sm:text-base">
                           {block.claim}
                         </p>
                         {block.source ? (
-                          <p className="mt-1 text-xs leading-relaxed text-zinc-400 sm:text-sm">
+                          <p className="mt-auto pt-3 text-xs leading-relaxed text-zinc-400 sm:text-sm">
                             {block.source}
                           </p>
                         ) : null}
@@ -1440,14 +1214,14 @@ export default function Onboarding() {
                 ) : null}
 
                 {isIntroStep ? (
-                  <div className="mx-auto mt-5 w-full max-w-sm shrink-0 sm:mt-6">
+                  <div className="mx-auto mt-3 w-full max-w-[min(100%,15rem)] shrink-0 sm:mt-5 sm:max-w-sm">
                     <Button
                       type="button"
                       onClick={handleNext}
                       disabled={isSubmitting}
                       className={cn(
-                        "h-12 w-full text-base sm:min-h-[3.25rem]",
                         onboardingPrimaryCtaClassName,
+                        "h-9 w-full rounded-xl px-5 text-sm font-semibold sm:h-11 sm:min-h-[2.75rem] sm:px-8 sm:text-base",
                       )}
                     >
                       {i18n(language, { en: "Continue", fr: "Continuer" })}

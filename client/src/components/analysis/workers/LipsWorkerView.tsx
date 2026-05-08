@@ -11,6 +11,7 @@ import {
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -149,9 +150,14 @@ function LipColorSwatch({
 export interface LipsWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function LipsWorkerView({ aggregates, language }: LipsWorkerViewProps) {
+export function LipsWorkerView({
+  aggregates,
+  language,
+  heroAside,
+}: LipsWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -216,7 +222,7 @@ export function LipsWorkerView({ aggregates, language }: LipsWorkerViewProps) {
         argument={heroArgument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           colorDisplay ? (
             <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
               <span
@@ -232,8 +238,9 @@ export function LipsWorkerView({ aggregates, language }: LipsWorkerViewProps) {
                 </p>
               </div>
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {/* Fullness + upper/lower balance */}

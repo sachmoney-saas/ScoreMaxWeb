@@ -16,6 +16,7 @@ import {
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -141,9 +142,14 @@ function TextureGallery({
 export interface HairWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
+export function HairWorkerView({
+  aggregates,
+  language,
+  heroAside,
+}: HairWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -211,7 +217,7 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
         argument={overall.argument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           textureDisplay ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -221,8 +227,9 @@ export function HairWorkerView({ aggregates, language }: HairWorkerViewProps) {
                 {textureDisplay}
               </p>
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       <Card

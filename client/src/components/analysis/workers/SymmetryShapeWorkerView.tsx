@@ -20,6 +20,7 @@ import {
   ScoreBar,
   SectionShell,
   WorkerHero,
+  mergeHeroRightSlot,
   workerSectionCardClassName,
 } from "./_shared";
 
@@ -489,11 +490,13 @@ function ProportionsCanvas({
 export interface SymmetryShapeWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
 export function SymmetryShapeWorkerView({
   aggregates,
   language,
+  heroAside,
 }: SymmetryShapeWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -624,7 +627,7 @@ export function SymmetryShapeWorkerView({
         argument={heroArgument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           shapeDisplay ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -634,8 +637,9 @@ export function SymmetryShapeWorkerView({
                 {shapeDisplay}
               </p>
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {/* Face shape gallery + signed ratios */}

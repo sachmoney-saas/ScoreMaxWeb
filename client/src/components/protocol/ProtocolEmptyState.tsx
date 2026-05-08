@@ -4,18 +4,22 @@ import { Link } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { ProtocolHubNavTabs } from "@/components/protocol/ProtocolHubNavTabs";
 import { ProtocolPageShell, ProtocolPageTitle } from "@/components/protocol/ProtocolPageShell";
 
 /** Blurred preview behind the empty-state modal (structure aligned with the real page). */
 function ProtocolEmptyBackdrop({ language }: { language: AppLanguage }) {
   return (
-    <ProtocolPageShell header={<ProtocolPageTitle language={language} />}>
+    <ProtocolPageShell
+      topNav={<ProtocolHubNavTabs language={language} active="protocol" />}
+      header={<ProtocolPageTitle language={language} />}
+    >
       <div className="space-y-8" aria-hidden>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="h-40 rounded-xl border border-zinc-200 bg-zinc-50"
+              className="h-40 rounded-xl border border-white/10 bg-white/[0.06]"
             />
           ))}
         </div>
@@ -23,7 +27,7 @@ function ProtocolEmptyBackdrop({ language }: { language: AppLanguage }) {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-24 rounded-xl border border-zinc-200 bg-zinc-50"
+              className="h-24 rounded-xl border border-white/10 bg-white/[0.06]"
             />
           ))}
         </div>

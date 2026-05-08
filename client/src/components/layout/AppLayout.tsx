@@ -650,7 +650,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <ModernAppSidebar />
         <SidebarInset className="flex min-h-0 flex-col overflow-hidden bg-transparent">
           <SidebarTrigger className="absolute left-4 top-4 z-30 h-8 w-8 rounded-lg border border-white/10 bg-white/10 backdrop-blur-xl hover:bg-white/15 md:hidden" />
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-4 md:p-8">
+          <div
+            data-app-scroll-region
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-4 md:p-8"
+          >
             <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col animate-in fade-in slide-in-from-bottom-4 duration-500 text-foreground">
               {children}
             </div>

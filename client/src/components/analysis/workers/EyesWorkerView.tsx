@@ -7,10 +7,12 @@ import {
 } from "@/lib/face-analysis-display";
 import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import {
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -20,7 +22,9 @@ import {
 const WORKER_KEY = "eyes";
 
 /* ----------------------------------------------------------------------------
- * Iris color palette (reused from coloring inspiration)
+ * Iris : une entrée par valeur possible du modèle (15), ordre = mélanine / luminance
+ * décroissante du haut vers le bas — `almost_black` est toujours le pôle le plus sombre.
+ * Référence clés : AGGREGATE_VALUE_REGISTRY eyes → iris_sclera_and_lashes.iris_color
  * ------------------------------------------------------------------------- */
 
 const IRIS_SPECTRUM: { key: string; color: string }[] = [
@@ -34,11 +38,12 @@ const IRIS_SPECTRUM: { key: string; color: string }[] = [
   { key: "hazel_brown", color: "#8b6f47" },
   { key: "light_brown", color: "#a06f43" },
   { key: "medium_brown", color: "#6a4528" },
-  { key: "dark_brown", color: "#3a261a" },
   { key: "amber", color: "#b8860b" },
+  { key: "dark_brown", color: "#3a261a" },
+  /* Hétérochromie : transitions encore assombries mais avant le presque noir */
+  { key: "central_heterochromia", color: "#2e221b" },
+  { key: "sectoral_heterochromia", color: "#231a13" },
   { key: "almost_black", color: "#1a1410" },
-  { key: "central_heterochromia", color: "#6a5acd" },
-  { key: "sectoral_heterochromia", color: "#9370db" },
 ];
 
 function normalizeIrisKey(value: string | null): string | null {
@@ -46,50 +51,217 @@ function normalizeIrisKey(value: string | null): string | null {
   return value.toLowerCase().trim().replace(/\s+/g, "_");
 }
 
-function IrisSwatch({
+/** Barre étroite et haute : chaque bande est plus haute que large (voir maquette). */
+const IRIS_BAR_WIDTH_CLASS = "w-7 sm:w-8";
+/** Piste de mesure : hauteur fixe (les % du repère sont relatifs à cette boîte uniquement). */
+const IRIS_GRAPH_TRACK_CLASS = "h-[26rem] sm:h-[30rem]";
+
+function isHeterochromiaKey(normalized: string | null): boolean {
+  return (
+    normalized === "central_heterochromia" || normalized === "sectoral_heterochromia"
+  );
+}
+
+function irisMelaninSummary(
+  language: AppLanguage,
+  normalized: string | null,
+  paletteIndex: number,
+): React.ReactNode {
+  const fr = language === "fr";
+  if (isHeterochromiaKey(normalized)) {
+    return fr ? (
+      <>
+        Ton iris présente une répartition pigmentaire{" "}
+        <span className="font-semibold text-white">atypique</span> (hétérochromie).
+      </>
+    ) : (
+      <>
+        Your iris shows{" "}
+        <span className="font-semibold text-white">atypical pigment</span> distribution
+        (heterochromia).
+      </>
+    );
+  }
+  const idx = paletteIndex >= 0 ? paletteIndex : 0;
+  if (idx < 4) {
+    return fr ? (
+      <>
+        Tes yeux correspondent à une{" "}
+        <span className="font-semibold text-white">faible mélanisation</span> de
+        l&apos;iris (tons clairs, bleus-gris).
+      </>
+    ) : (
+      <>
+        Your eyes skew toward{" "}
+        <span className="font-semibold text-white">low melanin</span> in the iris (lighter /
+        cooler tones).
+      </>
+    );
+  }
+  if (idx < 8) {
+    return fr ? (
+      <>
+        Tes yeux se situent dans une plage de{" "}
+        <span className="font-semibold text-white">mélanine modérée</span> (verts et
+        noisettes).
+      </>
+    ) : (
+      <>
+        Your eyes sit in a <span className="font-semibold text-white">moderate melanin</span> range
+        (greens and hazels).
+      </>
+    );
+  }
+  if (idx < 10) {
+    return fr ? (
+      <>
+        Les tons de tes yeux indiquent une{" "}
+        <span className="font-semibold text-white">mélanine assez élevée</span> dans
+        l&apos;iris (bruns clairs à moyens).
+      </>
+    ) : (
+      <>
+        Your eyes show{" "}
+        <span className="font-semibold text-white">relatively high melanin</span> concentration in
+        the iris.
+      </>
+    );
+  }
+  if (idx < 12) {
+    return fr ? (
+      <>
+        Ton iris reflète une{" "}
+        <span className="font-semibold text-white">forte concentration de mélanine</span> (ambre ou
+        brun profond).
+      </>
+    ) : (
+      <>
+        Your eyes have{" "}
+        <span className="font-semibold text-white">high melanin</span> concentration (amber to deep
+        brown).
+      </>
+    );
+  }
+  /* Presque noir (index 14) ; hétérochromies 12–13 gérées plus haut */
+  return fr ? (
+    <>
+      Ton iris est proche du pôle à{" "}
+      <span className="font-semibold text-white">mélanisation maximale</span> (brun très foncé,
+      presque noir).
+    </>
+  ) : (
+    <>
+      Your iris is near the{" "}
+      <span className="font-semibold text-white">maximum melanin</span> pole (almost black-brown).
+    </>
+  );
+}
+
+/** Spectre vertical : du bleu clair (haut) aux tons très foncés (bas), avec repère utilisateur. */
+function IrisSpectrumVertical({
   selected,
-  label,
   valueLabel,
   argument,
+  language,
 }: {
   selected: string | null;
-  label: string;
   valueLabel: string | null;
   argument: string | null;
+  language: AppLanguage;
 }) {
   const normalized = normalizeIrisKey(selected);
-  const idx = normalized
-    ? IRIS_SPECTRUM.findIndex((p) => p.key === normalized)
-    : -1;
+  const idx = normalized ? IRIS_SPECTRUM.findIndex((p) => p.key === normalized) : -1;
   const total = IRIS_SPECTRUM.length;
-  const pct = idx >= 0 ? ((idx + 0.5) / total) * 100 : null;
+  const pctTop = idx >= 0 ? ((idx + 0.5) / total) * 100 : null;
+  const swatchHex = idx >= 0 ? IRIS_SPECTRUM[idx]?.color ?? null : null;
+  const displayLabel =
+    valueLabel?.trim().length && idx >= 0 ? valueLabel.toUpperCase() : null;
+
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium text-zinc-200">{label}</span>
-        {valueLabel ? (
-          <span className="text-sm font-semibold text-white">{valueLabel}</span>
+    <div className="space-y-6">
+      <div className="mx-auto w-full max-w-md py-6 sm:py-8">
+        <div
+          className={cn(
+            "relative mx-auto w-full max-w-xs select-none sm:max-w-sm",
+            IRIS_GRAPH_TRACK_CLASS,
+          )}
+          aria-label={
+            typeof valueLabel === "string" ? valueLabel : "Iris melanin spectrum"
+          }
+        >
+          {/* Ligne horizontale centrée sur la bande sélectionnée (même référence de hauteur que la barre) */}
+          {pctTop !== null ? (
+            <div
+              className="pointer-events-none absolute left-0 right-0 z-[1] border-t border-dashed border-white/30"
+              style={{
+                top: `${pctTop}%`,
+                transform: "translateY(-50%)",
+              }}
+            />
+          ) : null}
+
+          <div
+            className={cn(
+              "absolute left-1/2 top-0 z-[2] flex h-full -translate-x-1/2 flex-col overflow-hidden rounded-full border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
+              IRIS_BAR_WIDTH_CLASS,
+            )}
+          >
+            {IRIS_SPECTRUM.map((p, i) => (
+              <div
+                key={p.key}
+                className={cn(
+                  "min-h-0 flex-1 transition-[box-shadow] duration-200",
+                  i === idx ? "z-[1] ring-2 ring-inset ring-white/70" : "",
+                )}
+                style={{ backgroundColor: p.color }}
+              />
+            ))}
+          </div>
+
+          {pctTop !== null && displayLabel && swatchHex ? (
+            <div
+              className="absolute left-0 right-0 z-[3] grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 px-0 sm:gap-x-3 sm:px-2"
+              style={{
+                top: `${pctTop}%`,
+                transform: "translateY(-50%)",
+              }}
+            >
+              <div className="flex min-w-0 items-center justify-end gap-2 pr-1 sm:pr-2">
+                <div
+                  className="size-5 shrink-0 rounded border border-white/40 shadow-sm sm:size-6"
+                  style={{ backgroundColor: swatchHex }}
+                />
+                <span className="max-w-[9rem] truncate text-right text-[10px] font-bold leading-tight text-zinc-100 sm:max-w-[11rem] sm:text-xs">
+                  {displayLabel}
+                </span>
+              </div>
+              <div className={cn("shrink-0", IRIS_BAR_WIDTH_CLASS)} aria-hidden />
+              <div className="flex justify-start pl-1 sm:pl-2">
+                <span className="rounded-full border border-white/25 bg-white/95 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-zinc-900 shadow-sm">
+                  {i18n(language, { en: "You", fr: "Toi" })}
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm leading-relaxed text-zinc-300 sm:px-5 sm:py-4">
+        {idx >= 0 ? (
+          irisMelaninSummary(language, normalized, idx)
+        ) : language === "fr" ? (
+          <>
+            Repère lisible avec la valeur détectée :{" "}
+            <span className="font-semibold text-white">{valueLabel ?? selected}</span>.
+          </>
         ) : (
-          <span className="text-xs font-medium text-zinc-500">—</span>
+          <>
+            Mapped to spectrum using detected value{" "}
+            <span className="font-semibold text-white">{valueLabel ?? selected}</span>.
+          </>
         )}
       </div>
-      <div className="relative h-9 w-full overflow-hidden rounded-xl border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-        <div className="flex h-full w-full">
-          {IRIS_SPECTRUM.map((p) => (
-            <div
-              key={p.key}
-              className="h-full flex-1"
-              style={{ backgroundColor: p.color }}
-            />
-          ))}
-        </div>
-        {pct !== null ? (
-          <div
-            className="pointer-events-none absolute top-0 h-full w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_2px_rgba(0,0,0,0.55)]"
-            style={{ left: `${pct}%` }}
-          />
-        ) : null}
-      </div>
+
       {argument ? (
         <p className="text-xs leading-relaxed text-zinc-400">{argument}</p>
       ) : null}
@@ -104,9 +276,10 @@ function IrisSwatch({
 export interface EyesWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function EyesWorkerView({ aggregates, language }: EyesWorkerViewProps) {
+export function EyesWorkerView({ aggregates, language, heroAside }: EyesWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -157,6 +330,7 @@ export function EyesWorkerView({ aggregates, language }: EyesWorkerViewProps) {
         argument={overall.argument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
+        rightSlot={mergeHeroRightSlot(undefined, heroAside)}
       />
 
       {/* Iris swatch */}
@@ -174,14 +348,14 @@ export function EyesWorkerView({ aggregates, language }: EyesWorkerViewProps) {
                 })}
               </h3>
             </div>
-            <IrisSwatch
+            <IrisSpectrumVertical
               selected={irisEnum.value}
-              label={formatLabel("iris_sclera_and_lashes.iris_color")}
               valueLabel={formatEnumValue(
                 "iris_sclera_and_lashes.iris_color",
                 irisEnum.value,
               )}
               argument={irisEnum.argument}
+              language={language}
             />
           </CardContent>
         </Card>

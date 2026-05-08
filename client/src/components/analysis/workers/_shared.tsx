@@ -5,6 +5,8 @@ import {
   localScoreToGlobal100,
 } from "@/lib/global-score-tiers";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { analysisSurfaceCardClassName } from "@/components/analysis/analysis-styles";
+export { analysisSurfaceCardClassName };
 import { cn } from "@/lib/utils";
 
 /* ----------------------------------------------------------------------------
@@ -63,13 +65,27 @@ export const analysisTabActiveMetallicTriggerClassName = cn(
   "data-[state=active]:before:pointer-events-none data-[state=active]:before:absolute data-[state=active]:before:inset-0 data-[state=active]:before:z-0 data-[state=active]:before:rounded-[inherit] data-[state=active]:before:bg-[linear-gradient(118deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(15,23,42,0.06)_100%)] data-[state=active]:before:content-['']",
 );
 
+/** Liens d’onglets (analyse, hub protocole) — même base que `TabsTrigger` inactif Radix. */
+export const appHubTabLinkBaseClassName =
+  "relative z-0 inline-flex items-center justify-center rounded-xl border border-transparent px-5 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]";
+
+export const appHubTabLinkInactiveClassName = cn(
+  appHubTabLinkBaseClassName,
+  "text-zinc-400 hover:text-zinc-200",
+);
+
+export const appHubTabLinkActiveClassName = cn(
+  appHubTabLinkBaseClassName,
+  "relative z-0 overflow-hidden font-semibold text-zinc-950",
+  "border border-white/40 ring-1 ring-slate-900/15",
+  "bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_8px_rgba(71,85,105,0.22),0_10px_28px_-12px_rgba(0,0,0,0.5),0_4px_12px_-6px_rgba(0,0,0,0.18)]",
+  "before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-[inherit] before:bg-[linear-gradient(118deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(15,23,42,0.06)_100%)] before:content-['']",
+);
+
 /**
  * Overview / worker / recommendations shells — glass panel + default text.
  */
-export const analysisSurfaceCardClassName = cn(
-  analysisGlassPanelClassName,
-  "text-zinc-50",
-);
 
 /** Worker subsection cards — identical surface to overview cards. */
 export const workerSectionCardClassName = analysisSurfaceCardClassName;
@@ -581,6 +597,46 @@ export function LevelScale({
 /* ----------------------------------------------------------------------------
  * WorkerHero — consistent hero header with optional ring + argument
  * ------------------------------------------------------------------------- */
+
+/** Colonne droite du hero : métadonnées existantes + bouton admin depuis WorkerDetails. */
+export function mergeHeroRightSlot(
+  slot: React.ReactNode,
+  heroAside?: React.ReactNode,
+): React.ReactNode | undefined {
+  if (!heroAside) {
+    return slot ?? undefined;
+  }
+  const wrap = (
+    <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+      {slot}
+      {heroAside}
+    </div>
+  );
+  if (slot === null || slot === undefined || slot === false) {
+    return <div className="flex flex-col items-stretch gap-2 sm:items-end">{heroAside}</div>;
+  }
+  return wrap;
+}
+
+/**
+ * Titres hero partagés (colorimétrie / teint) — sans texte générique placeholder :
+ * la narration doit venir uniquement des sorties du modèle (`overall` / arguments).
+ */
+export function coloringSkinTintHeroBlock(language: AppLanguage): {
+  eyebrow: string;
+  title: string;
+} {
+  return {
+    eyebrow: i18n(language, {
+      en: "Skin overview",
+      fr: "Vue d'ensemble peau",
+    }),
+    title: i18n(language, {
+      en: "Your skin profile",
+      fr: "Ton profil de peau",
+    }),
+  };
+}
 
 export function WorkerHero({
   eyebrow,

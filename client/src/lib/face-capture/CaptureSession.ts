@@ -14,7 +14,7 @@ import { FaceDetector } from "./FaceDetector";
 import { MaskRenderer } from "./MaskRenderer";
 import { MotionTracker } from "./MotionTracker";
 import { PoseValidator } from "./PoseValidator";
-import { evaluateFrameQualityMinimal } from "./QualityGate";
+import { evaluateFrameQualityForCapture, evaluateFrameQualityMinimal } from "./QualityGate";
 
 export type CaptureSessionEvent =
   | { type: "pose_captured"; poseId: PoseId; blob: Blob }
@@ -623,18 +623,22 @@ export class CaptureSession {
      * avant de capturer ; au-delà, on capture quand même (le hold a déjà
      * été tenu, on ne va pas faire poireauter l'utilisateur indéfiniment).
      */
-    const EXPOSURE_STABILIZATION_MS = 1000;
+    const EXPOSURE_STABILIZATION_MS = 1800;
     const EXPOSURE_POLL_MS = 100;
-    const MIN_ACCEPTABLE_LUMA = 35;
+    const MIN_ACCEPTABLE_LUMA = 42;
     const exposureStartedAt = performance.now();
     while (
       this.videoEl &&
       this.videoEl.videoWidth > 0 &&
       performance.now() - exposureStartedAt < EXPOSURE_STABILIZATION_MS
     ) {
-      const stats = evaluateFrameQualityMinimal(this.videoEl);
+      const stats = evaluateFrameQualityForCapture(this.videoEl);
       if (stats.meanLuma >= MIN_ACCEPTABLE_LUMA) break;
       await new Promise((r) => setTimeout(r, EXPOSURE_POLL_MS));
+    }
+
+    if (this.videoEl?.videoWidth && this.videoEl.videoHeight) {
+      await new Promise((r) => setTimeout(r, 60));
     }
 
     const cooldownMs = this.config.cooldownMs ?? 300;
@@ -689,9 +693,17 @@ export class CaptureSession {
      * d'alignement suivante ne redémarre immédiatement après le flash.
      */
     const nextPoseDef = CAPTURE_POSES[idx + 1];
+    const nextPoseEntryDelayMs = nextPoseDef?.entryDelayMs ?? 0;
+    const nextPoseWarmupMs =
+      nextPoseDef?.id === "frontal"
+        ? 1200
+        : nextPoseDef?.id === "closeup-smile"
+          ? 500
+          : 0;
     const transitionMs = Math.max(
       cooldownMs,
-      nextPoseDef?.entryDelayMs ?? 0,
+      nextPoseEntryDelayMs,
+      nextPoseWarmupMs,
     );
     this.cooldownUntil = performance.now() + transitionMs;
     this.holdStartAt = null;
@@ -708,6 +720,8 @@ export class CaptureSession {
       this.callback?.({ type: "session_complete", results: this.capturedPoses });
       return;
     }
+
+    this.poseStates[this.currentPoseIndex]!.state = "pending";
   }
 
   private computeConfidence(landmarks: LandmarkPoint[]): number {

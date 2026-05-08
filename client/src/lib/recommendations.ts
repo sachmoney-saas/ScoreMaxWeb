@@ -331,6 +331,59 @@ export function useRecommendationActions(worker: string | null) {
   });
 }
 
+type RawRecommendationEngagementRow = RecommendationAction & {
+  recommendation: unknown;
+};
+
+/** Une ligne d’historique reco : action utilisateur + contenu éditorial. */
+export interface UserRecommendationEngagementItem {
+  action: RecommendationAction;
+  recommendation: Recommendation;
+}
+
+/**
+ * Toutes les interactions recommandations du compte (tous workers, tous statuts),
+ * pour la vue globale sous `/app/protocol/recommendations`.
+ */
+export function useUserRecommendationEngagement() {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  return useQuery<UserRecommendationEngagementItem[]>({
+    queryKey: ["user-recommendation-engagement", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+
+      const { data, error } = await supabase
+        .from("scoremax_recommendation_actions")
+        .select(
+          `
+            *,
+            recommendation:scoremax_recommendations!inner(*)
+          `,
+        )
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false });
+
+      if (error) throw error;
+
+      const rows = (data ?? []) as RawRecommendationEngagementRow[];
+      const items: UserRecommendationEngagementItem[] = [];
+      for (const row of rows) {
+        if (!row.recommendation) continue;
+        const { recommendation: rawRec, ...action } = row;
+        items.push({
+          recommendation: normaliseRecommendationRow(rawRec),
+          action: action as RecommendationAction,
+        });
+      }
+      return items;
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 30,
+  });
+}
+
 export function useUpsertRecommendationAction() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -369,6 +422,9 @@ export function useUpsertRecommendationAction() {
       queryClient.invalidateQueries({
         queryKey: ["user-protocol", user?.id],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["user-recommendation-engagement", user?.id],
+      });
     },
   });
 }
@@ -395,6 +451,9 @@ export function useDeleteRecommendationAction() {
       });
       queryClient.invalidateQueries({
         queryKey: ["user-protocol", user?.id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["user-recommendation-engagement", user?.id],
       });
     },
   });

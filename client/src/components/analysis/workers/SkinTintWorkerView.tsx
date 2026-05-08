@@ -5,12 +5,14 @@ import {
   formatAggregateDisplayLabel,
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
-import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import { calculateWorkerFaceScore, SCOREMAX_OVERALL_SCORE_KEYS } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
+  coloringSkinTintHeroBlock,
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -297,11 +299,13 @@ function UndertoneWheel({
 export interface SkinTintWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
 export function SkinTintWorkerView({
   aggregates,
   language,
+  heroAside,
 }: SkinTintWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -316,11 +320,18 @@ export function SkinTintWorkerView({
     [locale],
   );
 
-  const overallNested = getScore(aggregates, "global_score.overall_colorimetry_score");
-  const overallFlat = getScore(aggregates, "overall_colorimetry_score");
-  const overallLegacy = getScore(aggregates, "overall_colorimetry");
-  const heroArgument =
-    overallNested.argument ?? overallFlat.argument ?? overallLegacy.argument;
+  const tintHero = coloringSkinTintHeroBlock(language);
+
+  const heroArgument = React.useMemo(() => {
+    const keys = SCOREMAX_OVERALL_SCORE_KEYS[WORKER_KEY];
+    if (!keys) return null;
+    for (const k of keys) {
+      const s = getScore(aggregates, k);
+      const a = s.argument?.trim();
+      if (a) return a;
+    }
+    return null;
+  }, [aggregates]);
 
   // Phenotype & undertone
   const fitzEnum = getEnum(aggregates, "phenotype_and_undertone.fitzpatrick_type");
@@ -363,15 +374,12 @@ export function SkinTintWorkerView({
   return (
     <div className="space-y-4">
       <WorkerHero
-        eyebrow={i18n(language, { en: "Skin tint", fr: "Teint" })}
-        title={i18n(language, {
-          en: "Your skin colorimetry",
-          fr: "Ta colorimétrie de peau",
-        })}
+        eyebrow={tintHero.eyebrow}
+        title={tintHero.title}
         argument={heroArgument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           fitzDisplay ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -384,8 +392,9 @@ export function SkinTintWorkerView({
                 {fitzDisplay}
               </p>
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {/* Fitzpatrick scale */}

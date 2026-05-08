@@ -21,6 +21,7 @@ import {
   calculateGlobalFaceScore,
   calculateWorkerFaceScore,
   SCOREMAX_WORKER_WEIGHTS,
+  workerAggregatesHaveDisplayableOutput,
 } from "@/lib/face-analysis-score";
 import type { GlobalFaceScore } from "@/lib/face-analysis-score";
 import {
@@ -985,7 +986,10 @@ export function AnalysisResultsSection({
   /** Toujours dérivé de la même façon — avant tout return — pour respecter l’ordre des hooks. */
   const results = React.useMemo((): NormalizedWorkerResult[] => {
     if (!analysis) return [];
-    return sortWorkerResults(analysis.results.map(normalizeWorkerResult));
+    const sorted = sortWorkerResults(analysis.results.map(normalizeWorkerResult));
+    return sorted.filter((r) =>
+      workerAggregatesHaveDisplayableOutput(r.worker, r.outputAggregates),
+    );
   }, [analysis]);
 
   const { strengthSet: takeawayStrengthWorkers, weaknessSet: takeawayWeaknessWorkers } =

@@ -17,6 +17,7 @@ import {
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -419,11 +420,13 @@ function TiltIndicator({
 export interface EyeBrowsWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
 export function EyeBrowsWorkerView({
   aggregates,
   language,
+  heroAside,
 }: EyeBrowsWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -511,7 +514,7 @@ export function EyeBrowsWorkerView({
         argument={overall.argument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           shapeDisplay ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -521,8 +524,9 @@ export function EyeBrowsWorkerView({
                 {shapeDisplay}
               </p>
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {/* Bold × Feminine matrix */}

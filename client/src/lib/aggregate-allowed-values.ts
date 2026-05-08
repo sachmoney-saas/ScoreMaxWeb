@@ -35,6 +35,7 @@ export const AGGREGATE_VALUE_REGISTRY: AggregateValueRegistry = {
       "prominent",
     ],
     "iris_sclera_and_lashes.iris_color": [
+      /* Ordre mélanine clair → foncé (aligné sur le spectre UI EyesWorkerView) */
       "light_blue",
       "dark_blue",
       "grey_blue",
@@ -45,11 +46,11 @@ export const AGGREGATE_VALUE_REGISTRY: AggregateValueRegistry = {
       "hazel_brown",
       "light_brown",
       "medium_brown",
-      "dark_brown",
       "amber",
-      "almost_black",
+      "dark_brown",
       "central_heterochromia",
       "sectoral_heterochromia",
+      "almost_black",
     ],
   },
 

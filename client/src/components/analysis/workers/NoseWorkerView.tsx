@@ -12,6 +12,7 @@ import {
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -33,9 +34,14 @@ const WORKER_KEY = "nose";
 export interface NoseWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
+export function NoseWorkerView({
+  aggregates,
+  language,
+  heroAside,
+}: NoseWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -193,7 +199,7 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
         argument={overall.argument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           bridgeDisplay || nostrilDisplay ? (
             <div className="flex flex-col gap-2">
               {bridgeDisplay ? (
@@ -211,8 +217,9 @@ export function NoseWorkerView({ aggregates, language }: NoseWorkerViewProps) {
                 />
               ) : null}
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {/* Signature nasale — radar */}

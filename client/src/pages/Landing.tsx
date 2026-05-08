@@ -445,6 +445,16 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
   const [scale, setScale] = React.useState(1);
 
   const updateFit = React.useCallback(() => {
+    /** Matches Tailwind `md`: viewport scaling squashes mobile layout + leaves empty strip below (origin top). */
+    const isNarrow =
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767px)").matches;
+    if (isNarrow) {
+      setNaturalHeight(0);
+      setScale(1);
+      return;
+    }
+
     const el = measureRef.current;
     if (!el) return;
     const natural = el.scrollHeight;
@@ -511,8 +521,10 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
   const shellHeight =
     naturalHeight > 0 ? Math.ceil(naturalHeight * scale) : undefined;
 
+  const scaledDown = naturalHeight > 0 && scale < 0.999;
+
   return (
-    <section className="max-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.17),transparent_36%),radial-gradient(circle_at_78%_72%,rgba(185,204,209,0.16),transparent_44%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.3)_100%)] px-4">
+    <section className="overflow-visible bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.17),transparent_36%),radial-gradient(circle_at_78%_72%,rgba(185,204,209,0.16),transparent_44%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.3)_100%)] px-4 py-8 md:max-h-[100svh] md:overflow-hidden md:py-0">
       <div
         className="mx-auto w-full max-w-5xl"
         style={{
@@ -520,22 +532,26 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
         }}
       >
         <div
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: "top center",
-            willChange: "transform",
-          }}
+          style={
+            scaledDown
+              ? {
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top center",
+                  willChange: "transform",
+                }
+              : undefined
+          }
         >
-          <div ref={measureRef} className="py-16 md:py-24">
-            <div className="rounded-[2.2rem] border border-white/15 bg-black/30 p-6 shadow-[0_24px_90px_-58px_rgba(0,0,0,0.85)] backdrop-blur-sm md:p-10">
+          <div ref={measureRef} className="py-8 md:py-24">
+            <div className="rounded-[2.2rem] border border-white/15 bg-black/30 p-5 shadow-[0_24px_90px_-58px_rgba(0,0,0,0.85)] backdrop-blur-sm md:p-10">
               <div className="mx-auto max-w-3xl text-center">
-                <h2 className="font-hero text-4xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white md:text-6xl">
+                <h2 className="font-hero text-[clamp(1.65rem,6vw+0.6rem,2.25rem)] font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white md:text-6xl">
                   {i18n(language, {
                     en: "Your score isn't fixed",
                     fr: "Ton score n'est pas figé",
                   })}
                 </h2>
-                <p className="mx-auto mt-4 max-w-2xl font-sans text-base font-medium leading-relaxed text-zinc-400 md:text-3xl">
+                <p className="mx-auto mt-3 max-w-2xl font-sans text-base font-medium leading-snug text-zinc-400 md:mt-4 md:text-3xl md:leading-relaxed">
                   {i18n(language, {
                     en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
                     fr: "De petits changements constants s'accumulent avec le temps. Suis ta progression et vois ton score évoluer.",
@@ -543,27 +559,29 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
                 </p>
               </div>
 
-              <div className="mt-14 flex items-end justify-center gap-6 text-center md:gap-12">
-                <div>
-                  <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
+              <div className="mt-8 flex items-end justify-center gap-4 text-center md:mt-14 md:gap-12">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-500 md:text-sm">
                     {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
                   </p>
-                  <p className="mt-4 font-display text-6xl tracking-tight text-zinc-500 md:text-7xl">
+                  <p className="mt-2 font-display text-[clamp(2.25rem,11vw,3.75rem)] leading-none tracking-tight text-zinc-500 md:mt-4 md:text-7xl">
                     {currentScore.toFixed(2)}
                   </p>
                 </div>
-                <div className="pb-4 text-5xl text-zinc-600 md:text-6xl">→</div>
-                <div>
-                  <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-400">
+                <div className="shrink-0 pb-2 text-4xl text-zinc-600 md:pb-4 md:text-6xl">
+                  →
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-zinc-400 md:text-sm">
                     {i18n(language, { en: "Potential", fr: "Potentiel" })}
                   </p>
-                  <p className="mt-4 font-display text-6xl tracking-tight text-white md:text-7xl">
+                  <p className="mt-2 font-display text-[clamp(2.25rem,11vw,3.75rem)] leading-none tracking-tight text-white md:mt-4 md:text-7xl">
                     {potentialScore.toFixed(2)}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-10 w-full min-w-0">
+              <div className="mt-6 w-full min-w-0 md:mt-10">
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                   className="mx-auto block h-auto w-full max-w-full text-[#aab2bd]"
@@ -832,33 +850,39 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Complete Analysis Section */}
+      {/* Complete Analysis — mobile: hauteur au contenu (< 100vh OK) ; md+: 1 viewport, image calée en bas */}
       <section
         id="complete-analysis"
-        className="relative flex min-h-[100svh] overflow-hidden bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pt-20 md:pt-28"
+        className="relative isolate flex flex-col overflow-hidden bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pb-0 pt-8 md:h-[100svh] md:max-h-[100svh] md:pt-10"
       >
-        <WaveBackground position="absolute" className="!h-full !w-full" />
-        <div className="relative z-10 flex min-h-[calc(100svh-5rem)] w-full flex-col justify-end lg:max-w-[75%] mx-auto md:min-h-[calc(100svh-7rem)]">
+        <WaveBackground
+          position="absolute"
+          className="pointer-events-none z-0 !h-full !min-h-full !w-full"
+        />
+        <div className="relative z-10 mx-auto flex w-full flex-col md:min-h-0 md:flex-1 lg:max-w-[75%]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, amount: 0.2 }}
-            className="relative z-30 flex flex-1 flex-col items-center justify-between gap-10 text-center"
+            className="relative z-30 flex flex-col items-center gap-4 text-center md:min-h-0 md:flex-1 md:gap-6"
           >
             <motion.h2
               variants={itemVariants}
-              className="font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
+              className="shrink-0 font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
             >
               Your Complete Facial Analysis
             </motion.h2>
 
-            <motion.div variants={itemVariants} className="w-full max-w-2xl">
+            <motion.div
+              variants={itemVariants}
+              className="flex w-full max-w-2xl flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
+            >
               <img
                 src="/model1.png"
                 alt="Your complete facial analysis model"
                 loading="lazy"
-                className="mx-auto block h-auto w-full object-contain select-none"
+                className="mx-auto block h-auto w-full object-contain object-bottom select-none md:h-full md:max-h-full"
               />
             </motion.div>
           </motion.div>

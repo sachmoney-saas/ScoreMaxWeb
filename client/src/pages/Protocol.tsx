@@ -14,6 +14,7 @@ import { ProtocolActiveCures } from "@/components/protocol/ProtocolActiveCures";
 import { ProtocolEmptyExperience } from "@/components/protocol/ProtocolEmptyState";
 import { ProtocolItemCard } from "@/components/protocol/ProtocolItemCard";
 import { ProtocolSection } from "@/components/protocol/ProtocolSection";
+import { ProtocolHubNavTabs } from "@/components/protocol/ProtocolHubNavTabs";
 import { ProtocolPageShell, ProtocolPageTitle } from "@/components/protocol/ProtocolPageShell";
 
 export default function ProtocolPage() {
@@ -21,6 +22,8 @@ export default function ProtocolPage() {
   const { user } = useAuth();
   const breakdown = useProtocolBreakdown();
   const { data: history = [] } = useAnalysisHistory({ enabled: !!user?.id });
+
+  const hubNav = <ProtocolHubNavTabs language={language} active="protocol" />;
 
   const latestAnalysisId = React.useMemo(() => {
     const completed = history
@@ -39,16 +42,16 @@ export default function ProtocolPage() {
       fr: "Chargement de ton protocole…",
     });
     return (
-      <ProtocolPageShell header={<ProtocolPageTitle language={language} />}>
+      <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
         <div
           className="flex min-h-[min(400px,55vh)] w-full flex-col items-center justify-center gap-5 py-8"
           role="status"
           aria-busy="true"
           aria-live="polite"
         >
-          <BrandLoader size="lg" tone="on-light" label={loadingLabel} />
-          <BrandLoaderTrack tone="on-light" />
-          <p className="text-center text-sm font-medium tracking-tight text-zinc-600">
+          <BrandLoader size="lg" tone="on-dark" label={loadingLabel} />
+          <BrandLoaderTrack tone="on-dark" />
+          <p className="text-center text-sm font-medium tracking-tight text-zinc-300">
             {loadingLabel}
           </p>
         </div>
@@ -58,7 +61,7 @@ export default function ProtocolPage() {
 
   if (breakdown.error) {
     return (
-      <ProtocolPageShell header={<ProtocolPageTitle language={language} />}>
+      <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
         <Card className="border-rose-200 bg-rose-50/90 text-rose-950 shadow-none">
           <CardContent className="flex items-start gap-3 p-6 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
@@ -89,7 +92,7 @@ export default function ProtocolPage() {
   }
 
   return (
-    <ProtocolPageShell header={<ProtocolPageTitle language={language} />}>
+    <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
       <div className="space-y-8">
         <ProtocolDay itemsBySlot={breakdown.bySlot} language={language} />
 
@@ -127,7 +130,7 @@ export default function ProtocolPage() {
           </ProtocolSection>
         ) : null}
 
-        <p className="border-t border-zinc-200 pt-4 text-[11px] leading-relaxed text-zinc-500">
+        <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
           {i18n(language, {
             en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
             fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",

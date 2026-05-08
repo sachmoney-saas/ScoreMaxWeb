@@ -264,6 +264,49 @@ export function calculateWorkerFaceScore(
   return pairs.length > 0 ? average(pairs.map((p) => p.score)) : null;
 }
 
+/**
+ * Parcourt les agrégats : chaînes non vides après trim, ou nombres finis — pour détecter
+ * enums / textes même sans entrée `.score`.
+ */
+function aggregatesContainRenderableLeaves(value: unknown, depth = 0): boolean {
+  if (depth > 28) return false;
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) {
+    return value.some((item) => aggregatesContainRenderableLeaves(item, depth + 1));
+  }
+  if (isRecord(value)) {
+    return Object.values(value).some((child) =>
+      aggregatesContainRenderableLeaves(child, depth + 1),
+    );
+  }
+  return false;
+}
+
+/**
+ * `true` si le worker a au moins un score, nombre ou chaîne exploitable dans les agrégats
+ * — pas seulement des clés vides ou des `{}`.
+ */
+export function workerAggregatesHaveDisplayableOutput(
+  worker: string,
+  aggregates: Record<string, unknown>,
+): boolean {
+  if (!isRecord(aggregates) || Object.keys(aggregates).length === 0) {
+    return false;
+  }
+
+  if (calculateWorkerFaceScore(worker, aggregates) !== null) {
+    return true;
+  }
+
+  if (collectScorePaths(aggregates).length > 0) {
+    return true;
+  }
+
+  return aggregatesContainRenderableLeaves(aggregates);
+}
+
 export function calculateGlobalFaceScore(results: ScoreInputResult[]): GlobalFaceScore | null {
   let weightedSum = 0;
   let totalWeight = 0;

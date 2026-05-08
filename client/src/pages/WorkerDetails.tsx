@@ -18,6 +18,7 @@ import {
   buildAggregateDisplayEntries,
   getWorkerDisplayLabel,
 } from "@/lib/face-analysis-display";
+import { workerAggregatesHaveDisplayableOutput } from "@/lib/face-analysis-score";
 import { useAppLanguage } from "@/lib/i18n";
 import { ColoringWorkerView } from "@/components/analysis/workers/ColoringWorkerView";
 import { SkinWorkerView } from "@/components/analysis/workers/SkinWorkerView";
@@ -46,6 +47,26 @@ import { ArrowLeft, Braces, Copy } from "lucide-react";
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+/** Vues riches : hero intégré au worker → pas de 2ᵉ carte titre dupliquée en page. */
+const WORKER_DETAIL_DEDICATED_VIEWS = new Set([
+  "age",
+  "coloring",
+  "skin",
+  "bodyfat",
+  "symmetry_shape",
+  "jaw",
+  "eye_brows",
+  "eyes",
+  "lips",
+  "nose",
+  "chin",
+  "cheeks",
+  "smile",
+  "hair",
+  "skin_tint",
+  "neck",
+]);
 
 function isNumericDisplayValue(value: string): boolean {
   return !Number.isNaN(Number(value.replace(",", ".")));
@@ -82,6 +103,14 @@ export default function WorkerDetails() {
   const [adminPayloadOpen, setAdminPayloadOpen] = React.useState(false);
   const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId);
 
+  /* Le layout app scroll dans [data-app-scroll-region], pas sur window — on remonte au clic preview. */
+  React.useLayoutEffect(() => {
+    const el = document.querySelector("[data-app-scroll-region]");
+    if (el instanceof HTMLElement) {
+      el.scrollTop = 0;
+    }
+  }, [params.jobId, worker]);
+
   const row = React.useMemo(() => {
     if (!analysis) return undefined;
     return analysis.results.find((result) => result.worker === worker);
@@ -92,6 +121,8 @@ export default function WorkerDetails() {
     ? resultPayload.outputAggregates
     : {};
   const entries = buildAggregateDisplayEntries(worker, outputAggregates);
+
+  const hasDisplayableOutput = workerAggregatesHaveDisplayableOutput(worker, outputAggregates);
 
   const workerAdminPayload = React.useMemo(() => {
     if (!row) return null;
@@ -122,11 +153,26 @@ export default function WorkerDetails() {
     });
   };
 
+  const dedicatedWorker = WORKER_DETAIL_DEDICATED_VIEWS.has(worker);
+  const adminHeroAside =
+    isAdmin && workerAdminPayload ? (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-2 border-amber-500/40 text-xs text-amber-100 hover:bg-amber-500/10 hover:text-amber-50 sm:text-sm"
+        onClick={() => setAdminPayloadOpen(true)}
+      >
+        <Braces className="h-4 w-4 shrink-0" />
+        Données brutes (admin)
+      </Button>
+    ) : null;
+
   if (isLoading) {
     return <WorkerDetailsSkeleton />;
   }
 
-  if (isError || !analysis || !row) {
+  if (isError || !analysis || !row || !hasDisplayableOutput) {
     return (
       <div className="space-y-5">
         <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
@@ -139,7 +185,8 @@ export default function WorkerDetails() {
           <CardContent className="p-6">
             <h1 className="font-display text-2xl font-bold">Worker introuvable</h1>
             <p className="mt-2 text-sm text-zinc-300">
-              Ce détail n'existe pas pour cette analyse ou n'est pas accessible.
+              Ce volet n&apos;existe pas pour cette analyse, n&apos;a pas de résultats exploitables,
+              ou n&apos;est pas accessible.
             </p>
           </CardContent>
         </Card>
@@ -149,7 +196,7 @@ export default function WorkerDetails() {
 
   return (
     <div className="space-y-5">
-      <AnalysisTopNavTabs jobId={analysis.job.id} active="worker" />
+      <AnalysisTopNavTabs jobId={analysis.job.id} active="overview" />
 
       <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
         <Link href={`/app/analyses/${analysis.job.id}`}>
@@ -158,25 +205,20 @@ export default function WorkerDetails() {
         </Link>
       </Button>
 
-      <Card className={analysisSurfaceCardClassName}>
-        <CardContent className="relative p-6 pr-24 sm:pr-44">
-          <h1 className="font-display text-4xl font-bold tracking-tight text-white">
-            {getWorkerDisplayLabel(worker)}
-          </h1>
-          {isAdmin && workerAdminPayload ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="absolute right-4 top-4 max-w-[calc(100%-2rem)] gap-2 border-amber-500/40 text-xs text-amber-100 hover:bg-amber-500/10 hover:text-amber-50 sm:right-6 sm:top-6 sm:max-w-none sm:text-sm"
-              onClick={() => setAdminPayloadOpen(true)}
-            >
-              <Braces className="h-4 w-4 shrink-0" />
-              Données brutes (admin)
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+      {!dedicatedWorker ? (
+        <Card className={analysisSurfaceCardClassName}>
+          <CardContent className="relative p-6 pr-24 sm:pr-44">
+            <h1 className="font-display text-4xl font-bold tracking-tight text-white">
+              {getWorkerDisplayLabel(worker)}
+            </h1>
+            {adminHeroAside ? (
+              <div className="absolute right-4 top-4 max-w-[calc(100%-2rem)] sm:right-6 sm:top-6 sm:max-w-none">
+                {adminHeroAside}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Dialog open={adminPayloadOpen} onOpenChange={setAdminPayloadOpen}>
         <DialogContent className="flex max-h-[85vh] max-w-[min(56rem,calc(100vw-2rem))] flex-col gap-0 border-zinc-700 bg-zinc-950 p-0 text-zinc-100">
@@ -217,6 +259,7 @@ export default function WorkerDetails() {
         entries,
         language,
         cardClassName: analysisSurfaceCardClassName,
+        heroAside: dedicatedWorker ? adminHeroAside : undefined,
       })}
 
       {entries.length > 0 ? (
@@ -230,58 +273,41 @@ export default function WorkerDetails() {
   );
 }
 
-const DEDICATED_WORKER_VIEWS = new Set([
-  "age",
-  "coloring",
-  "skin",
-  "bodyfat",
-  "symmetry_shape",
-  "jaw",
-  "eye_brows",
-  "eyes",
-  "lips",
-  "nose",
-  "chin",
-  "cheeks",
-  "smile",
-  "hair",
-  "skin_tint",
-  "neck",
-]);
-
 function renderWorkerBody({
   worker,
   outputAggregates,
   entries,
   language,
   cardClassName,
+  heroAside,
 }: {
   worker: string;
   outputAggregates: Record<string, unknown>;
   entries: ReturnType<typeof buildAggregateDisplayEntries>;
   language: ReturnType<typeof useAppLanguage>;
   cardClassName: string;
+  heroAside?: React.ReactNode;
 }): React.ReactNode {
   switch (worker) {
-    case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} />;
-    case "coloring":      return <ColoringWorkerView aggregates={outputAggregates} language={language} />;
-    case "skin":          return <SkinWorkerView aggregates={outputAggregates} language={language} />;
-    case "bodyfat":       return <BodyfatWorkerView aggregates={outputAggregates} language={language} />;
-    case "symmetry_shape": return <SymmetryShapeWorkerView aggregates={outputAggregates} language={language} />;
-    case "jaw":           return <JawWorkerView aggregates={outputAggregates} language={language} />;
-    case "eye_brows":     return <EyeBrowsWorkerView aggregates={outputAggregates} language={language} />;
-    case "eyes":          return <EyesWorkerView aggregates={outputAggregates} language={language} />;
-    case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} />;
-    case "nose":          return <NoseWorkerView aggregates={outputAggregates} language={language} />;
-    case "chin":          return <ChinWorkerView aggregates={outputAggregates} language={language} />;
-    case "cheeks":        return <CheeksWorkerView aggregates={outputAggregates} language={language} />;
-    case "smile":         return <SmileWorkerView aggregates={outputAggregates} language={language} />;
-    case "hair":          return <HairWorkerView aggregates={outputAggregates} language={language} />;
-    case "skin_tint":     return <SkinTintWorkerView aggregates={outputAggregates} language={language} />;
-    case "neck":          return <NeckWorkerView aggregates={outputAggregates} language={language} />;
+    case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "coloring":      return <ColoringWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "skin":          return <SkinWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "bodyfat":       return <BodyfatWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "symmetry_shape": return <SymmetryShapeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "jaw":           return <JawWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "eye_brows":     return <EyeBrowsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "eyes":          return <EyesWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "nose":          return <NoseWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "chin":          return <ChinWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "cheeks":        return <CheeksWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "smile":         return <SmileWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "hair":          return <HairWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "skin_tint":     return <SkinTintWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "neck":          return <NeckWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
   }
 
-  if (DEDICATED_WORKER_VIEWS.has(worker)) {
+  if (WORKER_DETAIL_DEDICATED_VIEWS.has(worker)) {
     return null;
   }
 

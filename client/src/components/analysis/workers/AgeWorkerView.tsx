@@ -347,9 +347,14 @@ function NeotenyComposite({
 export interface AgeWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
+export function AgeWorkerView({
+  aggregates,
+  language,
+  heroAside,
+}: AgeWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -429,7 +434,12 @@ export function AgeWorkerView({ aggregates, language }: AgeWorkerViewProps) {
     <div className="space-y-4">
       {/* Hero — apparent age */}
       <Card className={workerSectionCardClassName}>
-        <CardContent className="p-6 sm:p-10">
+        <CardContent className="relative p-6 sm:p-10">
+          {heroAside ? (
+            <div className="absolute right-4 top-4 z-10 max-w-[min(100%-2rem,14rem)] sm:right-8 sm:top-8 sm:max-w-none">
+              {heroAside}
+            </div>
+          ) : null}
           <div className="grid gap-6 lg:grid-cols-[auto_1fr] lg:items-center lg:gap-10">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400">

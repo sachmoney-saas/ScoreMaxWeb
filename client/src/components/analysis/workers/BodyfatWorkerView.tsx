@@ -21,6 +21,7 @@ import {
   getScore,
   getString,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -74,11 +75,13 @@ function formatEstimatedBfPercent(aggregates: Record<string, unknown>): {
 export interface BodyfatWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
 export function BodyfatWorkerView({
   aggregates,
   language,
+  heroAside,
 }: BodyfatWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -141,7 +144,7 @@ export function BodyfatWorkerView({
         argument={facialLeanness.argument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           bfPctDisplay ? (
             <div className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3 text-right">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -166,8 +169,9 @@ export function BodyfatWorkerView({
                 {waterLabel}
               </p>
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {showGlobalCard ? (

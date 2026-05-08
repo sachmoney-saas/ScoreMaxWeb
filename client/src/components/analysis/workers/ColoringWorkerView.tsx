@@ -4,12 +4,14 @@ import {
   formatAggregateDisplayLabel,
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
-import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
+import { calculateWorkerFaceScore, SCOREMAX_OVERALL_SCORE_KEYS } from "@/lib/face-analysis-score";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
+  coloringSkinTintHeroBlock,
   getEnum,
   getScore,
   LevelScale,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -156,11 +158,13 @@ function ColorSwatchScale({
 export interface ColoringWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
 export function ColoringWorkerView({
   aggregates,
   language,
+  heroAside,
 }: ColoringWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
 
@@ -175,11 +179,6 @@ export function ColoringWorkerView({
         : null,
     [locale],
   );
-
-  const globalScore =
-    getScore(aggregates, "global_coloring_score").score !== null
-      ? getScore(aggregates, "global_coloring_score")
-      : getScore(aggregates, "global_coloring");
 
   const skinTone = getEnum(aggregates, "skin.tone");
   const skinClarity = getScore(aggregates, "skin.clarity");
@@ -215,20 +214,28 @@ export function ColoringWorkerView({
       : "contrast.overall_contrast";
   const contrastType = getEnum(aggregates, "contrast.contrast_type");
 
+  const tintHero = coloringSkinTintHeroBlock(language);
+
+  const heroArgument = React.useMemo(() => {
+    const keys = SCOREMAX_OVERALL_SCORE_KEYS[WORKER_KEY];
+    if (!keys) return null;
+    for (const k of keys) {
+      const s = getScore(aggregates, k);
+      const a = s.argument?.trim();
+      if (a) return a;
+    }
+    return null;
+  }, [aggregates]);
+
   return (
     <div className="space-y-4">
       <WorkerHero
-        eyebrow={i18n(language, {
-          en: "Coloring overview",
-          fr: "Vue d'ensemble colorimétrie",
-        })}
-        title={i18n(language, {
-          en: "Your global coloring",
-          fr: "Ta colorimétrie globale",
-        })}
-        argument={globalScore.argument}
+        eyebrow={tintHero.eyebrow}
+        title={tintHero.title}
+        argument={heroArgument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
+        rightSlot={mergeHeroRightSlot(undefined, heroAside)}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

@@ -303,8 +303,8 @@ const IRIS_COLOR_HEX: Record<string, string> = {
   blue: "#3d6a9c",
   dark_blue: "#2a5080",
   light_blue: "#7cb1d6",
-  central_heterochromia: "#6a5acd",
-  sectoral_heterochromia: "#9370db",
+  central_heterochromia: "#2e221b",
+  sectoral_heterochromia: "#231a13",
 };
 
 const LIP_COLOR_HEX: Record<string, string> = {

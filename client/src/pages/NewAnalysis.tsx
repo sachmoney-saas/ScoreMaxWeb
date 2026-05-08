@@ -339,7 +339,7 @@ export default function NewAnalysis() {
         </Button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-6 pt-2">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-start px-4 pb-6 pt-2">
         <section
           className={cn(
             analysisHeroGlassClassName,

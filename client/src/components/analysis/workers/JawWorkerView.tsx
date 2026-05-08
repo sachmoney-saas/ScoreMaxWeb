@@ -12,6 +12,7 @@ import {
   getEnum,
   getScore,
   hasAnyScore,
+  mergeHeroRightSlot,
   ScoreBar,
   SectionShell,
   WorkerHero,
@@ -40,9 +41,10 @@ function resolveOverallJaw(aggregates: Record<string, unknown>) {
 export interface JawWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
+  heroAside?: React.ReactNode;
 }
 
-export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
+export function JawWorkerView({ aggregates, language, heroAside }: JawWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -133,7 +135,7 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
         argument={overall.argument}
         score={calculateWorkerFaceScore(WORKER_KEY, aggregates)}
         scoreFractionDigits={2}
-        rightSlot={
+        rightSlot={mergeHeroRightSlot(
           frontalDisplay || sideDisplay ? (
             <div className="flex flex-col gap-2">
               {frontalDisplay ? (
@@ -151,8 +153,9 @@ export function JawWorkerView({ aggregates, language }: JawWorkerViewProps) {
                 />
               ) : null}
             </div>
-          ) : null
-        }
+          ) : null,
+          heroAside,
+        )}
       />
 
       {radarData.length >= 3 ? (
