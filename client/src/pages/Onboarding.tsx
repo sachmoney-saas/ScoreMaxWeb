@@ -887,9 +887,18 @@ export default function Onboarding() {
 
   const onboardingSessionId = scanStatus?.session_id;
 
+  /**
+   * Vrai dès que l'utilisateur a déclenché « Uploader les captures » : on
+   * masque alors le bouton « Lancer l'analyse » et on bascule sur l'écran
+   * `AnalysisProcessingState` pendant TOUT le pipeline (upload R2 → POST
+   * /onboarding/complete → polling/redirect). Sans ça, l'utilisateur voit
+   * pendant 2–5 s le bouton CTA réapparaître sous un loader, ce qui invite
+   * à recliquer.
+   */
   const isAnalysisRunning =
     isLastStep &&
-    (isSubmitting ||
+    (isUploadingCaptures ||
+      isSubmitting ||
       Boolean(onboardingJobId && jobStatusValue !== "failed"));
 
   const processingMessage =
@@ -1037,14 +1046,33 @@ export default function Onboarding() {
 
       /**
        * Le serveur a positionné `has_completed_onboarding=true` dès la
-       * création/réutilisation du job. On rafraîchit le profil tout de
-       * suite pour que :
-       * - le gate (`useOnboardingGate`) flippe en `ok` immédiatement,
-       *   évitant tout retour vers l'écran 0 sur refresh,
-       * - même en cas d'échec ultérieur du worker ScanFace, l'utilisateur
+       * création/réutilisation du job. On rafraîchit en parallèle :
+       * - `profile` : pour que le gate (`useOnboardingGate`) flippe en
+       *   `ok` immédiatement et évite tout aller-retour vers l'écran 0
+       *   au refresh ; même en cas d'échec ultérieur du worker, l'utilisateur
        *   reste considéré comme onboardé.
+       * - `latest-face-analysis` : pour pré-remplir le cache de la page
+       *   `/app` avec le job en cours. Sans ce prefetch, la page d'arrivée
+       *   monte avec `analysis = undefined`, démarre son propre loader
+       *   (timer à 0) puis bascule sur l'AnalysisProcessingState quand la
+       *   query répond — visuellement, le compteur paraît reset.
        */
-      await queryClient.refetchQueries({ queryKey: ["profile", user.id] });
+      await Promise.allSettled([
+        queryClient.refetchQueries({ queryKey: ["profile", user.id] }),
+        queryClient.refetchQueries({
+          queryKey: ["latest-face-analysis", user.id],
+        }),
+      ]);
+
+      /**
+       * Redirection immédiate vers `/app`. La page d'arrivée ré-affiche
+       * `AnalysisProcessingState` avec `elapsedAnchorEpochMs` ancré sur
+       * `analysis_jobs.created_at` (préchargé via la refetch ci-dessus), donc
+       * le chrono reste continu — l'utilisateur ne voit qu'**un seul** écran
+       * de progression au lieu d'enchaîner « bouton + loader → loader
+       * onboarding → loader /app ».
+       */
+      setLocation(AUTH_CONFIG.REDIRECT_PATH);
     } catch (error) {
       console.error("Unable to complete onboarding:", error);
       setAnalysisMessage(
@@ -1059,7 +1087,7 @@ export default function Onboarding() {
     } finally {
       setIsUploadingCaptures(false);
     }
-  }, [capturedPoses, language, onboardingSessionId, user?.id]);
+  }, [capturedPoses, language, onboardingSessionId, setLocation, user?.id]);
 
   const openOnboardingCapture = React.useCallback(() => {
     if (!onboardingSessionId || isScanStatusLoading) return;
