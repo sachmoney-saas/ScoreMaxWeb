@@ -77,6 +77,19 @@ describe("closeup-eye blink behaviour", () => {
   });
 });
 
+describe("closeup-hairline pull-back gate", () => {
+  const strategy = POSE_STRATEGIES.find((s) => s.poseId === "closeup-hairline")!;
+  const poseDef = CAPTURE_POSES.find((p) => p.id === "closeup-hairline")!;
+
+  it("blocks ready until pullback satisfied when opting out explicitly", () => {
+    expect(poseDef.requirePullBackBeforeAlign).toBeDefined();
+    const frame = frameForPose("closeup-hairline");
+    const r = strategy.evaluate(frame, poseDef, { holding: false, pullBackSatisfied: false });
+    expect(r.ok).toBe(false);
+    expect(r.hints[0]).toMatch(/Éloignez/);
+  });
+});
+
 describe("pose strategies", () => {
   for (const strategy of POSE_STRATEGIES) {
     it(`evaluates ${strategy.poseId}`, () => {

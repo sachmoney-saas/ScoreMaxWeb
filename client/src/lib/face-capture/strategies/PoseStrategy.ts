@@ -15,6 +15,8 @@ export interface StrategyResult {
  */
 export interface StrategyOptions {
   holding?: boolean;
+  /** `false` = l'utilisateur doit d'abord montrer un recul (voir `requirePullBackBeforeAlign`). */
+  pullBackSatisfied?: boolean;
 }
 
 export interface PoseStrategy {

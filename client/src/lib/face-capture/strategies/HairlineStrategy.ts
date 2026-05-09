@@ -21,19 +21,38 @@ const HOLDING_ANGLE_EXPAND_DEG = 10;
 /**
  * Pendant le hold, on tolère ~15 % de moins en taille de visage (le gros plan
  * dérive un peu quand l'utilisateur incline la tête pour exposer le front).
- * Le seuil d'entrée — désormais aligné sur celui de l'œil (0.5) — reste lui
- * strict, pour éviter de démarrer la barre depuis une distance de selfie.
+ * Le seuil d'entrée (`minFaceRatio` élevé dans `types`) reste strict ;
+ * en hold on assouplit légèrement la taille / le hairline pour le wobble détection.
  */
 const HOLDING_FACE_RATIO_FACTOR = 0.85;
 /** Un peu plus tolérant quand le visage est plus petit dans le cadre (prise un peu plus loin). */
-const HOLDING_HAIRLINE_THRESHOLD = 0.46;
-const STRICT_HAIRLINE_THRESHOLD = 0.64;
+const HOLDING_HAIRLINE_THRESHOLD = 0.5;
+const STRICT_HAIRLINE_THRESHOLD = 0.68;
 
 export class HairlineStrategy implements PoseStrategy {
   readonly poseId = "closeup-hairline" as const;
 
   evaluate(frame: FaceFrame, pose: PoseDefinition, opts?: StrategyOptions) {
     const holding = opts?.holding === true;
+
+    if (
+      !holding &&
+      pose.requirePullBackBeforeAlign &&
+      opts?.pullBackSatisfied === false
+    ) {
+      const maxR = pose.requirePullBackBeforeAlign.maxFaceRatio;
+      const fr = faceRatio(frame);
+      const pullProg =
+        fr < maxR ? 0.5 : Math.max(0, 1 - (fr - maxR) / Math.max(0.2, 0.75 - maxR)) * 0.42;
+      return {
+        ok: false,
+        hints: [
+          "Éloignez un instant l'appareil, puis rapprochez-le fortement pour cadrer le front.",
+        ],
+        progress: pullProg,
+      };
+    }
+
     const yawRange = holding ? widenRange(pose.yawRange, HOLDING_ANGLE_EXPAND_DEG) : pose.yawRange;
     const pitchRange = holding
       ? widenRange(pose.pitchRange, HOLDING_ANGLE_EXPAND_DEG)

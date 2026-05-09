@@ -42,34 +42,16 @@ const STEP_INSTRUCTION: Record<PoseId, { en: string; fr: string }> = {
     en: 'Lower your head slightly to include the top of your head.',
   },
   'closeup-eye': {
-    fr: "Rapprochez l'appareil et cadrez un œil au centre, en gros plan.",
-    en: 'Move the device closer and frame one eye in the centre, close-up.',
+    fr: "Approchez encore l'appareil : un œil au centre, en très gros plan.",
+    en: 'Move even closer: one eye centred, very close-up.',
   },
   'closeup-smile': {
-    fr: 'Rapprochez-vous et souriez naturellement.',
-    en: 'Move closer and give a natural smile.',
+    fr: 'Approchez davantage le visage et souriez naturellement.',
+    en: 'Move closer to the camera and give a natural smile.',
   },
   'closeup-hairline': {
-    fr: "Rapprochez l'appareil et dégagez bien le front, hairline visible.",
-    en: 'Move the device closer and clear your forehead so the hairline is visible.',
-  },
-};
-
-/**
- * Court bandeau affiché pendant la pause de transition (~1 s) avant les gros
- * plans qui exigent un changement physique de distance. Sans cet écran, après
- * le flash de capture l'utilisateur voit la barre d'alignement de la pose
- * suivante repartir immédiatement et ne comprend pas pourquoi il est invité à
- * « se rapprocher ». On verbalise la consigne à ce moment précis.
- */
-const TRANSITION_PROMPT: Partial<Record<PoseId, { en: string; fr: string }>> = {
-  'closeup-eye': {
-    fr: "Rapprochez l'appareil de votre œil pour le prochain gros plan.",
-    en: 'Move the device closer to your eye for the next close-up.',
-  },
-  'closeup-hairline': {
-    fr: "Rapprochez l'appareil de votre front pour le prochain gros plan.",
-    en: 'Move the device closer to your forehead for the next close-up.',
+    fr: "Reculez brièvement puis rapprochez fort le téléphone : front et hairline nets.",
+    en: 'Step back briefly, then move very close: forehead and hairline clear.',
   },
 };
 
@@ -140,41 +122,34 @@ export function FaceCaptureView({
     return CAPTURE_POSES[idx]?.id ?? null;
   }, [state.currentPose?.index]);
 
-  /**
-   * Consigne lisible tout de suite : pendant `Capturing` l’index session pointe encore
-   * sur la pose qu’on enlève jusqu’à la fin du shutter — on affiche donc déjà la suivante,
-   * sauf à la dernière pose (pas d’étape suivante dans le flux).
-   */
-  const instructionPoseId = useMemo((): PoseId | null => {
-    const idx = state.currentPose?.index ?? 0;
-    if (state.sessionState === 'Capturing') {
-      if (idx >= CAPTURE_POSES.length - 1) return CAPTURE_POSES[idx]?.id ?? null;
-      return CAPTURE_POSES[idx + 1]?.id ?? null;
-    }
-    return activePoseId;
-  }, [state.sessionState, state.currentPose?.index, activePoseId]);
-
   const instruction =
-    instructionPoseId !== null ? i18n(language, STEP_INSTRUCTION[instructionPoseId]) : '';
+    activePoseId !== null ? i18n(language, STEP_INSTRUCTION[activePoseId]) : '';
 
-  /**
-   * Pause de transition entre une pose terminée et la pose suivante quand
-   * cette dernière exige un changement physique de distance (gros plans œil
-   * et hairline). On affiche alors un bandeau dédié pendant `Cooldown` /
-   * `NextPose` au lieu de laisser apparaître l'instruction de la pose
-   * suivante avec un avertissement « Rapprochez davantage » qui surgit
-   * brutalement.
-   */
-  const isTransitioning =
-    state.sessionState === 'Cooldown' || state.sessionState === 'NextPose';
-  const transitionCopy =
-    isTransitioning && activePoseId && TRANSITION_PROMPT[activePoseId]
-      ? i18n(language, TRANSITION_PROMPT[activePoseId]!)
-      : null;
+  const showPoseInstructionOverlay = useMemo(() => {
+    if (isLoading || hasError || !instruction) return false;
+    return (
+      state.sessionState === 'Cooldown' ||
+      state.sessionState === 'NextPose' ||
+      (Boolean(state.faceInView) && Boolean(state.validation))
+    );
+  }, [
+    isLoading,
+    hasError,
+    instruction,
+    state.sessionState,
+    state.faceInView,
+    state.validation,
+  ]);
 
   /** Indique de quel côté pivoter pour entrer dans la plage de yaw (profils). */
   const profileTurnArrow = useMemo((): 'left' | 'right' | null => {
-    if (state.sessionState === 'Capturing') return null;
+    if (
+      state.sessionState === 'Capturing' ||
+      state.sessionState === 'Cooldown' ||
+      state.sessionState === 'NextPose'
+    ) {
+      return null;
+    }
     if (
       !state.headPose ||
       state.validation?.status === 'ready' ||
@@ -429,27 +404,7 @@ export function FaceCaptureView({
             </div>
           )}
 
-          {!isLoading && !hasError && transitionCopy ? (
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-[35] flex justify-center px-5 pt-8">
-              <div
-                className="flex max-w-md items-center gap-3 rounded-2xl border border-white/15 bg-black/65 px-5 py-4 backdrop-blur-md"
-                style={{
-                  boxShadow:
-                    '0 12px 40px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
-                }}
-              >
-                <div
-                  className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-300"
-                  aria-hidden
-                />
-                <p className="font-display text-base font-semibold leading-snug tracking-tight text-white sm:text-lg">
-                  {transitionCopy}
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {!isLoading && !hasError && !transitionCopy && state.validation && state.faceInView && instruction ? (
+          {!isLoading && !hasError && showPoseInstructionOverlay ? (
             <>
               {profileTurnArrow === 'left' ? (
                 <div
@@ -491,6 +446,8 @@ export function FaceCaptureView({
 
               {state.sessionState !== 'Holding' &&
               state.sessionState !== 'Capturing' &&
+              state.sessionState !== 'Cooldown' &&
+              state.sessionState !== 'NextPose' &&
               state.validation?.reasons &&
               state.validation.reasons.length > 0 &&
               activePoseId !== null &&

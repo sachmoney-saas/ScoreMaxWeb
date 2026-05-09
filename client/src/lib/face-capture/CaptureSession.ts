@@ -17,6 +17,7 @@ import { PoseValidator } from "./PoseValidator";
 import { evaluateFrameQualityForCapture, evaluateFrameQualityMinimal } from "./QualityGate";
 import { computeHoldFrameMerit } from "./holdFrameMerit";
 import { resolveHoldBestFrameTuning, type ResolvedHoldBestFrameTuning } from "./holdBestFrameTuning";
+import { faceRatio } from "./strategies/PoseStrategy";
 
 export type CaptureSessionEvent =
   | { type: "pose_captured"; poseId: PoseId; blob: Blob }
@@ -191,6 +192,10 @@ export class CaptureSession {
   private transitionThumbnailUrl: string | null = null;
   /** `performance.now()` threshold; until then, first frontal pose skips strict validation (see `FIRST_POSE_WARMUP_MS`). */
   private sessionWarmupUntil = 0;
+  /** Suit `requirePullBackBeforeAlign` (ex. hairline après œil). */
+  private pullbackGatePoseIndex = -1;
+  private pullbackStableStreak = 0;
+  private pullbackGateSatisfied = true;
 
   private videoEl: HTMLVideoElement | null = null;
   private overlayCanvas: HTMLCanvasElement | null = null;
@@ -245,6 +250,9 @@ export class CaptureSession {
     this.clearHoldBestCandidate();
     this.transitionPoseId = null;
     this.transitionThumbnailUrl = null;
+    this.pullbackGatePoseIndex = -1;
+    this.pullbackStableStreak = 0;
+    this.pullbackGateSatisfied = true;
     this.sessionWarmupUntil = performance.now() + FIRST_POSE_WARMUP_MS;
     this.motion.reset();
     this.resetHoldGestureStreaks();
@@ -580,6 +588,30 @@ export class CaptureSession {
       return;
     }
 
+    if (this.currentPoseIndex !== this.pullbackGatePoseIndex) {
+      this.pullbackGatePoseIndex = this.currentPoseIndex;
+      this.pullbackStableStreak = 0;
+      this.pullbackGateSatisfied = !poseDef.requirePullBackBeforeAlign;
+    }
+
+    if (
+      poseDef.requirePullBackBeforeAlign &&
+      !this.pullbackGateSatisfied &&
+      !isExtrapolated
+    ) {
+      const cfg = poseDef.requirePullBackBeforeAlign;
+      const fr = faceRatio(frame);
+      const minStable = cfg.minStableFrames ?? 12;
+      if (fr < cfg.maxFaceRatio && fr > 0.02) {
+        this.pullbackStableStreak += 1;
+        if (this.pullbackStableStreak >= minStable) {
+          this.pullbackGateSatisfied = true;
+        }
+      } else {
+        this.pullbackStableStreak = 0;
+      }
+    }
+
     /**
      * Once the hold has started for this pose, ask strategies to evaluate
      * with looser tolerance: this avoids kicking the user out on transient
@@ -588,7 +620,10 @@ export class CaptureSession {
      * very first ready frame so the entry criteria stay strict.
      */
     const holding = this.holdStartAt !== null;
-    const validation = this.validator.validate(frame, poseDef, { holding });
+    const validation = this.validator.validate(frame, poseDef, {
+      holding,
+      pullBackSatisfied: this.pullbackGateSatisfied,
+    });
     this.lastValidation = validation;
     this.poseStates[this.currentPoseIndex]!.validation = validation;
 
@@ -972,7 +1007,10 @@ export class CaptureSession {
     const poseDef = CAPTURE_POSES[this.currentPoseIndex];
     if (!poseDef) return;
 
-    const validation = this.validator.validate(frame, poseDef, { holding: true });
+    const validation = this.validator.validate(frame, poseDef, {
+      holding: true,
+      pullBackSatisfied: this.pullbackGateSatisfied,
+    });
     this.lastValidation = validation;
     const ps = this.poseStates[this.currentPoseIndex];
     if (ps) ps.validation = validation;

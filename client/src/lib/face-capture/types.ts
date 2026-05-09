@@ -104,6 +104,15 @@ export interface PoseDefinition {
    * cooldown standard (transitions sans changement de distance).
    */
   entryDelayMs?: number;
+  /**
+   * Avant que la validation « rapprochez » ne compte, impose que le ratio de
+   * largeur facial (voir `faceRatio`) descende sous `maxFaceRatio` pendant
+   * `minStableFrames` frames d’affilée — évite deux gros plans extrêmes qui s’enchaînent sans recul.
+   */
+  requirePullBackBeforeAlign?: {
+    maxFaceRatio: number;
+    minStableFrames?: number;
+  };
 }
 
 export const CAPTURE_POSES: PoseDefinition[] = [
@@ -185,8 +194,7 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     yawRange: [-15, 15],
     pitchRange: [-18, 18],
     rollRange: [-15, 15],
-    /** Loose enough to capture from a regular selfie distance, not just extreme close-up. */
-    minFaceRatio: 0.13,
+    minFaceRatio: 0.16,
     holdMs: 1800,
     qualityGateRequired: true,
   },
@@ -204,17 +212,10 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     yawRange: [-25, 25],
     pitchRange: [-20, 20],
     rollRange: [-15, 15],
-    minFaceRatio: 0.6,
+    minFaceRatio: 0.68,
     holdMs: 1800,
     qualityGateRequired: true,
-    /**
-     * Le sourire précédent peut être pris à distance de selfie normale.
-     * On laisse 1.5 s à l'utilisateur pour rapprocher physiquement l'appareil
-     * du visage avant de redémarrer l'évaluation, sinon la barre d'alignement
-     * du gros plan repart immédiatement après le flash et le « rapprochez
-     * davantage » s'enchaîne sans pause perçue.
-     */
-    entryDelayMs: 1500,
+    entryDelayMs: 1800,
   },
   {
     id: "closeup-hairline",
@@ -231,11 +232,16 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     yawRange: [-25, 25],
     pitchRange: [-25, 30],
     rollRange: [-15, 15],
-    minFaceRatio: 0.5,
+    minFaceRatio: 0.62,
     holdMs: 1800,
     qualityGateRequired: true,
-    /** Idem `closeup-eye` : pause pour reconfigurer la distance/inclinaison. */
-    entryDelayMs: 1200,
+    entryDelayMs: 2200,
+    /**
+     * Après un gros plan œil très serré : le visage doit d'abord redevenir petit dans le cadre
+     * (recul réel du téléphone) avant que le rapprochement pour le hairline soit validé — évite
+     * deux clichés quasi identiques/pris trop vite.
+     */
+    requirePullBackBeforeAlign: { maxFaceRatio: 0.34, minStableFrames: 15 },
   },
 ];
 
