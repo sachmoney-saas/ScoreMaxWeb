@@ -142,7 +142,7 @@ export const CAPTURE_POSES: PoseDefinition[] = [
      * Yaw is mirrored to match the selfie preview (`solveHeadPoseFromMatrix(..., true)`).
      * “Tournez à droite” → yaw devient négatif (profil droit).
      */
-    yawRange: [-95, -32],
+    yawRange: [-95, -40],
     pitchRange: [-28, 28],
     rollRange: [-18, 18],
     minFaceRatio: 0.08,
@@ -154,8 +154,8 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     label: "Profil gauche",
     description: "Tournez la tête vers la gauche",
     icon: "👈",
-    /** Même convention miroir : « vers la gauche » → yaw positif. */
-    yawRange: [32, 95],
+    /** Même convention miroir : « vers la gauche » → yaw positif. À partir de ~40° vers l’épaule. */
+    yawRange: [40, 95],
     pitchRange: [-28, 28],
     rollRange: [-18, 18],
     minFaceRatio: 0.08,

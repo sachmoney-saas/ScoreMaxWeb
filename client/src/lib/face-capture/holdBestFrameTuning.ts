@@ -110,7 +110,8 @@ export function normalizeMeritWeights(w: HoldMeritWeights): HoldMeritWeights {
 export function inferLowTierDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   const cores = navigator.hardwareConcurrency;
-  const memGb = navigator.deviceMemory;
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const memGb = nav.deviceMemory;
   const weakCores = typeof cores === "number" && cores > 0 && cores <= 4;
   const lowMem = typeof memGb === "number" && memGb > 0 && memGb <= 4;
   return weakCores || lowMem;

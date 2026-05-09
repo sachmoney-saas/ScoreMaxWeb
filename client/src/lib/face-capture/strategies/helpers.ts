@@ -10,6 +10,12 @@ import { clamp01 } from "./PoseStrategy";
 export const SMILE_BLENDSHAPE_THRESHOLD = 0.42;
 
 /**
+ * Ouverture minimale (`jawOpen` MediaPipe 0..1) pour accepter le cliché sourire.
+ * Sans ça, un « sourire » bouche fermée (blendshapes commissures seuls) peut passer le seuil.
+ */
+export const SMILE_MIN_JAW_OPEN_FOR_CAPTURE = 0.1;
+
+/**
  * Blendshapes `eyeBlinkLeft` / `eyeBlinkRight` (MediaPipe Face Landmarker, échelle 0..1).
  * ~0 yeux ouverts, ↑ vers fermeture / clignement.
  */
@@ -50,6 +56,9 @@ export function eyeNotBlinkingBlendScore(frame: { blendshapes: Record<string, nu
  * (damps one-sided spikes) and lightly penalise a big **jawOpen** with a
  * weak smile (bâillement / bouche grande ouverte sans contraction sourire).
  *
+ * **Ouverture** : on exige en plus un `jawOpen` minimal (ou équivalent géométrique)
+ * pour rejeter un sourire strictement bouche fermée si l’utilisateur attend des dents visibles.
+ *
  * Fallback (when blendshapes are unavailable): geometric heuristic —
  * stricter than before (neutre doit rester bas).
  */
@@ -58,9 +67,34 @@ export function smileProgress(frame: FaceFrame): number {
   const sl = bs?.mouthSmileLeft;
   const sr = bs?.mouthSmileRight;
   if (typeof sl === "number" && typeof sr === "number") {
-    return clamp01(blendshapeSmileScore(bs, sl, sr));
+    let s = clamp01(blendshapeSmileScore(bs, sl, sr));
+    const jaw = bs.jawOpen;
+    if (typeof jaw === "number") {
+      if (jaw < SMILE_MIN_JAW_OPEN_FOR_CAPTURE) {
+        s *= jaw / Math.max(1e-6, SMILE_MIN_JAW_OPEN_FOR_CAPTURE);
+      }
+    } else {
+      s *= geometricMouthOpenScore(frame.landmarks);
+    }
+    return clamp01(s);
   }
-  return geometricSmileScore(frame.landmarks);
+  const geoSmile = geometricSmileScore(frame.landmarks);
+  const geoOpen = geometricMouthOpenScore(frame.landmarks);
+  return clamp01(Math.min(geoSmile, geoOpen));
+}
+
+function geometricMouthOpenScore(lms: LandmarkPoint[]): number {
+  const upperLip = lms[13];
+  const lowerLip = lms[14];
+  const cornerL = lms[61];
+  const cornerR = lms[291];
+  if (!upperLip || !lowerLip || !cornerL || !cornerR) return 0;
+  const mouthWidth = Math.hypot(cornerR.x - cornerL.x, cornerR.y - cornerL.y);
+  if (mouthWidth < 1e-6) return 0;
+  /** Coords normalisées, y vers le bas : bouche ouverte ⇒ espace vertical lèvres. */
+  const gap = Math.max(0, lowerLip.y - upperLip.y);
+  /** ~0.028 = joint, 0.06+ = ouverture nette (relatif à la largeur bouche). */
+  return clamp01((gap / mouthWidth - 0.026) / 0.042);
 }
 
 function blendshapeSmileScore(

@@ -38,7 +38,13 @@ function frameForPose(poseId: PoseId): FaceFrame {
     "closeup-hairline": { yaw: 0, pitch: 0, roll: 0 },
   };
   const blendshapes: Record<string, number> =
-    poseId === "closeup-smile" ? { mouthSmileLeft: 0.55, mouthSmileRight: 0.55 } : {};
+    poseId === "closeup-smile"
+      ? {
+          mouthSmileLeft: 0.55,
+          mouthSmileRight: 0.55,
+          jawOpen: 0.14,
+        }
+      : {};
   return {
     timestamp: 0,
     landmarks: buildLandmarks(),

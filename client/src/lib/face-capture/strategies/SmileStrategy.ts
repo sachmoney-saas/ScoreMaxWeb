@@ -1,6 +1,6 @@
 import type { FaceFrame, PoseDefinition } from "../types";
 import { PoseStrategy, faceRatio, inRange, rangeProgress } from "./PoseStrategy";
-import { smileProgress, SMILE_BLENDSHAPE_THRESHOLD } from "./helpers";
+import { smileProgress, SMILE_BLENDSHAPE_THRESHOLD, SMILE_MIN_JAW_OPEN_FOR_CAPTURE } from "./helpers";
 
 /**
  * Blendshapes : seuil via `SMILE_BLENDSHAPE_THRESHOLD` + forme `smileProgress`
@@ -16,7 +16,20 @@ export class SmileStrategy implements PoseStrategy {
     if (!inRange(frame.headPose.pitch, pose.pitchRange)) hints.push("Regardez droit devant");
     if (!inRange(frame.headPose.roll, pose.rollRange)) hints.push("Redressez la tête");
     if (smile < SMILE_BLENDSHAPE_THRESHOLD) {
-      hints.push("Souriez davantage (visible des deux côtés).");
+      const jaw = frame.blendshapes?.jawOpen;
+      const sl = frame.blendshapes?.mouthSmileLeft;
+      const sr = frame.blendshapes?.mouthSmileRight;
+      if (
+        typeof jaw === "number" &&
+        typeof sl === "number" &&
+        typeof sr === "number" &&
+        jaw < SMILE_MIN_JAW_OPEN_FOR_CAPTURE &&
+        (sl + sr) / 2 >= 0.36
+      ) {
+        hints.push("Ouvrez légèrement la bouche en gardant le sourire.");
+      } else {
+        hints.push("Souriez davantage (visible des deux côtés).");
+      }
     }
     if (faceRatio(frame) < pose.minFaceRatio) hints.push("Rapprochez votre visage");
     const smileNormalized = Math.min(1, smile / SMILE_BLENDSHAPE_THRESHOLD);

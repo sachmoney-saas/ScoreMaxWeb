@@ -3,7 +3,13 @@
 // Accepts external refs so the session uses the same DOM elements as JSX.
 // ============================================================
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  type RefObject,
+} from 'react';
 import { CaptureSession, type CapturedPose, type CaptureSessionState } from './CaptureSession';
 import type {
   CaptureSessionConfig,
@@ -38,15 +44,28 @@ export interface FaceCaptureControls {
   start: () => Promise<void>;
   stop: () => void;
   switchCamera: (deviceId: string | undefined) => Promise<void>;
+  /** Avec `deferSessionStart` : démarre détection + poses après briefing caméra. */
+  beginPoseSession: () => Promise<void>;
+}
+
+/** Options optionnelles du hook (4ᵉ argument). */
+export interface UseFaceCaptureOptions {
+  /** Si vrai, `init()` active la caméra/MediaPipe sans `session.start()` ; appeler `beginPoseSession()` ensuite. */
+  deferSessionStart?: boolean;
 }
 
 export function useFaceCapture(
-  videoRef: React.RefObject<HTMLVideoElement>,
-  overlayRef: React.RefObject<HTMLCanvasElement>,
+  videoRef: RefObject<HTMLVideoElement | null>,
+  overlayRef: RefObject<HTMLCanvasElement | null>,
   captureConfig?: Partial<CaptureSessionConfig>,
+  options?: UseFaceCaptureOptions,
 ): [FaceCaptureState, FaceCaptureControls] {
   const sessionRef = useRef<CaptureSession | null>(null);
   const initStarted = useRef(false);
+  /** `session.start()` appelé au moins une fois (ou ignoré si pas defer). */
+  const sessionFlowStartedRef = useRef(false);
+  const optionsRef = useRef<UseFaceCaptureOptions | undefined>(options);
+  optionsRef.current = options;
   const captureConfigRef = useRef(captureConfig);
   captureConfigRef.current = captureConfig;
 
@@ -89,7 +108,6 @@ export function useFaceCapture(
     const video = videoRef.current;
     const overlay = overlayRef.current;
     if (!video || !overlay) {
-      // Video/canvas not mounted yet — will be retried by the effect
       return;
     }
     if (initStarted.current) return;
@@ -120,12 +138,20 @@ export function useFaceCapture(
       await session.init(video, overlay);
       const elapsed = performance.now() - t0;
       if (elapsed < FACE_CAPTURE_LOAD_MIN_MS) {
-        await new Promise((r) => setTimeout(r, FACE_CAPTURE_LOAD_MIN_MS - elapsed));
+        await new Promise(r => setTimeout(r, FACE_CAPTURE_LOAD_MIN_MS - elapsed));
       }
       setState(prev => ({ ...prev, isLoading: false }));
-      await session.start();
-      syncState(session);
+
+      const defer = Boolean(optionsRef.current?.deferSessionStart);
+      if (!defer) {
+        await session.start();
+        sessionFlowStartedRef.current = true;
+        syncState(session);
+      }
     } catch (err) {
+      initStarted.current = false;
+      sessionFlowStartedRef.current = false;
+      sessionRef.current = null;
       setState(prev => ({
         ...prev,
         error: err instanceof Error ? err.message : 'Camera init failed',
@@ -134,6 +160,22 @@ export function useFaceCapture(
       }));
     }
   }, [videoRef, overlayRef, syncState]);
+
+  const beginPoseSession = useCallback(async () => {
+    const session = sessionRef.current;
+    if (!session || sessionFlowStartedRef.current) return;
+    try {
+      await session.start();
+      sessionFlowStartedRef.current = true;
+      syncState(session);
+    } catch (err) {
+      setState(prev => ({
+        ...prev,
+        error: err instanceof Error ? err.message : 'Capture session failed',
+        sessionState: 'error',
+      }));
+    }
+  }, [syncState]);
 
   const switchCamera = useCallback(async (deviceId: string | undefined) => {
     const session = sessionRef.current;
@@ -150,6 +192,7 @@ export function useFaceCapture(
     sessionRef.current?.stop();
     sessionRef.current = null;
     initStarted.current = false;
+    sessionFlowStartedRef.current = false;
     setState(prev => ({
       ...prev,
       sessionState: 'idle',
@@ -166,7 +209,6 @@ export function useFaceCapture(
     }));
   }, []);
 
-  /** Throttle React updates: session internals refresh every frame; UI only needs ~20–30 Hz. */
   const lastUiSyncMs = useRef(-1);
   useEffect(() => {
     const UI_SYNC_MS = 1000 / 30;
@@ -187,7 +229,6 @@ export function useFaceCapture(
     return () => cancelAnimationFrame(rafId);
   }, [syncState]);
 
-  // Start when video + overlay DOM elements are available
   useEffect(() => {
     const video = videoRef.current;
     const overlay = overlayRef.current;
@@ -201,5 +242,8 @@ export function useFaceCapture(
     };
   }, []);
 
-  return [state, { start, stop, switchCamera }];
+  return [
+    state,
+    { start, stop, switchCamera, beginPoseSession },
+  ];
 }

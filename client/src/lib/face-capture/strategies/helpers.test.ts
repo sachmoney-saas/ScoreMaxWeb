@@ -15,11 +15,26 @@ function frameWithBlendshapes(blendshapes: Record<string, number>): FaceFrame {
 }
 
 describe("smileProgress", () => {
-  it("returns high score when both corners smile strongly", () => {
+  it("returns high score when corners smile strongly and jaw opens enough", () => {
     const s = smileProgress(
-      frameWithBlendshapes({ mouthSmileLeft: 0.58, mouthSmileRight: 0.56 }),
+      frameWithBlendshapes({
+        mouthSmileLeft: 0.58,
+        mouthSmileRight: 0.56,
+        jawOpen: 0.14,
+      }),
     );
     expect(s).toBeGreaterThanOrEqual(SMILE_BLENDSHAPE_THRESHOLD);
+  });
+
+  it("rejects strong mouthSmile with closed jaw (no visible open mouth)", () => {
+    const s = smileProgress(
+      frameWithBlendshapes({
+        mouthSmileLeft: 0.56,
+        mouthSmileRight: 0.55,
+        jawOpen: 0.03,
+      }),
+    );
+    expect(s).toBeLessThan(SMILE_BLENDSHAPE_THRESHOLD);
   });
 
   it("damps asymmetric one-sided spikes", () => {

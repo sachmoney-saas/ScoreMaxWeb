@@ -33,5 +33,9 @@ export type {
   CaptureSessionCallback,
 } from './CaptureSession';
 export { useFaceCapture } from './useFaceCapture';
-export type { FaceCaptureState, FaceCaptureControls } from './useFaceCapture';
+export type {
+  FaceCaptureState,
+  FaceCaptureControls,
+  UseFaceCaptureOptions,
+} from './useFaceCapture';
 export { listVideoInputDevices } from './camera-devices';

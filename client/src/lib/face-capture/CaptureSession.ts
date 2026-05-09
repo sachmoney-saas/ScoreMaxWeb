@@ -94,7 +94,7 @@ export class CaptureSession {
    *
    * **Profils** : la perte de visage reste gérée par extrapolation / grace ;
    * en revanche un retour volontaire face caméra (|yaw| dans une bande
-   * neutre, disjointe du profil ≥32°) annule le hold après quelques frames.
+   * neutre, disjointe du profil ≥40°) annule le hold après quelques frames.
    *
    * **Menton levé / sommet du crâne** : suivi pitch dédié (retour hors
    * consigne) ; pas d’extrapolation **pendant** le hold sinon la perte de
@@ -108,7 +108,7 @@ export class CaptureSession {
    */
   private readonly holdLostPoseStreakToAbort = 4;
   /**
-   * Seuil |yaw| « face au centre » plus bas que le bord profil (32°) pour
+   * Seuil |yaw| « face au centre » plus bas que le bord profil (40°) pour
    * éviter les faux positifs sur la limite de détection.
    */
   private readonly profileReturnNeutralAbsYawDeg = 20;
