@@ -1,0 +1,854 @@
+// ============================================================
+// Aperçu admin : vignettes aplatis PNG (idem téléchargements), ou repli canvas.
+// ============================================================
+
+import { useEffect, useRef } from 'react';
+import type { AdminCaptureDebugPayload } from '@/lib/face-capture/CaptureSession';
+import type { LandmarkPoint, PoseId } from '@/lib/face-capture/types';
+import { MaskRenderer } from '@/lib/face-capture/MaskRenderer';
+import { DEBUG_CAPTURE_WHITE_FACE_MESH } from '@/lib/face-capture/capture-render-debug';
+import {
+  drawAdminJawUpLowerArcGuideOnCanvas,
+  drawAdminNoseMouthWidthGuidelinesOnCanvas,
+  drawAdminOrientationGuidelinesOnCanvas,
+  drawAdminProfileJawGuideOnCanvas,
+  drawAdminSmileLipsGuideOnCanvas,
+  drawAdminVerticalThirdsGuidelinesOnCanvas,
+  mirrorLandmarksNormalizedX,
+} from '@/lib/face-capture/admin-capture-guidelines';
+import { Button } from '@/components/ui/button';
+import { i18n, type AppLanguage } from '@/lib/i18n';
+
+const MAX_MASK_PIXEL_RATIO = 1.25;
+
+type GuideDrawer = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+) => void;
+
+type AdminFallbackStackOutcome =
+  | { ok: true; meshRenderer: MaskRenderer | null }
+  | { ok: false };
+
+/**
+ * Photo + (optionnel) WebGL masque debug + repères 2D — repli PNG indisponible.
+ * Sans maillage si `drawWhiteFaceMesh` faux et `DEBUG_CAPTURE_WHITE_FACE_MESH` faux.
+ */
+function renderAdminDebugStack(
+  img: HTMLImageElement,
+  payload: AdminCaptureDebugPayload,
+  els: { photo: HTMLCanvasElement; mask: HTMLCanvasElement; guide: HTMLCanvasElement },
+  pr: number,
+  drawGuides: GuideDrawer,
+  drawWhiteFaceMesh = false,
+): AdminFallbackStackOutcome {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  if (w < 2 || h < 2) return { ok: false };
+
+  const lmFlat = mirrorLandmarksNormalizedX(payload.landmarks);
+
+  const { photo, mask, guide } = els;
+  photo.style.width = `${w}px`;
+  photo.style.height = `${h}px`;
+  photo.width = Math.round(w * pr);
+  photo.height = Math.round(h * pr);
+
+  mask.style.width = `${w}px`;
+  mask.style.height = `${h}px`;
+
+  guide.style.width = `${w}px`;
+  guide.style.height = `${h}px`;
+  guide.width = Math.round(w * pr);
+  guide.height = Math.round(h * pr);
+
+  const pctx = photo.getContext('2d');
+  if (!pctx) return { ok: false };
+  pctx.setTransform(pr, 0, 0, pr, 0, 0);
+  pctx.clearRect(0, 0, w, h);
+  pctx.save();
+  pctx.translate(w, 0);
+  pctx.scale(-1, 1);
+  pctx.drawImage(img, 0, 0, w, h);
+  pctx.restore();
+
+  let meshRenderer: MaskRenderer | null = null;
+
+  const useMeshLayer = drawWhiteFaceMesh || DEBUG_CAPTURE_WHITE_FACE_MESH;
+  if (useMeshLayer) {
+    void mask.offsetHeight;
+    meshRenderer = new MaskRenderer();
+    meshRenderer.init(mask, { skipResizeObserver: true });
+    meshRenderer.setAlignmentQuality(1);
+    meshRenderer.render(
+      lmFlat,
+      payload.sourceVideoWidth,
+      payload.sourceVideoHeight,
+      0,
+      0,
+      { staticCssSize: { w, h }, landmarkFrame: 'jpegBitmap' },
+    );
+  }
+
+  const gctx = guide.getContext('2d');
+  if (!gctx) {
+    meshRenderer?.dispose();
+    return { ok: false };
+  }
+  gctx.setTransform(pr, 0, 0, pr, 0, 0);
+  gctx.clearRect(0, 0, w, h);
+  drawGuides(gctx, lmFlat, w, h);
+
+  return { ok: true, meshRenderer };
+}
+
+function isProfilePoseId(id: PoseId): boolean {
+  return id === 'profile-left' || id === 'profile-right';
+}
+
+function isJawUpPoseId(id: PoseId): boolean {
+  return id === 'jaw-up';
+}
+
+function isCrownDownPoseId(id: PoseId): boolean {
+  return id === 'crown-down';
+}
+
+function isCloseupSmilePoseId(id: PoseId): boolean {
+  return id === 'closeup-smile';
+}
+
+function isCloseupEyePoseId(id: PoseId): boolean {
+  return id === 'closeup-eye';
+}
+
+function isCloseupHairlinePoseId(id: PoseId): boolean {
+  return id === 'closeup-hairline';
+}
+
+/** Gros plan œil / hairline : pas de PNG aplati — miniature JPEG d’analyse uniquement (sans masque). */
+function JpegThumbnailOnlyAdminPreview({
+  payload,
+  language,
+}: {
+  payload: AdminCaptureDebugPayload;
+  language: AppLanguage;
+}) {
+  const eye = isCloseupEyePoseId(payload.poseId);
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+        {eye
+          ? i18n(language, {
+              en: 'Eye closeup — analysis JPEG only (no admin flat PNG, no mask overlay)',
+              fr: 'Gros plan œil — JPEG d’analyse uniquement (pas de PNG aplati admin, pas de masque)',
+            })
+          : i18n(language, {
+              en: 'Hairline closeup — analysis JPEG only (no admin flat PNG, no mask overlay)',
+              fr:
+                'Gros plan front — JPEG d’analyse uniquement (pas de PNG aplati admin, pas de masque)',
+            })}
+      </p>
+      <img
+        src={payload.thumbnailUrl}
+        alt=""
+        width={payload.outputWidth}
+        height={payload.outputHeight}
+        className="mx-auto block h-auto max-w-full rounded-md [transform:scaleX(-1)]"
+        decoding="async"
+      />
+    </div>
+  );
+}
+
+/** Repli canvas — profil : photo + arc mâchoire (sans maillage debug si constante prod). */
+function CanvasFallbackProfileJaw({
+  payload,
+  language,
+}: {
+  payload: AdminCaptureDebugPayload;
+  language: AppLanguage;
+}) {
+  const photoRef = useRef<HTMLCanvasElement>(null);
+  const maskRef = useRef<HTMLCanvasElement>(null);
+  const guideRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderer: MaskRenderer | null = null;
+    const img = new Image();
+
+    img.onload = () => {
+      if (cancelled) return;
+      const pr = Math.min(window.devicePixelRatio ?? 1, MAX_MASK_PIXEL_RATIO);
+      const photo = photoRef.current;
+      const mask = maskRef.current;
+      const guide = guideRef.current;
+      if (!photo || !mask || !guide) return;
+      renderer?.dispose();
+      const drawer: GuideDrawer = (ctx, lm, ow, oh) =>
+        drawAdminProfileJawGuideOnCanvas(ctx, lm, ow, oh, payload.poseId);
+      const stacked = renderAdminDebugStack(img, payload, { photo, mask, guide }, pr, drawer, false);
+      renderer = stacked.ok ? stacked.meshRenderer : null;
+    };
+
+    img.src = payload.thumbnailUrl;
+
+    return () => {
+      cancelled = true;
+      renderer?.dispose();
+    };
+  }, [payload]);
+
+  const stackWrap = 'relative mx-auto inline-block leading-none';
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+        {i18n(language, {
+          en: 'Profile — jaw guideline (fallback)',
+          fr: 'Profil — repère mâchoire (repli)',
+        })}
+      </p>
+      <div className={stackWrap}>
+        <canvas ref={photoRef} className="block max-w-full rounded-md" />
+        <canvas
+          ref={maskRef}
+          className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+        />
+        <canvas
+          ref={guideRef}
+          className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Repli canvas — menton levé : arc mandibulaire bas sans maillage filaire prod. */
+function CanvasFallbackJawUp({
+  payload,
+  language,
+}: {
+  payload: AdminCaptureDebugPayload;
+  language: AppLanguage;
+}) {
+  const photoRef = useRef<HTMLCanvasElement>(null);
+  const maskRef = useRef<HTMLCanvasElement>(null);
+  const guideRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderer: MaskRenderer | null = null;
+    const img = new Image();
+
+    img.onload = () => {
+      if (cancelled) return;
+      const pr = Math.min(window.devicePixelRatio ?? 1, MAX_MASK_PIXEL_RATIO);
+      const photo = photoRef.current;
+      const mask = maskRef.current;
+      const guide = guideRef.current;
+      if (!photo || !mask || !guide) return;
+      renderer?.dispose();
+      const drawer: GuideDrawer = (ctx, lm, ow, oh) =>
+        drawAdminJawUpLowerArcGuideOnCanvas(ctx, lm, ow, oh);
+      const stacked = renderAdminDebugStack(img, payload, { photo, mask, guide }, pr, drawer, false);
+      renderer = stacked.ok ? stacked.meshRenderer : null;
+    };
+
+    img.src = payload.thumbnailUrl;
+
+    return () => {
+      cancelled = true;
+      renderer?.dispose();
+    };
+  }, [payload]);
+
+  const stackWrap = 'relative mx-auto inline-block leading-none';
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+        {i18n(language, {
+          en: 'Jaw lower arc — guideline (fallback)',
+          fr: 'Menton levé — arc mandibulaire (repli)',
+        })}
+      </p>
+      <div className={stackWrap}>
+        <canvas ref={photoRef} className="block max-w-full rounded-md" />
+        <canvas
+          ref={maskRef}
+          className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+        />
+        <canvas
+          ref={guideRef}
+          className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Repli canvas — sommet du crâne : photo miroir seule (comme le PNG aplati, sans masque). */
+function CanvasFallbackCrownPhoto({
+  payload,
+  language,
+}: {
+  payload: AdminCaptureDebugPayload;
+  language: AppLanguage;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const img = new Image();
+
+    img.onload = () => {
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const pr = Math.min(window.devicePixelRatio ?? 1, MAX_MASK_PIXEL_RATIO);
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      if (w < 2 || h < 2) return;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      canvas.width = Math.round(w * pr);
+      canvas.height = Math.round(h * pr);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(pr, 0, 0, pr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, w, h);
+      ctx.restore();
+    };
+
+    img.src = payload.thumbnailUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [payload]);
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+        {i18n(language, {
+          en: 'Crown — mirrored photo only (fallback)',
+          fr: 'Sommet du crâne — photo miroir seule (repli)',
+        })}
+      </p>
+      <canvas ref={canvasRef} className="mx-auto block max-w-full rounded-md" />
+    </div>
+  );
+}
+
+/** Repli canvas — sourire : masque + contours lèvres. */
+function CanvasFallbackSmileLips({
+  payload,
+  language,
+}: {
+  payload: AdminCaptureDebugPayload;
+  language: AppLanguage;
+}) {
+  const photoRef = useRef<HTMLCanvasElement>(null);
+  const maskRef = useRef<HTMLCanvasElement>(null);
+  const guideRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderer: MaskRenderer | null = null;
+    const img = new Image();
+
+    img.onload = () => {
+      if (cancelled) return;
+      const pr = Math.min(window.devicePixelRatio ?? 1, MAX_MASK_PIXEL_RATIO);
+      const photo = photoRef.current;
+      const mask = maskRef.current;
+      const guide = guideRef.current;
+      if (!photo || !mask || !guide) return;
+      renderer?.dispose();
+      const drawer: GuideDrawer = (ctx, lm, ow, oh) =>
+        drawAdminSmileLipsGuideOnCanvas(ctx, lm, ow, oh);
+      const stacked = renderAdminDebugStack(img, payload, { photo, mask, guide }, pr, drawer, true);
+      renderer = stacked.ok ? stacked.meshRenderer : null;
+    };
+
+    img.src = payload.thumbnailUrl;
+
+    return () => {
+      cancelled = true;
+      renderer?.dispose();
+    };
+  }, [payload]);
+
+  const stackWrap = 'relative mx-auto inline-block leading-none';
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+        {i18n(language, {
+          en: 'Smile — lip contours (fallback)',
+          fr: 'Sourire — contours lèvres (repli)',
+        })}
+      </p>
+      <div className={stackWrap}>
+        <canvas ref={photoRef} className="block max-w-full rounded-md" />
+        <canvas
+          ref={maskRef}
+          className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+        />
+        <canvas
+          ref={guideRef}
+          className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+        />
+      </div>
+    </div>
+  );
+}
+
+function CanvasFallbackPreview({
+  payload,
+  language,
+}: {
+  payload: AdminCaptureDebugPayload;
+  language: AppLanguage;
+}) {
+  const photoOriRef = useRef<HTMLCanvasElement>(null);
+  const maskOriRef = useRef<HTMLCanvasElement>(null);
+  const guideOriRef = useRef<HTMLCanvasElement>(null);
+
+  const photoNmRef = useRef<HTMLCanvasElement>(null);
+  const maskNmRef = useRef<HTMLCanvasElement>(null);
+  const guideNmRef = useRef<HTMLCanvasElement>(null);
+
+  const photoVtRef = useRef<HTMLCanvasElement>(null);
+  const maskVtRef = useRef<HTMLCanvasElement>(null);
+  const guideVtRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let rOri: MaskRenderer | null = null;
+    let rNm: MaskRenderer | null = null;
+    let rVt: MaskRenderer | null = null;
+    const img = new Image();
+
+    img.onload = () => {
+      if (cancelled) return;
+      const pr = Math.min(window.devicePixelRatio ?? 1, MAX_MASK_PIXEL_RATIO);
+
+      const po = photoOriRef.current;
+      const mo = maskOriRef.current;
+      const go = guideOriRef.current;
+      const pn = photoNmRef.current;
+      const mn = maskNmRef.current;
+      const gn = guideNmRef.current;
+      const pv = photoVtRef.current;
+      const mv = maskVtRef.current;
+      const gv = guideVtRef.current;
+      if (!po || !mo || !go || !pn || !mn || !gn || !pv || !mv || !gv) return;
+
+      rOri?.dispose();
+      rNm?.dispose();
+      rVt?.dispose();
+      const resOri = renderAdminDebugStack(
+        img,
+        payload,
+        { photo: po, mask: mo, guide: go },
+        pr,
+        drawAdminOrientationGuidelinesOnCanvas,
+        false,
+      );
+      const resNm = renderAdminDebugStack(
+        img,
+        payload,
+        { photo: pn, mask: mn, guide: gn },
+        pr,
+        drawAdminNoseMouthWidthGuidelinesOnCanvas,
+        false,
+      );
+      const resVt = renderAdminDebugStack(
+        img,
+        payload,
+        { photo: pv, mask: mv, guide: gv },
+        pr,
+        drawAdminVerticalThirdsGuidelinesOnCanvas,
+        false,
+      );
+      if (!resOri.ok || !resNm.ok || !resVt.ok) {
+        if (resOri.ok) resOri.meshRenderer?.dispose();
+        if (resNm.ok) resNm.meshRenderer?.dispose();
+        if (resVt.ok) resVt.meshRenderer?.dispose();
+        return;
+      }
+      rOri = resOri.meshRenderer;
+      rNm = resNm.meshRenderer;
+      rVt = resVt.meshRenderer;
+    };
+
+    img.src = payload.thumbnailUrl;
+
+    return () => {
+      cancelled = true;
+      rOri?.dispose();
+      rNm?.dispose();
+      rVt?.dispose();
+      rOri = null;
+      rNm = null;
+      rVt = null;
+    };
+  }, [payload]);
+
+  const stackWrap = 'relative mx-auto inline-block leading-none';
+
+  return (
+    <div className="flex w-full flex-col gap-8">
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+          {i18n(language, { en: 'Oval alignment (fallback)', fr: 'Alignement ovale (repli)' })}
+        </p>
+        <div className={stackWrap}>
+          <canvas ref={photoOriRef} className="block max-w-full rounded-md" />
+          <canvas
+            ref={maskOriRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+          />
+          <canvas
+            ref={guideOriRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+          />
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+          {i18n(language, { en: 'Nose & mouth (fallback)', fr: 'Nez & bouche (repli)' })}
+        </p>
+        <div className={stackWrap}>
+          <canvas ref={photoNmRef} className="block max-w-full rounded-md" />
+          <canvas
+            ref={maskNmRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+          />
+          <canvas
+            ref={guideNmRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+          />
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+          {i18n(language, {
+            en: 'Vertical thirds — eyes & lips (fallback)',
+            fr: 'Tiers verticaux — yeux & lèvres (repli)',
+          })}
+        </p>
+        <div className={stackWrap}>
+          <canvas ref={photoVtRef} className="block max-w-full rounded-md" />
+          <canvas
+            ref={maskVtRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+          />
+          <canvas
+            ref={guideVtRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AdminCaptureDebugPanel({
+  payload,
+  language,
+  onContinue,
+}: {
+  payload: AdminCaptureDebugPayload;
+  language: AppLanguage;
+  onContinue: () => void;
+}) {
+  const isProfilePose = isProfilePoseId(payload.poseId);
+  const isJawUpPose = isJawUpPoseId(payload.poseId);
+  const isCrownPose = isCrownDownPoseId(payload.poseId);
+  const isSmilePose = isCloseupSmilePoseId(payload.poseId);
+  const isEyeOrHairlineCloseup =
+    isCloseupEyePoseId(payload.poseId) || isCloseupHairlinePoseId(payload.poseId);
+  const ovalUrl = payload.annotatedOvalGuideThumbnailUrl;
+  const nmUrl = payload.annotatedNoseMouthGuideThumbnailUrl;
+  const vtUrl = payload.annotatedVerticalThirdsGuideThumbnailUrl;
+  const jawUrl = payload.annotatedProfileJawGuideThumbnailUrl;
+  const jawUpUrl = payload.annotatedJawUpLowerArcGuideThumbnailUrl;
+  const crownUrl = payload.annotatedCrownPhotoFlatThumbnailUrl;
+  const smileUrl = payload.annotatedSmileLipsGuideThumbnailUrl;
+
+  const hasFrontalFlat = Boolean(ovalUrl && nmUrl && vtUrl);
+  const hasProfileFlat = Boolean(jawUrl);
+  const hasJawUpFlat = Boolean(jawUpUrl);
+  const hasCrownFlat = Boolean(crownUrl);
+  const hasSmileFlat = Boolean(smileUrl);
+  const hasFlatPng =
+    hasFrontalFlat || hasProfileFlat || hasJawUpFlat || hasCrownFlat || hasSmileFlat;
+
+  return (
+    <div
+      className="absolute inset-0 z-[115] flex flex-col items-center justify-center gap-4 overflow-y-auto bg-black/88 px-4 py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-capture-debug-title"
+    >
+      <p
+        id="admin-capture-debug-title"
+        className="text-center font-mono text-xs font-medium uppercase tracking-wider text-amber-200/90"
+      >
+        {i18n(language, { en: 'Admin — capture debug', fr: 'Admin — debug capture' })}
+      </p>
+      <p className="max-w-lg text-center text-xs text-white/55">
+        {hasFlatPng
+          ? i18n(language, {
+              en: 'Lossless PNG stack (same files as downloads). Plain analysis JPEG is unchanged.',
+              fr:
+                'Empilement PNG sans perte (mêmes fichiers qu’au téléchargement). Le JPEG d’analyse reste inchangé.',
+            })
+          : isEyeOrHairlineCloseup
+            ? i18n(language, {
+                en:
+                  'No admin flat PNG for this closeup — thumbnail below is the plain analysis JPEG only (unchanged).',
+                fr:
+                  'Pas de PNG aplati admin pour ce gros plan — la miniature ci-dessous est le JPEG d’analyse brut (inchangé).',
+              })
+            : i18n(language, {
+                en: 'Flat PNGs unavailable — live canvas fallback. Plain analysis JPEG is unchanged.',
+                fr:
+                  'PNG aplatis indisponibles — aperçu canvas. Le JPEG d’analyse reste inchangé.',
+              })}
+      </p>
+      {hasFlatPng ? (
+        <div className="flex max-w-xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-cyan-200/90">
+          {hasProfileFlat ? (
+            <a
+              href={jawUrl}
+              download={`${payload.poseId}-annotated-profile-jaw-guide.png`}
+              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+            >
+              {i18n(language, {
+                en: 'Download PNG — profile jaw',
+                fr: 'Télécharger PNG — profil (mâchoire)',
+              })}
+            </a>
+          ) : hasJawUpFlat ? (
+            <a
+              href={jawUpUrl}
+              download={`${payload.poseId}-annotated-jaw-lower-arc-guide.png`}
+              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+            >
+              {i18n(language, {
+                en: 'Download PNG — jaw lower arc',
+                fr: 'Télécharger PNG — arc mandibulaire (menton levé)',
+              })}
+            </a>
+          ) : hasCrownFlat ? (
+            <a
+              href={crownUrl}
+              download={`${payload.poseId}-annotated-crown-photo-flat.png`}
+              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+            >
+              {i18n(language, {
+                en: 'Download PNG — crown (mirrored photo, no mask)',
+                fr: 'Télécharger PNG — sommet du crâne (photo miroir, sans masque)',
+              })}
+            </a>
+          ) : hasSmileFlat ? (
+            <a
+              href={smileUrl}
+              download={`${payload.poseId}-annotated-smile-lips-guide.png`}
+              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+            >
+              {i18n(language, {
+                en: 'Download PNG — lip contours (smile)',
+                fr: 'Télécharger PNG — contours lèvres (sourire)',
+              })}
+            </a>
+          ) : (
+            <>
+              <a
+                href={ovalUrl}
+                download={`${payload.poseId}-annotated-oval-guide.png`}
+                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+              >
+                {i18n(language, {
+                  en: 'Download PNG — oval guides',
+                  fr: 'Télécharger PNG — repères ovale',
+                })}
+              </a>
+              <a
+                href={nmUrl}
+                download={`${payload.poseId}-annotated-nose-mouth-guide.png`}
+                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+              >
+                {i18n(language, {
+                  en: 'Download PNG — nose & mouth',
+                  fr: 'Télécharger PNG — nez & bouche',
+                })}
+              </a>
+              <a
+                href={vtUrl}
+                download={`${payload.poseId}-annotated-vertical-thirds-guide.png`}
+                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+              >
+                {i18n(language, {
+                  en: 'Download PNG — vertical thirds',
+                  fr: 'Télécharger PNG — tiers verticaux',
+                })}
+              </a>
+            </>
+          )}
+        </div>
+      ) : null}
+      <div className="max-h-[min(82vh,960px)] w-full max-w-3xl overflow-auto rounded-lg border border-white/15 bg-black/40 p-4 shadow-xl">
+        {hasFlatPng ? (
+          hasProfileFlat ? (
+            <div className="w-full">
+              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                {i18n(language, {
+                  en: 'Profile jaw — flat (light blue guideline)',
+                  fr: 'Profil mâchoire — fichier aplati (repère bleu clair)',
+                })}
+              </p>
+              <img
+                src={jawUrl}
+                alt=""
+                width={payload.outputWidth}
+                height={payload.outputHeight}
+                className="mx-auto block h-auto w-full max-w-full rounded-md"
+                decoding="async"
+              />
+            </div>
+          ) : hasJawUpFlat ? (
+            <div className="w-full">
+              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                {i18n(language, {
+                  en: 'Jaw lower arc — flat (light blue guideline)',
+                  fr: 'Menton levé — fichier aplati (arc bleu clair)',
+                })}
+              </p>
+              <img
+                src={jawUpUrl}
+                alt=""
+                width={payload.outputWidth}
+                height={payload.outputHeight}
+                className="mx-auto block h-auto w-full max-w-full rounded-md"
+                decoding="async"
+              />
+            </div>
+          ) : hasCrownFlat ? (
+            <div className="w-full">
+              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                {i18n(language, {
+                  en: 'Crown — flat mirrored photo (no mesh, no guides)',
+                  fr: 'Sommet du crâne — fichier aplati photo miroir (sans masque ni repères)',
+                })}
+              </p>
+              <img
+                src={crownUrl}
+                alt=""
+                width={payload.outputWidth}
+                height={payload.outputHeight}
+                className="mx-auto block h-auto w-full max-w-full rounded-md"
+                decoding="async"
+              />
+            </div>
+          ) : hasSmileFlat ? (
+            <div className="w-full">
+              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                {i18n(language, {
+                  en: 'Smile — flat (mesh + light blue lip outlines)',
+                  fr: 'Sourire — aplati (masque + contours lèvres bleu clair)',
+                })}
+              </p>
+              <img
+                src={smileUrl}
+                alt=""
+                width={payload.outputWidth}
+                height={payload.outputHeight}
+                className="mx-auto block h-auto w-full max-w-full rounded-md"
+                decoding="async"
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-8">
+              <div className="w-full">
+                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                  {i18n(language, { en: 'Oval alignment — flat', fr: 'Alignement ovale — fichier aplati' })}
+                </p>
+                <img
+                  src={ovalUrl}
+                  alt=""
+                  width={payload.outputWidth}
+                  height={payload.outputHeight}
+                  className="mx-auto block h-auto w-full max-w-full rounded-md"
+                  decoding="async"
+                />
+              </div>
+              <div className="w-full">
+                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                  {i18n(language, {
+                    en: 'Nose & mouth widths — flat',
+                    fr: 'Largeur nez ↔ bouche — fichier aplati',
+                  })}
+                </p>
+                <img
+                  src={nmUrl}
+                  alt=""
+                  width={payload.outputWidth}
+                  height={payload.outputHeight}
+                  className="mx-auto block h-auto w-full max-w-full rounded-md"
+                  decoding="async"
+                />
+              </div>
+              <div className="w-full">
+                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                  {i18n(language, {
+                    en: 'Vertical thirds — flat (eyes midpoint, lips midpoint)',
+                    fr: 'Tiers verticaux — fichier aplati (milieu des yeux, milieu des lèvres)',
+                  })}
+                </p>
+                <img
+                  src={vtUrl}
+                  alt=""
+                  width={payload.outputWidth}
+                  height={payload.outputHeight}
+                  className="mx-auto block h-auto w-full max-w-full rounded-md"
+                  decoding="async"
+                />
+              </div>
+            </div>
+          )
+        ) : isEyeOrHairlineCloseup ? (
+          <JpegThumbnailOnlyAdminPreview payload={payload} language={language} />
+        ) : isProfilePose ? (
+          <CanvasFallbackProfileJaw payload={payload} language={language} />
+        ) : isJawUpPose ? (
+          <CanvasFallbackJawUp payload={payload} language={language} />
+        ) : isCrownPose ? (
+          <CanvasFallbackCrownPhoto payload={payload} language={language} />
+        ) : isSmilePose ? (
+          <CanvasFallbackSmileLips payload={payload} language={language} />
+        ) : (
+          <CanvasFallbackPreview payload={payload} language={language} />
+        )}
+      </div>
+      <Button
+        type="button"
+        className="h-11 min-w-[200px] rounded-full bg-white text-base font-semibold text-slate-950 hover:bg-zinc-200"
+        onClick={onContinue}
+      >
+        {i18n(language, { en: 'Next', fr: 'Suivant' })}
+      </Button>
+    </div>
+  );
+}

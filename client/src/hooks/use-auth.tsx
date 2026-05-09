@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -11,6 +12,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { AUTH_CONFIG } from "@/config/auth";
+import {
+  readAdminCaptureUxEnabledFromStorage,
+  writeAdminCaptureUxEnabledToStorage,
+} from "@/lib/admin-capture-preferences";
 
 type Profile = {
   id: string;
@@ -29,6 +34,12 @@ type AuthContextType = {
   isLoading: boolean;
   isAdmin: boolean;
   /**
+   * Pause capture + aplatis PNG + HUD debug lorsque vous êtes admin et que l’option
+   * correspondante reste activée en paramètres (localStorage).
+   */
+  adminCaptureExtrasActive: boolean;
+  setAdminCaptureUxEnabled: (enabled: boolean) => void;
+  /**
    * Effective gate for paid/premium features.
    * Mirrors `scoremax_has_premium_access(uid)` server-side: admin OR active sub.
    */
@@ -42,7 +53,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const [adminCaptureUxEnabled, setAdminCaptureUxEnabledState] = useState(() =>
+    typeof window !== "undefined" ? readAdminCaptureUxEnabledFromStorage() : true,
+  );
   const { toast } = useToast();
+
+  /** Re-sync si plusieurs onglets : rare pour ce toggle, mais cohérent après navigation. */
+  useEffect(() => {
+    const onFocus = () => {
+      try {
+        setAdminCaptureUxEnabledState(readAdminCaptureUxEnabledFromStorage());
+      } catch {
+        /* */
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  const setAdminCaptureUxEnabled = useCallback((enabled: boolean) => {
+    setAdminCaptureUxEnabledState(enabled);
+    writeAdminCaptureUxEnabledToStorage(enabled);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -103,13 +135,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return cachedProfile;
         }
 
-        console.log("Profile fetched:", data); // Debug log
         return data as Profile;
       },
       enabled: !!user,
       retry: 2,
       retryDelay: 400,
-      staleTime: 0, // Ensure we get fresh data
+      staleTime: 0,
     });
 
   const signOut = async () => {
@@ -124,12 +155,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = profile?.role === "admin";
+  const adminCaptureExtrasActive = isAdmin && adminCaptureUxEnabled;
   const value = {
     session,
     user,
     profile: profile ?? null,
     isLoading: isLoadingSession || (!!user && isLoadingProfile),
     isAdmin,
+    adminCaptureExtrasActive,
+    setAdminCaptureUxEnabled,
     hasPremiumAccess: isAdmin || Boolean(profile?.is_subscriber),
     signOut,
   };

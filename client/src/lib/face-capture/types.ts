@@ -79,8 +79,18 @@ export interface CaptureSessionConfig {
   mediaPipeTargetFps?: number;
   cooldownMs?: number;
   holdFrames?: number;
-  /** Préréglages + surcharges pour le « meilleur frame » pendant le hold (JPEG aperçu). */
-  holdBestFrame?: HoldBestFrameOptions;
+  /**
+   * Définitions des poses pour cette session (par défaut `CAPTURE_POSES` ou variante bureau via le hook).
+   */
+  capturePoses?: PoseDefinition[];
+  /**
+   * Pause admin après chaque capture : écran debug, journaux yaw/pitch/roll, payloads
+   * jusqu’à `resumeAfterAdminPoseReview`.
+   *
+   * Les PNG repères (stockage DB) sont encodés pour **tous** les utilisateurs dès que
+   * landmarks + résolution JPEG sont suffisants ; cette option ne désactive pas l’encode.
+   */
+  pauseForAdminCaptureReview?: boolean;
 }
 
 export interface PoseDefinition {
@@ -125,7 +135,7 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     pitchRange: [-15, 15],
     rollRange: [-10, 10],
     minFaceRatio: 0.13,
-    holdMs: 1800,
+    holdMs: 2300,
     qualityGateRequired: true,
   },
   {
@@ -246,3 +256,35 @@ export const CAPTURE_POSES: PoseDefinition[] = [
 ];
 
 export const CAPTURE_ORDER: PoseId[] = CAPTURE_POSES.map((p) => p.id);
+
+/**
+ * Bureau / webcam : pointeur précis + hover (souris / trackpad), typiquement pas un téléphone en mode tactile seul.
+ */
+export function prefersRelaxedPcWebcamCaptureFraming(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      window.matchMedia("(pointer: fine)").matches === true &&
+      window.matchMedia("(hover: hover)").matches === true
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Seuils un peu plus bas que mobile : le visage peut occuper moins de cadre (webcam plus loin du visage). */
+const DESKTOP_RELAXED_MIN_FACE_RATIO: Partial<Record<PoseId, number>> = {
+  frontal: 0.11,
+  "closeup-eye": 0.6,
+};
+
+/**
+ * Liste des poses pour la session : sur PC « classique », assouplit seulement frontal et gros-plan œil.
+ */
+export function resolveCapturePoseDefinitionsForRuntime(): PoseDefinition[] {
+  if (!prefersRelaxedPcWebcamCaptureFraming()) return CAPTURE_POSES;
+  return CAPTURE_POSES.map((d) => {
+    const v = DESKTOP_RELAXED_MIN_FACE_RATIO[d.id];
+    return v !== undefined ? { ...d, minFaceRatio: v } : d;
+  });
+}

@@ -6,6 +6,9 @@ import type { CameraConfig } from './types';
 
 export type CameraState = 'idle' | 'requesting' | 'starting' | 'running' | 'stopped' | 'error';
 
+/** Même valeur que `_encodeBoundedJpeg` ; exportée pour le repère admin aligné JPEG. */
+export const CAPTURE_MAX_LONG_EDGE_PX = 1600;
+
 export class CameraManager {
   private video: HTMLVideoElement | null = null;
   private stream: MediaStream | null = null;
@@ -156,8 +159,22 @@ export class CameraManager {
    * 8 captures × 6–15 MB push the analysis payload past the server's 12 MB
    * body limit and the upstream ScoreMax API limit (PAYLOAD_TOO_LARGE).
    */
-  async captureFrame(): Promise<Blob | null> {
+  /**
+   * @param onPixelsDrawn Appelé **synchrone** juste après `drawImage` sur le canvas d’encodage,
+   *   avant l’`await` de `toBlob`. Permet d’aligner MediaPipe sur le **même** photogramme que le JPEG.
+   */
+  async captureFrame(onPixelsDrawn?: () => void): Promise<Blob | null> {
     if (!this.stream) return null;
+
+    /**
+     * Priorité au photogramme tiré du même bitmap que MediaPipe (`<video>` intrinsèque).
+     * `ImageCapture.takePhoto()` renvoie souvent un autre recadrage / une autre géométrie que
+     * le flux preview — les landmarks restent alignés sur preview : le masque / les guides 2D
+     * sur JPEG aplati se retrouvent alors décalés (même bug côté analyse si on mélange pixels
+     * et repères). `takePhoto` ne sert que de repli si la copie canvas est impossible.
+     */
+    const fromVideo = await this._captureViaCanvas(onPixelsDrawn);
+    if (fromVideo) return fromVideo;
 
     if (this.processor) {
       try {
@@ -165,24 +182,16 @@ export class CameraManager {
         const bounded = await this._encodeBoundedJpeg(rawBlob);
         if (bounded) return bounded;
       } catch {
-        // Fall through to canvas
+        // no-op
       }
     }
 
-    return this._captureViaCanvas();
+    return null;
   }
 
-  /**
-   * JPEG depuis le flux **aperçu** (`<video>` courant), même borne que `captureFrame`
-   * sans passer par `takePhoto`. Utilisé pour garder la meilleure frame médiane pendant le hold.
-   */
-  snapshotPreviewBounded(): Promise<Blob | null> {
-    return this._captureViaCanvas();
-  }
-
-  private async _captureViaCanvas(): Promise<Blob | null> {
+  private async _captureViaCanvas(onPixelsDrawn?: () => void): Promise<Blob | null> {
     if (!this.video || !this.video.videoWidth) return null;
-    return this._encodeBoundedJpeg(this.video);
+    return this._encodeBoundedJpeg(this.video, onPixelsDrawn);
   }
 
   /**
@@ -192,6 +201,7 @@ export class CameraManager {
    */
   private async _encodeBoundedJpeg(
     source: Blob | HTMLVideoElement,
+    onPixelsDrawn?: () => void,
   ): Promise<Blob | null> {
     let srcW = 0;
     let srcH = 0;
@@ -215,9 +225,8 @@ export class CameraManager {
     }
 
     const longEdge = Math.max(srcW, srcH);
-    const scale = longEdge > CameraManager.MAX_CAPTURE_EDGE
-      ? CameraManager.MAX_CAPTURE_EDGE / longEdge
-      : 1;
+    const scale =
+      longEdge > CAPTURE_MAX_LONG_EDGE_PX ? CAPTURE_MAX_LONG_EDGE_PX / longEdge : 1;
     const targetW = Math.max(1, Math.round(srcW * scale));
     const targetH = Math.max(1, Math.round(srcH * scale));
 
@@ -230,6 +239,7 @@ export class CameraManager {
       return null;
     }
     ctx.drawImage(drawSource, 0, 0, targetW, targetH);
+    onPixelsDrawn?.();
     bitmap?.close?.();
 
     return new Promise(resolve =>
@@ -242,7 +252,7 @@ export class CameraManager {
   }
 
   /** Long-edge cap for any captured frame (px). Keeps payloads under server limits. */
-  private static readonly MAX_CAPTURE_EDGE = 1600;
+  private static readonly MAX_CAPTURE_EDGE = CAPTURE_MAX_LONG_EDGE_PX;
   /** JPEG quality used for all captured frames. */
   private static readonly CAPTURE_JPEG_QUALITY = 0.9;
 

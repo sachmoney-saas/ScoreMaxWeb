@@ -10,13 +10,14 @@ import {
   useCallback,
   type RefObject,
 } from 'react';
-import { CaptureSession, type CapturedPose, type CaptureSessionState } from './CaptureSession';
-import type {
-  CaptureSessionConfig,
-  HeadPose,
-  PoseId,
-  PoseSessionState,
-  PoseValidation,
+import { CaptureSession, type CapturedPose, type CaptureSessionState, type AdminCaptureDebugPayload } from './CaptureSession';
+import {
+  resolveCapturePoseDefinitionsForRuntime,
+  type CaptureSessionConfig,
+  type HeadPose,
+  type PoseId,
+  type PoseSessionState,
+  type PoseValidation,
 } from './types';
 
 /** Durée minimale de l’overlay « Initialisation caméra » (modèle + flux). */
@@ -38,6 +39,8 @@ export interface FaceCaptureState {
   holdProgress: number;
   transitionPoseId: PoseId | null;
   transitionThumbnailUrl: string | null;
+  /** Pause admin après cliché ; image + lignes landmarks. */
+  adminCaptureDebug: AdminCaptureDebugPayload | null;
 }
 
 export interface FaceCaptureControls {
@@ -46,12 +49,16 @@ export interface FaceCaptureControls {
   switchCamera: (deviceId: string | undefined) => Promise<void>;
   /** Avec `deferSessionStart` : démarre détection + poses après briefing caméra. */
   beginPoseSession: () => Promise<void>;
+  /** Après cliché admin : reprend vers la pose suivante. */
+  resumeAfterAdminPoseReview: () => void;
 }
 
 /** Options optionnelles du hook (4ᵉ argument). */
 export interface UseFaceCaptureOptions {
   /** Si vrai, `init()` active la caméra/MediaPipe sans `session.start()` ; appeler `beginPoseSession()` ensuite. */
   deferSessionStart?: boolean;
+  /** Calque canvas 2D pour repères bleus lorsque le maillage WebGL debug est masqué. */
+  guideOverlayRef?: RefObject<HTMLCanvasElement | null>;
 }
 
 export function useFaceCapture(
@@ -84,6 +91,7 @@ export function useFaceCapture(
     holdProgress: 0,
     transitionPoseId: null,
     transitionThumbnailUrl: null,
+    adminCaptureDebug: null,
   });
 
   const syncState = useCallback((session: CaptureSession) => {
@@ -115,10 +123,22 @@ export function useFaceCapture(
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-    const session = new CaptureSession(captureConfigRef.current ?? {});
+    const rawCfg = captureConfigRef.current ?? {};
+    const session = new CaptureSession({
+      ...rawCfg,
+      capturePoses: rawCfg.capturePoses ?? resolveCapturePoseDefinitionsForRuntime(),
+    });
     sessionRef.current = session;
 
     session.onEvent(event => {
+      if (event.type === 'admin_capture_debug') {
+        setState(prev => ({ ...prev, adminCaptureDebug: event.payload }));
+        syncState(session);
+        return;
+      }
+      if (event.type === 'pose_captured') {
+        setState(prev => ({ ...prev, adminCaptureDebug: null }));
+      }
       if (event.type === 'pose_captured' || event.type === 'shutter_started') {
         syncState(session);
       } else if (event.type === 'session_complete') {
@@ -127,15 +147,17 @@ export function useFaceCapture(
           ...prev,
           capturedPoses: event.results,
           isLoading: false,
+          adminCaptureDebug: null,
         }));
       } else if (event.type === 'session_error') {
-        setState(prev => ({ ...prev, error: event.error.message, isLoading: false }));
+        setState(prev => ({ ...prev, error: event.error.message, isLoading: false, adminCaptureDebug: null }));
       }
     });
 
     try {
       const t0 = performance.now();
-      await session.init(video, overlay);
+      const guideOverlay = optionsRef.current?.guideOverlayRef?.current ?? null;
+      await session.init(video, overlay, guideOverlay);
       const elapsed = performance.now() - t0;
       if (elapsed < FACE_CAPTURE_LOAD_MIN_MS) {
         await new Promise(r => setTimeout(r, FACE_CAPTURE_LOAD_MIN_MS - elapsed));
@@ -188,6 +210,13 @@ export function useFaceCapture(
     }
   }, [syncState]);
 
+  const resumeAfterAdminPoseReview = useCallback(() => {
+    const session = sessionRef.current;
+    if (!session) return;
+    session.resumeAfterAdminPoseReview();
+    syncState(session);
+  }, [syncState]);
+
   const stop = useCallback(() => {
     sessionRef.current?.stop();
     sessionRef.current = null;
@@ -206,6 +235,7 @@ export function useFaceCapture(
       holdProgress: 0,
       transitionPoseId: null,
       transitionThumbnailUrl: null,
+      adminCaptureDebug: null,
     }));
   }, []);
 
@@ -244,6 +274,6 @@ export function useFaceCapture(
 
   return [
     state,
-    { start, stop, switchCamera, beginPoseSession },
+    { start, stop, switchCamera, beginPoseSession, resumeAfterAdminPoseReview },
   ];
 }

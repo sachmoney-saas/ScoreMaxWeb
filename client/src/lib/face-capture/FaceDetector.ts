@@ -16,6 +16,55 @@ export type DetectionCallback = (
 
 const TASK_MODEL_PATH = "/models/face_landmarker.task";
 
+/**
+ * Une seule instance Face Landmarker + une promesse d’init partagées entre les
+ * cycles de vie React (remontées rapides, navigation) pour éviter de retélécharger
+ * le fichier `.task` / réinitialiser le delegate GPU plusieurs fois d’affilée.
+ */
+let sharedLandmarker: FaceLandmarker | null = null;
+let sharedInitPromise: Promise<FaceLandmarker> | null = null;
+/** Nombre de `FaceDetector` actifs utilisant encore `sharedLandmarker`. */
+let sharedRefCount = 0;
+
+async function acquireSharedLandmarker(): Promise<FaceLandmarker> {
+  if (!sharedInitPromise) {
+    sharedInitPromise = (async () => {
+      const vision = await FilesetResolver.forVisionTasks("/wasm");
+      return FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: TASK_MODEL_PATH,
+          delegate: "GPU",
+        },
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
+        runningMode: "VIDEO",
+        numFaces: 1,
+      });
+    })();
+  }
+  sharedRefCount++;
+  try {
+    const lm = await sharedInitPromise;
+    sharedLandmarker = lm;
+    return lm;
+  } catch (err) {
+    sharedRefCount--;
+    if (sharedRefCount <= 0) {
+      sharedInitPromise = null;
+      sharedLandmarker = null;
+    }
+    throw err;
+  }
+}
+
+function releaseSharedLandmarker(): void {
+  sharedRefCount = Math.max(0, sharedRefCount - 1);
+  if (sharedRefCount > 0) return;
+  sharedLandmarker?.close();
+  sharedLandmarker = null;
+  sharedInitPromise = null;
+}
+
 export class FaceDetector {
   private detector: FaceLandmarker | null = null;
   private state: FaceDetectorState = "loading";
@@ -24,19 +73,7 @@ export class FaceDetector {
   async init(onDetection: DetectionCallback): Promise<void> {
     this.state = "loading";
     this.detectionCallback = onDetection;
-
-    const vision = await FilesetResolver.forVisionTasks("/wasm");
-    this.detector = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: TASK_MODEL_PATH,
-        delegate: "GPU",
-      },
-      outputFaceBlendshapes: true,
-      outputFacialTransformationMatrixes: true,
-      runningMode: "VIDEO",
-      numFaces: 1,
-    });
-
+    this.detector = await acquireSharedLandmarker();
     this.state = "ready";
   }
 
@@ -86,9 +123,9 @@ export class FaceDetector {
   }
 
   destroy(): void {
-    this.detector?.close();
     this.detector = null;
     this.detectionCallback = null;
     this.state = "stopped";
+    releaseSharedLandmarker();
   }
 }

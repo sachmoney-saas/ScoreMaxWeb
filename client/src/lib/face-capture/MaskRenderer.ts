@@ -14,25 +14,18 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import type { LandmarkPoint } from './types';
 import { FACEMESH_FEATURE_CONTOURS_ORDERED } from './facemesh-feature-contours';
+import { FACEMESH_FACE_OVAL_ORDERED } from './facemesh-face-oval';
 import { FACEMESH_TESSELATION_TRIS } from './facemesh-tesselation-tris';
 
 /** Maillage intérieur + yeux / nez / bouche — très léger (~10 %). */
 const INTERIOR_GRAPHICS_OPACITY = 0.1;
 
 /**
- * Contour visage MediaPipe — ordre cyclique (front → tempes → mâchoire → menton).
- * Utilisé pour le trait extérieur épais (sans réordonner via Set).
- */
-const FACEMESH_FACE_OVAL_ORDERED: number[] = [
-  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176,
-  149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
-];
-
-/**
  * Map normalized landmark in video bitmap space to overlay element CSS pixels,
  * matching object-fit: cover (same math as painting the video into the box).
  */
-function videoNormToElementPx(
+/** Même convention que `<video>` en `object-fit: cover` (repères live + maillage masque). */
+export function videoNormToElementPx(
   nx: number,
   ny: number,
   videoW: number,
@@ -47,6 +40,13 @@ function videoNormToElementPx(
   const py = ny * videoH * scale + offsetY;
   return { x: px, y: py };
 }
+
+/** JPEG / bitmap plein cadre capture : même convention que les guides 2D admin (`nx × largeur`). */
+function videoNormToJpegBitmapPx(nx: number, ny: number, elW: number, elH: number): { x: number; y: number } {
+  return { x: nx * elW, y: ny * elH };
+}
+
+export type LandmarkFrameMode = 'previewCover' | 'jpegBitmap';
 
 /** Write DOM-oriented pixel in element → NDC (y-up) into out xyz */
 function elementPxToNdcOut(
@@ -100,17 +100,33 @@ export class MaskRenderer {
   private readonly _meshColor = new THREE.Color();
   private readonly _ndcScratch = { x: 0, y: 0, z: 0 };
 
-  init(overlayCanvas: HTMLCanvasElement): void {
+  /** DPR utilisé pour le framebuffer WebGL (export PNG : garder à 1 ; preview : device). */
+  private _overlayPixelRatio = 1;
+
+  init(
+    overlayCanvas: HTMLCanvasElement,
+    runtimeOpts?: {
+      skipResizeObserver?: boolean;
+      preserveDrawingBuffer?: boolean;
+      /** Si défini > 0, fixe `renderer.setPixelRatio` (PNG aplatis : 1 évite erreur composite `drawImage`). */
+      overlayPixelRatio?: number;
+    },
+  ): void {
     this.overlay = overlayCanvas;
+
+    this._overlayPixelRatio =
+      typeof runtimeOpts?.overlayPixelRatio === 'number' && runtimeOpts.overlayPixelRatio > 0
+        ? runtimeOpts.overlayPixelRatio
+        : Math.min(window.devicePixelRatio, MaskRenderer.MAX_OVERLAY_PIXEL_RATIO);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: overlayCanvas,
       alpha: true,
       antialias: true,
+      /** Requis pour `drawImage(canvasWebGL)` (PNG aplatis) : sinon le tampon peut être vidé avant la copie 2D. */
+      preserveDrawingBuffer: runtimeOpts?.preserveDrawingBuffer === true,
     });
-    this.renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio, MaskRenderer.MAX_OVERLAY_PIXEL_RATIO),
-    );
+    this.renderer.setPixelRatio(this._overlayPixelRatio);
 
     const cw = Math.max(overlayCanvas.clientWidth, 2);
     const ch = Math.max(overlayCanvas.clientHeight, 2);
@@ -124,7 +140,7 @@ export class MaskRenderer {
     this._lastBufferW = cw;
     this._lastBufferH = ch;
 
-    if (typeof ResizeObserver !== 'undefined') {
+    if (runtimeOpts?.skipResizeObserver !== true && typeof ResizeObserver !== 'undefined') {
       this._resizeObserver = new ResizeObserver(() => {
         if (!this.overlay) return;
         this._syncCanvasSize(this.overlay.clientWidth, this.overlay.clientHeight);
@@ -221,9 +237,7 @@ export class MaskRenderer {
     const w = Math.round(elW);
     const h = Math.round(elH);
     if (w !== this._lastBufferW || h !== this._lastBufferH) {
-      this.renderer.setPixelRatio(
-        Math.min(window.devicePixelRatio, MaskRenderer.MAX_OVERLAY_PIXEL_RATIO),
-      );
+      this.renderer.setPixelRatio(this._overlayPixelRatio);
       this.renderer.setSize(w, h, false);
       this._lastBufferW = w;
       this._lastBufferH = h;
@@ -240,20 +254,45 @@ export class MaskRenderer {
     this._alignmentQuality = q;
   }
 
+  /**
+   * @param opts.landmarkFrame `previewCover` = même object-fit « cover » que la `<video>` plein cadre ;
+   *   `jpegBitmap` = grille linéaire sur tout le JPEG analyse (aplats admin / téléchargements).
+   */
   render(
     landmarks: LandmarkPoint[],
     videoW: number,
     videoH: number,
     _elW: number,
     _elH: number,
-    opts?: { holdingProgress?: number },
+    opts?: {
+      holdingProgress?: number;
+      staticCssSize?: { w: number; h: number };
+      landmarkFrame?: LandmarkFrameMode;
+      /** Masque ovalaire + maillage blanc désactivés (repères canvas 2D seuls en parallèle). */
+      hideFaceOverlay?: boolean;
+    },
   ): void {
     if (!this.scene || !this.overlay || !this.renderer || !this.camera) return;
     if (landmarks.length < 3) return;
 
+    if (opts?.staticCssSize) {
+      const cw = Math.max(2, Math.round(opts.staticCssSize.w));
+      const ch = Math.max(2, Math.round(opts.staticCssSize.h));
+      this.overlay.style.width = `${cw}px`;
+      this.overlay.style.height = `${ch}px`;
+      void this.overlay.offsetHeight;
+    }
+
     const elW = this.overlay.clientWidth;
     const elH = this.overlay.clientHeight;
     if (elW <= 0 || elH <= 0 || videoW <= 0 || videoH <= 0) return;
+
+    const frame: LandmarkFrameMode = opts?.landmarkFrame === 'jpegBitmap' ? 'jpegBitmap' : 'previewCover';
+
+    const toPx = (nx: number, ny: number) =>
+      frame === 'jpegBitmap'
+        ? videoNormToJpegBitmapPx(nx, ny, elW, elH)
+        : videoNormToElementPx(nx, ny, videoW, videoH, elW, elH);
 
     if (this.meshMesh) {
       this.meshMesh.visible = true;
@@ -266,6 +305,15 @@ export class MaskRenderer {
     }
     if (this.ovalLine) {
       this.ovalLine.visible = true;
+    }
+
+    const hideFaceOverlay = opts?.hideFaceOverlay === true;
+    if (hideFaceOverlay) {
+      if (this.meshMesh) this.meshMesh.visible = false;
+      for (const { line } of this._featureLines) {
+        line.visible = false;
+      }
+      if (this.ovalLine) this.ovalLine.visible = false;
     }
 
     this._syncCanvasSize(elW, elH);
@@ -289,7 +337,7 @@ export class MaskRenderer {
       const pos = this._meshPos!;
       for (let i = 0; i < landmarks.length; i++) {
         const lm = landmarks[i]!;
-        const { x: px, y: py } = videoNormToElementPx(lm.x, lm.y, videoW, videoH, elW, elH);
+        const { x: px, y: py } = toPx(lm.x, lm.y);
         const ndcX = (px / elW) * 2 - 1;
         const ndcY = -((py / elH) * 2 - 1);
         pos[i * 3] = ndcX;
@@ -321,7 +369,7 @@ export class MaskRenderer {
           ok = false;
           break;
         }
-        const { x: px, y: py } = videoNormToElementPx(lm.x, lm.y, videoW, videoH, elW, elH);
+        const { x: px, y: py } = toPx(lm.x, lm.y);
         elementPxToNdcOut(px, py, elW, elH, this._ndcScratch);
         buf[j * 3] = this._ndcScratch.x;
         buf[j * 3 + 1] = this._ndcScratch.y;
@@ -357,7 +405,7 @@ export class MaskRenderer {
           ok = false;
           break;
         }
-        const { x: px, y: py } = videoNormToElementPx(lm.x, lm.y, videoW, videoH, elW, elH);
+        const { x: px, y: py } = toPx(lm.x, lm.y);
         elementPxToNdcOut(px, py, elW, elH, this._ndcScratch);
         op[i * 3] = this._ndcScratch.x;
         op[i * 3 + 1] = this._ndcScratch.y;
@@ -396,7 +444,7 @@ export class MaskRenderer {
         const yTop = bboxMaxY - yMargin;
         const yBot = bboxMinY + yMargin;
         const barY = yTop + (yBot - yTop) * clampedProgress;
-        const xRange = this._computeOvalXAtY(landmarks, videoW, videoH, elW, elH, barY);
+        const xRange = this._computeOvalXAtY(landmarks, videoW, videoH, elW, elH, barY, frame);
         if (xRange) {
           const w = Math.max(0.01, xRange.xMax - xRange.xMin);
           const cx = (xRange.xMin + xRange.xMax) * 0.5;
@@ -426,18 +474,23 @@ export class MaskRenderer {
     elW: number,
     elH: number,
     barY: number,
+    frame: LandmarkFrameMode,
   ): { xMin: number; xMax: number } | null {
     let xMin = Infinity;
     let xMax = -Infinity;
     const oval = FACEMESH_FACE_OVAL_ORDERED;
+    const pix = (nx: number, ny: number) =>
+      frame === 'jpegBitmap'
+        ? videoNormToJpegBitmapPx(nx, ny, elW, elH)
+        : videoNormToElementPx(nx, ny, videoW, videoH, elW, elH);
     for (let i = 0; i < oval.length; i++) {
       const aIdx = oval[i]!;
       const bIdx = oval[(i + 1) % oval.length]!;
       const a = landmarks[aIdx];
       const b = landmarks[bIdx];
       if (!a || !b) continue;
-      const aPx = videoNormToElementPx(a.x, a.y, videoW, videoH, elW, elH);
-      const bPx = videoNormToElementPx(b.x, b.y, videoW, videoH, elW, elH);
+      const aPx = pix(a.x, a.y);
+      const bPx = pix(b.x, b.y);
       const aNdcY = -((aPx.y / elH) * 2 - 1);
       const bNdcY = -((bPx.y / elH) * 2 - 1);
       if (aNdcY === bNdcY) continue;

@@ -15,23 +15,69 @@ import { MaskRenderer } from "./MaskRenderer";
 import { MotionTracker } from "./MotionTracker";
 import { PoseValidator } from "./PoseValidator";
 import { evaluateFrameQualityForCapture, evaluateFrameQualityMinimal } from "./QualityGate";
-import { computeHoldFrameMerit } from "./holdFrameMerit";
-import { resolveHoldBestFrameTuning, type ResolvedHoldBestFrameTuning } from "./holdBestFrameTuning";
 import { faceRatio } from "./strategies/PoseStrategy";
-
-export type CaptureSessionEvent =
-  | { type: "pose_captured"; poseId: PoseId; blob: Blob }
-  /** Déclenchement synchrone : la UI peut passer en `Capturing` sans attendre le poll RAF. */
-  | { type: "shutter_started" }
-  | { type: "session_complete"; results: CapturedPose[] }
-  | { type: "session_error"; error: Error };
+import {
+  drawLiveColoredPoseGuidesOnOverlayCanvas,
+  jpegOutputDimensions,
+  posesWithColoredGuideLinesOnly,
+} from "./admin-capture-guidelines";
+import { DEBUG_CAPTURE_WHITE_FACE_MESH } from "./capture-render-debug";
+import { encodeAdminGuideFlattenedPair } from "./encode-admin-guide-flat";
 
 export interface CapturedPose {
   poseId: PoseId;
   blob: Blob;
   thumbnailUrl: string;
   timestamp: number;
+  /** PNG aplati cliché + maillage + guides ovale (hors analyse). */
+  annotatedOvalGuideBlob?: Blob;
+  annotatedOvalGuideThumbnailUrl?: string;
+  /** PNG aplati cliché + maillage + guides nez/bouche (hors analyse). */
+  annotatedNoseMouthGuideBlob?: Blob;
+  annotatedNoseMouthGuideThumbnailUrl?: string;
+  /** PNG aplati cliché + maillage + médiatrice verticale tiercée yeux/lèvres (hors analyse). */
+  annotatedVerticalThirdsGuideBlob?: Blob;
+  annotatedVerticalThirdsGuideThumbnailUrl?: string;
+  /** PNG aplati profil : cliché + masque + arc mâchoire bleu (hors analyse). */
+  annotatedProfileJawGuideBlob?: Blob;
+  annotatedProfileJawGuideThumbnailUrl?: string;
+  /** PNG aplati menton levé : cliché + masque + arc mandibulaire bas (hors analyse). */
+  annotatedJawUpLowerArcGuideBlob?: Blob;
+  annotatedJawUpLowerArcGuideThumbnailUrl?: string;
+  /** PNG aplati sommet du crâne : photo miroir seule, sans masque (hors analyse). */
+  annotatedCrownPhotoFlatBlob?: Blob;
+  annotatedCrownPhotoFlatThumbnailUrl?: string;
+  /** PNG aplati sourire : cliché + masque + contours lèvres (hors analyse). */
+  annotatedSmileLipsGuideBlob?: Blob;
+  annotatedSmileLipsGuideThumbnailUrl?: string;
 }
+
+export interface AdminCaptureDebugPayload {
+  poseId: PoseId;
+  blob: Blob;
+  thumbnailUrl: string;
+  landmarks: LandmarkPoint[];
+  sourceVideoWidth: number;
+  sourceVideoHeight: number;
+  outputWidth: number;
+  outputHeight: number;
+  annotatedOvalGuideThumbnailUrl?: string;
+  annotatedNoseMouthGuideThumbnailUrl?: string;
+  annotatedVerticalThirdsGuideThumbnailUrl?: string;
+  annotatedProfileJawGuideThumbnailUrl?: string;
+  annotatedJawUpLowerArcGuideThumbnailUrl?: string;
+  annotatedCrownPhotoFlatThumbnailUrl?: string;
+  annotatedSmileLipsGuideThumbnailUrl?: string;
+}
+
+export type CaptureSessionEvent =
+  | { type: "pose_captured"; poseId: PoseId; blob: Blob }
+  /** Déclenchement synchrone : la UI peut passer en `Capturing` sans attendre le poll RAF. */
+  | { type: "shutter_started" }
+  | { type: "session_complete"; results: CapturedPose[] }
+  | { type: "session_error"; error: Error }
+  | { type: "admin_capture_debug"; payload: AdminCaptureDebugPayload };
+
 
 export type CaptureSessionState =
   | "idle"
@@ -42,6 +88,7 @@ export type CaptureSessionState =
   | "Capturing"
   | "Cooldown"
   | "NextPose"
+  | "AdminPoseReview"
   | "Done"
   | "error";
 
@@ -130,6 +177,8 @@ export class CaptureSession {
   private profileReturningCenterStreak = 0;
   private pitchDriftAbandonStreak = 0;
   private readonly config: CaptureSessionConfig;
+  /** Définitions effectives des poses pour cette session (peut diverger sur bureau vs mobile). */
+  private readonly poses: readonly PoseDefinition[];
 
   private callback: CaptureSessionCallback | null = null;
   private state: CaptureSessionState = "idle";
@@ -180,14 +229,15 @@ export class CaptureSession {
    * so the overlay does not freeze during exposure wait / takePhoto.
    */
   private captureAwaitingShot = false;
-  /** Meilleur cliché candidat pendant le hold (aperçu vidéo), choisi par `computeHoldFrameMerit`. */
-  private bestHoldMerit = Number.NEGATIVE_INFINITY;
-  private bestHoldBlob: Blob | null = null;
-  private holdSnapInflight = false;
-  private lastHoldSnapWallMs = Number.NEGATIVE_INFINITY;
-  /** Clichés JPEG lancés pendant ce hold — plafonné pour limiter CPU / blocages encode. */
-  private holdSnapAttemptsThisHold = 0;
-  private readonly holdBestTuning: ResolvedHoldBestFrameTuning;
+  /**
+   * True pendant `encodeAdminGuideFlattenedPair` (souvent lent) : masque toujours piloté
+   * par les landmarks alors que la pose est déjà `captured`, sans `processFrame`.
+   */
+  private captureFinalizeEncodeBusy = false;
+  /** Évite plusieurs `captureCurrentPose` pendant que le hold reste ≥ fin (répète le scan bar / sensation « deux clichés »). */
+  private holdCompletionCaptureScheduled = false;
+  /** Seuil commun pour payloads (JPEG + landmarks appariés côté admin). */
+  private static readonly MIN_LANDMARKS_FOR_PAYLOAD = 100;
   private transitionPoseId: PoseId | null = null;
   private transitionThumbnailUrl: string | null = null;
   /** `performance.now()` threshold; until then, first frontal pose skips strict validation (see `FIRST_POSE_WARMUP_MS`). */
@@ -197,8 +247,12 @@ export class CaptureSession {
   private pullbackStableStreak = 0;
   private pullbackGateSatisfied = true;
 
+  /** Pose index récemment capturée pendant que l’admin valide le debug visuel. */
+  private adminPausedCompletedIdx: number | null = null;
+
   private videoEl: HTMLVideoElement | null = null;
   private overlayCanvas: HTMLCanvasElement | null = null;
+  private guideOverlayCanvas: HTMLCanvasElement | null = null;
   private rafId: number | null = null;
   private frameCbHandle: number | null = null;
   private lastFrameAt = 0;
@@ -206,22 +260,24 @@ export class CaptureSession {
 
   constructor(config: Partial<CaptureSessionConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.poses = config.capturePoses ?? CAPTURE_POSES;
     const fps = Math.min(60, Math.max(15, this.config.mediaPipeTargetFps ?? 60));
     this.frameIntervalMs = 1000 / fps;
-    this.holdBestTuning = resolveHoldBestFrameTuning({
-      mediaPipeTargetFps: this.config.mediaPipeTargetFps ?? 60,
-      options: this.config.holdBestFrame,
-    });
   }
 
   onEvent(cb: CaptureSessionCallback): void {
     this.callback = cb;
   }
 
-  async init(videoEl: HTMLVideoElement, overlayCanvas: HTMLCanvasElement): Promise<void> {
+  async init(
+    videoEl: HTMLVideoElement,
+    overlayCanvas: HTMLCanvasElement,
+    guideOverlayCanvas?: HTMLCanvasElement | null,
+  ): Promise<void> {
     this.state = "Initializing";
     this.videoEl = videoEl;
     this.overlayCanvas = overlayCanvas;
+    this.guideOverlayCanvas = guideOverlayCanvas ?? null;
     await this.camera.start(videoEl);
     this.maskRenderer.init(overlayCanvas);
     await this.detector.init((landmarks, _world, pose, blendshapes) => {
@@ -247,7 +303,8 @@ export class CaptureSession {
     this.holdStartHeadPose = null;
     this.cooldownUntil = 0;
     this.captureAwaitingShot = false;
-    this.clearHoldBestCandidate();
+    this.captureFinalizeEncodeBusy = false;
+    this.holdCompletionCaptureScheduled = false;
     this.transitionPoseId = null;
     this.transitionThumbnailUrl = null;
     this.pullbackGatePoseIndex = -1;
@@ -266,6 +323,8 @@ export class CaptureSession {
     this.camera.stop();
     this.detector.destroy();
     this.maskRenderer.dispose();
+    this.clearGuideOverlayCanvas();
+    this.adminPausedCompletedIdx = null;
     this.state = "idle";
   }
 
@@ -318,7 +377,7 @@ export class CaptureSession {
   }
 
   private initPoseStates(): void {
-    this.poseStates = CAPTURE_POSES.map((pose, index) => ({
+    this.poseStates = this.poses.map((pose, index) => ({
       poseId: pose.id,
       index,
       state: "pending",
@@ -338,46 +397,10 @@ export class CaptureSession {
     this.pitchDriftAbandonStreak = 0;
   }
 
-  private clearHoldBestCandidate(): void {
-    this.bestHoldBlob = null;
-    this.bestHoldMerit = Number.NEGATIVE_INFINITY;
-    this.holdSnapInflight = false;
-    this.lastHoldSnapWallMs = Number.NEGATIVE_INFINITY;
-    this.holdSnapAttemptsThisHold = 0;
-  }
-
-  /** Enregistre un JPEG depuis l’aperçu si le mérite dépasse le meilleur précédent (throttling). */
-  private maybeRecordBetterHoldPreview(merit: number): void {
-    const { meritEpsilon: eps, minGapMs, maxSnapshotsPerHold } = this.holdBestTuning.sampling;
-    if (!this.videoEl || merit <= this.bestHoldMerit + eps) return;
-    const nowMs = performance.now();
-    if (
-      this.holdSnapInflight ||
-      nowMs - this.lastHoldSnapWallMs < minGapMs ||
-      this.holdSnapAttemptsThisHold >= maxSnapshotsPerHold
-    )
-      return;
-    this.holdSnapAttemptsThisHold += 1;
-    this.holdSnapInflight = true;
-    const meritAtSnap = merit;
-    void this.camera.snapshotPreviewBounded().then(b => {
-      this.holdSnapInflight = false;
-      this.lastHoldSnapWallMs = performance.now();
-      if (!b || meritAtSnap <= this.bestHoldMerit) return;
-      this.bestHoldMerit = meritAtSnap;
-      this.bestHoldBlob = b;
-    });
-  }
-
-  private consumeBestHoldCandidateBlob(): Blob | null {
-    const b = this.bestHoldBlob;
-    this.clearHoldBestCandidate();
-    return b;
-  }
-
   private scheduleSendLoop(): void {
     const video = this.videoEl;
     if (!video) return;
+    this.cancelSendLoop();
     if (typeof video.requestVideoFrameCallback === "function") {
       const onFrame: VideoFrameRequestCallback = () => {
         if (this.state === "idle" || this.state === "Done" || this.state === "error") return;
@@ -418,12 +441,133 @@ export class CaptureSession {
     this.frameCbHandle = null;
   }
 
+  private clearGuideOverlayCanvas(): void {
+    const g = this.guideOverlayCanvas;
+    if (!g) return;
+    const ctx = g.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, g.width, g.height);
+  }
+
+  /** Repères bleus (canvas 2D) — alignés sur MaskRenderer.previewCover après flip CSS selfie. */
+  private paintPoseGuideLayers(
+    landmarks: LandmarkPoint[],
+    vw: number,
+    vh: number,
+    poseId: PoseId,
+  ): void {
+    const g = this.guideOverlayCanvas;
+    if (!g || !this.videoEl) return;
+    const ew = this.videoEl.clientWidth || 1;
+    const eh = this.videoEl.clientHeight || 1;
+    const pr =
+      typeof window !== "undefined"
+        ? Math.min(window.devicePixelRatio ?? 1, 1.25)
+        : 1;
+    const bw = Math.max(2, Math.round(ew * pr));
+    const bh = Math.max(2, Math.round(eh * pr));
+    if (g.width !== bw || g.height !== bh) {
+      g.width = bw;
+      g.height = bh;
+    }
+    g.style.width = `${ew}px`;
+    g.style.height = `${eh}px`;
+    const ctx = g.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(pr, 0, 0, pr, 0, 0);
+    ctx.clearRect(0, 0, ew, eh);
+    drawLiveColoredPoseGuidesOnOverlayCanvas(ctx, landmarks, vw, vh, ew, eh, poseId);
+  }
+
+  /**
+   * Masque WebGL (optionnel selon pose) + calque 2D pour les poses « repères bleus seuls ».
+   * Barre de scan : inchangée (vert) ; maillage blanc : réactivable via {@link DEBUG_CAPTURE_WHITE_FACE_MESH}.
+   */
+  private renderPoseOverlays(
+    frame: FaceFrame,
+    poseDef: PoseDefinition,
+    isExtrapolated: boolean,
+    alignmentQuality: number,
+  ): void {
+    if (!this.videoEl) return;
+    const vw = frame.frameWidth;
+    const vh = frame.frameHeight;
+    const ew = this.videoEl.clientWidth || 1;
+    const eh = this.videoEl.clientHeight || 1;
+
+    const hideWireMesh =
+      posesWithColoredGuideLinesOnly(poseDef.id) && !DEBUG_CAPTURE_WHITE_FACE_MESH;
+
+    if (isExtrapolated) {
+      this.maskRenderer.clear();
+      this.clearGuideOverlayCanvas();
+      return;
+    }
+
+    this.maskRenderer.setAlignmentQuality(alignmentQuality);
+
+    if (this.state === "Holding") {
+      this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh, {
+        holdingProgress: this.holdProgress,
+        hideFaceOverlay: hideWireMesh,
+      });
+    } else {
+      this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh, {
+        hideFaceOverlay: hideWireMesh,
+      });
+    }
+
+    if (hideWireMesh) {
+      this.paintPoseGuideLayers(frame.landmarks, vw, vh, poseDef.id);
+    } else {
+      this.clearGuideOverlayCanvas();
+    }
+  }
+
   private onLandmarks(
     landmarks: LandmarkPoint[],
     pose: HeadPose,
     blendshapes: Record<string, number>,
   ): void {
     if (!this.videoEl || this.state === "idle" || this.state === "Done" || this.state === "error") return;
+
+    if (this.state === "AdminPoseReview") {
+      this.maskRenderer.clear();
+      this.clearGuideOverlayCanvas();
+      return;
+    }
+
+    if (this.captureFinalizeEncodeBusy) {
+      this.state = "Capturing";
+      const now = performance.now();
+      let frameForMask: FaceFrame | null = null;
+      if (landmarks.length > 0) {
+        this.faceInView = true;
+        this.lastHeadPose = pose;
+        this.lastSeenHeadPose = pose;
+        this.lastSeenLandmarks = landmarks;
+        this.lastSeenBlendshapes = blendshapes;
+        this.lastSeenAt = now;
+        frameForMask = {
+          timestamp: now,
+          landmarks,
+          headPose: pose,
+          confidence: this.computeConfidence(landmarks),
+          frameWidth: this.videoEl.videoWidth || this.videoEl.clientWidth || 1,
+          frameHeight: this.videoEl.videoHeight || this.videoEl.clientHeight || 1,
+          blendshapes,
+        };
+      } else {
+        const extrapolated = this.tryBuildExtrapolatedFrame(now);
+        if (extrapolated) {
+          this.faceInView = true;
+          frameForMask = extrapolated;
+        }
+      }
+      if (frameForMask) this.renderMaskDuringCaptureAwait(frameForMask);
+      return;
+    }
 
     if (this.captureAwaitingShot) {
       this.state = "Capturing";
@@ -451,6 +595,16 @@ export class CaptureSession {
       return;
     }
 
+    /**
+     * Une fois la pose marquée `captured`, ne plus appeler `processFrame` jusqu’à
+     * finalize / admin — sinon pendant `await encodeAdminGuideFlattenedPair` la FSM
+     * relançait un hold → barre / analyse visuelle deux fois (voir garde dédiée
+     * `captureFinalizeEncodeBusy` pour garder le masque vivant sans `processFrame`).
+     */
+    if (this.poseStates[this.currentPoseIndex]?.state === "captured") {
+      return;
+    }
+
     const now = performance.now();
 
     if (now < this.cooldownUntil) {
@@ -458,6 +612,7 @@ export class CaptureSession {
       this.holdStartAt = null;
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
+      this.holdCompletionCaptureScheduled = false;
       this.resetHoldGestureStreaks();
       this.motion.reset();
       return;
@@ -517,6 +672,7 @@ export class CaptureSession {
       if (now < this.faceLossGraceUntil) {
         this.faceInView = true;
         this.maskRenderer.clear();
+        this.clearGuideOverlayCanvas();
         return;
       }
     }
@@ -524,7 +680,7 @@ export class CaptureSession {
     this.faceInView = false;
     this.lastHeadPose = null;
 
-    const currentPoseId = CAPTURE_POSES[this.currentPoseIndex]!.id;
+    const currentPoseId = this.poses[this.currentPoseIndex]!.id;
     this.lastValidation = {
       poseId: currentPoseId,
       status: "invalid",
@@ -535,11 +691,13 @@ export class CaptureSession {
     this.holdStartAt = null;
     this.holdProgress = 0;
     this.holdStartHeadPose = null;
+    this.holdCompletionCaptureScheduled = false;
     this.faceLossGraceUntil = null;
     this.resetHoldGestureStreaks();
     this.motion.reset();
     this.state = "AwaitFace";
     this.maskRenderer.clear();
+    this.clearGuideOverlayCanvas();
   }
 
   /**
@@ -552,7 +710,12 @@ export class CaptureSession {
    */
   private processFrame(frame: FaceFrame, isExtrapolated: boolean): void {
     if (!this.videoEl) return;
-    const poseDef = CAPTURE_POSES[this.currentPoseIndex]!;
+    if (this.state === "AdminPoseReview") return;
+
+    const curPoseState = this.poseStates[this.currentPoseIndex];
+    if (curPoseState?.state === "captured") return;
+
+    const poseDef = this.poses[this.currentPoseIndex]!;
     const inFirstPoseWarmup =
       this.currentPoseIndex === 0 &&
       poseDef.id === "frontal" &&
@@ -563,6 +726,7 @@ export class CaptureSession {
       this.holdStartAt = null;
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
+      this.holdCompletionCaptureScheduled = false;
       this.faceLossGraceUntil = null;
       this.resetHoldGestureStreaks();
       this.poseStates[0]!.state = "pending";
@@ -577,13 +741,9 @@ export class CaptureSession {
       this.poseStates[0]!.validation = warmupValidation;
       if (isExtrapolated) {
         this.maskRenderer.clear();
+        this.clearGuideOverlayCanvas();
       } else {
-        const vw = frame.frameWidth;
-        const vh = frame.frameHeight;
-        const ew = this.videoEl.clientWidth || 1;
-        const eh = this.videoEl.clientHeight || 1;
-        this.maskRenderer.setAlignmentQuality(0);
-        this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh);
+        this.renderPoseOverlays(frame, poseDef, false, 0);
       }
       return;
     }
@@ -718,10 +878,10 @@ export class CaptureSession {
 
     if (abandonHoldGesture) {
       this.resetHoldGestureStreaks();
-      this.clearHoldBestCandidate();
       this.holdStartAt = null;
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
+      this.holdCompletionCaptureScheduled = false;
       this.faceLossGraceUntil = null;
       this.state = "Aligning";
       this.poseStates[this.currentPoseIndex]!.state = "aligning";
@@ -737,16 +897,13 @@ export class CaptureSession {
       const holdMs = poseDef.holdMs || ((this.config.holdFrames ?? 18) * this.frameIntervalMs);
       this.holdProgress = Math.max(0, Math.min(1, (frame.timestamp - this.holdStartAt) / holdMs));
       const triggerSoon = this.holdProgress >= 1;
-      if (!isExtrapolated && !triggerSoon) {
-        const merit = computeHoldFrameMerit(poseDef, frame, validation, this.holdBestTuning.meritWeights);
-        this.maybeRecordBetterHoldPreview(merit);
-      }
-      if (triggerSoon) {
+      if (triggerSoon && !this.holdCompletionCaptureScheduled) {
+        this.holdCompletionCaptureScheduled = true;
         triggerCapture = true;
       }
     } else if (ready) {
       this.resetHoldGestureStreaks();
-      this.clearHoldBestCandidate();
+      this.holdCompletionCaptureScheduled = false;
       this.holdStartAt = frame.timestamp;
       this.holdStartHeadPose = frame.headPose;
       this.faceLossGraceUntil = null;
@@ -755,11 +912,8 @@ export class CaptureSession {
       const holdMs = poseDef.holdMs || ((this.config.holdFrames ?? 18) * this.frameIntervalMs);
       this.holdProgress = Math.max(0, Math.min(1, (frame.timestamp - this.holdStartAt) / holdMs));
       const triggerSoon = this.holdProgress >= 1;
-      if (!isExtrapolated && !triggerSoon) {
-        const merit = computeHoldFrameMerit(poseDef, frame, validation, this.holdBestTuning.meritWeights);
-        this.maybeRecordBetterHoldPreview(merit);
-      }
-      if (triggerSoon) {
+      if (triggerSoon && !this.holdCompletionCaptureScheduled) {
+        this.holdCompletionCaptureScheduled = true;
         triggerCapture = true;
       }
     } else {
@@ -767,30 +921,20 @@ export class CaptureSession {
       this.holdStartAt = null;
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
+      this.holdCompletionCaptureScheduled = false;
       this.resetHoldGestureStreaks();
-      this.clearHoldBestCandidate();
       this.poseStates[this.currentPoseIndex]!.state = "aligning";
     }
 
     /**
-     * Rendu du masque : ovale opaque + maillage / traits intérieurs (~10 %).
-     * Barre de scan en phase Holding. En extrapolation, on masque l’overlay.
+     * Rendu : maillage ovale debug (réactivable) ou repères 2D bleu clair seuls selon pose ;
+     * barre de scan en Holding. En extrapolation, on vide l’overlay.
      */
     if (isExtrapolated) {
       this.maskRenderer.clear();
+      this.clearGuideOverlayCanvas();
     } else {
-      const vw = frame.frameWidth;
-      const vh = frame.frameHeight;
-      const ew = this.videoEl.clientWidth || 1;
-      const eh = this.videoEl.clientHeight || 1;
-      this.maskRenderer.setAlignmentQuality(validation.score);
-      if (this.state === "Holding") {
-        this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh, {
-          holdingProgress: this.holdProgress,
-        });
-      } else {
-        this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh);
-      }
+      this.renderPoseOverlays(frame, poseDef, false, validation.score);
     }
 
     if (triggerCapture) {
@@ -810,7 +954,7 @@ export class CaptureSession {
     if (!this.lastSeenHeadPose || !this.lastSeenLandmarks) return null;
     if (now - this.lastSeenAt > this.extrapolationMaxMs) return null;
 
-    const poseDef = CAPTURE_POSES[this.currentPoseIndex];
+    const poseDef = this.poses[this.currentPoseIndex];
     if (!poseDef) return null;
     if (!this.canExtrapolatePose(poseDef.id)) return null;
     /**
@@ -855,6 +999,77 @@ export class CaptureSession {
       return pose.pitch >= poseDef.pitchRange[0] && pose.pitch <= poseDef.pitchRange[1];
     }
     return false;
+  }
+
+  resumeAfterAdminPoseReview(): void {
+    if (this.state !== "AdminPoseReview" || this.adminPausedCompletedIdx === null) return;
+    const idx = this.adminPausedCompletedIdx;
+    this.adminPausedCompletedIdx = null;
+    this.finalizeAdvanceAfterSuccessfulCapture(idx);
+  }
+
+  /**
+   * Incrémente pose / cooldown après un cliché réussi (`admin` reprend après pause).
+   */
+  private finalizeAdvanceAfterSuccessfulCapture(idx: number): void {
+    const poseState = this.poseStates[idx]!;
+    const blob = [...this.capturedPoses]
+      .reverse()
+      .find((c) => c.poseId === poseState.poseId)?.blob;
+    if (!blob || !poseState.thumbnailUrl) return;
+
+    const cooldownMs = this.config.cooldownMs ?? 300;
+    this.transitionPoseId = poseState.poseId;
+    this.transitionThumbnailUrl = poseState.thumbnailUrl;
+    const nextPoseDef = this.poses[idx + 1];
+    const nextPoseEntryDelayMs = nextPoseDef?.entryDelayMs ?? 0;
+    const nextPoseWarmupMs =
+      nextPoseDef?.id === "frontal"
+        ? 1200
+        : nextPoseDef?.id === "closeup-smile"
+          ? 500
+          : 0;
+    const transitionMs = Math.max(
+      cooldownMs,
+      nextPoseEntryDelayMs,
+      nextPoseWarmupMs,
+    );
+    this.cooldownUntil = performance.now() + transitionMs;
+    this.holdStartAt = null;
+    this.holdProgress = 0;
+    this.holdStartHeadPose = null;
+    this.holdCompletionCaptureScheduled = false;
+    this.faceLossGraceUntil = null;
+    this.resetHoldGestureStreaks();
+    this.currentPoseIndex = idx + 1;
+    this.state = "NextPose";
+
+    if (this.currentPoseIndex >= this.poses.length) {
+      this.state = "Done";
+      this.cancelSendLoop();
+      this.callback?.({ type: "pose_captured", poseId: poseState.poseId, blob });
+      this.callback?.({ type: "session_complete", results: this.capturedPoses });
+      return;
+    }
+
+    this.poseStates[this.currentPoseIndex]!.state = "pending";
+    this.callback?.({ type: "pose_captured", poseId: poseState.poseId, blob });
+  }
+
+  /**
+   * Copie des landmarks tout de suite après que `captureFrame` a résolu son promesse,
+   * sans await intercalé — évite une détection bien postérieure au JPEG encore basé sur
+   * une frame précédente pendant l’encodage (~ordre grandeurs : prise vidéo + pipeline).
+   */
+  private landmarksSnapshotAfterShutterBlob(): LandmarkPoint[] {
+    const src = this.lastSeenLandmarks;
+    if (!src || src.length < CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD) return [];
+    return src.map(p => ({
+      x: p.x,
+      y: p.y,
+      z: p.z ?? 0,
+      visibility: p.visibility,
+    }));
   }
 
   private async captureCurrentPose(): Promise<void> {
@@ -918,84 +1133,203 @@ export class CaptureSession {
     this.faceLossGraceUntil = null;
     this.resetHoldGestureStreaks();
 
-    let blob = this.consumeBestHoldCandidateBlob();
+    let lmSnap: LandmarkPoint[] = [];
+    let blob: Blob | null = null;
     for (let attempt = 0; attempt < 4 && !blob; attempt++) {
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, 45 * attempt));
       }
-      blob = await this.camera.captureFrame();
+      blob = await this.camera.captureFrame(() => {
+        if (!this.videoEl) return;
+        /**
+         * Même photogramme que le `drawImage` du JPEG : avant, on lisait `lastSeen`
+         * après `await toBlob` — plusieurs frames pouvaient s’écouler ; cliché en profil
+         * + landmarks encore « de face » (masque fantôme décalé sur l’aplati admin).
+         */
+        this.detector.sendFrame(this.videoEl);
+        const snap = this.landmarksSnapshotAfterShutterBlob();
+        if (snap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD) {
+          lmSnap = snap;
+        }
+      });
     }
     if (!blob) {
       poseState.state = "aligning";
       this.state = "Aligning";
       this.cooldownUntil = 0;
       this.captureAwaitingShot = false;
+      this.holdCompletionCaptureScheduled = false;
       return;
+    }
+
+    if (lmSnap.length < CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD) {
+      const fallback = this.landmarksSnapshotAfterShutterBlob();
+      if (fallback.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD) {
+        lmSnap = fallback;
+      }
     }
 
     /** Fin du blocage overlay : fichier obtenu, on quitte avant la mutation d’état suivante. */
     this.captureAwaitingShot = false;
 
+    const vw = this.videoEl.videoWidth || this.videoEl.clientWidth || 1;
+    const vh = this.videoEl.videoHeight || this.videoEl.clientHeight || 1;
+    const jpegDims = jpegOutputDimensions(vw, vh);
+
+    /** Repères aplatis pour tous les comptes (R2 / `GUIDE_TRACE_*`), pas réservé admin. */
+    const shouldEncodeFlattenedGuides =
+      lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD &&
+      jpegDims.outW >= 64 &&
+      jpegDims.outH >= 64;
+
+    if (shouldEncodeFlattenedGuides) {
+      this.captureFinalizeEncodeBusy = true;
+    }
+
     const thumbnailUrl = URL.createObjectURL(blob);
     poseState.state = "captured";
     poseState.captureTime = performance.now();
     poseState.thumbnailUrl = thumbnailUrl;
+
+    let annotatedOvalGuideBlob: Blob | undefined;
+    let annotatedOvalGuideThumbnailUrl: string | undefined;
+    let annotatedNoseMouthGuideBlob: Blob | undefined;
+    let annotatedNoseMouthGuideThumbnailUrl: string | undefined;
+    let annotatedVerticalThirdsGuideBlob: Blob | undefined;
+    let annotatedVerticalThirdsGuideThumbnailUrl: string | undefined;
+    let annotatedProfileJawGuideBlob: Blob | undefined;
+    let annotatedProfileJawGuideThumbnailUrl: string | undefined;
+    let annotatedJawUpLowerArcGuideBlob: Blob | undefined;
+    let annotatedJawUpLowerArcGuideThumbnailUrl: string | undefined;
+    let annotatedCrownPhotoFlatBlob: Blob | undefined;
+    let annotatedCrownPhotoFlatThumbnailUrl: string | undefined;
+    let annotatedSmileLipsGuideBlob: Blob | undefined;
+    let annotatedSmileLipsGuideThumbnailUrl: string | undefined;
+
+    if (shouldEncodeFlattenedGuides) {
+      try {
+        const flattened = await encodeAdminGuideFlattenedPair({
+          photoBlob: blob,
+          landmarks: lmSnap,
+          sourceVideoWidth: vw,
+          sourceVideoHeight: vh,
+          poseId: poseState.poseId,
+        });
+        if (flattened?.variant === "frontal") {
+          annotatedOvalGuideBlob = flattened.ovalFlat;
+          annotatedNoseMouthGuideBlob = flattened.noseMouthFlat;
+          annotatedVerticalThirdsGuideBlob = flattened.verticalThirdsFlat;
+          annotatedOvalGuideThumbnailUrl = URL.createObjectURL(flattened.ovalFlat);
+          annotatedNoseMouthGuideThumbnailUrl = URL.createObjectURL(flattened.noseMouthFlat);
+          annotatedVerticalThirdsGuideThumbnailUrl = URL.createObjectURL(
+            flattened.verticalThirdsFlat,
+          );
+        } else if (flattened?.variant === "profile") {
+          annotatedProfileJawGuideBlob = flattened.profileJawFlat;
+          annotatedProfileJawGuideThumbnailUrl = URL.createObjectURL(flattened.profileJawFlat);
+        } else if (flattened?.variant === "jawUp") {
+          annotatedJawUpLowerArcGuideBlob = flattened.jawLowerArcFlat;
+          annotatedJawUpLowerArcGuideThumbnailUrl = URL.createObjectURL(flattened.jawLowerArcFlat);
+        } else if (flattened?.variant === "crownPhoto") {
+          annotatedCrownPhotoFlatBlob = flattened.photoFlat;
+          annotatedCrownPhotoFlatThumbnailUrl = URL.createObjectURL(flattened.photoFlat);
+        } else if (flattened?.variant === "smileLips") {
+          annotatedSmileLipsGuideBlob = flattened.smileLipsFlat;
+          annotatedSmileLipsGuideThumbnailUrl = URL.createObjectURL(flattened.smileLipsFlat);
+        }
+      } finally {
+        this.captureFinalizeEncodeBusy = false;
+      }
+    }
+
     const captured: CapturedPose = {
       poseId: poseState.poseId,
       blob,
       thumbnailUrl,
       timestamp: performance.now(),
+      ...(annotatedOvalGuideBlob &&
+      annotatedNoseMouthGuideBlob &&
+      annotatedVerticalThirdsGuideBlob &&
+      annotatedOvalGuideThumbnailUrl &&
+      annotatedNoseMouthGuideThumbnailUrl &&
+      annotatedVerticalThirdsGuideThumbnailUrl
+        ? {
+            annotatedOvalGuideBlob,
+            annotatedNoseMouthGuideBlob,
+            annotatedVerticalThirdsGuideBlob,
+            annotatedOvalGuideThumbnailUrl,
+            annotatedNoseMouthGuideThumbnailUrl,
+            annotatedVerticalThirdsGuideThumbnailUrl,
+          }
+        : {}),
+      ...(annotatedProfileJawGuideBlob && annotatedProfileJawGuideThumbnailUrl
+        ? {
+            annotatedProfileJawGuideBlob,
+            annotatedProfileJawGuideThumbnailUrl,
+          }
+        : {}),
+      ...(annotatedJawUpLowerArcGuideBlob && annotatedJawUpLowerArcGuideThumbnailUrl
+        ? {
+            annotatedJawUpLowerArcGuideBlob,
+            annotatedJawUpLowerArcGuideThumbnailUrl,
+          }
+        : {}),
+      ...(annotatedCrownPhotoFlatBlob && annotatedCrownPhotoFlatThumbnailUrl
+        ? {
+            annotatedCrownPhotoFlatBlob,
+            annotatedCrownPhotoFlatThumbnailUrl,
+          }
+        : {}),
+      ...(annotatedSmileLipsGuideBlob && annotatedSmileLipsGuideThumbnailUrl
+        ? {
+            annotatedSmileLipsGuideBlob,
+            annotatedSmileLipsGuideThumbnailUrl,
+          }
+        : {}),
     };
     this.capturedPoses.push(captured);
 
-    if (typeof console !== "undefined") {
+    if (typeof console !== "undefined" && this.config.pauseForAdminCaptureReview === true) {
       console.info(
         `[face-capture] captured ${poseState.poseId} | yaw=${this.lastHeadPose?.yaw} pitch=${this.lastHeadPose?.pitch} roll=${this.lastHeadPose?.roll}`,
       );
     }
 
-    this.transitionPoseId = poseState.poseId;
-    this.transitionThumbnailUrl = thumbnailUrl;
-    /**
-     * Re-arm from now: the await may have eaten part of the budget.
-     * Si la pose suivante définit un `entryDelayMs` (ex. gros plans œil /
-     * hairline qui exigent un rapprochement physique de l'appareil), on
-     * substitue ce délai au cooldown standard pour éviter que la barre
-     * d'alignement suivante ne redémarre immédiatement après le flash.
-     */
-    const nextPoseDef = CAPTURE_POSES[idx + 1];
-    const nextPoseEntryDelayMs = nextPoseDef?.entryDelayMs ?? 0;
-    const nextPoseWarmupMs =
-      nextPoseDef?.id === "frontal"
-        ? 1200
-        : nextPoseDef?.id === "closeup-smile"
-          ? 500
-          : 0;
-    const transitionMs = Math.max(
-      cooldownMs,
-      nextPoseEntryDelayMs,
-      nextPoseWarmupMs,
-    );
-    this.cooldownUntil = performance.now() + transitionMs;
-    this.holdStartAt = null;
-    this.holdProgress = 0;
-    this.holdStartHeadPose = null;
-    this.faceLossGraceUntil = null;
-    this.resetHoldGestureStreaks();
-    this.currentPoseIndex = idx + 1;
-    this.state = "NextPose";
-
-    if (this.currentPoseIndex >= CAPTURE_POSES.length) {
-      this.state = "Done";
-      this.cancelSendLoop();
-      this.callback?.({ type: "pose_captured", poseId: poseState.poseId, blob });
-      this.callback?.({ type: "session_complete", results: this.capturedPoses });
+    if (
+      this.config.pauseForAdminCaptureReview === true &&
+      lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD &&
+      jpegDims.outW >= 64 &&
+      jpegDims.outH >= 64
+    ) {
+      this.adminPausedCompletedIdx = idx;
+      this.cooldownUntil = 0;
+      this.state = "AdminPoseReview";
+      this.maskRenderer.clear();
+      this.clearGuideOverlayCanvas();
+      this.callback?.({
+        type: "admin_capture_debug",
+        payload: {
+          poseId: poseState.poseId,
+          blob,
+          thumbnailUrl,
+          landmarks: lmSnap,
+          sourceVideoWidth: vw,
+          sourceVideoHeight: vh,
+          outputWidth: jpegDims.outW,
+          outputHeight: jpegDims.outH,
+          annotatedOvalGuideThumbnailUrl,
+          annotatedNoseMouthGuideThumbnailUrl,
+          annotatedVerticalThirdsGuideThumbnailUrl,
+          annotatedProfileJawGuideThumbnailUrl,
+          annotatedJawUpLowerArcGuideThumbnailUrl,
+          annotatedCrownPhotoFlatThumbnailUrl,
+          annotatedSmileLipsGuideThumbnailUrl,
+        },
+      });
       return;
     }
 
-    this.poseStates[this.currentPoseIndex]!.state = "pending";
-    /** Après avancement d’index : la UI peut afficher la consigne de la pose suivante sans attendre le poll RAF. */
-    this.callback?.({ type: "pose_captured", poseId: poseState.poseId, blob });
+    this.finalizeAdvanceAfterSuccessfulCapture(idx);
   }
 
   /**
@@ -1004,7 +1338,7 @@ export class CaptureSession {
    */
   private renderMaskDuringCaptureAwait(frame: FaceFrame): void {
     if (!this.videoEl) return;
-    const poseDef = CAPTURE_POSES[this.currentPoseIndex];
+    const poseDef = this.poses[this.currentPoseIndex];
     if (!poseDef) return;
 
     const validation = this.validator.validate(frame, poseDef, {
@@ -1015,12 +1349,7 @@ export class CaptureSession {
     const ps = this.poseStates[this.currentPoseIndex];
     if (ps) ps.validation = validation;
 
-    const vw = frame.frameWidth;
-    const vh = frame.frameHeight;
-    const ew = this.videoEl.clientWidth || 1;
-    const eh = this.videoEl.clientHeight || 1;
-    this.maskRenderer.setAlignmentQuality(validation.score);
-    this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh, { holdingProgress: 1 });
+    this.renderPoseOverlays(frame, poseDef, false, validation.score);
   }
 
   private computeConfidence(landmarks: LandmarkPoint[]): number {

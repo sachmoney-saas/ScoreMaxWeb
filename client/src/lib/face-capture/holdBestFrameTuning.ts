@@ -1,6 +1,6 @@
 /**
- * Réglage du « meilleur frame » pendant le hold : pondération du mérite
- * et cadence des snapshots JPEG (aperçu) pour équilibrer qualité vs CPU / jank.
+ * Pondération du mérite agrégé (`computeHoldFrameMerit`) et presets associés
+ * (`HoldSamplingTuning` reste disponible pour outillage / évolutions futures).
  */
 
 export type HoldBestFramePreset = "balanced" | "accuracy" | "performance";
@@ -14,7 +14,7 @@ export interface HoldMeritWeights {
 }
 
 export interface HoldSamplingTuning {
-  /** Écart minimal entre deux `snapshotPreviewBounded` ( borne basse FPS / device ci-dessous ). */
+  /** Pause minimale cible entre deux clichés lorsqu’on sous-échantillonne une séquence vidéo. */
   minGapMs: number;
   /** Amélioration minimale du mérite pour déclencher un nouveau cliché vs `bestHoldMerit`. */
   meritEpsilon: number;

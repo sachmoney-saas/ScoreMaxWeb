@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'wouter';
 import { Settings2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AdminCaptureDebugPanel } from '@/components/AdminCaptureDebugPanel';
 import { useFaceCapture, listVideoInputDevices } from '../lib/face-capture';
 import type { CapturedPose } from '../lib/face-capture/CaptureSession';
 import { CAPTURE_POSES, type PoseId } from '../lib/face-capture/types';
@@ -71,9 +72,10 @@ export function FaceCaptureView({
   language = 'fr',
   preCaptureBriefing = false,
 }: FaceCaptureViewProps) {
-  const { isAdmin } = useAuth();
+  const { adminCaptureExtrasActive } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null!);
   const overlayRef = useRef<HTMLCanvasElement>(null!);
+  const guideOverlayRef = useRef<HTMLCanvasElement>(null!);
   const [briefingDismissed, setBriefingDismissed] = useState(() => !preCaptureBriefing);
   const [briefingBusy, setBriefingBusy] = useState(false);
 
@@ -81,11 +83,24 @@ export function FaceCaptureView({
     setBriefingDismissed(!preCaptureBriefing);
   }, [preCaptureBriefing]);
 
-  const [state, { stop, switchCamera, beginPoseSession }] = useFaceCapture(
+  const captureSessionConfig = useMemo(
+    () => ({ pauseForAdminCaptureReview: Boolean(adminCaptureExtrasActive) }),
+    [adminCaptureExtrasActive],
+  );
+
+  const captureFaceOptions = useMemo(
+    () => ({
+      deferSessionStart: preCaptureBriefing,
+      guideOverlayRef,
+    }),
+    [preCaptureBriefing],
+  );
+
+  const [state, { stop, switchCamera, beginPoseSession, resumeAfterAdminPoseReview }] = useFaceCapture(
     videoRef,
     overlayRef,
-    undefined,
-    { deferSessionStart: preCaptureBriefing },
+    captureSessionConfig,
+    captureFaceOptions,
   );
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameraSwitching, setCameraSwitching] = useState(false);
@@ -121,9 +136,9 @@ export function FaceCaptureView({
   const hasError = Boolean(state.error);
 
   useEffect(() => {
-    if (!isAdmin || isLoading || hasError) return;
+    if (!adminCaptureExtrasActive || isLoading || hasError) return;
     void refreshVideoDevices();
-  }, [isAdmin, isLoading, hasError, refreshVideoDevices]);
+  }, [adminCaptureExtrasActive, isLoading, hasError, refreshVideoDevices]);
 
   useEffect(() => {
     if (state.sessionState === 'Done' && state.capturedPoses.length > 0) {
@@ -149,11 +164,6 @@ export function FaceCaptureView({
     }
   }, [beginPoseSession]);
 
-  const handleBriefingBack = useCallback(() => {
-    stop();
-    onCancel();
-  }, [stop, onCancel]);
-
   const activePoseId: PoseId | null = useMemo(() => {
     const idx = state.currentPose?.index ?? 0;
     return CAPTURE_POSES[idx]?.id ?? null;
@@ -163,7 +173,14 @@ export function FaceCaptureView({
     activePoseId !== null ? i18n(language, STEP_INSTRUCTION[activePoseId]) : '';
 
   const showPoseInstructionOverlay = useMemo(() => {
-    if (showPreCaptureBriefingOverlay || isLoading || hasError || !instruction) return false;
+    if (
+      showPreCaptureBriefingOverlay ||
+      isLoading ||
+      hasError ||
+      state.sessionState === 'AdminPoseReview' ||
+      !instruction
+    )
+      return false;
     return (
       state.sessionState === 'Cooldown' ||
       state.sessionState === 'NextPose' ||
@@ -275,6 +292,12 @@ export function FaceCaptureView({
             style={{ zIndex: 2, transform: 'scaleX(-1)' }}
           />
 
+          <canvas
+            ref={guideOverlayRef}
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            style={{ zIndex: 13, transform: 'scaleX(-1)' }}
+          />
+
           {!isLoading && !hasError && !showPreCaptureBriefingOverlay ? (
             <div
               className="selfie-flash-vignette pointer-events-none absolute inset-0 z-[3]"
@@ -292,7 +315,7 @@ export function FaceCaptureView({
             </div>
           ) : null}
 
-          {!isLoading && !hasError && !showPreCaptureBriefingOverlay && isAdmin ? (
+          {!isLoading && !hasError && !showPreCaptureBriefingOverlay && adminCaptureExtrasActive ? (
             <div className="absolute right-3 top-3 z-[25] sm:right-4 sm:top-4">
               <DropdownMenu
                 onOpenChange={open => {
@@ -384,32 +407,19 @@ export function FaceCaptureView({
 
           {showPreCaptureBriefingOverlay ? (
             <div
-              className="absolute inset-0 z-[42] flex items-center justify-center overflow-y-auto px-4 py-8"
-              style={{ background: 'rgba(0,0,0,0.52)' }}
+              className="absolute inset-0 z-[42] flex items-center justify-center overflow-y-auto bg-black/90 px-4 py-8"
               role="dialog"
               aria-modal="true"
               aria-labelledby="face-capture-briefing-title"
             >
-              <div
-                className="w-full max-w-lg rounded-2xl border border-white/15 bg-[hsl(236_38%_8%)]/92 p-6 shadow-xl backdrop-blur-md sm:p-8"
-                style={{
-                  background:
-                    'linear-gradient(145deg, hsl(236 32% 12% / 0.94) 0%, hsl(235 28% 7% / 0.94) 100%)',
-                }}
-              >
-                <p className="text-center text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white/55">
-                  {i18n(language, {
-                    en: 'New analysis',
-                    fr: 'Nouvelle analyse',
-                  })}
-                </p>
+              <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-black/70 p-6 shadow-xl backdrop-blur-md sm:p-8">
                 <h2
                   id="face-capture-briefing-title"
-                  className="mt-3 text-center font-display text-xl font-bold leading-snug tracking-tight text-white sm:text-2xl"
+                  className="text-center font-display text-xl font-bold leading-snug tracking-tight text-white sm:text-2xl"
                 >
                   {i18n(language, {
-                    en: `${CAPTURE_POSES.length} poses to capture`,
-                    fr: `${CAPTURE_POSES.length} poses à enregistrer`,
+                    en: 'Beginning capture',
+                    fr: 'Début de la capture',
                   })}
                 </h2>
                 <p className="mt-5 text-center text-sm leading-relaxed text-white/90 sm:text-[0.9375rem]">
@@ -434,7 +444,7 @@ export function FaceCaptureView({
                       fr: 'En savoir plus sur les données récupérées et leurs usages',
                     })}
                   </Link>
-                  <div className="flex w-full max-w-xs flex-col gap-3">
+                  <div className="flex w-full max-w-xs justify-center">
                     <Button
                       type="button"
                       className="h-11 w-full rounded-full bg-white text-base font-semibold text-slate-950 hover:bg-zinc-200"
@@ -449,18 +459,6 @@ export function FaceCaptureView({
                           fr: 'Commencer',
                         })
                       )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-10 rounded-full text-sm text-white/75 hover:bg-white/10 hover:text-white"
-                      disabled={briefingBusy}
-                      onClick={handleBriefingBack}
-                    >
-                      {i18n(language, {
-                        en: 'Back',
-                        fr: 'Retour',
-                      })}
                     </Button>
                   </div>
                 </div>
@@ -584,7 +582,7 @@ export function FaceCaptureView({
                 </p>
               ) : null}
 
-              {isAdmin ? (
+              {adminCaptureExtrasActive ? (
                 <div className="pointer-events-none absolute left-3 top-3 z-30 rounded-lg border border-white/15 bg-black/55 px-3 py-2 font-mono text-[11px] leading-tight text-white/85 backdrop-blur-md sm:text-xs">
                   <div>state: {state.sessionState}</div>
                   <div>status: {state.validation?.status ?? '-'}</div>
@@ -604,6 +602,14 @@ export function FaceCaptureView({
             state.allPoseStates[state.currentPose?.index ?? 0]?.state === 'capturing' && (
               <div className="pointer-events-none absolute inset-0 z-30 capture-flash" style={{ background: 'white' }} />
             )}
+
+          {state.adminCaptureDebug && adminCaptureExtrasActive ? (
+            <AdminCaptureDebugPanel
+              payload={state.adminCaptureDebug}
+              language={language}
+              onContinue={resumeAfterAdminPoseReview}
+            />
+          ) : null}
         </div>
 
         <div className="shrink-0 border-t border-black/10 bg-white px-4 py-5 shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.08)]">
@@ -628,53 +634,38 @@ export function FaceCaptureView({
 
         {cancelConfirmOpen ? (
           <div
-            className="absolute inset-0 z-[110] flex items-end justify-center bg-black/75 px-4 pb-8 pt-12 sm:items-center sm:pb-12"
+            className="absolute inset-0 z-[110] flex flex-col bg-black"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="face-capture-cancel-title"
-            aria-describedby="face-capture-cancel-desc"
+            aria-label={i18n(language, {
+              en: 'Cancel session confirmation',
+              fr: 'Confirmation annulation session',
+            })}
             onClick={() => setCancelConfirmOpen(false)}
           >
+            <div className="min-h-0 flex-1" aria-hidden />
             <div
-              className="w-full max-w-md rounded-2xl border border-white/10 bg-[hsl(236_38%_8%)] p-6 shadow-xl"
-              style={{ background: 'linear-gradient(145deg, hsl(236 32% 10%) 0%, hsl(235 28% 6%) 100%)' }}
+              className="flex shrink-0 flex-col-reverse gap-2 px-4 pb-8 pt-4 sm:flex-row sm:justify-center sm:gap-3 sm:pb-10"
               onClick={e => e.stopPropagation()}
             >
-              <h2
-                id="face-capture-cancel-title"
-                className="font-display text-lg font-semibold tracking-tight text-white"
+              <button
+                type="button"
+                className="rounded-full border border-white/15 px-4 py-2.5 text-sm text-white/80 transition-colors hover:bg-white/5"
+                onClick={() => setCancelConfirmOpen(false)}
               >
-                {i18n(language, {
-                  en: 'Cancel this session?',
-                  fr: 'Annuler la session ?',
-                })}
-              </h2>
-              <p id="face-capture-cancel-desc" className="mt-3 text-sm leading-relaxed text-white/65">
-                {i18n(language, {
-                  en: 'This will delete all photos and progress from the current capture session. Nothing will be kept—you will need to start again from the beginning.',
-                  fr: 'Cette action supprimera toutes les photos et toute la progression de la session de capture en cours. Aucune donnée ne sera conservée : vous devrez tout recommencer depuis le début.',
-                })}
-              </p>
-              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-                <button
-                  type="button"
-                  className="rounded-full border border-white/15 px-4 py-2.5 text-sm text-white/80 transition-colors hover:bg-white/5"
-                  onClick={() => setCancelConfirmOpen(false)}
-                >
-                  {i18n(language, { en: 'Keep capturing', fr: 'Continuer la capture' })}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-full border border-red-500/40 bg-red-500/15 px-4 py-2.5 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/25"
-                  onClick={() => {
-                    setCancelConfirmOpen(false);
-                    stop();
-                    onCancel();
-                  }}
-                >
-                  {i18n(language, { en: 'Cancel session', fr: 'Annuler la session' })}
-                </button>
-              </div>
+                {i18n(language, { en: 'Keep capturing', fr: 'Continuer la capture' })}
+              </button>
+              <button
+                type="button"
+                className="rounded-full border border-red-500/40 bg-red-500/15 px-4 py-2.5 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/25"
+                onClick={() => {
+                  setCancelConfirmOpen(false);
+                  stop();
+                  onCancel();
+                }}
+              >
+                {i18n(language, { en: 'Cancel session', fr: 'Annuler la session' })}
+              </button>
             </div>
           </div>
         ) : null}

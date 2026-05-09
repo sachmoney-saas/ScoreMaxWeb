@@ -4,6 +4,7 @@ import {
   type AnalysisTier,
 } from "@shared/oneshot";
 import {
+  REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
   SCAN_ASSET_TO_CANONICAL_SLOT,
   type OnboardingScanAssetCode,
 } from "@shared/schema";
@@ -11,16 +12,8 @@ import { ApiError } from "./errors";
 import { downloadR2Object, getDefaultR2Bucket } from "./r2-storage";
 import { supabaseAdmin } from "./supabase-admin";
 
-export const requiredAssetCodes: OnboardingScanAssetCode[] = [
-  "FACE_FRONT",
-  "PROFILE_LEFT",
-  "PROFILE_RIGHT",
-  "LOOK_UP",
-  "LOOK_DOWN",
-  "SMILE",
-  "HAIR_BACK",
-  "EYE_CLOSEUP",
-];
+export const requiredAssetCodes: OnboardingScanAssetCode[] =
+  Array.from(REQUIRED_ONBOARDING_SCAN_ASSET_CODES);
 
 /**
  * Workers we request on every full analysis. ScanFace decides which slot

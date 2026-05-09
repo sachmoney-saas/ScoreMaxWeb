@@ -7,7 +7,11 @@ import {
   type AnalysesRequest,
   type AnalysisTier,
 } from "@shared/oneshot";
-import type { OnboardingScanAssetCode } from "@shared/schema";
+import {
+  isSignedUploadScanAssetCode,
+  type OnboardingScanAssetCode,
+  type SignedUploadScanAssetCode,
+} from "@shared/schema";
 import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
 import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-jobs";
 import { ApiError } from "../lib/errors";
@@ -58,8 +62,8 @@ const signedUploadBodySchema = z.object({
   assetTypeCode: z
     .string()
     .refine(
-      (value): value is OnboardingScanAssetCode =>
-        (requiredAssetCodes as string[]).includes(value),
+      (value): value is SignedUploadScanAssetCode =>
+        isSignedUploadScanAssetCode(value),
       {
         message: "Invalid asset type code",
       },

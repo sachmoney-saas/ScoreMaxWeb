@@ -183,15 +183,65 @@ export type PremiumAccessState = {
   active_subscription: ActiveSubscriptionSummary | null;
 };
 
+/**
+ * Huit clichés JPEG requis pour l’onboarding / une analyse complète ScanFace.
+ * Ne pas étendre ce tuple sans mettre à jour les workers ni `SCAN_ASSET_TO_CANONICAL_SLOT`.
+ */
+export const REQUIRED_ONBOARDING_SCAN_ASSET_CODES = [
+  "FACE_FRONT",
+  "PROFILE_LEFT",
+  "PROFILE_RIGHT",
+  "LOOK_UP",
+  "LOOK_DOWN",
+  "SMILE",
+  "HAIR_BACK",
+  "EYE_CLOSEUP",
+] as const;
+
 export type OnboardingScanAssetCode =
-  | "FACE_FRONT"
-  | "PROFILE_LEFT"
-  | "PROFILE_RIGHT"
-  | "LOOK_UP"
-  | "LOOK_DOWN"
-  | "SMILE"
-  | "HAIR_BACK"
-  | "EYE_CLOSEUP";
+  (typeof REQUIRED_ONBOARDING_SCAN_ASSET_CODES)[number];
+
+/**
+ * PNG de repères (aplats tutoriels). Stockés comme `scan_assets` mais
+ * `scan_asset_types.is_required_onboarding = false` pour ne pas bloquer
+ * la progression de session ni les workers ML.
+ *
+ * Ces codes correspondent aux blobs facultatifs sur `CapturedPose` côté client.
+ */
+export const GUIDE_TRACE_SCAN_ASSET_CODES = [
+  "GUIDE_TRACE_FACE_FRONT_OVAL",
+  "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
+  "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
+  "GUIDE_TRACE_PROFILE_LEFT_JAW",
+  "GUIDE_TRACE_PROFILE_RIGHT_JAW",
+  "GUIDE_TRACE_LOOK_UP_JAW_ARC",
+  "GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR",
+  "GUIDE_TRACE_SMILE_LIPS",
+] as const;
+
+export type GuideTraceScanAssetCode =
+  (typeof GUIDE_TRACE_SCAN_ASSET_CODES)[number];
+
+export type SignedUploadScanAssetCode =
+  OnboardingScanAssetCode
+  | GuideTraceScanAssetCode;
+
+/** Jetons acceptés pour `POST /v1/analyses/scan-assets/signed-upload`. */
+export const SIGNED_UPLOAD_SCAN_ASSET_CODES: readonly SignedUploadScanAssetCode[] =
+  [
+    ...(REQUIRED_ONBOARDING_SCAN_ASSET_CODES as readonly SignedUploadScanAssetCode[]),
+    ...(GUIDE_TRACE_SCAN_ASSET_CODES as readonly SignedUploadScanAssetCode[]),
+  ];
+
+const signedUploadScanAssetCodesSet = new Set<string>(
+  SIGNED_UPLOAD_SCAN_ASSET_CODES,
+);
+
+export function isSignedUploadScanAssetCode(
+  value: string,
+): value is SignedUploadScanAssetCode {
+  return signedUploadScanAssetCodesSet.has(value);
+}
 
 /**
  * Canonical ScanFace image slot names (cf. ScanFace API docs).

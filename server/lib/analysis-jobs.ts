@@ -5,9 +5,15 @@ import {
 } from "@shared/oneshot";
 import {
   CANONICAL_SLOT_TO_SCAN_ASSET,
+  GUIDE_TRACE_SCAN_ASSET_CODES,
+  REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
   type OnboardingScanAssetCode,
   type ScanFaceCanonicalSlot,
 } from "@shared/schema";
+
+const onboardingAssetCodeLookup = new Set<string>(
+  REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
+);
 import { mapUnknownError } from "./errors";
 import { logger } from "./logger";
 import { runScoreMaxAnalyses } from "./scoremax-client";
@@ -86,21 +92,7 @@ export async function persistAnalysisJobAssets(params: {
             slotOrCode as ScanFaceCanonicalSlot
           ];
           if (mapped) return mapped;
-          // Legacy callers may pass an asset code directly as imageId.
-          if (
-            (
-              [
-                "FACE_FRONT",
-                "PROFILE_LEFT",
-                "PROFILE_RIGHT",
-                "LOOK_UP",
-                "LOOK_DOWN",
-                "SMILE",
-                "HAIR_BACK",
-                "EYE_CLOSEUP",
-              ] as const
-            ).includes(slotOrCode as OnboardingScanAssetCode)
-          ) {
+          if (onboardingAssetCodeLookup.has(slotOrCode as string)) {
             return slotOrCode as OnboardingScanAssetCode;
           }
           return null;
@@ -152,9 +144,47 @@ export async function persistAnalysisJobAssets(params: {
     user_id: params.userId,
   }));
 
-  const { error: upsertError } = await supabaseAdmin.from("analysis_job_assets").upsert(jobAssetRows, {
-    onConflict: "analysis_job_id,asset_type_code",
-  });
+  const { data: guideTraceAssets, error: guideTraceError } = await supabaseAdmin
+    .from("scan_assets")
+    .select("id, asset_type_code, created_at")
+    .eq("session_id", params.sessionId)
+    .eq("user_id", params.userId)
+    .in("asset_type_code", [...GUIDE_TRACE_SCAN_ASSET_CODES])
+    .in("upload_status", ["uploaded", "validated"])
+    .order("created_at", { ascending: false });
+
+  if (guideTraceError) {
+    throw guideTraceError;
+  }
+
+  const latestGuideByCode = new Map<string, string>();
+  for (const asset of guideTraceAssets ?? []) {
+    const row = asset as { id: string; asset_type_code: string };
+    if (!latestGuideByCode.has(row.asset_type_code)) {
+      latestGuideByCode.set(row.asset_type_code, row.id);
+    }
+  }
+
+  const guideJobRows = Array.from(latestGuideByCode.entries()).map(
+    ([assetTypeCode, scanAssetId]) => ({
+      analysis_job_id: params.jobId,
+      asset_type_code: assetTypeCode,
+      scan_asset_id: scanAssetId,
+      user_id: params.userId,
+    }),
+  );
+
+  const allJobAssetRows = [...jobAssetRows, ...guideJobRows];
+
+  if (allJobAssetRows.length === 0) {
+    return;
+  }
+
+  const { error: upsertError } = await supabaseAdmin
+    .from("analysis_job_assets")
+    .upsert(allJobAssetRows, {
+      onConflict: "analysis_job_id,asset_type_code",
+    });
 
   if (upsertError) {
     throw upsertError;

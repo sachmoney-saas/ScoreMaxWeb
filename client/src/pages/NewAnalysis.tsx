@@ -31,6 +31,7 @@ import {
   getScanAssetLabels,
   uploadScanAsset,
 } from "@/lib/face-analysis";
+import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
 import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
 import type { PoseId } from "@/lib/face-capture/types";
@@ -226,6 +227,20 @@ export default function NewAnalysis() {
           lang: language,
         });
         codes.push(code);
+
+        for (const trace of guideTraceBlobUploadsFromCapturedPose(pose)) {
+          await uploadScanAsset({
+            userId: user.id,
+            sessionId,
+            assetTypeCode: trace.assetTypeCode,
+            file: new File(
+              [trace.blob],
+              `${pose.poseId}-guide-${trace.fileLabel}.png`,
+              { type: "image/png" },
+            ),
+            lang: language,
+          });
+        }
       }
 
       await queryClient.invalidateQueries({

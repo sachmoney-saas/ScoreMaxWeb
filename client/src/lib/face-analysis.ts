@@ -2,8 +2,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { clientEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 import {
+  REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
   SCAN_ASSET_TO_CANONICAL_SLOT,
   type OnboardingScanAssetCode,
+  type SignedUploadScanAssetCode,
 } from "@shared/schema";
 import {
   ANALYSIS_TIER_RUNS,
@@ -24,14 +26,7 @@ export type ScanAssetRecord = {
 };
 
 export const requiredScanAssetCodes: OnboardingScanAssetCode[] = [
-  "FACE_FRONT",
-  "PROFILE_LEFT",
-  "PROFILE_RIGHT",
-  "LOOK_UP",
-  "LOOK_DOWN",
-  "SMILE",
-  "HAIR_BACK",
-  "EYE_CLOSEUP",
+  ...REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
 ];
 
 export function getScanAssetLabels(
@@ -256,7 +251,7 @@ function isAbortError(error: unknown): boolean {
 export async function uploadScanAsset(params: {
   userId: string;
   sessionId: string;
-  assetTypeCode: OnboardingScanAssetCode;
+  assetTypeCode: SignedUploadScanAssetCode;
   file: File;
   lang?: AppLanguage;
 }): Promise<void> {
@@ -351,13 +346,28 @@ export async function fetchOnboardingScanAssets(
       "id, session_id, user_id, asset_type_code, r2_bucket, r2_key, mime_type",
     )
     .eq("session_id", sessionId)
-    .order("asset_type_code", { ascending: true });
+    .in(
+      "asset_type_code",
+      REQUIRED_ONBOARDING_SCAN_ASSET_CODES as unknown as string[],
+    )
+    .in("upload_status", ["uploaded", "validated"])
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw error;
   }
 
-  return (data ?? []) as ScanAssetRecord[];
+  const latestByType = new Map<OnboardingScanAssetCode, ScanAssetRecord>();
+  for (const raw of data ?? []) {
+    const row = raw as ScanAssetRecord;
+    if (!latestByType.has(row.asset_type_code)) {
+      latestByType.set(row.asset_type_code, row);
+    }
+  }
+
+  return requiredScanAssetCodes
+    .map((code) => latestByType.get(code))
+    .filter((asset): asset is ScanAssetRecord => asset !== undefined);
 }
 
 export async function buildFaceAnalysisRequest(params: {
@@ -372,7 +382,7 @@ export async function buildFaceAnalysisRequest(params: {
   const tier: AnalysisTier = params.tier ?? "freemium";
   const assets = await fetchOnboardingScanAssets(params.sessionId);
 
-  if (assets.length === 0) {
+  if (assets.length < requiredScanAssetCodes.length) {
     throw new Error(faceAnalysisMessage(lang, "noScanAssets"));
   }
 

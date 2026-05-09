@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProfileSchema } from "@shared/schema";
@@ -35,7 +36,7 @@ import {
 const settingsPanelClassName = "relative overflow-hidden border-white/20 bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] text-zinc-50 shadow-[0_28px_90px_-55px_rgba(0,0,0,0.95)]";
 
 export default function Settings() {
-  const { user, profile, session, signOut } = useAuth();
+  const { user, profile, session, signOut, adminCaptureExtrasActive, setAdminCaptureUxEnabled } = useAuth();
   const { updateProfile, isUpdating } = useProfile();
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const { toast } = useToast();
@@ -184,13 +185,41 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4 rounded-2xl border border-white/15 bg-white/10 p-4">
-                <Shield className="h-8 w-8 text-zinc-100" />
+                <Shield className="h-8 w-8 shrink-0 text-zinc-100" />
                 <div>
-                  <p className="font-medium text-white">Rôle : Administrateur</p>
+                  <p className="font-medium text-white">
+                    {i18n(uiLang, { en: "Role: administrator", fr: "Rôle : administrateur" })}
+                  </p>
                   <p className="text-sm text-zinc-300">
-                    Vous avez un accès administratif complet à la plateforme.
+                    {i18n(uiLang, {
+                      en: "Administrative routes and tooling remain active. Capture extras are optional.",
+                      fr: "Les pages et outils d’administration restent accessibles ; les aides à la capture sont optionnelles.",
+                    })}
                   </p>
                 </div>
+              </div>
+
+              <div className="flex flex-row items-start justify-between gap-4 rounded-2xl border border-white/15 bg-white/5 px-4 py-3 sm:items-center sm:gap-6">
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor="admin-capture-ux-switch" className="text-white">
+                    {i18n(uiLang, {
+                      en: "Enhanced capture UX (pause, guides, overlays)",
+                      fr: "Outils capture avancés (pause, overlays, clichés annotés)",
+                    })}
+                  </Label>
+                  <p className="text-xs leading-relaxed text-zinc-400">
+                    {i18n(uiLang, {
+                      en: "Disable to match member experience during photo capture — no HUD, no intermediate overlays, lighter browser work.",
+                      fr: "Désactivé : même expérience qu’un client pendant la série photo — sans pause intermédiaire, HUD ni encodages de debug.",
+                    })}
+                  </p>
+                </div>
+                <Switch
+                  id="admin-capture-ux-switch"
+                  checked={adminCaptureExtrasActive}
+                  onCheckedChange={setAdminCaptureUxEnabled}
+                  className="shrink-0 data-[state=checked]:bg-sky-500"
+                />
               </div>
             </CardContent>
           </Card>
