@@ -635,6 +635,8 @@ export default function Onboarding() {
     currentStep.category === "Vie sociale" || currentStep.category === "Social life";
   const isIntroStep = currentStep.category === "Introduction";
   const isLastStep = stepIndex === steps.length - 1;
+  /** Carte + en-tête (logo, segments) centrés dans la hauteur utile — pas les étapes « preuves » longues. */
+  const shouldVerticallyCenterMain = isIntroStep || isLastStep;
   const evidenceGridClassName = cn(
     "grid gap-3 sm:gap-4",
     currentStep.evidence.length <= 1 && "mx-auto max-w-xl grid-cols-1",
@@ -1000,8 +1002,14 @@ export default function Onboarding() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-start px-4 pb-5 pt-[max(0.75rem,calc(env(safe-area-inset-top,0px)+0.5rem))] sm:px-6 sm:py-6">
-        <div className="space-y-2.5 py-2 sm:space-y-4 sm:py-4">
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] pt-[max(0.75rem,calc(env(safe-area-inset-top,0px)+0.5rem))] sm:px-6 sm:pb-6 sm:pt-6">
+        <div
+          className={cn(
+            "flex w-full flex-1 flex-col",
+            shouldVerticallyCenterMain ? "justify-center py-2 sm:py-3" : "justify-start py-2 sm:py-4",
+          )}
+        >
+        <div className="w-full space-y-2.5 sm:space-y-4">
           <div className="flex justify-center">
             <img
               src="/favicon.png"
@@ -1278,6 +1286,7 @@ export default function Onboarding() {
               ) : null}
             </motion.article>
           </AnimatePresence>
+        </div>
         </div>
       </div>
 

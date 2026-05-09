@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FaceFrame, LandmarkPoint } from "../types";
-import { smileProgress, SMILE_BLENDSHAPE_THRESHOLD } from "./helpers";
+import { smileProgress, SMILE_BLENDSHAPE_THRESHOLD, eyeBlinkMax, eyeNotBlinkingBlendScore } from "./helpers";
 
 function frameWithBlendshapes(blendshapes: Record<string, number>): FaceFrame {
   return {
@@ -49,5 +49,29 @@ describe("smileProgress", () => {
       }),
     );
     expect(s).toBeGreaterThanOrEqual(SMILE_BLENDSHAPE_THRESHOLD);
+  });
+});
+
+describe("eye blink blendshapes", () => {
+  it("eyeNotBlinkingBlendScore is 1 when blendshapes missing", () => {
+    expect(
+      eyeNotBlinkingBlendScore(frameWithBlendshapes({})),
+    ).toBe(1);
+  });
+
+  it("drops when blink is strong", () => {
+    const low = eyeNotBlinkingBlendScore(
+      frameWithBlendshapes({ eyeBlinkLeft: 0.05, eyeBlinkRight: 0.04 }),
+    );
+    const high = eyeNotBlinkingBlendScore(
+      frameWithBlendshapes({ eyeBlinkLeft: 0.9, eyeBlinkRight: 0.85 }),
+    );
+    expect(low).toBeGreaterThan(0.95);
+    expect(high).toBeLessThan(0.15);
+  });
+
+  it("eyeBlinkMax returns max of both eyes", () => {
+    expect(eyeBlinkMax({ eyeBlinkLeft: 0.2, eyeBlinkRight: 0.6 })).toBe(0.6);
+    expect(eyeBlinkMax({ eyeBlinkLeft: 0.3 })).toBe(0.3);
   });
 });

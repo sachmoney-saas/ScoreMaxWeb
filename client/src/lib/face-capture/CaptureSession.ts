@@ -15,9 +15,13 @@ import { MaskRenderer } from "./MaskRenderer";
 import { MotionTracker } from "./MotionTracker";
 import { PoseValidator } from "./PoseValidator";
 import { evaluateFrameQualityForCapture, evaluateFrameQualityMinimal } from "./QualityGate";
+import { computeHoldFrameMerit } from "./holdFrameMerit";
+import { resolveHoldBestFrameTuning, type ResolvedHoldBestFrameTuning } from "./holdBestFrameTuning";
 
 export type CaptureSessionEvent =
   | { type: "pose_captured"; poseId: PoseId; blob: Blob }
+  /** Déclenchement synchrone : la UI peut passer en `Capturing` sans attendre le poll RAF. */
+  | { type: "shutter_started" }
   | { type: "session_complete"; results: CapturedPose[] }
   | { type: "session_error"; error: Error };
 
@@ -73,19 +77,57 @@ export class CaptureSession {
    */
   private readonly motion = new MotionTracker(400);
   /**
-   * Hold-interruption thresholds: once we're holding, the scan bar is NEVER
-   * stopped by validation drift, sub-threshold motion, or quality wobble — it
-   * is only reset when the user has clearly moved out of the locked pose.
+   * Hold-interruption : pendant le hold la barre accumule encore malgré une
+   * validation « pas ready » ponctuelle, sauf dans les cas suivants :
+   *   - **Grande rotation depuis le verrou** : |Δyaw| ou |Δroll| forts
+   *     (sans pitch — le pitch est traité séparément pour menton levé /
+   *     sommet du crâne, voir seuils ci-dessous).
    *
-   *   |Δyaw|  > 30°   (deliberate left/right turn — switching to a new pose)
-   *   |Δroll| > 10°   (deliberate head tilt that breaks the pose)
+   * **Poses sans extrapolation** (face, la plupart des gros plans) : plusieurs
+   * frames d’affilée hors validation « ready » annulent le hold — sinon un
+   * frontal peut dériver hors du cadre ±10° tout en restant sous le plafond
+   * |Δyaw| 30° depuis le début du hold. **Exception** `closeup-smile` : pas
+   * de série sur validation (blendshapes instables même immobile) ; l’interrupt
+   * yaw/roll reste actif ; la tête qui part sur le côté déclenchera encore
+   * l’abandon une fois Δyaw assez grand.
    *
-   * Pitch is intentionally NOT a hard interrupt: jaw-up / crown-down poses
-   * intentionally swing pitch wide, and frontal users tend to nod slightly.
-   * Deltas are measured against the head pose at hold start (`holdStartHeadPose`).
+   * **Profils** : la perte de visage reste gérée par extrapolation / grace ;
+   * en revanche un retour volontaire face caméra (|yaw| dans une bande
+   * neutre, disjointe du profil ≥32°) annule le hold après quelques frames.
+   *
+   * **Menton levé / sommet du crâne** : suivi pitch dédié (retour hors
+   * consigne) ; pas d’extrapolation **pendant** le hold sinon la perte de
+   * visage en fin de mouvement fige la pose et la capture part quand même.
    */
   private readonly holdInterruptYawDeg = 30;
   private readonly holdInterruptRollDeg = 10;
+  /**
+   * Poses type frontal / closeup : frames consécutives hors consigne avant
+   * d’interrompre (lissage bruit MediaPipe).
+   */
+  private readonly holdLostPoseStreakToAbort = 4;
+  /**
+   * Seuil |yaw| « face au centre » plus bas que le bord profil (32°) pour
+   * éviter les faux positifs sur la limite de détection.
+   */
+  private readonly profileReturnNeutralAbsYawDeg = 20;
+  private readonly profileReturnCenterStreakToAbort = 3;
+  /**
+   * jaw-up (`pitch ∈ [-90,-20]` en convention actuelle) : au-dessus de ce seuil,
+   * on n’est plus en « menton levé » acceptable.
+   */
+  private readonly jawUpPitchAbortAbove = -17;
+  /** Baisse de menton depuis le début du hold (pitch qui monte vers 0). */
+  private readonly jawUpPitchDropFromLockDeg = 11;
+  /** crown-down : retour trop « face neutre » (pitch hors plage basse). */
+  /** Abandon du hold crown-down si pitch < 20 (trop remonté). Plage valide min = 23°. */
+  private readonly crownDownPitchAbortBelow = 20;
+  /** Remontée de tête depuis le verrou (pitch qui descend). */
+  private readonly crownDownPitchRiseFromLockDeg = 11;
+  private readonly pitchDriftStreakToAbort = 4;
+  private holdPoseLostStreak = 0;
+  private profileReturningCenterStreak = 0;
+  private pitchDriftAbandonStreak = 0;
   private readonly config: CaptureSessionConfig;
 
   private callback: CaptureSessionCallback | null = null;
@@ -131,7 +173,20 @@ export class CaptureSession {
   private holdStartAt: number | null = null;
   private holdProgress = 0;
   private cooldownUntil = 0;
-  private captureLock = false;
+  /**
+   * True from commit-to-capture until the blob is obtained (or capture fails).
+   * Unlike the old immediate lock, we still run landmark-driven mask updates
+   * so the overlay does not freeze during exposure wait / takePhoto.
+   */
+  private captureAwaitingShot = false;
+  /** Meilleur cliché candidat pendant le hold (aperçu vidéo), choisi par `computeHoldFrameMerit`. */
+  private bestHoldMerit = Number.NEGATIVE_INFINITY;
+  private bestHoldBlob: Blob | null = null;
+  private holdSnapInflight = false;
+  private lastHoldSnapWallMs = Number.NEGATIVE_INFINITY;
+  /** Clichés JPEG lancés pendant ce hold — plafonné pour limiter CPU / blocages encode. */
+  private holdSnapAttemptsThisHold = 0;
+  private readonly holdBestTuning: ResolvedHoldBestFrameTuning;
   private transitionPoseId: PoseId | null = null;
   private transitionThumbnailUrl: string | null = null;
   /** `performance.now()` threshold; until then, first frontal pose skips strict validation (see `FIRST_POSE_WARMUP_MS`). */
@@ -148,6 +203,10 @@ export class CaptureSession {
     this.config = { ...DEFAULT_CONFIG, ...config };
     const fps = Math.min(60, Math.max(15, this.config.mediaPipeTargetFps ?? 60));
     this.frameIntervalMs = 1000 / fps;
+    this.holdBestTuning = resolveHoldBestFrameTuning({
+      mediaPipeTargetFps: this.config.mediaPipeTargetFps ?? 60,
+      options: this.config.holdBestFrame,
+    });
   }
 
   onEvent(cb: CaptureSessionCallback): void {
@@ -182,11 +241,13 @@ export class CaptureSession {
     this.holdProgress = 0;
     this.holdStartHeadPose = null;
     this.cooldownUntil = 0;
-    this.captureLock = false;
+    this.captureAwaitingShot = false;
+    this.clearHoldBestCandidate();
     this.transitionPoseId = null;
     this.transitionThumbnailUrl = null;
     this.sessionWarmupUntil = performance.now() + FIRST_POSE_WARMUP_MS;
     this.motion.reset();
+    this.resetHoldGestureStreaks();
     this.initPoseStates();
     this.state = "AwaitFace";
     this.scheduleSendLoop();
@@ -220,6 +281,9 @@ export class CaptureSession {
   }
   getCapturedCount(): number {
     return this.capturedPoses.length;
+  }
+  getCapturedPoses(): CapturedPose[] {
+    return this.capturedPoses;
   }
   getVideoEl(): HTMLVideoElement | null {
     return this.videoEl;
@@ -258,6 +322,49 @@ export class CaptureSession {
         confidence: 0,
       },
     }));
+  }
+
+  private resetHoldGestureStreaks(): void {
+    this.holdPoseLostStreak = 0;
+    this.profileReturningCenterStreak = 0;
+    this.pitchDriftAbandonStreak = 0;
+  }
+
+  private clearHoldBestCandidate(): void {
+    this.bestHoldBlob = null;
+    this.bestHoldMerit = Number.NEGATIVE_INFINITY;
+    this.holdSnapInflight = false;
+    this.lastHoldSnapWallMs = Number.NEGATIVE_INFINITY;
+    this.holdSnapAttemptsThisHold = 0;
+  }
+
+  /** Enregistre un JPEG depuis l’aperçu si le mérite dépasse le meilleur précédent (throttling). */
+  private maybeRecordBetterHoldPreview(merit: number): void {
+    const { meritEpsilon: eps, minGapMs, maxSnapshotsPerHold } = this.holdBestTuning.sampling;
+    if (!this.videoEl || merit <= this.bestHoldMerit + eps) return;
+    const nowMs = performance.now();
+    if (
+      this.holdSnapInflight ||
+      nowMs - this.lastHoldSnapWallMs < minGapMs ||
+      this.holdSnapAttemptsThisHold >= maxSnapshotsPerHold
+    )
+      return;
+    this.holdSnapAttemptsThisHold += 1;
+    this.holdSnapInflight = true;
+    const meritAtSnap = merit;
+    void this.camera.snapshotPreviewBounded().then(b => {
+      this.holdSnapInflight = false;
+      this.lastHoldSnapWallMs = performance.now();
+      if (!b || meritAtSnap <= this.bestHoldMerit) return;
+      this.bestHoldMerit = meritAtSnap;
+      this.bestHoldBlob = b;
+    });
+  }
+
+  private consumeBestHoldCandidateBlob(): Blob | null {
+    const b = this.bestHoldBlob;
+    this.clearHoldBestCandidate();
+    return b;
   }
 
   private scheduleSendLoop(): void {
@@ -309,10 +416,33 @@ export class CaptureSession {
     blendshapes: Record<string, number>,
   ): void {
     if (!this.videoEl || this.state === "idle" || this.state === "Done" || this.state === "error") return;
-    if (this.captureLock) {
+
+    if (this.captureAwaitingShot) {
       this.state = "Capturing";
+      if (landmarks.length > 0) {
+        const now = performance.now();
+        this.faceInView = true;
+        this.lastHeadPose = pose;
+        this.lastSeenHeadPose = pose;
+        this.lastSeenLandmarks = landmarks;
+        this.lastSeenBlendshapes = blendshapes;
+        this.lastSeenAt = now;
+        this.motion.push(now, pose);
+
+        const frame: FaceFrame = {
+          timestamp: now,
+          landmarks,
+          headPose: pose,
+          confidence: this.computeConfidence(landmarks),
+          frameWidth: this.videoEl.videoWidth || this.videoEl.clientWidth || 1,
+          frameHeight: this.videoEl.videoHeight || this.videoEl.clientHeight || 1,
+          blendshapes,
+        };
+        this.renderMaskDuringCaptureAwait(frame);
+      }
       return;
     }
+
     const now = performance.now();
 
     if (now < this.cooldownUntil) {
@@ -320,6 +450,7 @@ export class CaptureSession {
       this.holdStartAt = null;
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
+      this.resetHoldGestureStreaks();
       this.motion.reset();
       return;
     }
@@ -397,6 +528,7 @@ export class CaptureSession {
     this.holdProgress = 0;
     this.holdStartHeadPose = null;
     this.faceLossGraceUntil = null;
+    this.resetHoldGestureStreaks();
     this.motion.reset();
     this.state = "AwaitFace";
     this.maskRenderer.clear();
@@ -424,6 +556,7 @@ export class CaptureSession {
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
       this.faceLossGraceUntil = null;
+      this.resetHoldGestureStreaks();
       this.poseStates[0]!.state = "pending";
       const warmupValidation: PoseValidation = {
         poseId: "frontal",
@@ -461,13 +594,15 @@ export class CaptureSession {
 
     const ready = validation.status === "ready";
     /**
-     * Hold-interruption rule (replaces the old "extreme deg/sec motion +
-     * validation grace" combo): once the hold is armed, we ONLY abort if the
-     * user has clearly turned away from the locked pose. Concretely, |Δyaw|
-     * > 30° or |Δroll| > 10° measured against the head pose at hold start.
-     * Pitch is excluded on purpose — jaw-up / crown-down poses can swing
-     * pitch wide as the user settles. Extrapolated frames carry the cached
-     * head pose, which is by definition stable, so deltas are always 0.
+     * Interruption pendant le hold :
+     *   - |Δyaw| / |Δroll| depuis le verrou (seuils fixes) ;
+     *   - poses sans extrapolation : plusieurs frames d’affilée hors consigne
+     *     (validation ≠ ready) ;
+     *   - profil : retour face caméra (|yaw| dans une bande neutre sous le
+     *     profil requis), pour annuler si l’utilisateur abandonne le geste.
+     *   - menton levé / sommet : dérive hors plage ou retour évident vers une
+     *     tête trop « neutre » en pitch (frames live uniquement ; pas d’exo
+     *     pendant le hold pour ces deux-là — voir `tryBuildExtrapolatedFrame`).
      */
     let bigMovementInterrupt = false;
     if (this.holdStartAt !== null && this.holdStartHeadPose) {
@@ -478,9 +613,77 @@ export class CaptureSession {
       }
     }
 
+    let abandonHoldGesture = bigMovementInterrupt;
+    if (
+      this.holdStartAt !== null &&
+      !isExtrapolated &&
+      !bigMovementInterrupt
+    ) {
+      if (!this.canExtrapolatePose(poseDef.id)) {
+        const usePoseLostStreak = poseDef.id !== "closeup-smile";
+        if (usePoseLostStreak) {
+          if (!ready) {
+            this.holdPoseLostStreak += 1;
+            if (this.holdPoseLostStreak >= this.holdLostPoseStreakToAbort) {
+              abandonHoldGesture = true;
+            }
+          } else {
+            this.holdPoseLostStreak = 0;
+          }
+        } else {
+          this.holdPoseLostStreak = 0;
+        }
+        this.profileReturningCenterStreak = 0;
+        this.pitchDriftAbandonStreak = 0;
+      } else if (poseDef.id === "profile-right" || poseDef.id === "profile-left") {
+        if (Math.abs(frame.headPose.yaw) <= this.profileReturnNeutralAbsYawDeg) {
+          this.profileReturningCenterStreak += 1;
+          if (this.profileReturningCenterStreak >= this.profileReturnCenterStreakToAbort) {
+            abandonHoldGesture = true;
+          }
+        } else {
+          this.profileReturningCenterStreak = 0;
+        }
+        this.holdPoseLostStreak = 0;
+        this.pitchDriftAbandonStreak = 0;
+      } else if (poseDef.id === "jaw-up" || poseDef.id === "crown-down") {
+        this.holdPoseLostStreak = 0;
+        this.profileReturningCenterStreak = 0;
+
+        let pitchDriftSuspect = false;
+        if (this.holdStartHeadPose) {
+          if (poseDef.id === "jaw-up") {
+            const dp = frame.headPose.pitch - this.holdStartHeadPose.pitch;
+            pitchDriftSuspect =
+              frame.headPose.pitch > this.jawUpPitchAbortAbove ||
+              dp > this.jawUpPitchDropFromLockDeg;
+          } else {
+            const dp = frame.headPose.pitch - this.holdStartHeadPose.pitch;
+            pitchDriftSuspect =
+              frame.headPose.pitch < this.crownDownPitchAbortBelow ||
+              dp < -this.crownDownPitchRiseFromLockDeg;
+          }
+        }
+        if (pitchDriftSuspect) {
+          this.pitchDriftAbandonStreak += 1;
+          if (this.pitchDriftAbandonStreak >= this.pitchDriftStreakToAbort) {
+            abandonHoldGesture = true;
+          }
+        } else {
+          this.pitchDriftAbandonStreak = 0;
+        }
+      } else {
+        this.holdPoseLostStreak = 0;
+        this.profileReturningCenterStreak = 0;
+        this.pitchDriftAbandonStreak = 0;
+      }
+    }
+
     let triggerCapture = false;
 
-    if (bigMovementInterrupt) {
+    if (abandonHoldGesture) {
+      this.resetHoldGestureStreaks();
+      this.clearHoldBestCandidate();
       this.holdStartAt = null;
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
@@ -489,21 +692,26 @@ export class CaptureSession {
       this.poseStates[this.currentPoseIndex]!.state = "aligning";
     } else if (this.holdStartAt !== null) {
       /**
-       * Already holding: progress accumulates from `holdStartAt` regardless of
-       * the per-frame validation status — small drifts, brief MediaPipe
-       * wobble, micro-blinks, sub-threshold motion all stay invisible to the
-       * user. The scan bar only stops if the user has clearly moved out of
-       * the pose (handled above) or completes (triggerCapture).
+       * Already holding: progress selon la pose ; abandons via les règles
+       * ci-dessus (profil, pitch jaw/crown, validation poses sans exo, etc.)
+       * ou capture.
        */
       this.faceLossGraceUntil = null;
       this.state = "Holding";
       this.poseStates[this.currentPoseIndex]!.state = "holding";
       const holdMs = poseDef.holdMs || ((this.config.holdFrames ?? 18) * this.frameIntervalMs);
       this.holdProgress = Math.max(0, Math.min(1, (frame.timestamp - this.holdStartAt) / holdMs));
-      if (this.holdProgress >= 1) {
+      const triggerSoon = this.holdProgress >= 1;
+      if (!isExtrapolated && !triggerSoon) {
+        const merit = computeHoldFrameMerit(poseDef, frame, validation, this.holdBestTuning.meritWeights);
+        this.maybeRecordBetterHoldPreview(merit);
+      }
+      if (triggerSoon) {
         triggerCapture = true;
       }
     } else if (ready) {
+      this.resetHoldGestureStreaks();
+      this.clearHoldBestCandidate();
       this.holdStartAt = frame.timestamp;
       this.holdStartHeadPose = frame.headPose;
       this.faceLossGraceUntil = null;
@@ -511,7 +719,12 @@ export class CaptureSession {
       this.poseStates[this.currentPoseIndex]!.state = "holding";
       const holdMs = poseDef.holdMs || ((this.config.holdFrames ?? 18) * this.frameIntervalMs);
       this.holdProgress = Math.max(0, Math.min(1, (frame.timestamp - this.holdStartAt) / holdMs));
-      if (this.holdProgress >= 1) {
+      const triggerSoon = this.holdProgress >= 1;
+      if (!isExtrapolated && !triggerSoon) {
+        const merit = computeHoldFrameMerit(poseDef, frame, validation, this.holdBestTuning.meritWeights);
+        this.maybeRecordBetterHoldPreview(merit);
+      }
+      if (triggerSoon) {
         triggerCapture = true;
       }
     } else {
@@ -519,6 +732,8 @@ export class CaptureSession {
       this.holdStartAt = null;
       this.holdProgress = 0;
       this.holdStartHeadPose = null;
+      this.resetHoldGestureStreaks();
+      this.clearHoldBestCandidate();
       this.poseStates[this.currentPoseIndex]!.state = "aligning";
     }
 
@@ -563,6 +778,18 @@ export class CaptureSession {
     const poseDef = CAPTURE_POSES[this.currentPoseIndex];
     if (!poseDef) return null;
     if (!this.canExtrapolatePose(poseDef.id)) return null;
+    /**
+     * Pendant le hold sur pitches extrêmes, ne pas extrapoler : sinon un
+     * utilisateur qui sort du cadre / relâche la pose après un alignement bon
+     * fige encore la vieille pose et la barre aboutit à une capture refusée
+     * en pratique par l’analyse ensuite.
+     */
+    if (
+      (poseDef.id === "jaw-up" || poseDef.id === "crown-down") &&
+      this.holdStartAt !== null
+    ) {
+      return null;
+    }
     if (!this.lastSeenWasInPoseRange(this.lastSeenHeadPose, poseDef)) return null;
 
     return {
@@ -597,21 +824,20 @@ export class CaptureSession {
 
   private async captureCurrentPose(): Promise<void> {
     if (!this.videoEl) return;
-    if (this.captureLock) return;
-    if (performance.now() < this.cooldownUntil) return;
-
     const idx = this.currentPoseIndex;
     const poseState = this.poseStates[idx]!;
     if (poseState.state === "capturing" || poseState.state === "captured") return;
+    if (performance.now() < this.cooldownUntil) return;
 
-    this.captureLock = true;
+    this.captureAwaitingShot = true;
     poseState.state = "capturing";
     this.state = "Capturing";
+    this.callback?.({ type: "shutter_started" });
     /**
      * Quality gate is intentionally NOT used as a hard reject here: by the
      * time we reach this code path the user has already held the pose for
-     * `holdMs` (1.8 s) without a >30°/>10° interruption, so we owe them a
-     * capture. A failing quality check that bounces them back to Aligning
+     * `holdMs` (1.8 s) without triggering a hold abandon (see interrupt rules),
+     * so we owe them a capture. A failing quality check that bounces them back to Aligning
      * is exactly the "bar finishes but nothing happens, then restarts"
      * symptom the user reported. We rely on the held-pose stability
      * window itself as the quality signal.
@@ -622,9 +848,15 @@ export class CaptureSession {
      * jusqu'à `EXPOSURE_STABILIZATION_MS` à la caméra pour s'éclaircir
      * avant de capturer ; au-delà, on capture quand même (le hold a déjà
      * été tenu, on ne va pas faire poireauter l'utilisateur indéfiniment).
+     *
+     * Pour les poses **suivantes**, l'exposition caméra suit déjà le flux depuis
+     * plusieurs secondes : on borne beaucoup plus court pour éviter le masque figé trop longtemps (4+1).
      */
-    const EXPOSURE_STABILIZATION_MS = 1800;
-    const EXPOSURE_POLL_MS = 100;
+    const isFirstExposureCriticalShot =
+      poseState.poseId === "frontal" && idx === 0 && this.capturedPoses.length === 0;
+
+    const EXPOSURE_STABILIZATION_MS = isFirstExposureCriticalShot ? 1400 : 380;
+    const EXPOSURE_POLL_MS = isFirstExposureCriticalShot ? 100 : 40;
     const MIN_ACCEPTABLE_LUMA = 42;
     const exposureStartedAt = performance.now();
     while (
@@ -637,8 +869,9 @@ export class CaptureSession {
       await new Promise((r) => setTimeout(r, EXPOSURE_POLL_MS));
     }
 
+    const settleDelayMs = isFirstExposureCriticalShot ? 52 : 18;
     if (this.videoEl?.videoWidth && this.videoEl.videoHeight) {
-      await new Promise((r) => setTimeout(r, 60));
+      await new Promise((r) => setTimeout(r, settleDelayMs));
     }
 
     const cooldownMs = this.config.cooldownMs ?? 300;
@@ -648,8 +881,9 @@ export class CaptureSession {
     this.holdProgress = 0;
     this.holdStartHeadPose = null;
     this.faceLossGraceUntil = null;
+    this.resetHoldGestureStreaks();
 
-    let blob: Blob | null = null;
+    let blob = this.consumeBestHoldCandidateBlob();
     for (let attempt = 0; attempt < 4 && !blob; attempt++) {
       if (attempt > 0) {
         await new Promise((r) => setTimeout(r, 45 * attempt));
@@ -660,9 +894,12 @@ export class CaptureSession {
       poseState.state = "aligning";
       this.state = "Aligning";
       this.cooldownUntil = 0;
-      this.captureLock = false;
+      this.captureAwaitingShot = false;
       return;
     }
+
+    /** Fin du blocage overlay : fichier obtenu, on quitte avant la mutation d’état suivante. */
+    this.captureAwaitingShot = false;
 
     const thumbnailUrl = URL.createObjectURL(blob);
     poseState.state = "captured";
@@ -675,7 +912,6 @@ export class CaptureSession {
       timestamp: performance.now(),
     };
     this.capturedPoses.push(captured);
-    this.callback?.({ type: "pose_captured", poseId: poseState.poseId, blob });
 
     if (typeof console !== "undefined") {
       console.info(
@@ -710,18 +946,43 @@ export class CaptureSession {
     this.holdProgress = 0;
     this.holdStartHeadPose = null;
     this.faceLossGraceUntil = null;
+    this.resetHoldGestureStreaks();
     this.currentPoseIndex = idx + 1;
     this.state = "NextPose";
-    this.captureLock = false;
 
     if (this.currentPoseIndex >= CAPTURE_POSES.length) {
       this.state = "Done";
       this.cancelSendLoop();
+      this.callback?.({ type: "pose_captured", poseId: poseState.poseId, blob });
       this.callback?.({ type: "session_complete", results: this.capturedPoses });
       return;
     }
 
     this.poseStates[this.currentPoseIndex]!.state = "pending";
+    /** Après avancement d’index : la UI peut afficher la consigne de la pose suivante sans attendre le poll RAF. */
+    this.callback?.({ type: "pose_captured", poseId: poseState.poseId, blob });
+  }
+
+  /**
+   * Masque seulement pendant l’attente exposition / takePhoto : évite de geler
+   * l’overlay sans repasser par la FSM (hold, abandon, etc.).
+   */
+  private renderMaskDuringCaptureAwait(frame: FaceFrame): void {
+    if (!this.videoEl) return;
+    const poseDef = CAPTURE_POSES[this.currentPoseIndex];
+    if (!poseDef) return;
+
+    const validation = this.validator.validate(frame, poseDef, { holding: true });
+    this.lastValidation = validation;
+    const ps = this.poseStates[this.currentPoseIndex];
+    if (ps) ps.validation = validation;
+
+    const vw = frame.frameWidth;
+    const vh = frame.frameHeight;
+    const ew = this.videoEl.clientWidth || 1;
+    const eh = this.videoEl.clientHeight || 1;
+    this.maskRenderer.setAlignmentQuality(validation.score);
+    this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh, { holdingProgress: 1 });
   }
 
   private computeConfidence(landmarks: LandmarkPoint[]): number {

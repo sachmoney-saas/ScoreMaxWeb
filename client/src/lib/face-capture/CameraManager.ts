@@ -172,6 +172,14 @@ export class CameraManager {
     return this._captureViaCanvas();
   }
 
+  /**
+   * JPEG depuis le flux **aperçu** (`<video>` courant), même borne que `captureFrame`
+   * sans passer par `takePhoto`. Utilisé pour garder la meilleure frame médiane pendant le hold.
+   */
+  snapshotPreviewBounded(): Promise<Blob | null> {
+    return this._captureViaCanvas();
+  }
+
   private async _captureViaCanvas(): Promise<Blob | null> {
     if (!this.video || !this.video.videoWidth) return null;
     return this._encodeBoundedJpeg(this.video);

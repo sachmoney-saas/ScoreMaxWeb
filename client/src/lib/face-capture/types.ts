@@ -1,3 +1,11 @@
+import type {
+  HoldBestFrameOptions,
+  HoldBestFramePreset,
+  HoldMeritWeights,
+} from "./holdBestFrameTuning";
+
+export type { HoldBestFrameOptions, HoldBestFramePreset, HoldMeritWeights };
+
 export type PoseId =
   | "frontal"
   | "profile-right"
@@ -71,6 +79,8 @@ export interface CaptureSessionConfig {
   mediaPipeTargetFps?: number;
   cooldownMs?: number;
   holdFrames?: number;
+  /** Préréglages + surcharges pour le « meilleur frame » pendant le hold (JPEG aperçu). */
+  holdBestFrame?: HoldBestFrameOptions;
 }
 
 export interface PoseDefinition {
@@ -161,7 +171,7 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     description: "Baissez la tête pour montrer le sommet",
     icon: "⬇",
     yawRange: [-20, 20],
-    pitchRange: [28, 90],
+    pitchRange: [23, 90],
     rollRange: [-15, 15],
     minFaceRatio: 0.14,
     holdMs: 1800,

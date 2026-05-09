@@ -16,6 +16,16 @@ export {
 export { MaskRenderer } from './MaskRenderer';
 export { MotionTracker } from './MotionTracker';
 export { CaptureSession } from './CaptureSession';
+export {
+  resolveHoldBestFrameTuning,
+  normalizeMeritWeights,
+  inferLowTierDevice,
+  DEFAULT_HOLD_MERIT_WEIGHTS,
+} from './holdBestFrameTuning';
+export type {
+  ResolvedHoldBestFrameTuning,
+  HoldSamplingTuning,
+} from './holdBestFrameTuning';
 export type {
   CapturedPose,
   CaptureSessionEvent,

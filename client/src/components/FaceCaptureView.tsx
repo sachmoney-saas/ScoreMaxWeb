@@ -140,10 +140,22 @@ export function FaceCaptureView({
     return CAPTURE_POSES[idx]?.id ?? null;
   }, [state.currentPose?.index]);
 
+  /**
+   * Consigne lisible tout de suite : pendant `Capturing` l’index session pointe encore
+   * sur la pose qu’on enlève jusqu’à la fin du shutter — on affiche donc déjà la suivante,
+   * sauf à la dernière pose (pas d’étape suivante dans le flux).
+   */
+  const instructionPoseId = useMemo((): PoseId | null => {
+    const idx = state.currentPose?.index ?? 0;
+    if (state.sessionState === 'Capturing') {
+      if (idx >= CAPTURE_POSES.length - 1) return CAPTURE_POSES[idx]?.id ?? null;
+      return CAPTURE_POSES[idx + 1]?.id ?? null;
+    }
+    return activePoseId;
+  }, [state.sessionState, state.currentPose?.index, activePoseId]);
+
   const instruction =
-    activePoseId !== null
-      ? i18n(language, STEP_INSTRUCTION[activePoseId])
-      : '';
+    instructionPoseId !== null ? i18n(language, STEP_INSTRUCTION[instructionPoseId]) : '';
 
   /**
    * Pause de transition entre une pose terminée et la pose suivante quand
@@ -162,6 +174,7 @@ export function FaceCaptureView({
 
   /** Indique de quel côté pivoter pour entrer dans la plage de yaw (profils). */
   const profileTurnArrow = useMemo((): 'left' | 'right' | null => {
+    if (state.sessionState === 'Capturing') return null;
     if (
       !state.headPose ||
       state.validation?.status === 'ready' ||
@@ -182,7 +195,7 @@ export function FaceCaptureView({
     if (y < yMin) return 'right';
     if (y > yMax) return 'left';
     return null;
-  }, [activePoseId, state.headPose, state.validation?.status]);
+  }, [state.sessionState, activePoseId, state.headPose, state.validation?.status]);
 
   /** Hors du scroll/padding AppLayout + ancêtres en `transform` (animate-in), sinon `fixed` est faux-vrai plein écran. */
   const captureUi = (
@@ -199,6 +212,23 @@ export function FaceCaptureView({
           50% { opacity: 1; }
         }
         .scan-flash-frame { animation: scanFlashPulse 1.4s ease-in-out infinite; }
+        /**
+         * Anneau blanc type « flash selfie » (Snap) : centre laissé plus clair
+         * pour le visage, bords fortement éclaircis.
+         */
+        .selfie-flash-vignette {
+          background: radial-gradient(
+            ellipse 82% 86% at 50% 46%,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0) 40%,
+            rgba(255, 255, 255, 0.22) 62%,
+            rgba(255, 255, 255, 0.52) 78%,
+            rgba(255, 255, 255, 0.88) 100%
+          );
+          box-shadow:
+            inset 0 0 72px rgba(255, 255, 255, 0.45),
+            inset 0 0 140px rgba(255, 255, 255, 0.2);
+        }
       `}</style>
 
       <div
@@ -231,6 +261,23 @@ export function FaceCaptureView({
             className="pointer-events-none absolute inset-0 h-full w-full"
             style={{ zIndex: 2, transform: 'scaleX(-1)' }}
           />
+
+          {!isLoading && !hasError ? (
+            <div
+              className="selfie-flash-vignette pointer-events-none absolute inset-0 z-[3]"
+              aria-hidden
+            />
+          ) : null}
+
+          {!isLoading && !hasError ? (
+            <div
+              className="pointer-events-none absolute inset-0 z-[12]"
+              aria-hidden
+            >
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/90 shadow-[0_0_2px_rgba(0,0,0,0.45)]" />
+              <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/90 shadow-[0_0_2px_rgba(0,0,0,0.45)]" />
+            </div>
+          ) : null}
 
           {!isLoading && !hasError && isAdmin ? (
             <div className="absolute right-3 top-3 z-[25] sm:right-4 sm:top-4">
@@ -357,7 +404,7 @@ export function FaceCaptureView({
               aria-hidden
               style={{
                 boxShadow:
-                  'inset 0 0 0 4px rgba(255, 255, 255, 0.95), inset 0 0 80px 28px rgba(255, 255, 255, 0.55), inset 0 0 180px 70px rgba(255, 255, 255, 0.22)',
+                  'inset 0 0 0 5px rgba(255, 255, 255, 0.98), inset 0 0 100px 40px rgba(255, 255, 255, 0.42)',
               }}
             />
           ) : null}
@@ -430,16 +477,31 @@ export function FaceCaptureView({
                 className="pointer-events-none absolute left-0 right-0 top-0 z-20 mx-auto max-w-md px-5 pt-8 text-center font-display text-lg font-semibold leading-snug tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] sm:max-w-lg sm:text-xl"
               >
                 {instruction}
-                {state.sessionState === 'Holding' ? (
-                  <span className="mt-3 block text-base font-semibold text-emerald-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
-                    {i18n(language, { en: 'Hold still', fr: 'Ne bougez pas' })}
-                  </span>
-                ) : state.validation?.reasons && state.validation.reasons.length > 0 ? (
-                  <span className="mt-3 block text-sm font-normal text-amber-200/95 drop-shadow-md">
-                    {state.validation.reasons[0]}
-                  </span>
-                ) : null}
               </p>
+
+              {state.sessionState === 'Holding' &&
+              state.validation?.poseId === activePoseId ? (
+                <p
+                  className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] mx-auto max-w-lg -translate-y-1/2 px-5 text-center font-display text-2xl font-semibold leading-snug tracking-tight text-emerald-300 drop-shadow-[0_2px_20px_rgba(0,0,0,0.92)] sm:max-w-2xl sm:text-3xl"
+                  aria-live="polite"
+                >
+                  {i18n(language, { en: 'Hold still', fr: 'Ne bougez pas' })}
+                </p>
+              ) : null}
+
+              {state.sessionState !== 'Holding' &&
+              state.sessionState !== 'Capturing' &&
+              state.validation?.reasons &&
+              state.validation.reasons.length > 0 &&
+              activePoseId !== null &&
+              state.validation.poseId === activePoseId ? (
+                <p
+                  className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] mx-auto max-w-lg -translate-y-1/2 px-5 text-center font-display text-2xl font-semibold leading-snug tracking-tight text-amber-200/95 drop-shadow-[0_2px_20px_rgba(0,0,0,0.92)] sm:max-w-2xl sm:text-3xl"
+                  aria-live="polite"
+                >
+                  {state.validation.reasons[0]}
+                </p>
+              ) : null}
 
               {isAdmin ? (
                 <div className="pointer-events-none absolute left-3 top-3 z-30 rounded-lg border border-white/15 bg-black/55 px-3 py-2 font-mono text-[11px] leading-tight text-white/85 backdrop-blur-md sm:text-xs">
@@ -463,21 +525,11 @@ export function FaceCaptureView({
             )}
         </div>
 
-        <div
-          className="shrink-0 border-t px-4 py-5"
-          style={{
-            borderColor: 'hsl(0 0% 100% / 0.06)',
-            background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.6) 100%)',
-          }}
-        >
+        <div className="shrink-0 border-t border-black/10 bg-white px-4 py-5 shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.08)]">
           <button
             type="button"
             onClick={() => setCancelConfirmOpen(true)}
-            className="group flex w-full items-center justify-center gap-2 rounded-full border px-4 py-3 text-sm transition-all"
-            style={{
-              borderColor: 'hsl(0 0% 100% / 0.1)',
-              color: 'hsl(0 0% 100% / 0.5)',
-            }}
+            className="group flex w-full items-center justify-center gap-2 rounded-full border border-black/12 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm transition-all hover:bg-zinc-50"
           >
             <svg
               className="h-4 w-4 transition-transform group-hover:-translate-x-0.5"

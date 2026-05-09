@@ -5,7 +5,13 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { CaptureSession, type CapturedPose, type CaptureSessionState } from './CaptureSession';
-import type { HeadPose, PoseId, PoseSessionState, PoseValidation } from './types';
+import type {
+  CaptureSessionConfig,
+  HeadPose,
+  PoseId,
+  PoseSessionState,
+  PoseValidation,
+} from './types';
 
 /** Durée minimale de l’overlay « Initialisation caméra » (modèle + flux). */
 const FACE_CAPTURE_LOAD_MIN_MS = 1400;
@@ -37,9 +43,12 @@ export interface FaceCaptureControls {
 export function useFaceCapture(
   videoRef: React.RefObject<HTMLVideoElement>,
   overlayRef: React.RefObject<HTMLCanvasElement>,
+  captureConfig?: Partial<CaptureSessionConfig>,
 ): [FaceCaptureState, FaceCaptureControls] {
   const sessionRef = useRef<CaptureSession | null>(null);
   const initStarted = useRef(false);
+  const captureConfigRef = useRef(captureConfig);
+  captureConfigRef.current = captureConfig;
 
   const [state, setState] = useState<FaceCaptureState>({
     sessionState: 'idle',
@@ -68,6 +77,7 @@ export function useFaceCapture(
       headPose: session.getLastHeadPose(),
       faceInView: session.getFaceInView(),
       capturedCount: session.getCapturedCount(),
+      capturedPoses: [...session.getCapturedPoses()],
       activeCameraDeviceId: session.getActiveCameraDeviceId(),
       holdProgress: session.getHoldProgress(),
       transitionPoseId: session.getTransitionPoseId(),
@@ -87,12 +97,19 @@ export function useFaceCapture(
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-    const session = new CaptureSession();
+    const session = new CaptureSession(captureConfigRef.current ?? {});
     sessionRef.current = session;
 
     session.onEvent(event => {
-      if (event.type === 'session_complete') {
-        setState(prev => ({ ...prev, capturedPoses: event.results, isLoading: false }));
+      if (event.type === 'pose_captured' || event.type === 'shutter_started') {
+        syncState(session);
+      } else if (event.type === 'session_complete') {
+        syncState(session);
+        setState(prev => ({
+          ...prev,
+          capturedPoses: event.results,
+          isLoading: false,
+        }));
       } else if (event.type === 'session_error') {
         setState(prev => ({ ...prev, error: event.error.message, isLoading: false }));
       }
@@ -152,7 +169,7 @@ export function useFaceCapture(
   /** Throttle React updates: session internals refresh every frame; UI only needs ~20–30 Hz. */
   const lastUiSyncMs = useRef(-1);
   useEffect(() => {
-    const UI_SYNC_MS = 1000 / 24;
+    const UI_SYNC_MS = 1000 / 30;
     let rafId: number;
     const poll = (t: number) => {
       if (sessionRef.current) {

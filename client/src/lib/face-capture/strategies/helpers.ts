@@ -10,6 +10,38 @@ import { clamp01 } from "./PoseStrategy";
 export const SMILE_BLENDSHAPE_THRESHOLD = 0.42;
 
 /**
+ * Blendshapes `eyeBlinkLeft` / `eyeBlinkRight` (MediaPipe Face Landmarker, échelle 0..1).
+ * ~0 yeux ouverts, ↑ vers fermeture / clignement.
+ */
+export function eyeBlinkMax(blendshapes: Record<string, number>): number | null {
+  const l = blendshapes?.eyeBlinkLeft;
+  const r = blendshapes?.eyeBlinkRight;
+  const hasL = typeof l === "number";
+  const hasR = typeof r === "number";
+  if (!hasL && !hasR) return null;
+  return Math.max(hasL ? l! : 0, hasR ? r! : 0);
+}
+
+/**
+ * Hors hold : au-dessus on considère « en train de cligner » pour bloquer le statut ready.
+ * (Calibraison médiane téléphone ; marge sous un clignement complet ~0.7–1.)
+ */
+export const EYE_CLOSEUP_BLINK_READY_MAX = 0.32;
+
+/** Courbe blink → ouvert : palier plein puis décroissance jusqu'à 0. */
+const BLINK_SOFT = 0.08;
+const BLINK_HARD = 0.52;
+
+/** Score 1 = yeux bien ouverts, 0 = clignement franc. Blendshapes absents → 1 (pas de régression). */
+export function eyeNotBlinkingBlendScore(frame: { blendshapes: Record<string, number> }): number {
+  const m = eyeBlinkMax(frame.blendshapes);
+  if (m === null) return 1;
+  if (m <= BLINK_SOFT) return 1;
+  if (m >= BLINK_HARD) return 0;
+  return 1 - (m - BLINK_SOFT) / (BLINK_HARD - BLINK_SOFT);
+}
+
+/**
  * Smile score in [0, 1].
  *
  * Primary signal: MediaPipe FaceLandmarker blendshapes

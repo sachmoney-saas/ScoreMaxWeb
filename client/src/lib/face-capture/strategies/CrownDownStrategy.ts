@@ -14,7 +14,7 @@ export class CrownDownStrategy implements PoseStrategy {
     if (!inRange(frame.headPose.roll, pose.rollRange)) hints.push("Redressez la tête");
     if (!forehead) hints.push("Sommet du crâne non détecté");
     if (faceRatio(frame) < pose.minFaceRatio) hints.push("Rapprochez votre visage");
-    const progress = rangeProgress(frame.headPose.pitch, pose.pitchRange, 18);
+    const progress = rangeProgress(frame.headPose.pitch, pose.pitchRange, 20);
     return { ok: hints.length === 0, hints, progress };
   }
 }

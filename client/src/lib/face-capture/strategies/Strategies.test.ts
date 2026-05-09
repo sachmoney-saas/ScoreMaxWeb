@@ -50,6 +50,33 @@ function frameForPose(poseId: PoseId): FaceFrame {
   };
 }
 
+describe("closeup-eye blink behaviour", () => {
+  const strategy = POSE_STRATEGIES.find((s) => s.poseId === "closeup-eye")!;
+  const poseDef = CAPTURE_POSES.find((p) => p.id === "closeup-eye")!;
+
+  it("hints when blink is strong before hold", () => {
+    const frame = frameForPose("closeup-eye");
+    frame.landmarks = buildLandmarks();
+    frame.landmarks[234] = { x: 0.12, y: 0.5, z: 0, visibility: 1 };
+    frame.landmarks[454] = { x: 0.82, y: 0.5, z: 0, visibility: 1 };
+    frame.blendshapes = { eyeBlinkLeft: 0.72, eyeBlinkRight: 0.68 };
+    const result = strategy.evaluate(frame, poseDef, { holding: false });
+    expect(result.ok).toBe(false);
+    expect(result.hints.some((h) => h.includes("ouvert"))).toBe(true);
+  });
+
+  it("does not add blink hints during holding", () => {
+    const frame = frameForPose("closeup-eye");
+    frame.landmarks = buildLandmarks();
+    frame.landmarks[234] = { x: 0.12, y: 0.5, z: 0, visibility: 1 };
+    frame.landmarks[454] = { x: 0.82, y: 0.5, z: 0, visibility: 1 };
+    frame.blendshapes = { eyeBlinkLeft: 0.72, eyeBlinkRight: 0.68 };
+    const result = strategy.evaluate(frame, poseDef, { holding: true });
+    expect(result.hints.some((h) => h.includes("ouvert"))).toBe(false);
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe("pose strategies", () => {
   for (const strategy of POSE_STRATEGIES) {
     it(`evaluates ${strategy.poseId}`, () => {
