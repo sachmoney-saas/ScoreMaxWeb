@@ -1,72 +1,123 @@
 import * as React from "react";
-import { AlertTriangle } from "lucide-react";
+import { useQueries } from "@tanstack/react-query";
+import { Link, useSearch } from "wouter";
+import { AlertTriangle, ArrowUpRight } from "lucide-react";
 
 import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
 import { Card, CardContent } from "@/components/ui/card";
-import { RecommendationCard } from "@/components/analysis/recommendations/RecommendationCard";
+import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
 import { ProtocolHubNavTabs } from "@/components/protocol/ProtocolHubNavTabs";
 import {
   ProtocolPageShell,
   protocolPageTitleClassName,
 } from "@/components/protocol/ProtocolPageShell";
 import { cn } from "@/lib/utils";
-import { getWorkerDisplayLabel } from "@/lib/face-analysis-display";
 import { useAppLanguage, i18n, type AppLanguage } from "@/lib/i18n";
+import { analysisHistoryGlobalScoreSummary } from "@/lib/analysis-history-global-summary";
+import { buildAnalysisThumbnailUrl, type AnalysisHistoryItem } from "@/lib/face-analysis";
+import { buildAnalysisViewHref } from "@/lib/analysis-view-href";
+import { countUniqueSurfacedRecommendationsForHistoryJob } from "@/lib/critical-points";
 import {
-  type MatchedRecommendation,
-  type UserRecommendationEngagementItem,
-  useUserRecommendationEngagement,
-  type RecommendationActionStatus,
+  normaliseRecommendationRow,
+  type Recommendation,
 } from "@/lib/recommendations";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/use-auth";
+import { useAnalysisHistory } from "@/hooks/use-supabase";
 
-function toMatched(rec: UserRecommendationEngagementItem["recommendation"]): MatchedRecommendation {
-  return { ...rec, relevance: rec.priority };
+const recommendationsPageTitleI18n = {
+  en: "Recommendations",
+  fr: "Recommandations",
+} as const;
+
+function formatHistoryDate(iso: string, language: AppLanguage): string {
+  return new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
-function statusLabel(status: RecommendationActionStatus, language: AppLanguage): string {
-  const map: Record<RecommendationActionStatus, { en: string; fr: string }> = {
-    saved: { en: "In protocol", fr: "Dans le protocole" },
-    dismissed: { en: "Dismissed", fr: "Masquée" },
-    in_progress: { en: "In progress", fr: "En cours" },
-    done: { en: "Done", fr: "Terminée" },
-  };
-  return i18n(language, map[status]);
+function analysisJobSortKey(a: AnalysisHistoryItem): number {
+  const t = a.completed_at ?? a.created_at;
+  return new Date(t).getTime();
 }
 
 export default function ProtocolRecommendationsPage() {
   const language = useAppLanguage();
-  const engagement = useUserRecommendationEngagement();
+  const { user } = useAuth();
+  const search = useSearch();
+  const userId = user?.id ?? null;
 
-  const byWorker = React.useMemo(() => {
-    const items = engagement.data ?? [];
-    const m = new Map<string, UserRecommendationEngagementItem[]>();
-    for (const row of items) {
-      const w = row.action.worker;
-      const bucket = m.get(w) ?? [];
-      bucket.push(row);
-      m.set(w, bucket);
+  const historyQuery = useAnalysisHistory({ enabled: !!userId });
+
+  const completedAnalyses = React.useMemo(() => {
+    const rows = historyQuery.data ?? [];
+    return rows
+      .filter(
+        (a) =>
+          a.status === "completed" &&
+          Array.isArray(a.results) &&
+          a.results.length > 0,
+      )
+      .sort((a, b) => analysisJobSortKey(b) - analysisJobSortKey(a));
+  }, [historyQuery.data]);
+
+  const unionWorkers = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const a of completedAnalyses) {
+      for (const r of a.results) s.add(r.worker);
     }
-    return Array.from(m.entries()).sort((a, b) =>
-      getWorkerDisplayLabel(a[0]).localeCompare(getWorkerDisplayLabel(b[0]), "fr", {
-        sensitivity: "base",
-      }),
-    );
-  }, [engagement.data]);
+    return Array.from(s);
+  }, [completedAnalyses]);
 
-  if (engagement.isLoading) {
+  const recQueries = useQueries({
+    queries: unionWorkers.map((worker) => ({
+      queryKey: ["recommendations", worker],
+      queryFn: async (): Promise<Recommendation[]> => {
+        const { data, error } = await supabase
+          .from("scoremax_recommendations")
+          .select("*")
+          .eq("worker", worker)
+          .eq("enabled", true)
+          .order("priority", { ascending: false });
+        if (error) throw error;
+        return (data ?? []).map(normaliseRecommendationRow);
+      },
+      staleTime: 1000 * 60 * 30,
+    })),
+  });
+
+  const recDataSignature = recQueries.map((q) => q.dataUpdatedAt ?? 0).join("|");
+
+  const recommendationsByWorker = React.useMemo(() => {
+    const m = new Map<string, Recommendation[]>();
+    unionWorkers.forEach((w, i) => {
+      m.set(w, recQueries[i]?.data ?? []);
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unionWorkers.join("|"), recDataSignature]);
+
+  const recsLoading = recQueries.some((q) => q.isLoading);
+  const recFirstError = recQueries.find((q) => q.error)?.error as Error | undefined;
+
+  const isLoading = historyQuery.isLoading || (unionWorkers.length > 0 && recsLoading);
+  const loadError = historyQuery.error ?? recFirstError;
+
+  if (isLoading) {
     const loadingLabel = i18n(language, {
-      en: "Loading your recommendations…",
-      fr: "Chargement de tes recommandations…",
+      en: "Loading…",
+      fr: "Chargement…",
     });
     return (
       <ProtocolPageShell
         topNav={<ProtocolHubNavTabs language={language} active="recommendations" />}
         header={
           <h1 className={cn(protocolPageTitleClassName, "text-center")}>
-            {i18n(language, {
-              en: "Recommendation history",
-              fr: "Historique des recommandations",
-            })}
+            {i18n(language, recommendationsPageTitleI18n)}
           </h1>
         }
       >
@@ -84,16 +135,13 @@ export default function ProtocolRecommendationsPage() {
     );
   }
 
-  if (engagement.error) {
+  if (loadError) {
     return (
       <ProtocolPageShell
         topNav={<ProtocolHubNavTabs language={language} active="recommendations" />}
         header={
           <h1 className={cn(protocolPageTitleClassName, "text-center")}>
-            {i18n(language, {
-              en: "Recommendation history",
-              fr: "Historique des recommandations",
-            })}
+            {i18n(language, recommendationsPageTitleI18n)}
           </h1>
         }
       >
@@ -103,11 +151,11 @@ export default function ProtocolRecommendationsPage() {
             <div>
               <p className="font-semibold text-rose-900">
                 {i18n(language, {
-                  en: "Couldn't load recommendation history.",
-                  fr: "Impossible de charger l’historique des recommandations.",
+                  en: "Couldn't load data.",
+                  fr: "Impossible de charger les données.",
                 })}
               </p>
-              <p className="mt-1 text-xs text-rose-800/90">{(engagement.error as Error).message}</p>
+              <p className="mt-1 text-xs text-rose-800/90">{(loadError as Error).message}</p>
             </div>
           </CardContent>
         </Card>
@@ -115,82 +163,124 @@ export default function ProtocolRecommendationsPage() {
     );
   }
 
-  const empty = byWorker.length === 0;
+  const locale = language === "fr" ? "fr" : "en";
+  const empty = completedAnalyses.length === 0;
 
   return (
     <ProtocolPageShell
       topNav={<ProtocolHubNavTabs language={language} active="recommendations" />}
       header={
         <h1 className={cn(protocolPageTitleClassName, "text-center")}>
-          {i18n(language, {
-            en: "Recommendation history",
-            fr: "Historique des recommandations",
-          })}
+          {i18n(language, recommendationsPageTitleI18n)}
         </h1>
       }
     >
-      <div className="space-y-8">
-        <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-zinc-400">
-          {i18n(language, {
-            en: "Every recommendation you touched from past analyses — saved, dismissed or in progress — is listed here by area. This is not the per-analysis tab; it’s your account-wide log.",
-            fr: "Chaque recommandation avec laquelle tu as interagi depuis tes analyses — enregistrée, masquée ou en cours — apparaît ici, par zone du visage. Ce n’est pas l’onglet d’une analyse précise : c’est la vue globale de ton compte.",
-          })}
-        </p>
-
+      <div className="space-y-5">
         {empty ? (
           <Card className="border-white/12 bg-white/[0.06] text-zinc-100 shadow-none">
             <CardContent className="space-y-2 p-6 text-center text-sm text-zinc-300">
               <p className="font-display text-lg font-semibold text-white">
                 {i18n(language, {
-                  en: "Nothing here yet",
-                  fr: "Rien pour l’instant",
+                  en: "No completed analysis yet",
+                  fr: "Aucune analyse terminée",
                 })}
               </p>
               <p className="text-zinc-400">
                 {i18n(language, {
-                  en: "Open any completed analysis → Recommendations to match cards to your scores. Actions you take there will show up on this page.",
-                  fr: "Ouvre une analyse terminée → onglet Recommandations pour voir les fiches selon tes scores. Dès que tu interagis avec une fiche, elle apparaît ici.",
+                  en: "When you have a finished analysis, it will appear here. Tap to open it on the Recommendations tab.",
+                  fr: "Dès qu’une analyse est terminée, elle apparaît ici. Touche pour l’ouvrir sur l’onglet Recommandations.",
                 })}
               </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-10">
-            {byWorker.map(([worker, rows]) => (
-              <section key={worker} className="space-y-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-white/10 pb-3">
-                  <h2 className="font-display text-lg font-bold tracking-tight text-white">
-                    {getWorkerDisplayLabel(worker)}
-                  </h2>
-                  <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                    {rows.length}{" "}
-                    {rows.length === 1
-                      ? i18n(language, { en: "item", fr: "élément" })
-                      : i18n(language, { en: "items", fr: "éléments" })}
-                  </span>
-                </div>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {rows.map((entry: UserRecommendationEngagementItem) => {
-                    const { action, recommendation } = entry;
-                    return (
-                    <div key={action.id} className="space-y-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                        {statusLabel(action.status, language)}
-                      </p>
-                      <RecommendationCard
-                        rec={toMatched(recommendation)}
-                        worker={worker}
-                        aggregates={{}}
-                        language={language}
-                        action={action}
-                        hideReason
-                      />
-                    </div>
-                  );
+          <div className="flex flex-col gap-3">
+            {completedAnalyses.map((analysis) => {
+              const href = buildAnalysisViewHref(analysis.id, search, "recommendations");
+              const { score0to100, rankTitle } = analysisHistoryGlobalScoreSummary(
+                analysis.results,
+              );
+              const dateIso = analysis.completed_at ?? analysis.created_at;
+              const dateLabel = formatHistoryDate(dateIso, language);
+              const recCount = countUniqueSurfacedRecommendationsForHistoryJob({
+                results: analysis.results,
+                recommendationsByWorker,
+                locale,
+              });
+              const recLabel =
+                recCount === 1
+                  ? i18n(language, {
+                      en: "1 recommendation offered",
+                      fr: "1 recommandation proposée",
+                    })
+                  : i18n(language, {
+                      en: `${recCount} recommendations offered`,
+                      fr: `${recCount} recommandations proposées`,
+                    });
+
+              return (
+                <Link
+                  key={analysis.id}
+                  href={href}
+                  aria-label={i18n(language, {
+                    en: `Open analysis from ${dateLabel}: ${rankTitle ?? "Recommendations tab"}`,
+                    fr: `Ouvrir l'analyse du ${dateLabel} : ${rankTitle ?? "onglet Recommandations"}`,
                   })}
-                </div>
-              </section>
-            ))}
+                  className={cn(
+                    "group flex flex-wrap items-center gap-4 rounded-xl border border-white/12 bg-white/[0.055] px-4 py-4 transition",
+                    "hover:border-white/22 hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
+                  )}
+                >
+                  <div className="relative h-[4.75rem] w-[4.75rem] shrink-0 overflow-hidden rounded-lg border border-white/12 bg-black/25">
+                    {analysis.has_thumbnail && userId ? (
+                      <img
+                        src={buildAnalysisThumbnailUrl({
+                          userId,
+                          jobId: analysis.id,
+                        })}
+                        alt=""
+                        className="h-full w-full object-cover [transform:scaleX(-1)]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-zinc-500">
+                        —
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p className="font-display text-sm font-semibold leading-snug text-zinc-100 line-clamp-2">
+                      {rankTitle ??
+                        i18n(language, { en: "Analysis", fr: "Analyse" })}
+                    </p>
+                    <p className="text-xs tabular-nums text-zinc-300">{dateLabel}</p>
+                    <p className="text-base font-semibold leading-snug text-red-500 sm:text-[1.0625rem]">
+                      {recLabel}
+                    </p>
+                  </div>
+
+                  <div className="ml-auto flex shrink-0 items-center gap-3">
+                    {score0to100 !== null ? (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <MiniRing
+                          score={score0to100}
+                          scale={100}
+                          size={52}
+                          fractionDigits={1}
+                        />
+                        <span className="text-[10px] font-medium tabular-nums text-zinc-500">
+                          {score0to100.toFixed(1)}/100
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-zinc-500">—</span>
+                    )}
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-500 opacity-70 transition group-hover:opacity-100 group-hover:text-zinc-200" />
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
 

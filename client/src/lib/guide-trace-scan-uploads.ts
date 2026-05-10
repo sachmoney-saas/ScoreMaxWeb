@@ -63,6 +63,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           },
         });
       }
+      if (pose.annotatedFaceShapeContourGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
+          fileLabel: "face-shape-contour",
+          blob: pose.annotatedFaceShapeContourGuideBlob,
+        });
+      }
       break;
     case "profile-left":
       if (pose.annotatedProfileJawGuideBlob) {
@@ -72,6 +79,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           blob: pose.annotatedProfileJawGuideBlob,
         });
       }
+      if (pose.annotatedProfileNoseGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_PROFILE_LEFT_NOSE",
+          fileLabel: "profile-nose",
+          blob: pose.annotatedProfileNoseGuideBlob,
+        });
+      }
       break;
     case "profile-right":
       if (pose.annotatedProfileJawGuideBlob) {
@@ -79,6 +93,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           assetTypeCode: "GUIDE_TRACE_PROFILE_RIGHT_JAW",
           fileLabel: "profile-jaw",
           blob: pose.annotatedProfileJawGuideBlob,
+        });
+      }
+      if (pose.annotatedProfileNoseGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_PROFILE_RIGHT_NOSE",
+          fileLabel: "profile-nose",
+          blob: pose.annotatedProfileNoseGuideBlob,
         });
       }
       break;
@@ -106,6 +127,15 @@ export function guideTraceBlobUploadsFromCapturedPose(
           assetTypeCode: "GUIDE_TRACE_SMILE_LIPS",
           fileLabel: "smile-lips",
           blob: pose.annotatedSmileLipsGuideBlob,
+        });
+      }
+      break;
+    case "closeup-eye":
+      if (pose.annotatedCloseupEyeContoursGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
+          fileLabel: "eye-contours",
+          blob: pose.annotatedCloseupEyeContoursGuideBlob,
         });
       }
       break;

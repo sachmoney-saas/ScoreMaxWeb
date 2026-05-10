@@ -50,6 +50,12 @@ const latestAnalysisQuerySchema = z.object({
   userId: z.string().min(1),
 });
 
+/** Prévisualisation d’un scan lié au job (ex. gros plan œil, repère tiers verticaux). */
+const analysisJobAssetQuerySchema = z.object({
+  userId: z.string().min(1),
+  assetTypeCode: z.enum(["EYE_CLOSEUP", "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS"]),
+});
+
 const analysisJobParamsSchema = z.object({
   jobId: z.string().uuid(),
 });
@@ -718,6 +724,90 @@ export function createV1AnalysesRouter(): Router {
             code: "IMAGE_NOT_FOUND",
             status: 404,
             message: "Analysis thumbnail not found",
+            details: downloadError,
+          });
+        }
+
+        const arrayBuffer = await image.arrayBuffer();
+        res.setHeader("Content-Type", asset.mime_type);
+        res.setHeader("Cache-Control", "private, max-age=120");
+        res.status(200).send(Buffer.from(arrayBuffer));
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    "/analyses/:jobId/asset",
+    validateQuery(analysisJobAssetQuerySchema),
+    async (req, res, next) => {
+      try {
+        const params = analysisJobParamsSchema.parse(req.params);
+        const { userId, assetTypeCode } =
+          req.query as z.infer<typeof analysisJobAssetQuerySchema>;
+
+        const { data: job, error: jobError } = await supabaseAdmin
+          .from("analysis_jobs")
+          .select("id")
+          .eq("id", params.jobId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (jobError || !job) {
+          throw new ApiError({
+            code: "IMAGE_NOT_FOUND",
+            status: 404,
+            message: "Analysis asset not found",
+            details: jobError,
+          });
+        }
+
+        const { data: jobAsset, error: jobAssetError } = await supabaseAdmin
+          .from("analysis_job_assets")
+          .select("scan_asset_id")
+          .eq("analysis_job_id", params.jobId)
+          .eq("user_id", userId)
+          .eq("asset_type_code", assetTypeCode)
+          .maybeSingle();
+
+        if (jobAssetError || !jobAsset) {
+          throw new ApiError({
+            code: "IMAGE_NOT_FOUND",
+            status: 404,
+            message: "Analysis asset not found",
+            details: jobAssetError,
+          });
+        }
+
+        const { data: scanAsset, error: scanAssetError } = await supabaseAdmin
+          .from("scan_assets")
+          .select("id, r2_bucket, r2_key, mime_type")
+          .eq("id", jobAsset.scan_asset_id)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (scanAssetError || !scanAsset) {
+          throw new ApiError({
+            code: "IMAGE_NOT_FOUND",
+            status: 404,
+            message: "Analysis asset not found",
+            details: scanAssetError,
+          });
+        }
+
+        const asset = scanAsset as ScanAssetThumbnailRow;
+        let image: Blob;
+        try {
+          image = await downloadR2Object({
+            bucket: asset.r2_bucket || getDefaultR2Bucket(),
+            key: asset.r2_key,
+          });
+        } catch (downloadError) {
+          throw new ApiError({
+            code: "IMAGE_NOT_FOUND",
+            status: 404,
+            message: "Analysis asset not found",
             details: downloadError,
           });
         }

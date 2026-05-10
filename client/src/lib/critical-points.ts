@@ -265,3 +265,44 @@ export function buildCriticalPoints(
     workersAwaitingContent,
   };
 }
+
+function aggregatesFromPersistedWorkerResult(
+  result: Record<string, unknown>,
+): Record<string, unknown> {
+  if (isRecord(result.outputAggregates)) return result.outputAggregates;
+  return {};
+}
+
+/**
+ * Unique editorial recommendations « offered » for one analysis job (critical
+ * cards + orphans) — same aggregation as the analysis Recommendations tab.
+ */
+export function countUniqueSurfacedRecommendationsForHistoryJob(props: {
+  results: Array<{ worker: string; result: Record<string, unknown> }>;
+  recommendationsByWorker: Map<string, Recommendation[]>;
+  locale?: "fr" | "en";
+}): number {
+  const locale = props.locale ?? "fr";
+  const inputs: BuildCriticalPointsInput[] = props.results.map((row) => ({
+    worker: row.worker,
+    aggregates: aggregatesFromPersistedWorkerResult(row.result),
+    recommendations: props.recommendationsByWorker.get(row.worker) ?? [],
+  }));
+  const { workerGroupsOrdered, orphans } = buildCriticalPoints(inputs, {
+    locale,
+  });
+  const ids = new Set<string>();
+  for (const group of workerGroupsOrdered) {
+    for (const cp of group.criticalPoints) {
+      for (const rec of cp.matchedRecommendations) {
+        ids.add(rec.id);
+      }
+    }
+  }
+  for (const group of orphans) {
+    for (const rec of group.recommendations) {
+      ids.add(rec.id);
+    }
+  }
+  return ids.size;
+}

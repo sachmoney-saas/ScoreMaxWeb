@@ -486,6 +486,22 @@ export function buildAnalysisThumbnailUrl(params: {
   return `/v1/analyses/${params.jobId}/thumbnail?userId=${encodeURIComponent(params.userId)}`;
 }
 
+export type AnalysisJobAssetPreviewCode =
+  | "EYE_CLOSEUP"
+  | "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS";
+
+export function buildAnalysisJobAssetPreviewUrl(params: {
+  userId: string;
+  jobId: string;
+  assetTypeCode: AnalysisJobAssetPreviewCode;
+}): string {
+  const q = new URLSearchParams({
+    userId: params.userId,
+    assetTypeCode: params.assetTypeCode,
+  });
+  return `/v1/analyses/${params.jobId}/asset?${q.toString()}`;
+}
+
 export async function fetchLatestFaceAnalysis(
   userId: string,
 ): Promise<LatestAnalysisResponse | null> {

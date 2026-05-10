@@ -6,10 +6,9 @@ import {
   useDeleteAnalysisJob,
   useSubscriberStandardAnalysisQuota,
 } from "@/hooks/use-supabase";
+import { analysisHistoryGlobalScoreSummary } from "@/lib/analysis-history-global-summary";
 import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
 import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
-import { calculateGlobalFaceScore } from "@/lib/face-analysis-score";
-import { getScoreRank } from "@/lib/global-score-tiers";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
@@ -78,36 +77,6 @@ type SidebarNavItem = {
   icon: React.ComponentType<{ className?: string }>;
   isActive: (location: string) => boolean;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getHistoryGlobalScoreSummary(
-  results: Array<{ worker: string; result: Record<string, unknown> }>,
-): { score0to100: number | null; rankTitle: string | null } {
-  const global = calculateGlobalFaceScore(
-    results.map((row) => {
-      const outputAggregates = isRecord(row.result.outputAggregates)
-        ? row.result.outputAggregates
-        : {};
-
-      return {
-        worker: row.worker,
-        outputAggregates,
-      };
-    }),
-  );
-
-  if (!global) {
-    return { score0to100: null, rankTitle: null };
-  }
-
-  return {
-    score0to100: global.score,
-    rankTitle: getScoreRank(global.score).title,
-  };
-}
 
 function formatAnalysisHistoryDate(value: string): string {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -186,15 +155,7 @@ function ModernAppSidebar() {
     if (!latest) {
       return null;
     }
-    const inputs = latest.results.map((row) => {
-      const result = row.result as Record<string, unknown>;
-      const outputAggregates = isRecord(result.outputAggregates)
-        ? result.outputAggregates
-        : {};
-      return { worker: row.worker, outputAggregates };
-    });
-    const global = calculateGlobalFaceScore(inputs);
-    return global ? getScoreRank(global.score).title : null;
+    return analysisHistoryGlobalScoreSummary(latest.results).rankTitle;
   }, [analysisHistory]);
 
   const adminItems: SidebarNavItem[] = isAdmin
@@ -457,9 +418,8 @@ function ModernAppSidebar() {
 
               {analysisHistory.map((analysis) => {
                 const isAnalysisLoading = analysis.status === "queued" || analysis.status === "running";
-                const { score0to100, rankTitle } = getHistoryGlobalScoreSummary(
-                  analysis.results,
-                );
+                const { score0to100, rankTitle } =
+                  analysisHistoryGlobalScoreSummary(analysis.results);
                 const dateLabel = formatAnalysisHistoryDate(
                   analysis.completed_at ?? analysis.created_at,
                 );

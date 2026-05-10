@@ -18,6 +18,9 @@ import {
   buildAggregateDisplayEntries,
   getWorkerDisplayLabel,
 } from "@/lib/face-analysis-display";
+import {
+  buildAnalysisJobAssetPreviewUrl,
+} from "@/lib/face-analysis";
 import { workerAggregatesHaveDisplayableOutput } from "@/lib/face-analysis-score";
 import { useAppLanguage } from "@/lib/i18n";
 import { ColoringWorkerView } from "@/components/analysis/workers/ColoringWorkerView";
@@ -99,7 +102,7 @@ export default function WorkerDetails() {
   const params = useParams<{ jobId: string; worker: string }>();
   const worker = params.worker ? decodeURIComponent(params.worker) : "";
   const language = useAppLanguage();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const [adminPayloadOpen, setAdminPayloadOpen] = React.useState(false);
   const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId);
@@ -262,6 +265,22 @@ export default function WorkerDetails() {
         cardClassName: analysisSurfaceCardClassName,
         heroAside: dedicatedWorker ? adminHeroAside : undefined,
         captureGuideMetrics: analysis?.capture_guide_metrics,
+        eyeCloseupAssetSrc:
+          worker === "eye_brows" && analysis && user?.id
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: user.id,
+                assetTypeCode: "EYE_CLOSEUP",
+              })
+            : null,
+        verticalThirdsAssetSrc:
+          worker === "symmetry_shape" && analysis && user?.id
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: user.id,
+                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
+              })
+            : null,
       })}
 
       {entries.length > 0 ? (
@@ -283,6 +302,8 @@ function renderWorkerBody({
   cardClassName,
   heroAside,
   captureGuideMetrics,
+  eyeCloseupAssetSrc,
+  verticalThirdsAssetSrc,
 }: {
   worker: string;
   outputAggregates: Record<string, unknown>;
@@ -291,15 +312,31 @@ function renderWorkerBody({
   cardClassName: string;
   heroAside?: React.ReactNode;
   captureGuideMetrics?: GuideTraceMetricsForAnalysis | null;
+  eyeCloseupAssetSrc?: string | null;
+  verticalThirdsAssetSrc?: string | null;
 }): React.ReactNode {
   switch (worker) {
     case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "coloring":      return <ColoringWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "skin":          return <SkinWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "bodyfat":       return <BodyfatWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
-    case "symmetry_shape": return <SymmetryShapeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "symmetry_shape": return (
+      <SymmetryShapeWorkerView
+        aggregates={outputAggregates}
+        language={language}
+        heroAside={heroAside}
+        verticalThirdsAssetSrc={verticalThirdsAssetSrc}
+      />
+    );
     case "jaw":           return <JawWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} captureGuideMetrics={captureGuideMetrics} />;
-    case "eye_brows":     return <EyeBrowsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "eye_brows":     return (
+      <EyeBrowsWorkerView
+        aggregates={outputAggregates}
+        language={language}
+        heroAside={heroAside}
+        eyeCloseupAssetSrc={eyeCloseupAssetSrc}
+      />
+    );
     case "eyes":          return <EyesWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "nose":          return <NoseWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} captureGuideMetrics={captureGuideMetrics} />;

@@ -31,8 +31,8 @@ export interface ProtocolBreakdown {
   /** Items grouped per slot (only slots with at least 1 item are present). */
   bySlot: Map<ProtocolSlot, ProtocolItem[]>;
   /**
-   * Items with no slot at all and a `duration_value` set — surfaced under
-   * "Active cures" with their elapsed/remaining time computed.
+   * Items with no slot at all and a `duration_value` set — rendered in the
+   * Routine daily block with elapsed / remaining progress (formerly a separate cures section).
    */
   cures: ProtocolCure[];
   /**

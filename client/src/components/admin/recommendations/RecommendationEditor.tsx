@@ -142,7 +142,7 @@ function buildSemanticWarnings(form: FormState): string[] {
     form.category !== "device_clinical"
   ) {
     w.push(
-      "Aucun créneau ni durée : la reco n'apparaîtra ni dans la routine ni dans les cures actives.",
+      "Aucun créneau ni durée : la reco n'apparaîtra pas dans le bloc Routine.",
     );
   }
   if (form.duration_unit === "permanent" && slotsLen === 0) {

@@ -1,10 +1,14 @@
 import * as React from "react";
 import {
+  buildAnalysisJobAssetPreviewUrl,
+} from "@/lib/face-analysis";
+import {
   type FaceAnalysisLocale,
   formatAggregateDisplayLabel,
   formatAggregateDisplayValue,
 } from "@/lib/face-analysis-display";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import {
   calculateWorkerFaceScore,
   computeMeanLeafScores10,
@@ -20,12 +24,37 @@ import {
   WorkerSignatureRadar,
   type WorkerSignatureRadarPoint,
 } from "./workers/WorkerVisualizations";
+import { EyebrowBoldFeminineMatrix } from "./workers/EyebrowBoldFeminineMatrix";
+import {
+  eyebrowArchScoreForMatrix,
+  normalizeBrowShape,
+} from "./workers/eyebrowShapeNormalize";
 import {
   getEnum,
   getNumber,
   getScore,
   getString,
 } from "./workers/_shared";
+import { AnalysisJobAssetPreviewThumb } from "./workers/AnalysisJobAssetPreviewThumb";
+
+export const AnalysisJobScanPreviewContext = React.createContext<{
+  jobId: string;
+  userId: string;
+} | null>(null);
+
+export function AnalysisJobScanPreviewProvider({
+  value,
+  children,
+}: {
+  value: { jobId: string; userId: string } | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <AnalysisJobScanPreviewContext.Provider value={value}>
+      {children}
+    </AnalysisJobScanPreviewContext.Provider>
+  );
+}
 
 /* ============================================================================
  * Mini building blocks
@@ -925,21 +954,16 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
 
 /* -------------------------------- Symmetry & shape -------------------------------- */
 
-const FACE_SHAPE_PATHS: Record<string, string> = {
-  oval: "M50 6 C70 6 78 26 78 56 C78 90 65 114 50 114 C35 114 22 90 22 56 C22 26 30 6 50 6 Z",
-  round:
-    "M50 8 C76 8 86 36 86 60 C86 92 70 112 50 112 C30 112 14 92 14 60 C14 36 24 8 50 8 Z",
-  square:
-    "M28 14 L72 14 C78 14 80 30 80 44 L80 84 C80 100 76 110 60 110 L40 110 C24 110 20 100 20 84 L20 44 C20 30 22 14 28 14 Z",
-  heart:
-    "M22 16 C32 8 68 8 78 16 C84 30 78 56 68 78 C58 100 54 114 50 114 C46 114 42 100 32 78 C22 56 16 30 22 16 Z",
-  diamond:
-    "M50 6 L60 28 C70 38 84 50 84 60 C84 80 68 100 56 110 L50 114 L44 110 C32 100 16 80 16 60 C16 50 30 38 40 28 L50 6 Z",
-  oblong:
-    "M50 4 C72 4 78 30 78 64 C78 100 66 116 50 116 C34 116 22 100 22 64 C22 30 28 4 50 4 Z",
-};
-
 function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
+  const previewJob = React.useContext(AnalysisJobScanPreviewContext);
+  const verticalThirdsGuideSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
+        })
+      : null;
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const overallNested = getScore(
     aggregates,
@@ -956,13 +980,6 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
     "face_shape.overall_shape",
     "face_shape.shape",
   );
-  const shapeKey = normalizeKey(shapeEnum.value);
-  const shapePath =
-    shapeKey && FACE_SHAPE_PATHS[shapeKey]
-      ? FACE_SHAPE_PATHS[shapeKey]
-      : shapeKey === "long" || shapeKey === "rectangle"
-        ? FACE_SHAPE_PATHS.oblong
-        : null;
   const shapeDisplay = shapeEnum.value
     ? formatAggregateDisplayValue(
         "symmetry_shape",
@@ -978,7 +995,7 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
 
   return (
     <div className="space-y-3">
-      <div className={PREVIEW_HERO}>
+      <div className={`${PREVIEW_HERO} sm:flex-row sm:items-center sm:justify-center sm:gap-5`}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Face shape", fr: "Forme du visage" })}
@@ -994,20 +1011,15 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        {shapePath ? (
-          <svg
-            viewBox="0 0 100 120"
-            className="mx-auto h-20 w-16 shrink-0"
-            aria-hidden="true"
-          >
-            <path
-              d={shapePath}
-              fill="rgba(233,241,244,0.85)"
-              stroke="rgba(255,255,255,0.55)"
-              strokeWidth="1.4"
-            />
-          </svg>
-        ) : null}
+        <AnalysisJobAssetPreviewThumb
+          src={verticalThirdsGuideSrc}
+          alt={i18n(language, {
+            en: "Front-face scan overlay: vertical-thirds guide lines",
+            fr: "Repère tiers verticaux sur ton visage (prise frontale)",
+          })}
+          className="h-28 w-[5.25rem] shrink-0"
+          imgClassName="object-cover"
+        />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <MiniBar
@@ -1131,10 +1143,6 @@ function JawPreview({ aggregates, language }: PreviewProps) {
 function BrowsPreview({ aggregates, language }: PreviewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const overall = getScore(aggregates, "global_score.overall_brow_score");
-  const elevation = getScore(
-    aggregates,
-    "placement_and_symmetry.eyebrow_elevation",
-  );
   const symmetry = getScore(
     aggregates,
     "placement_and_symmetry.eyebrow_symmetry",
@@ -1143,8 +1151,14 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
     aggregates,
     "density_grooming_and_glabella.eyebrow_density",
   );
+  const thickness = getScore(
+    aggregates,
+    "density_grooming_and_glabella.eyebrow_thickness",
+  );
   const shapeEnum = getEnum(aggregates, "geometry_and_shape.eyebrow_shape");
   const tiltEnum = getEnum(aggregates, "geometry_and_shape.eyebrow_tilt");
+  const shapeKey = normalizeBrowShape(shapeEnum.value);
+  const archScore = eyebrowArchScoreForMatrix(shapeKey);
   const shapeDisplay =
     shapeEnum.value && !isUnknownEnumValue(shapeEnum.value)
       ? formatAggregateDisplayValue(
@@ -1165,7 +1179,7 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
       : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className={PREVIEW_HERO}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
@@ -1180,26 +1194,15 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
-        <svg
-          viewBox="0 0 100 30"
-          className="mx-auto h-12 w-24 shrink-0"
-          aria-hidden="true"
-        >
-          <path
-            d="M5 22 Q 25 8 48 18"
-            stroke="#e9f1f4"
-            strokeWidth="3"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <path
-            d="M52 18 Q 75 8 95 22"
-            stroke="#e9f1f4"
-            strokeWidth="3"
-            strokeLinecap="round"
-            fill="none"
-          />
-        </svg>
+      </div>
+      <div className="flex w-full justify-center">
+        <EyebrowBoldFeminineMatrix
+          thickness={thickness.score}
+          density={density.score}
+          archScore={archScore}
+          language={language}
+          compact
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         {shapeDisplay ? (
@@ -1214,20 +1217,6 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
             value={tiltDisplay}
           />
         ) : null}
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <MiniBar
-          label={i18n(language, { en: "Symmetry", fr: "Symétrie" })}
-          score={symmetry.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Density", fr: "Densité" })}
-          score={density.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Elevation", fr: "Hauteur" })}
-          score={elevation.score}
-        />
       </div>
     </div>
   );

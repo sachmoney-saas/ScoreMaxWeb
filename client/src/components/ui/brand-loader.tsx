@@ -67,18 +67,22 @@ export function BrandLoader({
       >
         <span
           className={cn(
-            "pointer-events-none absolute inset-0 animate-spin rounded-full border-2 duration-[1.35s] motion-reduce:animate-none",
+            "pointer-events-none absolute inset-0 animate-spin rounded-full border-2 motion-reduce:animate-none",
             t.outer,
           )}
-          style={{ animationTimingFunction: "cubic-bezier(0.55, 0.2, 0.35, 0.9)" }}
+          style={{
+            animationDuration: "1.35s",
+            animationTimingFunction: "cubic-bezier(0.55, 0.2, 0.35, 0.9)",
+          }}
         />
         <span
           className={cn(
-            "pointer-events-none absolute animate-spin rounded-full border duration-[2.1s] motion-reduce:animate-none",
+            "pointer-events-none absolute animate-spin rounded-full border motion-reduce:animate-none",
             ringInnerMap[size],
             t.inner,
           )}
           style={{
+            animationDuration: "2.1s",
             animationDirection: "reverse",
             animationTimingFunction: "cubic-bezier(0.45, 0.05, 0.55, 0.95)",
           }}

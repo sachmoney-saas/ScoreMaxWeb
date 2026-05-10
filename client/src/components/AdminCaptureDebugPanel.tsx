@@ -8,11 +8,13 @@ import type { LandmarkPoint, PoseId } from '@/lib/face-capture/types';
 import { MaskRenderer } from '@/lib/face-capture/MaskRenderer';
 import { DEBUG_CAPTURE_WHITE_FACE_MESH } from '@/lib/face-capture/capture-render-debug';
 import {
+  drawAdminFaceShapeContourGuideOnCanvas,
   drawAdminFrontalJawAngleGuidelinesOnCanvas,
   drawAdminJawUpLowerArcGuideOnCanvas,
   drawAdminNoseMouthWidthGuidelinesOnCanvas,
   drawAdminOrientationGuidelinesOnCanvas,
   drawAdminProfileJawGuideOnCanvas,
+  drawAdminProfileNoseGuideOnCanvas,
   drawAdminSmileLipsGuideOnCanvas,
   drawAdminVerticalThirdsGuidelinesOnCanvas,
   mirrorLandmarksNormalizedX,
@@ -129,7 +131,7 @@ function isCloseupHairlinePoseId(id: PoseId): boolean {
   return id === 'closeup-hairline';
 }
 
-/** Gros plan œil / hairline : pas de PNG aplati — miniature JPEG d’analyse uniquement (sans masque). */
+/** Gros plan œil sans PNG encore / hairline : miniature JPEG d’analyse uniquement (sans masque). */
 function JpegThumbnailOnlyAdminPreview({
   payload,
   language,
@@ -143,8 +145,9 @@ function JpegThumbnailOnlyAdminPreview({
       <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
         {eye
           ? i18n(language, {
-              en: 'Eye closeup — analysis JPEG only (no admin flat PNG, no mask overlay)',
-              fr: 'Gros plan œil — JPEG d’analyse uniquement (pas de PNG aplati admin, pas de masque)',
+              en: 'Eye close-up — analysis JPEG only (eye-contour PNG unavailable for this capture)',
+              fr:
+                'Gros plan œil — JPEG d’analyse seul (PNG contours indisponible pour cette capture)',
             })
           : i18n(language, {
               en: 'Hairline closeup — analysis JPEG only (no admin flat PNG, no mask overlay)',
@@ -189,8 +192,10 @@ function CanvasFallbackProfileJaw({
       const guide = guideRef.current;
       if (!photo || !mask || !guide) return;
       renderer?.dispose();
-      const drawer: GuideDrawer = (ctx, lm, ow, oh) =>
+      const drawer: GuideDrawer = (ctx, lm, ow, oh) => {
         drawAdminProfileJawGuideOnCanvas(ctx, lm, ow, oh, payload.poseId);
+        drawAdminProfileNoseGuideOnCanvas(ctx, lm, ow, oh, payload.poseId);
+      };
       const stacked = renderAdminDebugStack(img, payload, { photo, mask, guide }, pr, drawer, false);
       renderer = stacked.ok ? stacked.meshRenderer : null;
     };
@@ -436,12 +441,17 @@ function CanvasFallbackPreview({
   const maskJaRef = useRef<HTMLCanvasElement>(null);
   const guideJaRef = useRef<HTMLCanvasElement>(null);
 
+  const photoFcRef = useRef<HTMLCanvasElement>(null);
+  const maskFcRef = useRef<HTMLCanvasElement>(null);
+  const guideFcRef = useRef<HTMLCanvasElement>(null);
+
   useEffect(() => {
     let cancelled = false;
     let rOri: MaskRenderer | null = null;
     let rNm: MaskRenderer | null = null;
     let rVt: MaskRenderer | null = null;
     let rJa: MaskRenderer | null = null;
+    let rFc: MaskRenderer | null = null;
     const img = new Image();
 
     img.onload = () => {
@@ -460,12 +470,33 @@ function CanvasFallbackPreview({
       const pja = photoJaRef.current;
       const mja = maskJaRef.current;
       const gja = guideJaRef.current;
-      if (!po || !mo || !go || !pn || !mn || !gn || !pv || !mv || !gv || !pja || !mja || !gja) return;
+      const pfc = photoFcRef.current;
+      const mfc = maskFcRef.current;
+      const gfc = guideFcRef.current;
+      if (
+        !po ||
+        !mo ||
+        !go ||
+        !pn ||
+        !mn ||
+        !gn ||
+        !pv ||
+        !mv ||
+        !gv ||
+        !pja ||
+        !mja ||
+        !gja ||
+        !pfc ||
+        !mfc ||
+        !gfc
+      )
+        return;
 
       rOri?.dispose();
       rNm?.dispose();
       rVt?.dispose();
       rJa?.dispose();
+      rFc?.dispose();
       const resOri = renderAdminDebugStack(
         img,
         payload,
@@ -498,17 +529,27 @@ function CanvasFallbackPreview({
         drawAdminFrontalJawAngleGuidelinesOnCanvas,
         false,
       );
-      if (!resOri.ok || !resNm.ok || !resVt.ok || !resJa.ok) {
+      const resFc = renderAdminDebugStack(
+        img,
+        payload,
+        { photo: pfc, mask: mfc, guide: gfc },
+        pr,
+        drawAdminFaceShapeContourGuideOnCanvas,
+        false,
+      );
+      if (!resOri.ok || !resNm.ok || !resVt.ok || !resJa.ok || !resFc.ok) {
         if (resOri.ok) resOri.meshRenderer?.dispose();
         if (resNm.ok) resNm.meshRenderer?.dispose();
         if (resVt.ok) resVt.meshRenderer?.dispose();
         if (resJa.ok) resJa.meshRenderer?.dispose();
+        if (resFc.ok) resFc.meshRenderer?.dispose();
         return;
       }
       rOri = resOri.meshRenderer;
       rNm = resNm.meshRenderer;
       rVt = resVt.meshRenderer;
       rJa = resJa.meshRenderer;
+      rFc = resFc.meshRenderer;
     };
 
     img.src = payload.thumbnailUrl;
@@ -519,10 +560,12 @@ function CanvasFallbackPreview({
       rNm?.dispose();
       rVt?.dispose();
       rJa?.dispose();
+      rFc?.dispose();
       rOri = null;
       rNm = null;
       rVt = null;
       rJa = null;
+      rFc = null;
     };
   }, [payload]);
 
@@ -600,6 +643,25 @@ function CanvasFallbackPreview({
           />
         </div>
       </div>
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+          {i18n(language, {
+            en: 'Face shape — contour (fallback)',
+            fr: 'Forme du visage — contour (repli)',
+          })}
+        </p>
+        <div className={stackWrap}>
+          <canvas ref={photoFcRef} className="block max-w-full rounded-md" />
+          <canvas
+            ref={maskFcRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+          />
+          <canvas
+            ref={guideFcRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -617,24 +679,36 @@ export function AdminCaptureDebugPanel({
   const isJawUpPose = isJawUpPoseId(payload.poseId);
   const isCrownPose = isCrownDownPoseId(payload.poseId);
   const isSmilePose = isCloseupSmilePoseId(payload.poseId);
-  const isEyeOrHairlineCloseup =
-    isCloseupEyePoseId(payload.poseId) || isCloseupHairlinePoseId(payload.poseId);
+  const isCloseupEyePose = isCloseupEyePoseId(payload.poseId);
+  const eyeCloseupContourUrl = payload.annotatedCloseupEyeContoursGuideThumbnailUrl;
+  const hasCloseupEyeFlat = Boolean(isCloseupEyePose && eyeCloseupContourUrl);
+  const needsJpegOnlyCloseup =
+    isCloseupHairlinePoseId(payload.poseId) ||
+    (isCloseupEyePose && !eyeCloseupContourUrl);
+
   const ovalUrl = payload.annotatedOvalGuideThumbnailUrl;
   const nmUrl = payload.annotatedNoseMouthGuideThumbnailUrl;
   const vtUrl = payload.annotatedVerticalThirdsGuideThumbnailUrl;
   const jawAngleUrl = payload.annotatedJawAngleGuideThumbnailUrl;
+  const fcUrl = payload.annotatedFaceShapeContourGuideThumbnailUrl;
   const jawUrl = payload.annotatedProfileJawGuideThumbnailUrl;
+  const profileNoseUrl = payload.annotatedProfileNoseGuideThumbnailUrl;
   const jawUpUrl = payload.annotatedJawUpLowerArcGuideThumbnailUrl;
   const crownUrl = payload.annotatedCrownPhotoFlatThumbnailUrl;
   const smileUrl = payload.annotatedSmileLipsGuideThumbnailUrl;
 
-  const hasAnyFrontalGuidePng = Boolean(ovalUrl || nmUrl || vtUrl || jawAngleUrl);
-  const hasProfileFlat = Boolean(jawUrl);
+  const hasAnyFrontalGuidePng = Boolean(ovalUrl || nmUrl || vtUrl || jawAngleUrl || fcUrl);
+  const hasProfileFlat = Boolean(jawUrl || profileNoseUrl);
   const hasJawUpFlat = Boolean(jawUpUrl);
   const hasCrownFlat = Boolean(crownUrl);
   const hasSmileFlat = Boolean(smileUrl);
   const hasFlatPng =
-    hasAnyFrontalGuidePng || hasProfileFlat || hasJawUpFlat || hasCrownFlat || hasSmileFlat;
+    hasAnyFrontalGuidePng ||
+    hasProfileFlat ||
+    hasJawUpFlat ||
+    hasCrownFlat ||
+    hasSmileFlat ||
+    hasCloseupEyeFlat;
 
   return (
     <div
@@ -656,7 +730,7 @@ export function AdminCaptureDebugPanel({
               fr:
                 'Empilement PNG sans perte (mêmes fichiers qu’au téléchargement). Le JPEG d’analyse reste inchangé.',
             })
-          : isEyeOrHairlineCloseup
+          : needsJpegOnlyCloseup
             ? i18n(language, {
                 en:
                   'No admin flat PNG for this closeup — thumbnail below is the plain analysis JPEG only (unchanged).',
@@ -672,16 +746,32 @@ export function AdminCaptureDebugPanel({
       {hasFlatPng ? (
         <div className="flex max-w-xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-cyan-200/90">
           {hasProfileFlat ? (
-            <a
-              href={jawUrl}
-              download={`${payload.poseId}-annotated-profile-jaw-guide.png`}
-              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-            >
-              {i18n(language, {
-                en: 'Download PNG — profile jaw',
-                fr: 'Télécharger PNG — profil (mâchoire)',
-              })}
-            </a>
+            <>
+              {jawUrl ? (
+                <a
+                  href={jawUrl}
+                  download={`${payload.poseId}-annotated-profile-jaw-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — profile jaw',
+                    fr: 'Télécharger PNG — profil (mâchoire)',
+                  })}
+                </a>
+              ) : null}
+              {profileNoseUrl ? (
+                <a
+                  href={profileNoseUrl}
+                  download={`${payload.poseId}-annotated-profile-nose-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — profile nose silhouette',
+                    fr: 'Télécharger PNG — profil (silhouette nez)',
+                  })}
+                </a>
+              ) : null}
+            </>
           ) : hasJawUpFlat ? (
             <a
               href={jawUpUrl}
@@ -713,6 +803,17 @@ export function AdminCaptureDebugPanel({
               {i18n(language, {
                 en: 'Download PNG — lip contours (smile)',
                 fr: 'Télécharger PNG — contours lèvres (sourire)',
+              })}
+            </a>
+          ) : hasCloseupEyeFlat ? (
+            <a
+              href={eyeCloseupContourUrl}
+              download={`${payload.poseId}-annotated-eye-contours-guide.png`}
+              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+            >
+              {i18n(language, {
+                en: 'Download PNG — eye contours (close-up)',
+                fr: 'Télécharger PNG — contours œil (gros plan)',
               })}
             </a>
           ) : (
@@ -765,6 +866,18 @@ export function AdminCaptureDebugPanel({
                   })}
                 </a>
               ) : null}
+              {fcUrl ? (
+                <a
+                  href={fcUrl}
+                  download={`${payload.poseId}-annotated-face-shape-contour-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — face shape contour',
+                    fr: 'Télécharger PNG — contour forme du visage',
+                  })}
+                </a>
+              ) : null}
             </>
           )}
         </div>
@@ -772,21 +885,43 @@ export function AdminCaptureDebugPanel({
       <div className="max-h-[min(82vh,960px)] w-full max-w-3xl overflow-auto rounded-lg border border-white/15 bg-black/40 p-4 shadow-xl">
         {hasFlatPng ? (
           hasProfileFlat ? (
-            <div className="w-full">
-              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                {i18n(language, {
-                  en: 'Profile jaw — flat (light blue guideline)',
-                  fr: 'Profil mâchoire — fichier aplati (repère bleu clair)',
-                })}
-              </p>
-              <img
-                src={jawUrl}
-                alt=""
-                width={payload.outputWidth}
-                height={payload.outputHeight}
-                className="mx-auto block h-auto w-full max-w-full rounded-md"
-                decoding="async"
-              />
+            <div className="flex w-full flex-col items-center gap-8">
+              {jawUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Profile jaw — flat (light blue guideline)',
+                      fr: 'Profil mâchoire — fichier aplati (repère bleu clair)',
+                    })}
+                  </p>
+                  <img
+                    src={jawUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {profileNoseUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Profile nose silhouette — flat (visible side)',
+                      fr: 'Profil nez — fichier aplati (côté visible, forme narinaire)',
+                    })}
+                  </p>
+                  <img
+                    src={profileNoseUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : hasJawUpFlat ? (
             <div className="w-full">
@@ -832,6 +967,23 @@ export function AdminCaptureDebugPanel({
               </p>
               <img
                 src={smileUrl}
+                alt=""
+                width={payload.outputWidth}
+                height={payload.outputHeight}
+                className="mx-auto block h-auto w-full max-w-full rounded-md"
+                decoding="async"
+              />
+            </div>
+          ) : hasCloseupEyeFlat ? (
+            <div className="w-full">
+              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                {i18n(language, {
+                  en: 'Eye close-up — flat (light blue eye contours)',
+                  fr: 'Gros plan œil — aplati (contours paupières bleus)',
+                })}
+              </p>
+              <img
+                src={eyeCloseupContourUrl}
                 alt=""
                 width={payload.outputWidth}
                 height={payload.outputHeight}
@@ -910,9 +1062,27 @@ export function AdminCaptureDebugPanel({
                   />
                 </div>
               ) : null}
+              {fcUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Face shape contour — flat (light blue outline)',
+                      fr: 'Contour forme du visage — fichier aplati (trait bleu)',
+                    })}
+                  </p>
+                  <img
+                    src={fcUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
             </div>
           )
-        ) : isEyeOrHairlineCloseup ? (
+        ) : needsJpegOnlyCloseup ? (
           <JpegThumbnailOnlyAdminPreview payload={payload} language={language} />
         ) : isProfilePose ? (
           <CanvasFallbackProfileJaw payload={payload} language={language} />

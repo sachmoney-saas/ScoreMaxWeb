@@ -19,6 +19,13 @@ type AnalysisProcessingStateProps = {
    * Si défini, le chrono suit le temps réel côté serveur (pas de reset au changement de page).
    */
   elapsedAnchorEpochMs?: number | null;
+  /**
+   * Masque le décompte (ex. onboarding avant la vue app : upload + file).
+   * Le chrono peut reprendre in-app avec `elapsedAnchorEpochMs`.
+   */
+  showElapsedTimer?: boolean;
+  /** Remplace le titre sous le loader (« Analyse en cours » par défaut). */
+  title?: string | null;
 };
 
 /** Format « 42 s » / « 3 min 12 s » pour sidebar et écran d’analyse. */
@@ -52,6 +59,8 @@ export function AnalysisProcessingState({
   theme = "light",
   backdrop = false,
   elapsedAnchorEpochMs = null,
+  showElapsedTimer = true,
+  title: titleOverride = null,
 }: AnalysisProcessingStateProps) {
   const language = useAppLanguage();
   const isDark = theme === "dark";
@@ -59,28 +68,34 @@ export function AnalysisProcessingState({
 
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
+    if (!showElapsedTimer) return;
     const id = window.setInterval(() => setTick((previous) => previous + 1), 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [showElapsedTimer]);
 
   const hasAnchor =
     typeof elapsedAnchorEpochMs === "number" && Number.isFinite(elapsedAnchorEpochMs);
 
   const elapsedSeconds = React.useMemo(() => {
+    if (!showElapsedTimer) return 0;
     if (hasAnchor) {
       return Math.max(0, Math.floor((Date.now() - elapsedAnchorEpochMs) / 1000));
     }
     return tick;
-  }, [elapsedAnchorEpochMs, hasAnchor, tick]);
+  }, [elapsedAnchorEpochMs, hasAnchor, showElapsedTimer, tick]);
 
-  const titleLabel = i18n(language, {
-    fr: "Analyse en cours",
-    en: "Analysis in progress",
-  });
+  const titleLabel =
+    titleOverride?.trim() ||
+    i18n(language, {
+      fr: "Analyse en cours",
+      en: "Analysis in progress",
+    });
 
   const elapsedLabel = formatAnalysisElapsedLabel(elapsedSeconds, language);
   const detailHint = message?.trim();
-  const ariaLabel = [titleLabel, detailHint, elapsedLabel].filter(Boolean).join(" — ");
+  const ariaLabel = showElapsedTimer
+    ? [titleLabel, detailHint, elapsedLabel].filter(Boolean).join(" — ")
+    : [titleLabel, detailHint].filter(Boolean).join(" — ");
 
   const loaderSize = backdrop ? "lg" : minimalChrome ? "md" : "lg";
   const trackGap = "mt-7";
@@ -127,16 +142,18 @@ export function AnalysisProcessingState({
           {titleLabel}
         </h2>
 
-        <p
-          className={cn(
-            "mt-2 text-sm tabular-nums tracking-tight",
-            tone === "on-dark" ? "text-zinc-400" : "text-slate-500",
-          )}
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {elapsedLabel}
-        </p>
+        {showElapsedTimer ? (
+          <p
+            className={cn(
+              "mt-2 text-sm tabular-nums tracking-tight",
+              tone === "on-dark" ? "text-zinc-400" : "text-slate-500",
+            )}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {elapsedLabel}
+          </p>
+        ) : null}
 
         <BrandLoaderTrack tone={tone} className={cn(trackGap, "w-[min(240px,85%)]")} />
       </div>

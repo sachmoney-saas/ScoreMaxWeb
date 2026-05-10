@@ -69,6 +69,37 @@
     @apply border-border;
   }
 
+  /**
+   * Barres de défilement (Firefox + Chromium/WebKit) : curseur noir, piste discrète.
+   * Ne crée aucun défilement : s’applique seulement quand overflow produit déjà une barre.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #09090b transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #09090b;
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #171717;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   html {
     height: 100%;
   }

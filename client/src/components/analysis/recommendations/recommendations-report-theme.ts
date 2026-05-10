@@ -1,18 +1,13 @@
 import { cn } from "@/lib/utils";
-import { scoreRingMatchBadgeBackgroundClassName } from "@/components/analysis/workers/_shared";
+import { protocolPageBodyGlassClassName } from "@/components/protocol/ProtocolPageShell";
 
 /**
- * Feuille onglet Recommandations — même base métal que « Mon protocole » /
- * `scoreRingMatchMetallicPillClassName`, étendue à toute la surface.
+ * Onglet Recommandations — même panneau verre bleuté semi-transparent que « Mon protocole ».
  */
 export const recommendationsReportShellClassName = cn(
-  "relative isolate mx-auto w-full max-w-5xl overflow-hidden rounded-xl",
-  scoreRingMatchBadgeBackgroundClassName,
-  "border border-white/40 ring-1 ring-slate-900/15",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_14px_rgba(71,85,105,0.2),0_14px_44px_-18px_rgba(0,0,0,0.48),0_6px_16px_-8px_rgba(0,0,0,0.22)]",
-  "before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-[inherit] before:bg-[linear-gradient(118deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(15,23,42,0.06)_100%)] before:content-['']",
-  "[&>*]:relative [&>*]:z-[1]",
-  "px-5 py-8 text-zinc-900 sm:px-8 sm:py-10 md:px-11 md:py-11",
+  protocolPageBodyGlassClassName,
+  "rounded-xl text-zinc-100",
+  "px-5 py-8 sm:px-8 sm:py-10 md:px-11 md:py-11",
 );
 export const recommendationsReportTabsListClassName = cn(
   "inline-flex h-auto max-h-none min-h-[2.75rem] w-fit max-w-full flex-wrap justify-start gap-0.5",

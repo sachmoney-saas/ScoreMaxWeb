@@ -1,9 +1,7 @@
 import * as React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { Link } from "wouter";
 import {
   AlertTriangle,
-  ArrowUpRight,
   Loader2,
   Sparkles,
   Syringe,
@@ -37,6 +35,7 @@ import {
 import {
   analysisTabActiveMetallicTriggerClassName,
   analysisTabBarGlassClassName,
+  scoreRingMatchMetallicPillClassName,
 } from "@/components/analysis/workers/_shared";
 
 /** Même barre métal / fond verre que Overview | Recommandations. */
@@ -125,15 +124,11 @@ function CriticalPointSection({
   point,
   language,
   actionByRec,
-  buildWorkerHref,
-  suppressWorkerEyebrow = false,
 }: {
   index: number;
   point: CriticalPoint;
   language: AppLanguage;
   actionByRec: Map<string, RecommendationAction>;
-  buildWorkerHref: (worker: string) => string;
-  suppressWorkerEyebrow?: boolean;
 }) {
   const aggregates = React.useMemo<Record<string, unknown>>(() => ({}), []);
 
@@ -143,34 +138,23 @@ function CriticalPointSection({
   const recCount = point.matchedRecommendations.length;
 
   return (
-    <section className="space-y-6 border-b border-zinc-200 pb-10 last:border-b-0 last:pb-0">
+    <section className="space-y-6 border-b border-white/10 pb-10 last:border-b-0 last:pb-0">
       <div
         className={cn(
-          "rounded-lg border border-zinc-200 bg-zinc-50/80 pl-4 pr-4 py-5 sm:pl-5 sm:pr-5 sm:py-6 md:pl-6 md:pr-6",
+          scoreRingMatchMetallicPillClassName,
+          "w-full rounded-xl px-5 py-5 sm:px-8 sm:py-7",
           scoreHeroAccentBorder(point.score),
         )}
       >
-        <div className="relative flex flex-col gap-5 md:flex-row md:items-start md:justify-between md:gap-8">
-          <div className="min-w-0 flex-1 space-y-3">
+        <div className="relative z-[1] flex w-full flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
+          <div className="min-w-0 w-full flex-1 space-y-3 lg:max-w-none">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-zinc-300 bg-white font-display text-xs font-bold tabular-nums text-zinc-800">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/55 bg-white/90 font-display text-xs font-bold tabular-nums text-zinc-900 shadow-sm">
                 {index + 1}
               </span>
-              {suppressWorkerEyebrow ? null : (
-                <Link
-                  href={buildWorkerHref(point.worker)}
-                  className="group inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 transition-colors hover:text-zinc-900"
-                >
-                  {getWorkerDisplayLabel(
-                    point.worker,
-                    language === "fr" ? "fr" : "en",
-                  )}
-                  <ArrowUpRight className="h-3 w-3 opacity-60 transition-opacity group-hover:opacity-100" />
-                </Link>
-              )}
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-700">
                 {i18n(language, {
                   en: "Focus on this measure",
                   fr: "Axe à travailler",
@@ -179,13 +163,13 @@ function CriticalPointSection({
               <h3 className="mt-1.5 font-display text-2xl font-bold leading-tight tracking-tight text-zinc-950 sm:text-[1.65rem] sm:leading-[1.15]">
                 {point.aggregateLabel}
               </h3>
-              <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-700">
+              <p className="mt-3 w-full max-w-none text-sm leading-relaxed text-zinc-800">
                 {scoreSeverityBlurb(point.score, language)}
               </p>
             </div>
           </div>
 
-          <div className="flex w-full shrink-0 flex-col gap-2 md:w-auto md:max-w-[13.5rem]">
+          <div className="w-full shrink-0 lg:w-auto lg:max-w-[15rem]">
             <div
               className={cn(
                 "rounded-xl px-4 py-4 sm:px-5 sm:py-5",
@@ -211,14 +195,14 @@ function CriticalPointSection({
       </div>
 
       <div className="space-y-4">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-zinc-200 pt-4">
-          <h4 className="font-display text-sm font-semibold tracking-tight text-zinc-900">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-white/10 pt-4">
+          <h4 className="font-display text-sm font-semibold tracking-tight text-zinc-100">
             {i18n(language, {
               en: "How to improve",
               fr: "Comment progresser",
             })}
           </h4>
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-zinc-400">
             {recCount}{" "}
             {i18n(language, {
               en:
@@ -240,12 +224,12 @@ function CriticalPointSection({
               <Sparkles className="h-3 w-3" />
               {i18n(language, { en: "Softmaxxing", fr: "Softmaxxing" })}
             </span>
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] text-zinc-400">
               {soft.length}{" "}
               {i18n(language, { en: "actions", fr: "actions" })}
             </span>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid w-full gap-4 md:grid-cols-2">
             {soft.map((rec) => (
               <RecommendationCard
                 key={rec.id}
@@ -268,12 +252,12 @@ function CriticalPointSection({
               <Syringe className="h-3 w-3" />
               {i18n(language, { en: "Hardmaxxing", fr: "Hardmaxxing" })}
             </span>
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] text-zinc-400">
               {hard.length}{" "}
               {i18n(language, { en: "interventions", fr: "interventions" })}
             </span>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid w-full gap-4 md:grid-cols-2">
             {hard.map((rec) => (
               <RecommendationCard
                 key={rec.id}
@@ -311,19 +295,19 @@ function WorkerOrphansUnderTab({
   if (!group?.recommendations.length) return null;
 
   return (
-    <section className="mt-8 space-y-3 border-t border-zinc-200 pt-8">
+    <section className="mt-8 space-y-3 border-t border-white/10 pt-8">
       <header className="space-y-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
           {i18n(language, { en: "Also matches you", fr: "Autres pistes" })}
         </p>
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-zinc-300">
           {i18n(language, {
             en: "Suggestions linked to your profile but not pinned to one measure above.",
             fr: "Suggestions liées à ton profil, sans lien avec une mesure ci-dessus.",
           })}
         </p>
       </header>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid w-full gap-4 md:grid-cols-2">
         {group.recommendations.map((rec: MatchedRecommendation) => (
           <RecommendationCard
             key={rec.id}
@@ -339,34 +323,6 @@ function WorkerOrphansUnderTab({
   );
 }
 
-function WorkerDetailLink({
-  worker,
-  language,
-  buildWorkerHref,
-}: {
-  worker: string;
-  language: AppLanguage;
-  buildWorkerHref: (w: string) => string;
-}) {
-  const label = getWorkerDisplayLabel(
-    worker,
-    language === "fr" ? "fr" : "en",
-  );
-  return (
-    <div className="mb-6">
-      <Link
-        href={buildWorkerHref(worker)}
-        className="group inline-flex items-center gap-1 text-xs font-medium text-zinc-600 transition-colors hover:text-zinc-900"
-      >
-        {i18n(language, {
-          en: `See full · ${label} analysis`,
-          fr: `Voir l'analyse complète · ${label}`,
-        })}
-        <ArrowUpRight className="h-3.5 w-3.5 opacity-60 transition-opacity group-hover:opacity-100" />
-      </Link>
-    </div>
-  );
-}
 
 /* ============================================================================
  * Section: orphans — recos that matched but don't tie to a critical point
@@ -386,16 +342,16 @@ function ComingSoonSection({
   if (workers.length === 0) return null;
 
   return (
-    <section className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/80 p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+    <section className="rounded-lg border border-dashed border-white/25 bg-white/[0.06] p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
         {i18n(language, { en: "Coming soon", fr: "Bientôt disponible" })}
       </p>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-600">
+      <p className="mt-2 text-xs leading-relaxed text-zinc-300">
         {i18n(language, {
           en: "Editorial recommendations are being written for: ",
           fr: "Les recommandations éditoriales arrivent pour : ",
         })}
-        <span className="font-medium text-zinc-800">
+        <span className="font-medium text-zinc-100">
           {workers
             .map((w) =>
               getWorkerDisplayLabel(w, language === "fr" ? "fr" : "en"),
@@ -486,13 +442,6 @@ function CriticalPointsRecommendationsImpl({
     | Error
     | undefined;
 
-  const buildWorkerHref = React.useCallback(
-    (worker: string) =>
-      `/app/analyses/${analysisJobId}/workers/${encodeURIComponent(worker)}`,
-    [analysisJobId],
-  );
-
-  // `dataUpdatedAt` changes any time react-query refreshes a query, giving us
   // a cheap, stable string signature to gate the memoized computations below.
   const recDataSignature = recQueries
     .map((q) => q.dataUpdatedAt ?? 0)
@@ -555,8 +504,8 @@ function CriticalPointsRecommendationsImpl({
   if (isLoading) {
     return (
       <div className={recommendationsReportShellClassName}>
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-600">
-          <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+        <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-300">
+          <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
           {i18n(language, {
             en: "Loading recommendations…",
             fr: "Chargement des recommandations…",
@@ -569,16 +518,16 @@ function CriticalPointsRecommendationsImpl({
   if (firstError) {
     return (
       <div className={recommendationsReportShellClassName}>
-        <div className="flex items-start gap-3 py-6 text-sm text-rose-800">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+        <div className="flex items-start gap-3 py-6 text-sm text-rose-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
           <div>
-            <p className="font-semibold text-rose-900">
+            <p className="font-semibold text-rose-100">
               {i18n(language, {
                 en: "Couldn't load recommendations.",
                 fr: "Impossible de charger les recommandations.",
               })}
             </p>
-            <p className="mt-1 text-xs text-rose-700/90">{firstError.message}</p>
+            <p className="mt-1 text-xs text-rose-200/90">{firstError.message}</p>
           </div>
         </div>
       </div>
@@ -596,13 +545,13 @@ function CriticalPointsRecommendationsImpl({
     return (
       <div className={recommendationsReportShellClassName}>
         <div className="space-y-4 py-2 text-sm">
-          <p className="font-display text-lg font-semibold text-zinc-900">
+          <p className="font-display text-lg font-semibold text-zinc-50">
             {i18n(language, {
               en: "Nothing critical to address",
               fr: "Rien de critique à adresser",
             })}
           </p>
-          <p className="text-zinc-600">
+          <p className="text-zinc-300">
             {i18n(language, {
               en: "Your scores are healthy across the board — keep your routine consistent.",
               fr: "Tes scores sont sains dans l'ensemble — garde ta routine régulière.",
@@ -621,13 +570,13 @@ function CriticalPointsRecommendationsImpl({
     return (
       <div className={recommendationsReportShellClassName}>
         <div className="space-y-4 py-2 text-sm">
-          <p className="font-display text-lg font-semibold text-zinc-900">
+          <p className="font-display text-lg font-semibold text-zinc-50">
             {i18n(language, {
               en: "Recommendations coming soon",
               fr: "Recommandations bientôt disponibles",
             })}
           </p>
-          <p className="text-zinc-600">
+          <p className="text-zinc-300">
             {i18n(language, {
               en: "We're writing personalised recommendations for every ScoreMax worker. The eyes module is already live; the rest is on its way.",
               fr: "Nous rédigeons des recommandations personnalisées pour chaque worker ScoreMax. Le module yeux est déjà en ligne ; le reste arrive.",
@@ -700,14 +649,9 @@ function CriticalPointsRecommendationsImpl({
               className="mt-0 focus-visible:outline-none"
             >
               <div className={recommendationsReportShellClassName}>
-                <div className="space-y-10">
-                  <WorkerDetailLink
-                    worker={group.worker}
-                    language={language}
-                    buildWorkerHref={buildWorkerHref}
-                  />
+                <div className="w-full space-y-10">
                   {group.criticalPoints.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+                    <p className="rounded-lg border border-dashed border-white/25 bg-white/[0.06] px-4 py-3 text-sm text-zinc-300">
                       {i18n(language, {
                         en: "No single measure surfaced as critical here — see matching suggestions below if any.",
                         fr: "Aucune mesure ressort comme critique dans cette zone — voir les suggestions ci-dessous le cas échéant.",
@@ -721,8 +665,6 @@ function CriticalPointsRecommendationsImpl({
                       point={point}
                       language={language}
                       actionByRec={actionByRec}
-                      buildWorkerHref={buildWorkerHref}
-                      suppressWorkerEyebrow
                     />
                   ))}
                   <WorkerOrphansUnderTab
@@ -744,7 +686,7 @@ function CriticalPointsRecommendationsImpl({
           language={language}
         />
 
-      <p className="border-t border-zinc-200 pt-4 text-[11px] leading-relaxed text-zinc-500">
+      <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
         {i18n(language, {
           en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
           fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",

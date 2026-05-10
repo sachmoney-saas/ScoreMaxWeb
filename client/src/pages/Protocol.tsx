@@ -7,10 +7,9 @@ import { useAppLanguage, i18n } from "@/lib/i18n";
 import { useProtocolBreakdown } from "@/lib/protocol";
 import { useAnalysisHistory } from "@/hooks/use-supabase";
 import { useAuth } from "@/hooks/use-auth";
-import { ProtocolDay } from "@/components/protocol/ProtocolDay";
+import { ProtocolRoutine } from "@/components/protocol/ProtocolRoutine";
 import { ProtocolWeekly } from "@/components/protocol/ProtocolWeekly";
 import { ProtocolGeneralRules } from "@/components/protocol/ProtocolGeneralRules";
-import { ProtocolActiveCures } from "@/components/protocol/ProtocolActiveCures";
 import { ProtocolEmptyExperience } from "@/components/protocol/ProtocolEmptyState";
 import { ProtocolItemCard } from "@/components/protocol/ProtocolItemCard";
 import { ProtocolSection } from "@/components/protocol/ProtocolSection";
@@ -94,7 +93,11 @@ export default function ProtocolPage() {
   return (
     <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
       <div className="space-y-8">
-        <ProtocolDay itemsBySlot={breakdown.bySlot} language={language} />
+        <ProtocolRoutine
+          itemsBySlot={breakdown.bySlot}
+          cures={breakdown.cures}
+          language={language}
+        />
 
         <ProtocolWeekly
           items={breakdown.bySlot.get("weekly") ?? []}
@@ -105,8 +108,6 @@ export default function ProtocolPage() {
           items={breakdown.bySlot.get("general") ?? []}
           language={language}
         />
-
-        <ProtocolActiveCures cures={breakdown.cures} language={language} />
 
         {breakdown.uncategorised.length > 0 ? (
           <ProtocolSection

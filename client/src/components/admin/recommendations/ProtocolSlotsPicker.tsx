@@ -12,8 +12,8 @@ import {
  * ProtocolSlotsPicker
  *
  * Multi-select chip group used inside the recommendation editor.
- * Empty selection means: "this rec is a one-shot/cure, surfaces only in the
- * Active cures section based on its duration_value/duration_unit."
+ * Empty selection means: "this rec is a one-shot/cure; it surfaces in Routine
+ * when it has a duration; otherwise it may not appear in the daily block."
  * ========================================================================= */
 
 export interface ProtocolSlotsPickerProps {
@@ -66,8 +66,8 @@ export function ProtocolSlotsPicker({ values, onChange }: ProtocolSlotsPickerPro
         <span>
           Sélectionne 0 ou plusieurs créneaux. Si tu n'en sélectionnes aucun, la
           reco est traitée comme une <em>cure</em> ponctuelle (chirurgie,
-          séances, etc.) et apparaît dans <em>Cures actives</em> à partir de sa
-          durée.
+          séances, etc.) et apparaît dans <em>Routine</em> (bloc quotidien),
+          selon sa durée.
         </span>
       </p>
     </div>

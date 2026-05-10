@@ -14,7 +14,7 @@ import {
   MoreVertical,
 } from "lucide-react";
 import type { OnboardingScanAssetCode } from "@shared/schema";
-import { AnalysisProcessingState, analysisElapsedAnchorEpochMs } from "@/components/analysis/AnalysisProcessingState";
+import { AnalysisProcessingState } from "@/components/analysis/AnalysisProcessingState";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -661,11 +661,9 @@ export default function Onboarding() {
 
   /**
    * Vrai dès que l'utilisateur a déclenché « Uploader les captures » : on
-   * masque alors le bouton « Lancer l'analyse » et on bascule sur l'écran
-   * `AnalysisProcessingState` pendant TOUT le pipeline (upload R2 → POST
-   * /onboarding/complete → polling/redirect). Sans ça, l'utilisateur voit
-   * pendant 2–5 s le bouton CTA réapparaître sous un loader, ce qui invite
-   * à recliquer.
+   * masque le CTA et on affiche l’état traitement (« Initialisation… », sans
+   * chrono) pendant upload → file → jusqu’à la redirection /app où le temps
+   * écoulé s’affiche (sidebar / page résultat).
    */
   const isAnalysisRunning =
     isLastStep &&
@@ -839,10 +837,8 @@ export default function Onboarding() {
        *   au refresh ; même en cas d'échec ultérieur du worker, l'utilisateur
        *   reste considéré comme onboardé.
        * - `latest-face-analysis` : pour pré-remplir le cache de la page
-       *   `/app` avec le job en cours. Sans ce prefetch, la page d'arrivée
-       *   monte avec `analysis = undefined`, démarre son propre loader
-       *   (timer à 0) puis bascule sur l'AnalysisProcessingState quand la
-       *   query répond — visuellement, le compteur paraît reset.
+       *   `/app` avec le job en cours afin que le chronomètre in-app soit
+       *   cohérent dès la redirection.
        */
       await Promise.allSettled([
         queryClient.refetchQueries({ queryKey: ["profile", user.id] }),
@@ -852,12 +848,10 @@ export default function Onboarding() {
       ]);
 
       /**
-       * Redirection immédiate vers `/app`. La page d'arrivée ré-affiche
-       * `AnalysisProcessingState` avec `elapsedAnchorEpochMs` ancré sur
-       * `analysis_jobs.created_at` (préchargé via la refetch ci-dessus), donc
-       * le chrono reste continu — l'utilisateur ne voit qu'**un seul** écran
-       * de progression au lieu d'enchaîner « bouton + loader → loader
-       * onboarding → loader /app ».
+       * Redirection immédiate vers `/app`. La page d’arrivée affiche alors
+       * la progression analyse avec chronomètre ancré sur `analysis_jobs.created_at`
+       * (prefetch ci-dessus) — alors que l’onboarding montre seulement
+       * « Initialisation… » sans compteur.
        */
       setLocation(AUTH_CONFIG.REDIRECT_PATH);
     } catch (error) {
@@ -1072,9 +1066,11 @@ export default function Onboarding() {
                   message={processingMessage}
                   minimalChrome
                   theme="dark"
-                  elapsedAnchorEpochMs={analysisElapsedAnchorEpochMs(
-                    jobStatus.data?.job.created_at,
-                  )}
+                  showElapsedTimer={false}
+                  title={i18n(language, {
+                    en: "Initializing…",
+                    fr: "Initialisation…",
+                  })}
                 />
               ) : (
                 <div

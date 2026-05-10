@@ -4,6 +4,7 @@
 // 2) largeur nez (98↔327) et largeur bouche (61↔291), parallèles ;
 // 3) médiatrice-type : verticale x = milieu interpupillaire → ovale ; tiercements au milieu
 //    des deux yeux (moyenne Y des anneaux paupière) et milieu des lèvres (13/14).
+// 4) contour fermé ovale visage (FACEMESH_FACE_OVAL_ORDERED) : forme du visage, trait bleu continu.
 // ============================================================
 
 import { getPreferredLanguage, type AppLanguage } from "@/lib/i18n";
@@ -23,6 +24,10 @@ import {
   FACEMESH_JAW_LEFT_HEMISPHERE_TO_CHIN_ORDERED,
   FACEMESH_JAW_RIGHT_HEMISPHERE_TO_CHIN_ORDERED,
 } from './facemesh-profile-jaw';
+import {
+  FACEMESH_PROFILE_LEFT_VISIBLE_NOSE_ORDERED,
+  FACEMESH_PROFILE_RIGHT_VISIBLE_NOSE_ORDERED,
+} from './facemesh-profile-nose';
 import { videoNormToElementPx } from './MaskRenderer';
 
 /** Accent SaaS (~ Tailwind sky-300) pour tous les tracés de mesure capture. */
@@ -834,6 +839,56 @@ function drawProfileJawMapped(
   ctx.restore();
 }
 
+function drawProfileNoseMapped(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  toPx: LandmarkPxMapper,
+  minDimPx: number,
+  poseId: PoseId,
+): void {
+  if (poseId !== 'profile-left' && poseId !== 'profile-right') return;
+
+  const chain =
+    poseId === 'profile-right'
+      ? FACEMESH_PROFILE_RIGHT_VISIBLE_NOSE_ORDERED
+      : FACEMESH_PROFILE_LEFT_VISIBLE_NOSE_ORDERED;
+
+  const pts: { x: number; y: number }[] = [];
+  for (const idx of chain) {
+    const lm = landmarks[idx];
+    if (!lm || lm.x === undefined || lm.y === undefined) {
+      return;
+    }
+    pts.push(toPx(lm.x, lm.y));
+  }
+  if (pts.length < 2) return;
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
+  ctx.lineWidth = Math.max(2.75, minDimPx * 0.004);
+  ctx.beginPath();
+  ctx.moveTo(pts[0]!.x, pts[0]!.y);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(pts[i]!.x, pts[i]!.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  const endpointR = Math.max(2.5, minDimPx * 0.004);
+  const startPt = pts[0]!;
+  const endPt = pts[pts.length - 1]!;
+  ctx.save();
+  ctx.fillStyle = CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA;
+  for (const p of [startPt, endPt]) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, endpointR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawJawUpLowerArcMapped(
   ctx: CanvasRenderingContext2D,
   landmarks: LandmarkPoint[],
@@ -877,6 +932,38 @@ function drawJawUpLowerArcMapped(
   ctx.restore();
 }
 
+function drawFaceShapeContourMapped(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  toPx: LandmarkPxMapper,
+  minDimPx: number,
+): void {
+  const chain = ringVerticesUnique(FACEMESH_FACE_OVAL_ORDERED as readonly number[]);
+  const pts: { x: number; y: number }[] = [];
+  for (const idx of chain) {
+    const lm = landmarks[idx];
+    if (!lm || lm.x === undefined || lm.y === undefined) {
+      return;
+    }
+    pts.push(toPx(lm.x, lm.y));
+  }
+  if (pts.length < 3) return;
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
+  ctx.lineWidth = Math.max(2.75, minDimPx * 0.004);
+  ctx.beginPath();
+  ctx.moveTo(pts[0]!.x, pts[0]!.y);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(pts[i]!.x, pts[i]!.y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Repères 2D en direct sur l’overlay (coords CSS après `scaleX(-1)` sur la pile vidéo,
  * même base que MaskRenderer.previewCover).
@@ -905,8 +992,10 @@ export function drawLiveColoredPoseGuidesOnOverlayCanvas(
     drawNoseMouthWidthMapped(ctx, landmarks, mapper, minDim);
     drawVerticalThirdsMapped(ctx, landmarks, mapper, minDim);
     drawFrontalJawAngleMapped(ctx, landmarks, mapper, minDim);
+    drawFaceShapeContourMapped(ctx, landmarks, mapper, minDim);
   } else if (poseId === 'profile-left' || poseId === 'profile-right') {
     drawProfileJawMapped(ctx, landmarks, mapper, minDim, poseId);
+    drawProfileNoseMapped(ctx, landmarks, mapper, minDim, poseId);
   } else if (poseId === 'jaw-up') {
     drawJawUpLowerArcMapped(ctx, landmarks, mapper, minDim);
   }
@@ -954,6 +1043,17 @@ export function drawAdminFrontalJawAngleGuidelinesOnCanvas(
   drawFrontalJawAngleMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim);
 }
 
+export function drawAdminFaceShapeContourGuideOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): void {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return;
+  const minDim = Math.min(outW, outH);
+  drawFaceShapeContourMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim);
+}
+
 /**
  * Dessine les deux segments du repère diagnostic sur une image déjà projetée aux dimensions `outW`×`outH`.
  */
@@ -978,6 +1078,19 @@ export function drawAdminProfileJawGuideOnCanvas(
   if (landmarks.length < 400 || outW < 16 || outH < 16) return;
   const minDim = Math.min(outW, outH);
   drawProfileJawMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim, poseId);
+}
+
+/** PNG aplati profil : silhouette visible du nez (dorsum + aile narinaire correspondante au sens caméra). */
+export function drawAdminProfileNoseGuideOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+  poseId: PoseId,
+): void {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return;
+  const minDim = Math.min(outW, outH);
+  drawProfileNoseMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim, poseId);
 }
 
 /**
@@ -1044,5 +1157,49 @@ export function drawAdminSmileLipsGuideOnCanvas(
   ctx.lineCap = 'round';
   drawRing(FACEMESH_LIP_OUTER_ORDERED);
   drawRing(FACEMESH_LIP_INNER_ORDERED);
+  ctx.restore();
+}
+
+/**
+ * PNG aplati gros plan œil : contours paupière (anneaux gauche + droite MediaPipe), bleu clair.
+ */
+export function drawAdminCloseupEyeContoursGuideOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): void {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return;
+
+  const stroke = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
+  const lineW = Math.max(2, Math.min(outW, outH) * 0.0032);
+
+  const drawRing = (indicesIn: readonly number[]) => {
+    const indices = ringVerticesUnique(indicesIn);
+    const pts: { x: number; y: number }[] = [];
+    for (const idx of indices) {
+      const lm = landmarks[idx];
+      if (!lm || lm.x === undefined || lm.y === undefined) {
+        return;
+      }
+      pts.push(normPointToBmpPx(lm.x, lm.y, outW, outH));
+    }
+    if (pts.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(pts[0]!.x, pts[0]!.y);
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(pts[i]!.x, pts[i]!.y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  };
+
+  ctx.save();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lineW;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  drawRing(FACEMESH_RIGHT_EYE_ORDERED);
+  drawRing(FACEMESH_LEFT_EYE_ORDERED);
   ctx.restore();
 }

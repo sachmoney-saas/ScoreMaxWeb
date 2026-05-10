@@ -6,19 +6,22 @@
 // Résolution = celle du bitmap source (ratio pixel 1, pas de sur-échantillonnage).
 // ============================================================
 //
-// Pose de face : 4 PNG (ovale + nez/bouche + tiers verticaux + angle mâchoire).
-// Pose profil : 1 PNG (arc mâchoire bleu sur le cliché ; pas de maillage).
+// Pose de face : 5 PNG (ovale + nez/bouche + tiers verticaux + angle mâchoire + contour forme du visage).
+// Pose profil : 2 PNG (mâchoire + silhouette nez côté visible).
 // Pose menton levé : 1 PNG (arc mandibulaire bas sur le cliché ; pas de maillage).
 // Pose sommet du crâne : 1 PNG (photo miroir seule, sans repères dessinés).
 // Pose sourire : 1 PNG (photo + contours lèvres bleu clair, sans masque blanc hors debug).
-// Poses œil / front (hairline) : pas de PNG aplati admin.
+// Poses œil / front (hairline) : pas de PNG aplati admin hormis gros plan œil (contours).
 
 import {
+  drawAdminCloseupEyeContoursGuideOnCanvas,
+  drawAdminFaceShapeContourGuideOnCanvas,
   drawAdminFrontalJawAngleGuidelinesOnCanvas,
   drawAdminJawUpLowerArcGuideOnCanvas,
   drawAdminNoseMouthWidthGuidelinesOnCanvas,
   drawAdminOrientationGuidelinesOnCanvas,
   drawAdminProfileJawGuideOnCanvas,
+  drawAdminProfileNoseGuideOnCanvas,
   drawAdminSmileLipsGuideOnCanvas,
   drawAdminVerticalThirdsGuidelinesOnCanvas,
   mirrorLandmarksNormalizedX,
@@ -41,10 +44,12 @@ export type AdminFlattenedGuideEncoding =
       noseMouthFlat: Blob | null;
       verticalThirdsFlat: Blob | null;
       jawAngleFlat: Blob | null;
+      faceShapeContourFlat: Blob | null;
     }
   | {
       variant: 'profile';
       profileJawFlat: Blob;
+      profileNoseFlat: Blob | null;
     }
   | {
       variant: 'jawUp';
@@ -57,6 +62,10 @@ export type AdminFlattenedGuideEncoding =
   | {
       variant: 'smileLips';
       smileLipsFlat: Blob;
+    }
+  | {
+      variant: 'closeupEye';
+      eyeContoursFlat: Blob;
     };
 
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob | null> {
@@ -237,8 +246,9 @@ function isCloseupHairlinePoseId(id: PoseId): id is 'closeup-hairline' {
 }
 
 /**
- * PNG aplatis admin : 4 variantes pour la face de face ; 1 par profil (arc mâchoire)
- * ; 1 pour menton levé ; 1 pour sommet du crâne (photo seule) ; 1 pour sourire (lèvres).
+ * PNG aplatis admin : 5 variantes pour la face de face ; 2 par profil (mâchoire + nez visible)
+ * ; 1 pour menton levé ; 1 pour sommet du crâne (photo seule) ; 1 pour sourire (lèvres) ;
+ * 1 pour gros plan œil (contours des deux yeux).
  * Hors `DEBUG_CAPTURE_WHITE_FACE_MESH`, pas de masque blanc Wireframe sur ces composites.
  */
 export async function encodeAdminGuideFlattenedPair(opts: {
@@ -254,8 +264,21 @@ export async function encodeAdminGuideFlattenedPair(opts: {
   try {
     bitmap = await createImageBitmap(opts.photoBlob);
 
-    if (isCloseupEyePoseId(opts.poseId) || isCloseupHairlinePoseId(opts.poseId)) {
+    if (isCloseupHairlinePoseId(opts.poseId)) {
       return null;
+    }
+
+    if (isCloseupEyePoseId(opts.poseId)) {
+      const eyeContoursFlat = await renderSingleFlatGuidePng(
+        bitmap,
+        opts.landmarks,
+        opts.sourceVideoWidth,
+        opts.sourceVideoHeight,
+        (ctx, lm, ow, oh) => drawAdminCloseupEyeContoursGuideOnCanvas(ctx, lm, ow, oh),
+        false,
+      );
+      if (!eyeContoursFlat) return null;
+      return { variant: 'closeupEye', eyeContoursFlat };
     }
 
     if (isProfilePoseId(opts.poseId)) {
@@ -268,8 +291,16 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         (ctx, lm, ow, oh) => drawAdminProfileJawGuideOnCanvas(ctx, lm, ow, oh, pid),
         false,
       );
+      const profileNoseFlat = await renderSingleFlatGuidePng(
+        bitmap,
+        opts.landmarks,
+        opts.sourceVideoWidth,
+        opts.sourceVideoHeight,
+        (ctx, lm, ow, oh) => drawAdminProfileNoseGuideOnCanvas(ctx, lm, ow, oh, pid),
+        false,
+      );
       if (!profileJawFlat) return null;
-      return { variant: 'profile', profileJawFlat };
+      return { variant: 'profile', profileJawFlat, profileNoseFlat };
     }
 
     if (isJawUpPoseId(opts.poseId)) {
@@ -336,9 +367,25 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       drawAdminFrontalJawAngleGuidelinesOnCanvas,
       false,
     ).catch(() => null);
+    const faceShapeContourFlat = await renderSingleFlatGuidePng(
+      bitmap,
+      opts.landmarks,
+      opts.sourceVideoWidth,
+      opts.sourceVideoHeight,
+      drawAdminFaceShapeContourGuideOnCanvas,
+      false,
+    ).catch(() => null);
 
-    if (!ovalFlat && !noseMouthFlat && !verticalThirdsFlat && !jawAngleFlat) return null;
-    return { variant: 'frontal', ovalFlat, noseMouthFlat, verticalThirdsFlat, jawAngleFlat };
+    if (!ovalFlat && !noseMouthFlat && !verticalThirdsFlat && !jawAngleFlat && !faceShapeContourFlat)
+      return null;
+    return {
+      variant: 'frontal',
+      ovalFlat,
+      noseMouthFlat,
+      verticalThirdsFlat,
+      jawAngleFlat,
+      faceShapeContourFlat,
+    };
   } catch {
     return null;
   } finally {

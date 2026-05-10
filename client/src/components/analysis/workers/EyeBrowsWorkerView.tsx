@@ -13,6 +13,13 @@ import {
 } from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { EyebrowBoldFeminineMatrix } from "./EyebrowBoldFeminineMatrix";
+import { EyeCloseupScanThumb } from "./EyeCloseupScanThumb";
+import {
+  type BrowShape,
+  normalizeBrowShape,
+  eyebrowArchScoreForMatrix,
+} from "./eyebrowShapeNormalize";
 import {
   getEnum,
   getScore,
@@ -31,8 +38,6 @@ const WORKER_KEY = "eye_brows";
  *
  * Each card draws a stylised brow on a 100x40 canvas.
  * ------------------------------------------------------------------------- */
-
-type BrowShape = "straight" | "soft_arch" | "high_arch" | "rounded";
 
 const BROW_SHAPES: {
   key: BrowShape;
@@ -67,28 +72,6 @@ const BROW_SHAPES: {
     lower: "L94 32 Q50 20 6 32 Z",
   },
 ];
-
-const BROW_SHAPE_ALIASES: Record<string, BrowShape> = {
-  straight: "straight",
-  droit: "straight",
-  flat: "straight",
-  soft_arch: "soft_arch",
-  "soft arch": "soft_arch",
-  arched: "soft_arch",
-  arc_doux: "soft_arch",
-  high_arch: "high_arch",
-  "high arch": "high_arch",
-  arc_haut: "high_arch",
-  rounded: "rounded",
-  arrondi: "rounded",
-  curved: "rounded",
-};
-
-function normalizeBrowShape(value: string | null): BrowShape | null {
-  if (!value) return null;
-  const k = value.toLowerCase().trim().replace(/\s+/g, "_");
-  return BROW_SHAPE_ALIASES[k] ?? null;
-}
 
 function BrowShapeGallery({
   selected,
@@ -145,170 +128,6 @@ function BrowShapeGallery({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------------------
- * Bold × Feminine matrix
- *
- * X axis: Feminine ← → Masculine (derived from arch type + thickness)
- * Y axis: Bold (top) ← → Subtle (bottom) (derived from thickness + density)
- * ------------------------------------------------------------------------- */
-
-function BoldFeminineMatrix({
-  thickness,
-  density,
-  archScore,
-  language,
-  cellTargetId,
-}: {
-  thickness: number | null;
-  density: number | null;
-  archScore: number | null;
-  language: AppLanguage;
-  /** Scroll target for matrix cells (sans `#`). */
-  cellTargetId?: string;
-}) {
-  const cols = 7;
-  const rows = 7;
-
-  // Bold axis (Y): combine thickness + density. High = bold (top).
-  const boldSignals = [thickness, density].filter(
-    (v): v is number => v !== null,
-  );
-  const boldness =
-    boldSignals.length > 0
-      ? boldSignals.reduce((a, b) => a + b, 0) / boldSignals.length
-      : null;
-
-  // Y inverted: bold (high) → top (row 0)
-  const yIdx =
-    boldness !== null
-      ? Math.min(
-          rows - 1,
-          Math.max(0, Math.round(((10 - boldness) / 10) * (rows - 1))),
-        )
-      : null;
-
-  // Feminine axis (X): high arch + lower thickness = feminine.
-  // archScore is "0..10 ~ flat..high arch" — used as feminine proxy.
-  // We then offset by thickness (the thicker, the more masculine).
-  let femScore: number | null = null;
-  if (archScore !== null || thickness !== null) {
-    const arch = archScore ?? 5;
-    const th = thickness ?? 5;
-    // Higher arch + thinner brow → more feminine. Range ~0..10
-    const raw = arch * 0.6 + (10 - th) * 0.4;
-    femScore = Math.max(0, Math.min(10, raw));
-  }
-
-  // X: feminine on left (col 0), masculine on right (col cols-1)
-  const xIdx =
-    femScore !== null
-      ? Math.min(
-          cols - 1,
-          Math.max(0, Math.round(((10 - femScore) / 10) * (cols - 1))),
-        )
-      : null;
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-[60px_1fr_60px] grid-rows-[24px_1fr_24px] items-center gap-1">
-        {/* top label */}
-        <div />
-        <div className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Bold", fr: "Marqué" })}
-        </div>
-        <div />
-
-        {/* left label */}
-        <div className="text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Feminine", fr: "Féminin" })}
-        </div>
-
-        {/* matrix grid */}
-        <div
-          className="relative aspect-square w-full rounded-2xl border border-white/10 bg-white/[0.03] p-2"
-          role="img"
-          aria-label="Bold × Feminine matrix"
-        >
-          <div
-            className="grid h-full w-full gap-1"
-            style={{
-              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-              gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-            }}
-          >
-            {Array.from({ length: rows }).map((_, ry) =>
-              Array.from({ length: cols }).map((_, cx) => {
-                const isUser = xIdx === cx && yIdx === ry;
-                const distance = Math.hypot(
-                  cx - (cols - 1) / 2,
-                  ry - (rows - 1) / 2,
-                );
-                const baseOpacity = Math.max(0.04, 0.18 - distance * 0.025);
-                const bg = isUser
-                  ? "#e9f1f4"
-                  : (`rgba(154,174,181,${baseOpacity})` as string);
-                const sh = isUser
-                  ? "0 0 18px rgba(255,255,255,0.55)"
-                  : undefined;
-                const c = cn(
-                  "rounded-md transition",
-                  isUser && "ring-2 ring-white/80",
-                  cellTargetId &&
-                    "cursor-pointer hover:brightness-125 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35",
-                );
-                if (!cellTargetId) {
-                  return (
-                    <div
-                      key={`cell-${ry}-${cx}`}
-                      className={c}
-                      style={{
-                        backgroundColor: bg,
-                        boxShadow: sh,
-                      }}
-                    />
-                  );
-                }
-                return (
-                  <button
-                    key={`cell-${ry}-${cx}`}
-                    type="button"
-                    className={cn(c, "h-full min-h-0 w-full border-0 p-0")}
-                    style={{
-                      backgroundColor: bg,
-                      boxShadow: sh,
-                    }}
-                    aria-label={i18n(language, {
-                      en: "Go to density and grooming scores",
-                      fr: "Aller aux scores densité et toilettage",
-                    })}
-                    onClick={() => scrollToWorkerAnchor(cellTargetId)}
-                  />
-                );
-              }),
-            )}
-          </div>
-
-          {/* axes */}
-          <div className="pointer-events-none absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-white/10" />
-          <div className="pointer-events-none absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-white/10" />
-        </div>
-
-        {/* right label */}
-        <div className="text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Masculine", fr: "Masculin" })}
-        </div>
-
-        {/* bottom label */}
-        <div />
-        <div className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-          {i18n(language, { en: "Subtle", fr: "Subtil" })}
-        </div>
-        <div />
-      </div>
     </div>
   );
 }
@@ -421,12 +240,15 @@ export interface EyeBrowsWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
   heroAside?: React.ReactNode;
+  /** Gros plan œil utilisé pour l’analyse sourcils (URL API `/v1/analyses/.../asset`). */
+  eyeCloseupAssetSrc?: string | null;
 }
 
 export function EyeBrowsWorkerView({
   aggregates,
   language,
   heroAside,
+  eyeCloseupAssetSrc,
 }: EyeBrowsWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -487,18 +309,17 @@ export function EyeBrowsWorkerView({
     "density_grooming_and_glabella.brow_color",
   );
 
-  // Arch score is a synthetic signal for the matrix (0=flat, 10=high arch)
-  const archScore = (() => {
-    if (!shapeKey) return null;
-    if (shapeKey === "straight") return 1;
-    if (shapeKey === "rounded") return 4;
-    if (shapeKey === "soft_arch") return 6;
-    if (shapeKey === "high_arch") return 9;
-    return null;
-  })();
+  const archScore = eyebrowArchScoreForMatrix(shapeKey);
 
   const browTaxonomyAnchor = workerSectionAnchorId(WORKER_KEY, "brow-taxonomy");
   const densitySectionAnchor = workerSectionAnchorId(WORKER_KEY, "density-grooming");
+
+  const [eyeThumbBroken, setEyeThumbBroken] = React.useState(false);
+  React.useEffect(() => {
+    setEyeThumbBroken(false);
+  }, [eyeCloseupAssetSrc]);
+
+  const showEyeThumb = !!(eyeCloseupAssetSrc && !eyeThumbBroken);
 
   return (
     <div className="space-y-4">
@@ -529,37 +350,40 @@ export function EyeBrowsWorkerView({
         )}
       />
 
-      {/* Bold × Feminine matrix */}
       <Card className={workerSectionCardClassName}>
         <CardContent className="p-6 sm:p-8">
-          <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-            <div className="space-y-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                {i18n(language, {
-                  en: "Brow design matrix",
-                  fr: "Matrice de design",
-                })}
-              </p>
-              <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                {i18n(language, {
-                  en: "Bold × Feminine register",
-                  fr: "Registre Marqué × Féminin",
-                })}
-              </h3>
-              <p className="text-sm leading-relaxed text-zinc-400">
-                {i18n(language, {
-                  en: "Two faces with similar brow density can read very differently. The matrix combines thickness, density and arch to place your brow on the bold-vs-subtle and feminine-vs-masculine axes.",
-                  fr: "Deux visages avec une densité de sourcils similaire peuvent rendre très différemment. La matrice combine épaisseur, densité et arc pour positionner ton sourcil sur les axes marqué/subtil et féminin/masculin.",
-                })}
-              </p>
-            </div>
-            <BoldFeminineMatrix
-              thickness={thickness.score}
-              density={density.score}
-              archScore={archScore}
+          <div
+            className={cn(
+              "grid gap-6 lg:items-center",
+              showEyeThumb
+                ? "lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]"
+                : "lg:grid-cols-1 lg:justify-items-center",
+            )}
+          >
+            <EyeCloseupScanThumb
+              src={eyeCloseupAssetSrc}
               language={language}
-              cellTargetId={densitySectionAnchor}
+              className={cn(
+                "mx-auto w-full max-w-[280px]",
+                showEyeThumb && "lg:mx-0 lg:justify-self-start",
+              )}
+              imgClassName="aspect-square max-h-[320px]"
+              onUnavailable={() => setEyeThumbBroken(true)}
             />
+            <div
+              className={cn(
+                "min-w-0 w-full",
+                !showEyeThumb && "max-w-[min(100%,26rem)]",
+              )}
+            >
+              <EyebrowBoldFeminineMatrix
+                thickness={thickness.score}
+                density={density.score}
+                archScore={archScore}
+                language={language}
+                cellTargetId={densitySectionAnchor}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

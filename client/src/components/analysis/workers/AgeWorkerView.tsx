@@ -18,9 +18,22 @@ import {
   SectionShell,
   workerSectionCardClassName,
 } from "./_shared";
-import { Baby, Sparkles, Scissors, Smile } from "lucide-react";
-
 const WORKER_KEY = "age";
+
+/** Ancres DOM pour lien depuis les points du radar néoténique (scroll vers les ScoreBar). */
+const AGE_NEOTENY_ANCHORS = {
+  roundness: "age-metric-neoteny-roundness",
+  softJaw: "age-metric-neoteny-soft-jaw",
+  epidermal: "age-metric-skin-epidermal",
+  periorbital: "age-metric-skin-periorbital",
+  hairline: "age-metric-hair-hairline",
+  beard: "age-metric-hair-beard",
+  lips: "age-metric-struct-lips",
+  cartilage: "age-metric-struct-cartilage",
+} as const;
+
+type AgeNeotenyAnchorId =
+  (typeof AGE_NEOTENY_ANCHORS)[keyof typeof AGE_NEOTENY_ANCHORS];
 
 /* ----------------------------------------------------------------------------
  * Age extractor — supports several legacy keys
@@ -157,8 +170,10 @@ function MaturityTimeline({
 
 function NeotenyComposite({
   signals,
+  language,
 }: {
-  signals: { label: string; score: number }[];
+  signals: { label: string; score: number; anchorId: AgeNeotenyAnchorId }[];
+  language: AppLanguage;
 }) {
   if (signals.length < 4) return null;
   const avg =
@@ -208,7 +223,10 @@ function NeotenyComposite({
       viewBox={`-${viewPadX} -${viewPadY} ${size + 2 * viewPadX} ${size + 2 * viewPadY}`}
       className="mx-auto block h-auto w-full max-w-[420px] overflow-visible"
       role="img"
-      aria-label="Youthfulness signals"
+      aria-label={i18n(language, {
+        en: "Youthfulness radar — dots link to metric details below",
+        fr: "Toile des signaux de jeunesse — les points renvoient vers le détail plus bas",
+      })}
     >
       <defs>
         <linearGradient id="ageNeotenyRadarFill" x1="0" y1="0" x2="0" y2="1">
@@ -254,16 +272,31 @@ function NeotenyComposite({
 
       {valuePoints.map((p, i) => {
         const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        const sig = signals[i]!;
+        const labelGo = i18n(language, {
+          en: `Go to detail: ${sig.label}`,
+          fr: `Aller au détail : ${sig.label}`,
+        });
         return (
-          <circle
-            key={`pt-${i}`}
-            cx={p.x}
-            cy={p.y}
-            r={3.4}
-            fill={paint.dotFill}
-            stroke={paint.dotStroke}
-            strokeWidth="1.5"
-          />
+          <a
+            key={`pt-${sig.anchorId}`}
+            href={`#${sig.anchorId}`}
+            aria-label={labelGo}
+            className="outline-none transition-opacity hover:opacity-95"
+            style={{ cursor: "pointer" }}
+          >
+            <g>
+              <circle cx={p.x} cy={p.y} r={14} fill="transparent" />
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={3.6}
+                fill={paint.dotFill}
+                stroke={paint.dotStroke}
+                strokeWidth="1.5"
+              />
+            </g>
+          </a>
         );
       })}
 
@@ -399,36 +432,50 @@ export function AgeWorkerView({
     {
       label: i18n(language, { en: "Roundness", fr: "Rondeur" }),
       score: fatRoundness.score,
+      anchorId: AGE_NEOTENY_ANCHORS.roundness,
     },
     {
       label: i18n(language, { en: "Soft jaw", fr: "Bas doux" }),
       score: lowerFaceSoftness.score,
+      anchorId: AGE_NEOTENY_ANCHORS.softJaw,
     },
     {
       label: i18n(language, { en: "Skin", fr: "Peau" }),
       score: epidermalPlumpness.score,
+      anchorId: AGE_NEOTENY_ANCHORS.epidermal,
     },
     {
       label: i18n(language, { en: "Eyes", fr: "Yeux" }),
       score: periorbital.score,
+      anchorId: AGE_NEOTENY_ANCHORS.periorbital,
     },
     {
       label: i18n(language, { en: "Hairline", fr: "Cheveux" }),
       score: hairlineMaturation.score,
+      anchorId: AGE_NEOTENY_ANCHORS.hairline,
     },
     {
       label: i18n(language, { en: "Beard", fr: "Barbe" }),
       score: facialHair.score,
+      anchorId: AGE_NEOTENY_ANCHORS.beard,
     },
     {
       label: i18n(language, { en: "Lips", fr: "Lèvres" }),
       score: lipPlumpness.score,
+      anchorId: AGE_NEOTENY_ANCHORS.lips,
     },
     {
       label: i18n(language, { en: "Cartilage", fr: "Cartilage" }),
       score: cartilage.score,
+      anchorId: AGE_NEOTENY_ANCHORS.cartilage,
     },
-  ].filter((s): s is { label: string; score: number } => s.score !== null);
+  ].filter(
+    (s): s is {
+      label: string;
+      score: number;
+      anchorId: AgeNeotenyAnchorId;
+    } => s.score !== null,
+  );
 
   return (
     <div className="space-y-4">
@@ -504,24 +551,22 @@ export function AgeWorkerView({
       {/* Neoteny composite */}
       {radarSignals.length >= 4 ? (
         <Card className={workerSectionCardClassName}>
-          <CardContent className="p-5 sm:p-6">
-            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr] lg:items-start lg:gap-5">
-              <div className="min-w-0 space-y-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                  {i18n(language, {
-                    en: "Youthfulness signals",
-                    fr: "Signaux de jeunesse",
-                  })}
-                </p>
-                <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                  {i18n(language, {
-                    en: "What pulls your apparent age",
-                    fr: "Ce qui tire ton âge apparent",
-                  })}
-                </h3>
-              </div>
-              <NeotenyComposite signals={radarSignals} />
+          <CardContent className="space-y-6 p-5 sm:p-6">
+            <div className="space-y-2 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                {i18n(language, {
+                  en: "Youthfulness signals",
+                  fr: "Signaux de jeunesse",
+                })}
+              </p>
+              <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                {i18n(language, {
+                  en: "What pulls your apparent age",
+                  fr: "Ce qui tire ton âge apparent",
+                })}
+              </h3>
             </div>
+            <NeotenyComposite signals={radarSignals} language={language} />
           </CardContent>
         </Card>
       ) : null}
@@ -539,12 +584,6 @@ export function AgeWorkerView({
             fr: "Rondeur et douceur",
           })}
         >
-          <div className="flex items-center gap-2 text-zinc-400">
-            <Baby className="h-4 w-4" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">
-              {i18n(language, { en: "Soft tissue signals", fr: "Tissus mous" })}
-            </span>
-          </div>
           <ScoreBar
             label={formatLabel(
               "facial_neoteny_and_fat.juvenile_fat_retention_roundness",
@@ -552,12 +591,14 @@ export function AgeWorkerView({
             score={fatRoundness.score}
             argument={fatRoundness.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.roundness}
           />
           <ScoreBar
             label={formatLabel("facial_neoteny_and_fat.lower_face_softness")}
             score={lowerFaceSoftness.score}
             argument={lowerFaceSoftness.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.softJaw}
           />
         </SectionShell>
 
@@ -572,12 +613,6 @@ export function AgeWorkerView({
             fr: "Volume et fraîcheur",
           })}
         >
-          <div className="flex items-center gap-2 text-zinc-400">
-            <Sparkles className="h-4 w-4" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">
-              {i18n(language, { en: "Surface & glow", fr: "Surface et éclat" })}
-            </span>
-          </div>
           <ScoreBar
             label={formatLabel(
               "skin_quality_and_plumpness.epidermal_plumpness_baby_skin",
@@ -585,6 +620,7 @@ export function AgeWorkerView({
             score={epidermalPlumpness.score}
             argument={epidermalPlumpness.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.epidermal}
           />
           <ScoreBar
             label={formatLabel(
@@ -593,6 +629,7 @@ export function AgeWorkerView({
             score={periorbital.score}
             argument={periorbital.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.periorbital}
           />
         </SectionShell>
 
@@ -607,26 +644,19 @@ export function AgeWorkerView({
             fr: "Ligne de cheveux et pilosité",
           })}
         >
-          <div className="flex items-center gap-2 text-zinc-400">
-            <Scissors className="h-4 w-4" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">
-              {i18n(language, {
-                en: "Hair markers",
-                fr: "Marqueurs capillaires",
-              })}
-            </span>
-          </div>
           <ScoreBar
             label={formatLabel("hair_maturation.terminal_facial_hair_presence")}
             score={facialHair.score}
             argument={facialHair.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.beard}
           />
           <ScoreBar
             label={formatLabel("hair_maturation.scalp_hairline_maturation")}
             score={hairlineMaturation.score}
             argument={hairlineMaturation.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.hairline}
           />
         </SectionShell>
 
@@ -641,26 +671,19 @@ export function AgeWorkerView({
             fr: "Lèvres et cartilage",
           })}
         >
-          <div className="flex items-center gap-2 text-zinc-400">
-            <Smile className="h-4 w-4" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">
-              {i18n(language, {
-                en: "Bone & cartilage",
-                fr: "Os et cartilage",
-              })}
-            </span>
-          </div>
           <ScoreBar
             label={formatLabel("structural_neoteny.lip_plumpness")}
             score={lipPlumpness.score}
             argument={lipPlumpness.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.lips}
           />
           <ScoreBar
             label={formatLabel("structural_neoteny.cartilage_proportion")}
             score={cartilage.score}
             argument={cartilage.argument}
             language={language}
+            scrollTargetId={AGE_NEOTENY_ANCHORS.cartilage}
           />
         </SectionShell>
       </div>

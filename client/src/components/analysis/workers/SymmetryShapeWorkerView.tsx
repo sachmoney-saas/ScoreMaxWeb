@@ -23,14 +23,12 @@ import {
   mergeHeroRightSlot,
   workerSectionCardClassName,
 } from "./_shared";
+import { AnalysisJobAssetPreviewThumb } from "./AnalysisJobAssetPreviewThumb";
 
 const WORKER_KEY = "symmetry_shape";
 
 /* ----------------------------------------------------------------------------
- * Face-shape gallery
- *
- * SVG silhouettes for each canonical face shape. Used to highlight the
- * detected morphology, while showing the user the full visual taxonomy.
+ * Face-shape gallery — étiquettes de la taxonomie (sans silhouettes SVG).
  * ------------------------------------------------------------------------- */
 
 type FaceShapeKey =
@@ -40,20 +38,6 @@ type FaceShapeKey =
   | "heart"
   | "diamond"
   | "oblong";
-
-const FACE_SHAPE_PATHS: Record<FaceShapeKey, string> = {
-  oval: "M50 6 C70 6 78 26 78 56 C78 90 65 114 50 114 C35 114 22 90 22 56 C22 26 30 6 50 6 Z",
-  round:
-    "M50 8 C76 8 86 36 86 60 C86 92 70 112 50 112 C30 112 14 92 14 60 C14 36 24 8 50 8 Z",
-  square:
-    "M28 14 L72 14 C78 14 80 30 80 44 L80 84 C80 100 76 110 60 110 L40 110 C24 110 20 100 20 84 L20 44 C20 30 22 14 28 14 Z",
-  heart:
-    "M22 16 C32 8 68 8 78 16 C84 30 78 56 68 78 C58 100 54 114 50 114 C46 114 42 100 32 78 C22 56 16 30 22 16 Z",
-  diamond:
-    "M50 6 L60 28 C70 38 84 50 84 60 C84 80 68 100 56 110 L50 114 L44 110 C32 100 16 80 16 60 C16 50 30 38 40 28 L50 6 Z",
-  oblong:
-    "M50 4 C72 4 78 30 78 64 C78 100 66 116 50 116 C34 116 22 100 22 64 C22 30 28 4 50 4 Z",
-};
 
 const FACE_SHAPE_ORDER: FaceShapeKey[] = [
   "oval",
@@ -100,27 +84,12 @@ function FaceShapeGallery({
             key={shape}
             type="button"
             onClick={() => scrollToWorkerAnchor(taxonomyAnchorId)}
-            className={`relative flex flex-col items-center gap-2 rounded-2xl border p-3 text-left transition hover:border-white/25 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${
+            className={`relative flex min-h-[3.25rem] flex-col items-center justify-center rounded-2xl border px-2 py-2.5 text-center transition hover:border-white/25 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 sm:min-h-[3.5rem] ${
               isActive
                 ? "border-white/45 bg-white/[0.08] shadow-[0_0_28px_rgba(255,255,255,0.08)]"
                 : "border-white/10 bg-white/[0.025]"
             }`}
           >
-            <svg
-              viewBox="0 0 100 120"
-              className="h-16 w-12 sm:h-20 sm:w-16"
-              role="img"
-              aria-label={FACE_SHAPE_LABELS[shape].en}
-            >
-              <path
-                d={FACE_SHAPE_PATHS[shape]}
-                fill={isActive ? "#e9f1f4" : "rgba(154,174,181,0.18)"}
-                stroke={
-                  isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.18)"
-                }
-                strokeWidth={isActive ? 1.6 : 1.2}
-              />
-            </svg>
             <span
               className={`text-[11px] font-semibold uppercase tracking-[0.1em] ${
                 isActive ? "text-white" : "text-zinc-500"
@@ -229,64 +198,7 @@ function BipolarBar({
 }
 
 /* ----------------------------------------------------------------------------
- * Stylized face SVG — generic outline used as canvas for symmetry/proportions
- * overlays. ViewBox 0 0 200 260, with realistic landmarks.
- * ------------------------------------------------------------------------- */
-
-const FACE_OUTLINE_PATH =
-  "M100 14 C140 14 160 50 160 110 C160 180 134 240 100 244 C66 240 40 180 40 110 C40 50 60 14 100 14 Z";
-
-function FaceCanvas({ children }: { children?: React.ReactNode }) {
-  return (
-    <svg
-      viewBox="0 0 200 260"
-      className="mx-auto block h-auto w-full max-w-[300px]"
-    >
-      {/* Outline */}
-      <path
-        d={FACE_OUTLINE_PATH}
-        fill="rgba(154,174,181,0.06)"
-        stroke="rgba(255,255,255,0.18)"
-        strokeWidth="1.4"
-      />
-      {/* Brows */}
-      <path
-        d="M62 92 Q78 84 96 92"
-        stroke="rgba(255,255,255,0.35)"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        fill="none"
-      />
-      <path
-        d="M104 92 Q122 84 138 92"
-        stroke="rgba(255,255,255,0.35)"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        fill="none"
-      />
-      {/* Eyes */}
-      <ellipse cx="78" cy="106" rx="9" ry="4" fill="rgba(255,255,255,0.28)" />
-      <ellipse cx="122" cy="106" rx="9" ry="4" fill="rgba(255,255,255,0.28)" />
-      {/* Nose */}
-      <path
-        d="M100 112 L96 154 Q100 162 104 154 Z"
-        fill="rgba(255,255,255,0.18)"
-      />
-      {/* Mouth */}
-      <path
-        d="M84 188 Q100 196 116 188"
-        stroke="rgba(255,255,255,0.35)"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        fill="none"
-      />
-      {children}
-    </svg>
-  );
-}
-
-/* ----------------------------------------------------------------------------
- * Symmetry mirror — overlay region chips on the face
+ * Miroir de symétrie — pastilles cliquables (sans schéma visage SVG).
  * ------------------------------------------------------------------------- */
 
 function SymmetryMirror({
@@ -296,77 +208,56 @@ function SymmetryMirror({
   regions: {
     key: string;
     label: { en: string; fr: string };
-    x: number;
-    y: number;
     score: number | null;
     scrollTargetId: string;
   }[];
   language: AppLanguage;
 }) {
   return (
-    <div className="relative">
-      <FaceCanvas>
-        {/* Central vertical axis */}
-        <line
-          x1="100"
-          y1="6"
-          x2="100"
-          y2="252"
-          stroke="rgba(255,255,255,0.18)"
-          strokeWidth="1"
-          strokeDasharray="4 4"
-        />
-      </FaceCanvas>
-
-      {/* Region chips positioned absolutely */}
-      <div className="absolute inset-0">
-        {regions
-          .filter((r): r is typeof r & { score: number } => r.score !== null)
-          .map((r) => {
-            const band = bandFromScore(r.score);
-            const dotColor =
-              band === "excellent"
-                ? "bg-emerald-300"
-                : band === "good"
-                  ? "bg-lime-300"
-                  : band === "moderate"
-                    ? "bg-amber-300"
-                    : "bg-rose-300";
-            const ringColor =
-              band === "excellent"
-                ? "ring-emerald-300/40"
-                : band === "good"
-                  ? "ring-lime-300/40"
-                  : band === "moderate"
-                    ? "ring-amber-300/40"
-                    : "ring-rose-300/40";
-            return (
-              <button
-                key={r.key}
-                type="button"
-                onClick={() => scrollToWorkerAnchor(r.scrollTargetId)}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full bg-zinc-950/80 px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-white ring-1 backdrop-blur transition hover:brightness-125 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${ringColor}`}
-                style={{ left: `${r.x}%`, top: `${r.y}%` }}
-              >
-                <span className="flex items-center gap-1.5">
-                  <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-                  <span className="text-zinc-300">
-                    {i18n(language, r.label)}
-                  </span>
-                  <span className="font-display text-[11px] font-bold tabular-nums text-white">
-                    {r.score.toFixed(r.score % 1 === 0 ? 0 : 1)}
-                  </span>
+    <div className="flex flex-wrap items-center justify-center gap-2 lg:justify-end">
+      {regions
+        .filter((r): r is typeof r & { score: number } => r.score !== null)
+        .map((r) => {
+          const band = bandFromScore(r.score);
+          const dotColor =
+            band === "excellent"
+              ? "bg-emerald-300"
+              : band === "good"
+                ? "bg-lime-300"
+                : band === "moderate"
+                  ? "bg-amber-300"
+                  : "bg-rose-300";
+          const ringColor =
+            band === "excellent"
+              ? "ring-emerald-300/40"
+              : band === "good"
+                ? "ring-lime-300/40"
+                : band === "moderate"
+                  ? "ring-amber-300/40"
+                  : "ring-rose-300/40";
+          return (
+            <button
+              key={r.key}
+              type="button"
+              onClick={() => scrollToWorkerAnchor(r.scrollTargetId)}
+              className={`cursor-pointer rounded-full bg-zinc-950/80 px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-white ring-1 backdrop-blur transition hover:brightness-125 focus-visible:outline focus-visible:ring-2 focus-visible:ring-white/35 ${ringColor}`}
+            >
+              <span className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                <span className="text-zinc-300">{i18n(language, r.label)}</span>
+                <span className="font-display text-[11px] font-bold tabular-nums text-white">
+                  {r.score.toFixed(r.score % 1 === 0 ? 0 : 1)}
                 </span>
-              </button>
-            );
-          })}
-      </div>
+              </span>
+            </button>
+          );
+        })}
     </div>
   );
 }
 
 /* ----------------------------------------------------------------------------
- * Proportions canvas — overlay vertical thirds + horizontal fifths
+ * Proportions — repère tiers (asset scan) + actions vers les métriques tiers / cinquièmes.
  * ------------------------------------------------------------------------- */
 
 function ProportionsCanvas({
@@ -375,25 +266,15 @@ function ProportionsCanvas({
   language,
   thirdsMetricId,
   fifthsMetricId,
+  verticalThirdsAssetSrc,
 }: {
   thirdsScore: number | null;
   fifthsScore: number | null;
   language: AppLanguage;
   thirdsMetricId: string;
   fifthsMetricId: string;
+  verticalThirdsAssetSrc?: string | null;
 }) {
-  const thirdLines = [
-    { y: 70, key: "upper", label: { en: "Upper third", fr: "Tiers sup." } },
-    { y: 134, key: "middle", label: { en: "Middle third", fr: "Tiers moyen" } },
-    { y: 198, key: "lower", label: { en: "Lower third", fr: "Tiers inf." } },
-  ];
-  const fifthLines = [
-    { x: 40, label: "1/5" },
-    { x: 80, label: "2/5" },
-    { x: 120, label: "3/5" },
-    { x: 160, label: "4/5" },
-  ];
-
   const thirdsBand = thirdsScore !== null ? bandFromScore(thirdsScore) : null;
   const fifthsBand = fifthsScore !== null ? bandFromScore(fifthsScore) : null;
   const colorFor = (b: ReturnType<typeof bandFromScore> | null) =>
@@ -409,52 +290,17 @@ function ProportionsCanvas({
 
   return (
     <div className="space-y-3">
-      <FaceCanvas>
-        {/* Vertical thirds — horizontal lines */}
-        {thirdLines.map((tl) => (
-          <line
-            key={`third-${tl.key}`}
-            x1={32}
-            x2={168}
-            y1={tl.y}
-            y2={tl.y}
-            stroke={colorFor(thirdsBand)}
-            strokeWidth="1.2"
-            strokeDasharray="3 4"
-          />
-        ))}
-
-        {/* Horizontal fifths — vertical lines */}
-        {fifthLines.map((fl) => (
-          <line
-            key={`fifth-${fl.x}`}
-            x1={fl.x}
-            x2={fl.x}
-            y1={20}
-            y2={236}
-            stroke={colorFor(fifthsBand)}
-            strokeWidth="1"
-            strokeDasharray="2 5"
-            opacity="0.7"
-          />
-        ))}
-
-        {/* Third labels */}
-        {thirdLines.map((tl) => (
-          <text
-            key={`label-${tl.key}`}
-            x={172}
-            y={tl.y - 28}
-            fontSize="8"
-            fontWeight="700"
-            fill="#aab2bd"
-            letterSpacing="0.08em"
-          >
-            {i18n(language, tl.label).toUpperCase()}
-          </text>
-        ))}
-      </FaceCanvas>
-
+      <div className="flex justify-center pb-1 pt-0.5">
+        <AnalysisJobAssetPreviewThumb
+          src={verticalThirdsAssetSrc}
+          alt={i18n(language, {
+            en: "Front-face scan overlay: vertical-thirds guide lines",
+            fr: "Repère tiers verticaux sur ton visage (prise frontale)",
+          })}
+          className="mx-auto h-52 w-full max-w-[220px]"
+          imgClassName="object-contain"
+        />
+      </div>
       <div className="flex items-center justify-center gap-5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
         <button
           type="button"
@@ -491,12 +337,14 @@ export interface SymmetryShapeWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
   heroAside?: React.ReactNode;
+  verticalThirdsAssetSrc?: string | null;
 }
 
 export function SymmetryShapeWorkerView({
   aggregates,
   language,
   heroAside,
+  verticalThirdsAssetSrc,
 }: SymmetryShapeWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -561,53 +409,40 @@ export function SymmetryShapeWorkerView({
     "face_shape.face_length_vs_width_ratio",
   );
 
-  // Symmetry mirror regions, positioned in % over the face canvas
   const mirrorRegions = [
     {
       key: "brows",
       label: { en: "Brows", fr: "Sourcils" },
-      x: 50,
-      y: 28,
       score: browSym.score,
       scrollTargetId: symUpperAnchor,
     },
     {
       key: "eyes",
       label: { en: "Eyes", fr: "Yeux" },
-      x: 50,
-      y: 41,
       score: eyeSym.score,
       scrollTargetId: symUpperAnchor,
     },
     {
       key: "cheekbones",
       label: { en: "Cheekbones", fr: "Pommettes" },
-      x: 18,
-      y: 56,
       score: cheekBalance.score,
       scrollTargetId: symLowerAnchor,
     },
     {
       key: "nose",
       label: { en: "Nose axis", fr: "Axe du nez" },
-      x: 82,
-      y: 56,
       score: noseAxis.score,
       scrollTargetId: symUpperAnchor,
     },
     {
       key: "mouth",
       label: { en: "Mouth", fr: "Bouche" },
-      x: 50,
-      y: 74,
       score: mouthSym.score,
       scrollTargetId: symLowerAnchor,
     },
     {
       key: "jaw",
       label: { en: "Jaw axis", fr: "Axe mâchoire" },
-      x: 50,
-      y: 88,
       score: jawAxis.score,
       scrollTargetId: symLowerAnchor,
     },
@@ -741,8 +576,8 @@ export function SymmetryShapeWorkerView({
               </h3>
               <p className="text-sm leading-relaxed text-zinc-400">
                 {i18n(language, {
-                  en: "The dashed central axis represents the perfect midline. Each region badge shows how well the left and right sides mirror each other.",
-                  fr: "L'axe central pointillé représente la ligne médiane idéale. Chaque badge montre à quel point les côtés gauche et droit se correspondent.",
+                  en: "Tap a badge to jump to the detailed symmetry score for that facial region.",
+                  fr: "Appuie sur un badge pour ouvrir le détail du score de symétrie pour cette zone.",
                 })}
               </p>
             </div>
@@ -860,6 +695,7 @@ export function SymmetryShapeWorkerView({
                 WORKER_KEY,
                 "proportions.horizontal_fifths_balance",
               )}
+              verticalThirdsAssetSrc={verticalThirdsAssetSrc}
             />
           </div>
         </CardContent>

@@ -28,11 +28,13 @@ import {
   AnalysisProcessingState,
   analysisElapsedAnchorEpochMs,
 } from "@/components/analysis/AnalysisProcessingState";
+import { useAuth } from "@/hooks/use-auth";
 import {
   getWorkerPreviewHeadlineScore,
   MiniRing,
   type MiniRingHighlight,
   WorkerPreviewContent,
+  AnalysisJobScanPreviewProvider,
 } from "@/components/analysis/WorkerPreviewContent";
 import { CriticalPointsRecommendations } from "@/components/analysis/CriticalPointsRecommendations";
 import {
@@ -958,6 +960,7 @@ export function AnalysisResultsSection({
   isLoading,
 }: AnalysisResultsSectionProps) {
   const language = useAppLanguage();
+  const { user } = useAuth();
   const search = useSearch();
   const [, setLocation] = useLocation();
 
@@ -1102,6 +1105,13 @@ export function AnalysisResultsSection({
         </div>
 
         <TabsContent value="overview" className="mt-0">
+          <AnalysisJobScanPreviewProvider
+            value={
+              user?.id
+                ? { jobId: analysis.job.id, userId: user.id }
+                : null
+            }
+          >
           <div className="flex flex-col gap-4">
             {globalScore ? (
               <GlobalScoreCard
@@ -1395,6 +1405,7 @@ export function AnalysisResultsSection({
               />
             ))}
           </div>
+          </AnalysisJobScanPreviewProvider>
         </TabsContent>
 
         <TabsContent value="recommendations" className="mt-0">
