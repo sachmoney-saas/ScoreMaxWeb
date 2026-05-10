@@ -3,12 +3,18 @@ import { protocolPageBodyGlassClassName } from "@/components/protocol/ProtocolPa
 
 /**
  * Onglet Recommandations — même panneau verre bleuté semi-transparent que « Mon protocole ».
+ * Bords horizontaux et haut en pleine largeur pour les cartes métal (axes) ; padding texte via
+ * `recommendationsReportHorizontalInsetClassName` sur les blocs qui en ont besoin.
  */
 export const recommendationsReportShellClassName = cn(
   protocolPageBodyGlassClassName,
   "rounded-xl text-zinc-100",
-  "px-5 py-8 sm:px-8 sm:py-10 md:px-11 md:py-11",
+  "px-0 pt-0 pb-8 sm:pb-10 md:pb-11",
 );
+
+/** Marge latérale pour textes / grilles qui ne doivent pas toucher le bord du verre. */
+export const recommendationsReportHorizontalInsetClassName =
+  "px-5 sm:px-8 md:px-11";
 export const recommendationsReportTabsListClassName = cn(
   "inline-flex h-auto max-h-none min-h-[2.75rem] w-fit max-w-full flex-wrap justify-start gap-0.5",
   "rounded-lg border border-zinc-200 bg-zinc-100 p-1 text-zinc-700 sm:flex-nowrap",

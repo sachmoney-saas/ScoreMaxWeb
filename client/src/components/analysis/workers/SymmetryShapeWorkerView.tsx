@@ -452,8 +452,8 @@ export function SymmetryShapeWorkerView({
     <div className="space-y-4">
       <WorkerHero
         eyebrow={i18n(language, {
-          en: "Symmetry & shape",
-          fr: "Symétrie et forme",
+          en: "Symmetry",
+          fr: "Symétrie",
         })}
         title={i18n(language, {
           en: "Your facial structure",

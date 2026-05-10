@@ -54,6 +54,41 @@ export const scoreRingMatchMetallicPillClassName = cn(
 );
 
 /**
+ * Pastilles gradient bleu / rouge (filtre reco Softmaxxing·Hardmaxxing).
+ * Soft : cobalt / bleu roi + reflet façon capsule (même recette métal + gloss `::before` que Hard).
+ */
+export const softmaxxingGradientPillClassName = cn(
+  "relative z-0 overflow-hidden border border-blue-400/50 ring-1 ring-slate-950/35",
+  "bg-[linear-gradient(to_top_right,#172554_0%,#1d4ed8_20%,#3b82f6_38%,#bfdbfe_54%,#2563eb_78%,#172554_100%)]",
+  "font-semibold text-blue-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.52),inset_0_-2px_12px_rgba(30,64,175,0.45)]",
+  "before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-[inherit] before:bg-[linear-gradient(118deg,rgba(255,255,255,0.42)_0%,rgba(255,255,255,0.08)_38%,transparent_52%,rgba(30,58,138,0.16)_100%)] before:content-['']",
+);
+
+export const hardmaxxingGradientPillClassName = cn(
+  "relative z-0 overflow-hidden border border-rose-400/55 ring-1 ring-rose-950/35",
+  "bg-[linear-gradient(to_top_right,#881337_0%,#dc2626_22%,#fb7185_42%,#ffe4e6_56%,#e11d48_78%,#9f1239_100%)]",
+  "font-semibold text-rose-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.48),inset_0_-2px_12px_rgba(127,29,29,0.4)]",
+  "before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-[inherit] before:bg-[linear-gradient(118deg,rgba(255,255,255,0.4)_0%,rgba(255,255,255,0.07)_38%,transparent_52%,rgba(69,10,22,0.18)_100%)] before:content-['']",
+);
+
+/**
+ * Pastilles des rangs 1–3 (points forts / faibles) — plus claires que les versions précédentes,
+ * encore désaturées, sans halo métallique ; liseré neutre.
+ */
+export const softmaxxingTakeawayRankPillClassName = cn(
+  /* Pas de ring (évite halo / teinte froide) — liseré neutre léger uniquement */
+  "relative z-0 overflow-hidden border border-white/[0.14] ring-0 ring-transparent",
+  "bg-[linear-gradient(to_top_right,#324c43_0%,#426f5c_24%,#568d75_52%,#4a7a66_74%,#364e45_100%)]",
+  "font-semibold text-emerald-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.26),inset_0_-2px_10px_rgba(0,0,0,0.1)]",
+);
+
+export const hardmaxxingTakeawayRankPillClassName = cn(
+  "relative z-0 overflow-hidden border border-white/[0.14] ring-0 ring-transparent",
+  "bg-[linear-gradient(to_top_right,#443336_0%,#614a4f_26%,#766065_52%,#675357_74%,#463436_100%)]",
+  "font-semibold text-rose-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-2px_10px_rgba(0,0,0,0.11)]",
+);
+
+/**
  * Radix `TabsTrigger` active state — same metallic read as rank pills / Mon protocole.
  */
 export const analysisTabActiveMetallicTriggerClassName = cn(
@@ -632,8 +667,8 @@ export function coloringSkinTintHeroBlock(language: AppLanguage): {
       fr: "Vue d'ensemble peau",
     }),
     title: i18n(language, {
-      en: "Your skin profile",
-      fr: "Ton profil de peau",
+      en: "Skin",
+      fr: "Peau",
     }),
   };
 }

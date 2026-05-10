@@ -375,8 +375,8 @@ export function SkinWorkerView({
       <WorkerHero
         eyebrow={i18n(language, { en: "Skin overview", fr: "Vue d'ensemble peau" })}
         title={i18n(language, {
-          en: "Your skin profile",
-          fr: "Ton profil de peau",
+          en: "Skin",
+          fr: "Peau",
         })}
         argument={heroArgument}
         score={heroSkinScore}

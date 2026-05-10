@@ -41,8 +41,10 @@ import {
   analysisSurfaceCardClassName,
   analysisTabActiveMetallicTriggerClassName,
   analysisTabBarGlassClassName,
+  hardmaxxingTakeawayRankPillClassName,
   ScoreRing,
   scoreRingMatchMetallicPillClassName,
+  softmaxxingTakeawayRankPillClassName,
 } from "@/components/analysis/workers/_shared";
 import { cn } from "@/lib/utils";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
@@ -643,15 +645,13 @@ function TakeawayList({
   const isPositive = tone === "positive";
   const accent = isPositive
     ? {
-        chip: "bg-emerald-400/15 text-emerald-200 ring-emerald-400/30",
+        pill: softmaxxingTakeawayRankPillClassName,
         score: "text-emerald-200",
-        glow: "rgba(52,211,153,0.25)",
         heading: "text-emerald-200",
       }
     : {
-        chip: "bg-red-400/18 text-red-200 ring-red-400/35",
+        pill: hardmaxxingTakeawayRankPillClassName,
         score: "text-red-300",
-        glow: "rgba(248,113,113,0.28)",
         heading: "text-red-200",
       };
 
@@ -687,16 +687,12 @@ function TakeawayList({
               >
                 <span
                   className={cn(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-display text-[10px] font-bold tabular-nums ring-1",
-                    accent.chip,
+                    "flex shrink-0 items-center justify-center overflow-hidden rounded-md font-display text-[10px] font-bold tabular-nums",
+                    roomyRows ? "h-7 w-7 sm:h-8 sm:w-8 sm:text-[11px]" : "h-6 w-6",
+                    accent.pill,
                   )}
-                  style={{
-                    boxShadow: roomyRows
-                      ? `0 0 8px ${accent.glow}`
-                      : `0 0 10px ${accent.glow}`,
-                  }}
                 >
-                  {index + 1}
+                  <span className="relative z-10">{index + 1}</span>
                 </span>
                 <span
                   className={cn(
@@ -1059,6 +1055,7 @@ export function AnalysisResultsSection({
   const noseResult = results.find((r) => r.worker === "nose");
   const neckResult = results.find((r) => r.worker === "neck");
   const skinTintResult = results.find((r) => r.worker === "skin_tint");
+  const symmetryShapeResult = results.find((r) => r.worker === "symmetry_shape");
   const resultsAfterPinnedPairs = results.filter(
     (r) =>
       !isAgeWorker(r.worker) &&
@@ -1075,7 +1072,8 @@ export function AnalysisResultsSection({
       r.worker !== "eyes" &&
       r.worker !== "nose" &&
       r.worker !== "neck" &&
-      r.worker !== "skin_tint",
+      r.worker !== "skin_tint" &&
+      r.worker !== "symmetry_shape",
   );
 
   return (
@@ -1386,13 +1384,42 @@ export function AnalysisResultsSection({
                 scoreHighlight={workerPreviewScoreHighlight(noseResult.worker)}
               />
             ) : null}
-            {skinTintResult ? (
+            {skinTintResult && symmetryShapeResult ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+                <div className="min-w-0">
+                  <WorkerResultCard
+                    key={`${skinTintResult.worker}-${skinTintResult.promptVersion}`}
+                    result={skinTintResult}
+                    href={buildWorkerHref(skinTintResult.worker)}
+                    language={language}
+                    scoreHighlight={workerPreviewScoreHighlight(skinTintResult.worker)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <WorkerResultCard
+                    key={`${symmetryShapeResult.worker}-${symmetryShapeResult.promptVersion}`}
+                    result={symmetryShapeResult}
+                    href={buildWorkerHref(symmetryShapeResult.worker)}
+                    language={language}
+                    scoreHighlight={workerPreviewScoreHighlight(symmetryShapeResult.worker)}
+                  />
+                </div>
+              </div>
+            ) : skinTintResult ? (
               <WorkerResultCard
                 key={`${skinTintResult.worker}-${skinTintResult.promptVersion}`}
                 result={skinTintResult}
                 href={buildWorkerHref(skinTintResult.worker)}
                 language={language}
                 scoreHighlight={workerPreviewScoreHighlight(skinTintResult.worker)}
+              />
+            ) : symmetryShapeResult ? (
+              <WorkerResultCard
+                key={`${symmetryShapeResult.worker}-${symmetryShapeResult.promptVersion}`}
+                result={symmetryShapeResult}
+                href={buildWorkerHref(symmetryShapeResult.worker)}
+                language={language}
+                scoreHighlight={workerPreviewScoreHighlight(symmetryShapeResult.worker)}
               />
             ) : null}
             {resultsAfterPinnedPairs.map((result) => (

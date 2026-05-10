@@ -1,12 +1,6 @@
 import * as React from "react";
 import { useQueries } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  Loader2,
-  Sparkles,
-  Syringe,
-  TrendingDown,
-} from "lucide-react";
+import { AlertTriangle, Loader2, Sparkles, Syringe } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { i18n, type AppLanguage } from "@/lib/i18n";
@@ -31,14 +25,92 @@ import {
 } from "@/components/analysis/recommendations/RecommendationDocumentContext";
 import {
   recommendationsReportShellClassName,
+  recommendationsReportHorizontalInsetClassName,
 } from "@/components/analysis/recommendations/recommendations-report-theme";
+import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
 import {
   analysisTabActiveMetallicTriggerClassName,
   analysisTabBarGlassClassName,
+  hardmaxxingGradientPillClassName,
   scoreRingMatchMetallicPillClassName,
+  softmaxxingGradientPillClassName,
 } from "@/components/analysis/workers/_shared";
 
-/** Même barre métal / fond verre que Overview | Recommandations. */
+const RECOMMENDATIONS_TYPE_TOGGLE_BTN_BASE = cn(
+  "relative rounded-xl border border-transparent px-4 py-2.5 text-left text-sm font-medium transition-colors sm:px-5",
+  "data-[state=inactive]:text-zinc-500 data-[state=inactive]:hover:bg-white/[0.07] data-[state=inactive]:hover:text-zinc-300",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
+  "data-[state=active]:hover:brightness-[1.02]",
+);
+
+function RecommendationsTypeFilterBar({
+  showSoft,
+  showHard,
+  onSoftChange,
+  onHardChange,
+  language,
+}: {
+  showSoft: boolean;
+  showHard: boolean;
+  onSoftChange: (next: boolean) => void;
+  onHardChange: (next: boolean) => void;
+  language: AppLanguage;
+}) {
+  const toggleSoft = () => {
+    if (showSoft && !showHard) return;
+    onSoftChange(!showSoft);
+  };
+  const toggleHard = () => {
+    if (showHard && !showSoft) return;
+    onHardChange(!showHard);
+  };
+
+  return (
+    <div className="flex w-full justify-center px-2">
+      <div
+        className={cn(
+          analysisTabBarGlassClassName,
+          "inline-flex h-auto max-w-full flex-wrap items-center justify-center gap-1 rounded-2xl p-1.5 sm:flex-nowrap",
+        )}
+        role="group"
+        aria-label={i18n(language, {
+          en: "Filter recommendations by category",
+          fr: "Filtrer les recommandations par type",
+        })}
+      >
+        <button
+          type="button"
+          data-state={showSoft ? "active" : "inactive"}
+          aria-pressed={showSoft}
+          onClick={toggleSoft}
+          className={cn(
+            RECOMMENDATIONS_TYPE_TOGGLE_BTN_BASE,
+            showSoft ? softmaxxingGradientPillClassName : null,
+          )}
+        >
+          <span className="relative z-10 font-semibold">
+            {i18n(language, { en: "Softmaxxing", fr: "Softmaxxing" })}
+          </span>
+        </button>
+        <button
+          type="button"
+          data-state={showHard ? "active" : "inactive"}
+          aria-pressed={showHard}
+          onClick={toggleHard}
+          className={cn(
+            RECOMMENDATIONS_TYPE_TOGGLE_BTN_BASE,
+            showHard ? hardmaxxingGradientPillClassName : null,
+          )}
+        >
+          <span className="relative z-10 font-semibold">
+            {i18n(language, { en: "Hardmaxxing", fr: "Hardmaxxing" })}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const RECOMMENDATIONS_WORKER_TAB_TRIGGER_CLASS = cn(
   "relative z-0 rounded-xl border border-transparent px-4 py-2.5 text-left text-sm font-medium text-zinc-400 transition-all sm:px-5",
   "hover:text-zinc-200",
@@ -69,23 +141,6 @@ export interface CriticalPointsRecommendationsProps {
  * Visual helpers
  * ========================================================================= */
 
-function scoreBadgeClasses(score: number): string {
-  if (score < 3.5) return "border border-rose-200 bg-rose-50 text-rose-950";
-  if (score < 5.5) return "border border-orange-200 bg-orange-50 text-orange-950";
-  return "border border-amber-200 bg-amber-50 text-amber-950";
-}
-
-function scoreSeverityLabel(
-  score: number,
-  language: AppLanguage,
-): string {
-  if (score < 3.5)
-    return i18n(language, { en: "Critical", fr: "Critique" });
-  if (score < 5.5)
-    return i18n(language, { en: "Important", fr: "Important" });
-  return i18n(language, { en: "To improve", fr: "À améliorer" });
-}
-
 /** One-line explanation paired with the score band (the “argument” under the note). */
 function scoreSeverityBlurb(
   score: number,
@@ -109,33 +164,30 @@ function scoreSeverityBlurb(
   });
 }
 
-function scoreHeroAccentBorder(score: number): string {
-  if (score < 3.5) return "border-l-4 border-l-rose-600";
-  if (score < 5.5) return "border-l-4 border-l-orange-500";
-  return "border-l-4 border-l-amber-500";
-}
-
 /* ============================================================================
  * Section: a single critical point + its recommendations
  * ========================================================================= */
 
 function CriticalPointSection({
-  index,
   point,
   language,
   actionByRec,
+  showSoftmaxxing,
+  showHardmaxxing,
 }: {
-  index: number;
   point: CriticalPoint;
   language: AppLanguage;
   actionByRec: Map<string, RecommendationAction>;
+  showSoftmaxxing: boolean;
+  showHardmaxxing: boolean;
 }) {
   const aggregates = React.useMemo<Record<string, unknown>>(() => ({}), []);
 
   const soft = point.matchedRecommendations.filter((r) => r.type === "soft");
   const hard = point.matchedRecommendations.filter((r) => r.type === "hard");
 
-  const recCount = point.matchedRecommendations.length;
+  const visibleSoft = showSoftmaxxing ? soft : [];
+  const visibleHard = showHardmaxxing ? hard : [];
 
   return (
     <section className="space-y-6 border-b border-white/10 pb-10 last:border-b-0 last:pb-0">
@@ -143,81 +195,50 @@ function CriticalPointSection({
         className={cn(
           scoreRingMatchMetallicPillClassName,
           "w-full rounded-xl px-5 py-5 sm:px-8 sm:py-7",
-          scoreHeroAccentBorder(point.score),
         )}
       >
-        <div className="relative z-[1] flex w-full flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
+        <div className="relative z-[1] flex w-full flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
           <div className="min-w-0 w-full flex-1 space-y-3 lg:max-w-none">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/55 bg-white/90 font-display text-xs font-bold tabular-nums text-zinc-900 shadow-sm">
-                {index + 1}
-              </span>
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-700">
-                {i18n(language, {
-                  en: "Focus on this measure",
-                  fr: "Axe à travailler",
-                })}
-              </p>
-              <h3 className="mt-1.5 font-display text-2xl font-bold leading-tight tracking-tight text-zinc-950 sm:text-[1.65rem] sm:leading-[1.15]">
-                {point.aggregateLabel}
-              </h3>
-              <p className="mt-3 w-full max-w-none text-sm leading-relaxed text-zinc-800">
-                {scoreSeverityBlurb(point.score, language)}
-              </p>
-            </div>
+            <h3 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-950 sm:text-[1.65rem] sm:leading-[1.15]">
+              {point.aggregateLabel}
+            </h3>
+            <p className="w-full max-w-none text-sm leading-relaxed text-zinc-800">
+              {scoreSeverityBlurb(point.score, language)}
+            </p>
           </div>
 
-          <div className="w-full shrink-0 lg:w-auto lg:max-w-[15rem]">
-            <div
-              className={cn(
-                "rounded-xl px-4 py-4 sm:px-5 sm:py-5",
-                scoreBadgeClasses(point.score),
-              )}
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
-                {i18n(language, { en: "Your score", fr: "Ta note" })}
-              </p>
-              <p className="mt-2 flex flex-wrap items-baseline gap-1 font-display tabular-nums">
-                <span className="text-4xl font-bold tracking-tight text-zinc-950 sm:text-[2.65rem]">
-                  {point.score.toFixed(1)}
-                </span>
-                <span className="text-lg font-medium text-zinc-500">/10</span>
-              </p>
-              <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-zinc-800">
-                <TrendingDown className="h-3.5 w-3.5 shrink-0 opacity-90" />
-                <span>{scoreSeverityLabel(point.score, language)}</span>
-              </div>
-            </div>
+          <div className="flex w-full shrink-0 items-center justify-center sm:justify-start lg:w-auto lg:justify-end">
+            <MiniRing
+              score={point.score}
+              scale={10}
+              size={80}
+              fractionDigits={1}
+              highlight="weakness"
+              trackStroke="rgba(39,39,42,0.22)"
+              centerFill="#09090b"
+            />
           </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-white/10 pt-4">
-          <h4 className="font-display text-sm font-semibold tracking-tight text-zinc-100">
+        {(!showSoftmaxxing &&
+          soft.length > 0 &&
+          showHardmaxxing &&
+          hard.length > 0) ||
+        (!showHardmaxxing &&
+          hard.length > 0 &&
+          showSoftmaxxing &&
+          soft.length > 0) ? (
+          <p className="text-xs text-zinc-500">
             {i18n(language, {
-              en: "How to improve",
-              fr: "Comment progresser",
+              en: "Turn on the other mode above to see the hidden recommendations.",
+              fr: "Active l’autre mode ci-dessus pour voir les recommandations masquées.",
             })}
-          </h4>
-          <span className="text-xs text-zinc-400">
-            {recCount}{" "}
-            {i18n(language, {
-              en:
-                recCount > 1
-                  ? "actionable recommendations"
-                  : "actionable recommendation",
-              fr:
-                recCount > 1
-                  ? "recommandations actionnables"
-                  : "recommandation actionnable",
-            })}
-          </span>
-        </div>
+          </p>
+        ) : null}
 
-      {soft.length > 0 ? (
+      {visibleSoft.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-900 ring-1 ring-inset ring-emerald-200">
@@ -225,12 +246,12 @@ function CriticalPointSection({
               {i18n(language, { en: "Softmaxxing", fr: "Softmaxxing" })}
             </span>
             <span className="text-[11px] text-zinc-400">
-              {soft.length}{" "}
+              {visibleSoft.length}{" "}
               {i18n(language, { en: "actions", fr: "actions" })}
             </span>
           </div>
           <div className="grid w-full gap-4 md:grid-cols-2">
-            {soft.map((rec) => (
+            {visibleSoft.map((rec) => (
               <RecommendationCard
                 key={rec.id}
                 rec={rec}
@@ -245,7 +266,7 @@ function CriticalPointSection({
         </div>
       ) : null}
 
-      {hard.length > 0 ? (
+      {visibleHard.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-950 ring-1 ring-inset ring-rose-200">
@@ -253,12 +274,12 @@ function CriticalPointSection({
               {i18n(language, { en: "Hardmaxxing", fr: "Hardmaxxing" })}
             </span>
             <span className="text-[11px] text-zinc-400">
-              {hard.length}{" "}
+              {visibleHard.length}{" "}
               {i18n(language, { en: "interventions", fr: "interventions" })}
             </span>
           </div>
           <div className="grid w-full gap-4 md:grid-cols-2">
-            {hard.map((rec) => (
+            {visibleHard.map((rec) => (
               <RecommendationCard
                 key={rec.id}
                 rec={rec}
@@ -284,18 +305,34 @@ function WorkerOrphansUnderTab({
   language,
   actionByRec,
   resultsByWorker,
+  showSoftmaxxing,
+  showHardmaxxing,
 }: {
   worker: string;
   orphans: OrphanRecommendations[];
   language: AppLanguage;
   actionByRec: Map<string, RecommendationAction>;
   resultsByWorker: Map<string, Record<string, unknown>>;
+  showSoftmaxxing: boolean;
+  showHardmaxxing: boolean;
 }) {
   const group = orphans.find((o) => o.worker === worker);
   if (!group?.recommendations.length) return null;
 
+  const filtered = group.recommendations.filter(
+    (rec: MatchedRecommendation) =>
+      (showSoftmaxxing && rec.type === "soft") ||
+      (showHardmaxxing && rec.type === "hard"),
+  );
+  if (filtered.length === 0) return null;
+
   return (
-    <section className="mt-8 space-y-3 border-t border-white/10 pt-8">
+    <section
+      className={cn(
+        "mt-8 space-y-3 border-t border-white/10 pt-8",
+        recommendationsReportHorizontalInsetClassName,
+      )}
+    >
       <header className="space-y-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
           {i18n(language, { en: "Also matches you", fr: "Autres pistes" })}
@@ -308,7 +345,7 @@ function WorkerOrphansUnderTab({
         </p>
       </header>
       <div className="grid w-full gap-4 md:grid-cols-2">
-        {group.recommendations.map((rec: MatchedRecommendation) => (
+        {filtered.map((rec: MatchedRecommendation) => (
           <RecommendationCard
             key={rec.id}
             rec={rec}
@@ -323,46 +360,6 @@ function WorkerOrphansUnderTab({
   );
 }
 
-
-/* ============================================================================
- * Section: orphans — recos that matched but don't tie to a critical point
- * ========================================================================= */
-
-/* ============================================================================
- * Section: workers awaiting editorial content
- * ========================================================================= */
-
-function ComingSoonSection({
-  workers,
-  language,
-}: {
-  workers: string[];
-  language: AppLanguage;
-}) {
-  if (workers.length === 0) return null;
-
-  return (
-    <section className="rounded-lg border border-dashed border-white/25 bg-white/[0.06] p-4">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-        {i18n(language, { en: "Coming soon", fr: "Bientôt disponible" })}
-      </p>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-300">
-        {i18n(language, {
-          en: "Editorial recommendations are being written for: ",
-          fr: "Les recommandations éditoriales arrivent pour : ",
-        })}
-        <span className="font-medium text-zinc-100">
-          {workers
-            .map((w) =>
-              getWorkerDisplayLabel(w, language === "fr" ? "fr" : "en"),
-            )
-            .join(", ")}
-        </span>
-        .
-      </p>
-    </section>
-  );
-}
 
 /* ============================================================================
  * Public component
@@ -387,6 +384,9 @@ function CriticalPointsRecommendationsImpl({
 }: CriticalPointsRecommendationsProps) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+
+  const [showSoftmaxxing, setShowSoftmaxxing] = React.useState(true);
+  const [showHardmaxxing, setShowHardmaxxing] = React.useState(true);
 
   const workers = React.useMemo(() => {
     const seen = new Set<string>();
@@ -450,20 +450,19 @@ function CriticalPointsRecommendationsImpl({
     .map((q) => q.dataUpdatedAt ?? 0)
     .join("|");
 
-  const { workerGroupsOrdered, orphans, workersAwaitingContent } =
-    React.useMemo(() => {
-      const inputs = workers.map((worker, idx) => ({
-        worker,
-        aggregates:
-          results.find((r) => r.worker === worker)?.outputAggregates ?? {},
-        recommendations: recQueries[idx]?.data ?? [],
-      }));
-      return buildCriticalPoints(inputs, {
-        scoreThreshold,
-        maxPoints,
-        locale: language === "fr" ? "fr" : "en",
-      });
-    },
+  const { workerGroupsOrdered, orphans } = React.useMemo(() => {
+    const inputs = workers.map((worker, idx) => ({
+      worker,
+      aggregates:
+        results.find((r) => r.worker === worker)?.outputAggregates ?? {},
+      recommendations: recQueries[idx]?.data ?? [],
+    }));
+    return buildCriticalPoints(inputs, {
+      scoreThreshold,
+      maxPoints,
+      locale: language === "fr" ? "fr" : "en",
+    });
+  },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [workers, results, recDataSignature, scoreThreshold, maxPoints, language],
   );
@@ -504,7 +503,12 @@ function CriticalPointsRecommendationsImpl({
   if (isLoading) {
     return (
       <div className={recommendationsReportShellClassName}>
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-300">
+        <div
+          className={cn(
+            recommendationsReportHorizontalInsetClassName,
+            "flex items-center justify-center gap-2 py-16 pt-8 text-sm text-zinc-300 sm:pt-10",
+          )}
+        >
           <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
           {i18n(language, {
             en: "Loading recommendations…",
@@ -518,7 +522,12 @@ function CriticalPointsRecommendationsImpl({
   if (firstError) {
     return (
       <div className={recommendationsReportShellClassName}>
-        <div className="flex items-start gap-3 py-6 text-sm text-rose-200">
+        <div
+          className={cn(
+            recommendationsReportHorizontalInsetClassName,
+            "flex items-start gap-3 py-6 pt-8 text-sm text-rose-200 sm:pt-10",
+          )}
+        >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
           <div>
             <p className="font-semibold text-rose-100">
@@ -534,17 +543,19 @@ function CriticalPointsRecommendationsImpl({
     );
   }
 
-  // No critical points and no orphans → encourage state, but only if at least
-  // one worker has editorial content (otherwise the "coming soon" card carries
-  // the message on its own).
   const hasAnyContent = hasAnyCritical || orphanTotal > 0;
-  const hasContentInDb =
-    workers.length - workersAwaitingContent.length > 0;
+  // At least one worker has recommendation rows in DB (vs all workers empty).
+  const hasContentInDb = recQueries.some((q) => (q.data?.length ?? 0) > 0);
 
   if (!hasAnyContent && hasContentInDb) {
     return (
       <div className={recommendationsReportShellClassName}>
-        <div className="space-y-4 py-2 text-sm">
+        <div
+          className={cn(
+            recommendationsReportHorizontalInsetClassName,
+            "space-y-4 py-2 pt-8 text-sm sm:pt-10",
+          )}
+        >
           <p className="font-display text-lg font-semibold text-zinc-50">
             {i18n(language, {
               en: "Nothing critical to address",
@@ -557,10 +568,6 @@ function CriticalPointsRecommendationsImpl({
               fr: "Tes scores sont sains dans l'ensemble — garde ta routine régulière.",
             })}
           </p>
-          <ComingSoonSection
-            workers={workersAwaitingContent}
-            language={language}
-          />
         </div>
       </div>
     );
@@ -569,7 +576,12 @@ function CriticalPointsRecommendationsImpl({
   if (!hasAnyContent && !hasContentInDb) {
     return (
       <div className={recommendationsReportShellClassName}>
-        <div className="space-y-4 py-2 text-sm">
+        <div
+          className={cn(
+            recommendationsReportHorizontalInsetClassName,
+            "space-y-4 py-2 pt-8 text-sm sm:pt-10",
+          )}
+        >
           <p className="font-display text-lg font-semibold text-zinc-50">
             {i18n(language, {
               en: "Recommendations coming soon",
@@ -582,10 +594,6 @@ function CriticalPointsRecommendationsImpl({
               fr: "Nous rédigeons des recommandations personnalisées pour chaque worker ScoreMax. Le module yeux est déjà en ligne ; le reste arrive.",
             })}
           </p>
-          <ComingSoonSection
-            workers={workersAwaitingContent}
-            language={language}
-          />
         </div>
       </div>
     );
@@ -596,11 +604,19 @@ function CriticalPointsRecommendationsImpl({
   return (
     <div className="relative space-y-10">
       {visibleWorkerGroups.length > 0 ? (
-        <Tabs
-          defaultValue={visibleWorkerGroups[0]?.worker}
-          key={`${analysisJobId}:${visibleWorkerGroups.map((g) => g.worker).join("|")}`}
-          className="space-y-5"
-        >
+        <div className="space-y-5">
+          <RecommendationsTypeFilterBar
+            showSoft={showSoftmaxxing}
+            showHard={showHardmaxxing}
+            onSoftChange={setShowSoftmaxxing}
+            onHardChange={setShowHardmaxxing}
+            language={language}
+          />
+          <Tabs
+            defaultValue={visibleWorkerGroups[0]?.worker}
+            key={`${analysisJobId}:${visibleWorkerGroups.map((g) => g.worker).join("|")}`}
+            className="space-y-5"
+          >
           <div className="flex w-full justify-center">
             <TabsList
               className={cn(
@@ -651,20 +667,26 @@ function CriticalPointsRecommendationsImpl({
               <div className={recommendationsReportShellClassName}>
                 <div className="w-full space-y-10">
                   {group.criticalPoints.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-white/25 bg-white/[0.06] px-4 py-3 text-sm text-zinc-300">
+                    <p
+                      className={cn(
+                        recommendationsReportHorizontalInsetClassName,
+                        "rounded-lg border border-dashed border-white/25 bg-white/[0.06] py-3 text-sm text-zinc-300",
+                      )}
+                    >
                       {i18n(language, {
                         en: "No single measure surfaced as critical here — see matching suggestions below if any.",
                         fr: "Aucune mesure ressort comme critique dans cette zone — voir les suggestions ci-dessous le cas échéant.",
                       })}
                     </p>
                   ) : null}
-                  {group.criticalPoints.map((point, idx) => (
+                  {group.criticalPoints.map((point) => (
                     <CriticalPointSection
                       key={`${point.worker}:${point.aggregateKey}`}
-                      index={idx}
                       point={point}
                       language={language}
                       actionByRec={actionByRec}
+                      showSoftmaxxing={showSoftmaxxing}
+                      showHardmaxxing={showHardmaxxing}
                     />
                   ))}
                   <WorkerOrphansUnderTab
@@ -673,18 +695,16 @@ function CriticalPointsRecommendationsImpl({
                     language={language}
                     actionByRec={actionByRec}
                     resultsByWorker={resultsByWorker}
+                    showSoftmaxxing={showSoftmaxxing}
+                    showHardmaxxing={showHardmaxxing}
                   />
                 </div>
               </div>
             </TabsContent>
           ))}
         </Tabs>
+        </div>
       ) : null}
-
-        <ComingSoonSection
-          workers={workersAwaitingContent}
-          language={language}
-        />
 
       <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
         {i18n(language, {

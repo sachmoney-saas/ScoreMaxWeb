@@ -55,10 +55,10 @@ const workerLabels: Record<string, LocalizedText> = {
   lips: text("Lèvres", "Lips"),
   neck: text("Cou", "Neck"),
   nose: text("Nez", "Nose"),
-  skin: text("Ton profil de peau", "Your skin profile"),
+  skin: text("Peau", "Skin"),
   skin_tint: text("Teint", "Skin tone"),
   smile: text("Sourire", "Smile"),
-  symmetry_shape: text("Symétrie et forme", "Symmetry and shape"),
+  symmetry_shape: text("Symétrie", "Symmetry"),
 };
 
 const commonEnumLabels: Record<string, LocalizedText> = {
@@ -213,7 +213,7 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
     },
   },
   symmetry_shape: {
-    label: text("Symétrie et forme", "Symmetry and shape"),
+    label: text("Symétrie", "Symmetry"),
     aggregates: {
       "face_shape.overall_shape": {
         label: text("Forme globale du visage", "Overall face shape"),
@@ -659,7 +659,7 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
     },
   },
   skin: {
-    label: text("Ton profil de peau", "Your skin profile"),
+    label: text("Peau", "Skin"),
     aggregates: {
       "texture_pores_and_congestion.pore_size_and_visibility": {
         label: text("Taille et visibilité des pores", "Pore size and visibility"),

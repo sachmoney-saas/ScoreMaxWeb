@@ -79,6 +79,10 @@ export function MiniRing({
   size = 76,
   fractionDigits,
   highlight = "default",
+  /** Couleur du cercle de piste vide (lisible sur fond clair ou sombre). */
+  trackStroke = "rgba(255,255,255,0.08)",
+  /** Couleur du chiffre au centre ; si absent, dérivée de `highlight`. */
+  centerFill: centerFillProp,
 }: {
   score: number;
   scale?: number;
@@ -86,6 +90,8 @@ export function MiniRing({
   fractionDigits?: number;
   /** Coloring for overview worker cards in top-3 strengths vs weaknesses. */
   highlight?: MiniRingHighlight;
+  trackStroke?: string;
+  centerFill?: string;
 }) {
   const gradientId = React.useId().replace(/:/g, "");
   const clamped = Math.max(0, Math.min(score, scale));
@@ -125,11 +131,12 @@ export function MiniRing({
           );
 
   const textFill =
-    highlight === "strength"
+    centerFillProp ??
+    (highlight === "strength"
       ? "#6ee7b7"
       : highlight === "weakness"
         ? "#fca5a5"
-        : "#ffffff";
+        : "#ffffff");
 
   return (
     <svg
@@ -146,7 +153,7 @@ export function MiniRing({
         cy="36"
         r={radius}
         fill="none"
-        stroke="rgba(255,255,255,0.08)"
+        stroke={trackStroke}
         strokeWidth="6"
       />
       <circle
