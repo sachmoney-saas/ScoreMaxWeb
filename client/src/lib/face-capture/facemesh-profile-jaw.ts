@@ -16,3 +16,10 @@ export const FACEMESH_JAW_RIGHT_HEMISPHERE_TO_CHIN_ORDERED: readonly number[] = 
 export const FACEMESH_JAW_LEFT_HEMISPHERE_TO_CHIN_ORDERED: readonly number[] = [
   397, 365, 379, 378, 400, 377, 152,
 ];
+
+/** Latéral mâchoire gauche (face caméra) sur ovale ; aligné sur `FACEMESH_JAW_LEFT_HEMISPHERE_TO_CHIN_ORDERED`. */
+export const FACEMESH_FRONTAL_JAW_LEFT_LATERAL = 397;
+/** Latéral mâchoire droite (face caméra) ; aligné sur `FACEMESH_JAW_RIGHT_HEMISPHERE_TO_CHIN_ORDERED`. */
+export const FACEMESH_FRONTAL_JAW_RIGHT_LATERAL = 172;
+/** Pointe du menton (centre mandibulaire bas). */
+export const FACEMESH_CHIN_CENTER = 152;

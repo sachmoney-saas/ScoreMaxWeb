@@ -54,10 +54,20 @@ export const scanAssets = pgTable("scan_assets", {
   byte_size: bigint("byte_size", { mode: "number" }),
   checksum_sha256: text("checksum_sha256"),
   upload_status: text("upload_status", { enum: ["pending", "uploaded", "validated", "failed"] }).default("pending").notNull(),
+  /** Métriques côté client (repères, etc.) pour l’asset correspondant. */
+  capture_metadata: jsonb("capture_metadata").$type<Record<string, unknown>>().default({}).notNull(),
   captured_at: timestamp("captured_at", { withTimezone: true }),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/** Clé JSON dans `scan_assets.capture_metadata` — largeur bouche / largeur nez (segments repère 61↔291 vs 98↔327). */
+export const CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO = "mouth_to_nose_width_ratio" as const;
+/** Corde bouche sur ovale / corde ligne du haut (même géométrie que `GUIDE_TRACE_FACE_FRONT_OVAL`). */
+export const CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO =
+  "oval_mouth_over_upper_line_width_ratio" as const;
+/** Angle au sommet du repère V mâchoire (degrés), face de face. */
+export const CAPTURE_META_FRONT_JAW_ANGLE_DEG = "front_jaw_angle_deg" as const;
 
 export const analysisJobs = pgTable("analysis_jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -212,6 +222,7 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_FACE_FRONT_OVAL",
   "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
   "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
+  "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
   "GUIDE_TRACE_PROFILE_LEFT_JAW",
   "GUIDE_TRACE_PROFILE_RIGHT_JAW",
   "GUIDE_TRACE_LOOK_UP_JAW_ARC",

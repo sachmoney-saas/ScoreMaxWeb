@@ -31,7 +31,7 @@ export function ProtocolPageTitle({ language }: { language: AppLanguage }) {
 }
 
 export interface ProtocolPageShellProps {
-  /** Onglets hub (Protocole / Recommandations globales), au-dessus du bandeau titre. */
+  /** Onglets hub (Protocole / Recommandations) — rendus hors du panneau glass, sur le fond de page. */
   topNav?: React.ReactNode;
   /** Bandeau titre — même surface métallique que le bouton sidebar « Mon protocole ». */
   header?: React.ReactNode;
@@ -40,7 +40,7 @@ export interface ProtocolPageShellProps {
 }
 
 /**
- * Conteneur glass (comme analyses) au-dessus du WaveBackground + bandeau titre métal.
+ * Colonne : onglets hub au-dessus (hors glass), puis panneau glass + bandeau titre métal + contenu.
  */
 export function ProtocolPageShell({
   topNav,
@@ -49,24 +49,24 @@ export function ProtocolPageShell({
   className,
 }: ProtocolPageShellProps) {
   return (
-    <div className={cn(protocolPageBodyGlassClassName, className)}>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:gap-4">
       {topNav ? (
-        <div className="relative z-[2] shrink-0 px-5 pb-2 pt-6 sm:px-8 sm:pb-3 sm:pt-7">
-          {topNav}
-        </div>
+        <div className="relative z-[2] shrink-0 px-5 pt-6 pb-1 sm:px-8 sm:pb-2 sm:pt-7">{topNav}</div>
       ) : null}
-      {header ? (
-        <div
-          className={cn(
-            scoreRingMatchMetallicPillClassName,
-            "relative z-[2] shrink-0 overflow-visible rounded-b-none rounded-t-2xl border-x-0 border-t-0 border-b border-b-zinc-200/80",
-            "px-5 pb-10 pt-9 sm:px-8 sm:pb-11 sm:pt-10",
-          )}
-        >
-          <div className="relative z-10">{header}</div>
-        </div>
-      ) : null}
-      <div className="relative z-0 min-h-0 px-5 py-8 text-zinc-50 sm:px-8 sm:py-9">{children}</div>
+      <div className={cn(protocolPageBodyGlassClassName, className)}>
+        {header ? (
+          <div
+            className={cn(
+              scoreRingMatchMetallicPillClassName,
+              "relative z-[2] shrink-0 overflow-visible rounded-b-none rounded-t-2xl border-x-0 border-t-0 border-b border-b-zinc-200/80",
+              "px-5 pb-10 pt-9 sm:px-8 sm:pb-11 sm:pt-10",
+            )}
+          >
+            <div className="relative z-10">{header}</div>
+          </div>
+        ) : null}
+        <div className="relative z-0 min-h-0 px-5 py-8 text-zinc-50 sm:px-8 sm:py-9">{children}</div>
+      </div>
     </div>
   );
 }

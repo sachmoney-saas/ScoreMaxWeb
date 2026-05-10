@@ -8,6 +8,7 @@ import type { LandmarkPoint, PoseId } from '@/lib/face-capture/types';
 import { MaskRenderer } from '@/lib/face-capture/MaskRenderer';
 import { DEBUG_CAPTURE_WHITE_FACE_MESH } from '@/lib/face-capture/capture-render-debug';
 import {
+  drawAdminFrontalJawAngleGuidelinesOnCanvas,
   drawAdminJawUpLowerArcGuideOnCanvas,
   drawAdminNoseMouthWidthGuidelinesOnCanvas,
   drawAdminOrientationGuidelinesOnCanvas,
@@ -431,11 +432,16 @@ function CanvasFallbackPreview({
   const maskVtRef = useRef<HTMLCanvasElement>(null);
   const guideVtRef = useRef<HTMLCanvasElement>(null);
 
+  const photoJaRef = useRef<HTMLCanvasElement>(null);
+  const maskJaRef = useRef<HTMLCanvasElement>(null);
+  const guideJaRef = useRef<HTMLCanvasElement>(null);
+
   useEffect(() => {
     let cancelled = false;
     let rOri: MaskRenderer | null = null;
     let rNm: MaskRenderer | null = null;
     let rVt: MaskRenderer | null = null;
+    let rJa: MaskRenderer | null = null;
     const img = new Image();
 
     img.onload = () => {
@@ -451,11 +457,15 @@ function CanvasFallbackPreview({
       const pv = photoVtRef.current;
       const mv = maskVtRef.current;
       const gv = guideVtRef.current;
-      if (!po || !mo || !go || !pn || !mn || !gn || !pv || !mv || !gv) return;
+      const pja = photoJaRef.current;
+      const mja = maskJaRef.current;
+      const gja = guideJaRef.current;
+      if (!po || !mo || !go || !pn || !mn || !gn || !pv || !mv || !gv || !pja || !mja || !gja) return;
 
       rOri?.dispose();
       rNm?.dispose();
       rVt?.dispose();
+      rJa?.dispose();
       const resOri = renderAdminDebugStack(
         img,
         payload,
@@ -480,15 +490,25 @@ function CanvasFallbackPreview({
         drawAdminVerticalThirdsGuidelinesOnCanvas,
         false,
       );
-      if (!resOri.ok || !resNm.ok || !resVt.ok) {
+      const resJa = renderAdminDebugStack(
+        img,
+        payload,
+        { photo: pja, mask: mja, guide: gja },
+        pr,
+        drawAdminFrontalJawAngleGuidelinesOnCanvas,
+        false,
+      );
+      if (!resOri.ok || !resNm.ok || !resVt.ok || !resJa.ok) {
         if (resOri.ok) resOri.meshRenderer?.dispose();
         if (resNm.ok) resNm.meshRenderer?.dispose();
         if (resVt.ok) resVt.meshRenderer?.dispose();
+        if (resJa.ok) resJa.meshRenderer?.dispose();
         return;
       }
       rOri = resOri.meshRenderer;
       rNm = resNm.meshRenderer;
       rVt = resVt.meshRenderer;
+      rJa = resJa.meshRenderer;
     };
 
     img.src = payload.thumbnailUrl;
@@ -498,9 +518,11 @@ function CanvasFallbackPreview({
       rOri?.dispose();
       rNm?.dispose();
       rVt?.dispose();
+      rJa?.dispose();
       rOri = null;
       rNm = null;
       rVt = null;
+      rJa = null;
     };
   }, [payload]);
 
@@ -559,6 +581,25 @@ function CanvasFallbackPreview({
           />
         </div>
       </div>
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+          {i18n(language, {
+            en: 'Jaw angle — front (fallback)',
+            fr: 'Angle mâchoire — face (repli)',
+          })}
+        </p>
+        <div className={stackWrap}>
+          <canvas ref={photoJaRef} className="block max-w-full rounded-md" />
+          <canvas
+            ref={maskJaRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md opacity-[0.94]"
+          />
+          <canvas
+            ref={guideJaRef}
+            className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -581,12 +622,13 @@ export function AdminCaptureDebugPanel({
   const ovalUrl = payload.annotatedOvalGuideThumbnailUrl;
   const nmUrl = payload.annotatedNoseMouthGuideThumbnailUrl;
   const vtUrl = payload.annotatedVerticalThirdsGuideThumbnailUrl;
+  const jawAngleUrl = payload.annotatedJawAngleGuideThumbnailUrl;
   const jawUrl = payload.annotatedProfileJawGuideThumbnailUrl;
   const jawUpUrl = payload.annotatedJawUpLowerArcGuideThumbnailUrl;
   const crownUrl = payload.annotatedCrownPhotoFlatThumbnailUrl;
   const smileUrl = payload.annotatedSmileLipsGuideThumbnailUrl;
 
-  const hasFrontalFlat = Boolean(ovalUrl && nmUrl && vtUrl);
+  const hasFrontalFlat = Boolean(ovalUrl && nmUrl && vtUrl && jawAngleUrl);
   const hasProfileFlat = Boolean(jawUrl);
   const hasJawUpFlat = Boolean(jawUpUrl);
   const hasCrownFlat = Boolean(crownUrl);
@@ -705,6 +747,16 @@ export function AdminCaptureDebugPanel({
                   fr: 'Télécharger PNG — tiers verticaux',
                 })}
               </a>
+              <a
+                href={jawAngleUrl}
+                download={`${payload.poseId}-annotated-jaw-angle-guide.png`}
+                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+              >
+                {i18n(language, {
+                  en: 'Download PNG — jaw angle (front)',
+                  fr: 'Télécharger PNG — angle mâchoire (face)',
+                })}
+              </a>
             </>
           )}
         </div>
@@ -819,6 +871,22 @@ export function AdminCaptureDebugPanel({
                 </p>
                 <img
                   src={vtUrl}
+                  alt=""
+                  width={payload.outputWidth}
+                  height={payload.outputHeight}
+                  className="mx-auto block h-auto w-full max-w-full rounded-md"
+                  decoding="async"
+                />
+              </div>
+              <div className="w-full">
+                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                  {i18n(language, {
+                    en: 'Jaw angle (front) — flat',
+                    fr: 'Angle mâchoire (face) — fichier aplati',
+                  })}
+                </p>
+                <img
+                  src={jawAngleUrl}
                   alt=""
                   width={payload.outputWidth}
                   height={payload.outputHeight}

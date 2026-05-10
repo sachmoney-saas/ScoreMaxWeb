@@ -16,7 +16,12 @@ import { MotionTracker } from "./MotionTracker";
 import { PoseValidator } from "./PoseValidator";
 import { evaluateFrameQualityForCapture, evaluateFrameQualityMinimal } from "./QualityGate";
 import { faceRatio } from "./strategies/PoseStrategy";
-import { jpegOutputDimensions } from "./admin-capture-guidelines";
+import {
+  frontalJawAngleMetricsFromLandmarks,
+  jpegOutputDimensions,
+  mouthToNoseWidthRatioFromLandmarks,
+  ovalGuideMouthOverUpperLineWidthRatioFromLandmarks,
+} from "./admin-capture-guidelines";
 import { encodeAdminGuideFlattenedPair } from "./encode-admin-guide-flat";
 
 export interface CapturedPose {
@@ -33,6 +38,9 @@ export interface CapturedPose {
   /** PNG aplati cliché + maillage + médiatrice verticale tiercée yeux/lèvres (hors analyse). */
   annotatedVerticalThirdsGuideBlob?: Blob;
   annotatedVerticalThirdsGuideThumbnailUrl?: string;
+  /** PNG aplati cliché + guides angle mâchoire (V sous menton, hors analyse). */
+  annotatedJawAngleGuideBlob?: Blob;
+  annotatedJawAngleGuideThumbnailUrl?: string;
   /** PNG aplati profil : cliché + masque + arc mâchoire bleu (hors analyse). */
   annotatedProfileJawGuideBlob?: Blob;
   annotatedProfileJawGuideThumbnailUrl?: string;
@@ -45,6 +53,12 @@ export interface CapturedPose {
   /** PNG aplati sourire : cliché + masque + contours lèvres (hors analyse). */
   annotatedSmileLipsGuideBlob?: Blob;
   annotatedSmileLipsGuideThumbnailUrl?: string;
+  /** Largeur bouche / largeur nez (indices 61↔291 vs 98↔327), même calcul que sur le PNG nez–bouche. */
+  mouthToNoseWidthRatio?: number;
+  /** Largeur chord bouche ovale / largeur chord ligne haute (≤ 1 si petit trait = bouche). */
+  ovalMouthOverUpperLineWidthRatio?: number;
+  /** Angle au sommet du repère V mâchoire (degrés), même calcul que sur le PNG angle mâchoire. */
+  frontalJawAngleDeg?: number;
 }
 
 export interface AdminCaptureDebugPayload {
@@ -59,6 +73,7 @@ export interface AdminCaptureDebugPayload {
   annotatedOvalGuideThumbnailUrl?: string;
   annotatedNoseMouthGuideThumbnailUrl?: string;
   annotatedVerticalThirdsGuideThumbnailUrl?: string;
+  annotatedJawAngleGuideThumbnailUrl?: string;
   annotatedProfileJawGuideThumbnailUrl?: string;
   annotatedJawUpLowerArcGuideThumbnailUrl?: string;
   annotatedCrownPhotoFlatThumbnailUrl?: string;
@@ -1152,6 +1167,8 @@ export class CaptureSession {
     let annotatedNoseMouthGuideThumbnailUrl: string | undefined;
     let annotatedVerticalThirdsGuideBlob: Blob | undefined;
     let annotatedVerticalThirdsGuideThumbnailUrl: string | undefined;
+    let annotatedJawAngleGuideBlob: Blob | undefined;
+    let annotatedJawAngleGuideThumbnailUrl: string | undefined;
     let annotatedProfileJawGuideBlob: Blob | undefined;
     let annotatedProfileJawGuideThumbnailUrl: string | undefined;
     let annotatedJawUpLowerArcGuideBlob: Blob | undefined;
@@ -1174,11 +1191,13 @@ export class CaptureSession {
           annotatedOvalGuideBlob = flattened.ovalFlat;
           annotatedNoseMouthGuideBlob = flattened.noseMouthFlat;
           annotatedVerticalThirdsGuideBlob = flattened.verticalThirdsFlat;
+          annotatedJawAngleGuideBlob = flattened.jawAngleFlat;
           annotatedOvalGuideThumbnailUrl = URL.createObjectURL(flattened.ovalFlat);
           annotatedNoseMouthGuideThumbnailUrl = URL.createObjectURL(flattened.noseMouthFlat);
           annotatedVerticalThirdsGuideThumbnailUrl = URL.createObjectURL(
             flattened.verticalThirdsFlat,
           );
+          annotatedJawAngleGuideThumbnailUrl = URL.createObjectURL(flattened.jawAngleFlat);
         } else if (flattened?.variant === "profile") {
           annotatedProfileJawGuideBlob = flattened.profileJawFlat;
           annotatedProfileJawGuideThumbnailUrl = URL.createObjectURL(flattened.profileJawFlat);
@@ -1197,25 +1216,40 @@ export class CaptureSession {
       }
     }
 
+    const mouthToNoseWidthRatio =
+      poseState.poseId === "frontal" &&
+      lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD
+        ? mouthToNoseWidthRatioFromLandmarks(lmSnap) ?? undefined
+        : undefined;
+
+    const ovalMouthOverUpperLineWidthRatio =
+      poseState.poseId === "frontal" &&
+      lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD
+        ? ovalGuideMouthOverUpperLineWidthRatioFromLandmarks(lmSnap) ?? undefined
+        : undefined;
+
+    const frontalJawAngleDeg =
+      poseState.poseId === "frontal" &&
+      lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD
+        ? frontalJawAngleMetricsFromLandmarks(lmSnap)?.angleDeg
+        : undefined;
+
     const captured: CapturedPose = {
       poseId: poseState.poseId,
       blob,
       thumbnailUrl,
       timestamp: performance.now(),
-      ...(annotatedOvalGuideBlob &&
-      annotatedNoseMouthGuideBlob &&
-      annotatedVerticalThirdsGuideBlob &&
-      annotatedOvalGuideThumbnailUrl &&
-      annotatedNoseMouthGuideThumbnailUrl &&
-      annotatedVerticalThirdsGuideThumbnailUrl
-        ? {
-            annotatedOvalGuideBlob,
-            annotatedNoseMouthGuideBlob,
-            annotatedVerticalThirdsGuideBlob,
-            annotatedOvalGuideThumbnailUrl,
-            annotatedNoseMouthGuideThumbnailUrl,
-            annotatedVerticalThirdsGuideThumbnailUrl,
-          }
+      ...(annotatedOvalGuideBlob && annotatedOvalGuideThumbnailUrl
+        ? { annotatedOvalGuideBlob, annotatedOvalGuideThumbnailUrl }
+        : {}),
+      ...(annotatedNoseMouthGuideBlob && annotatedNoseMouthGuideThumbnailUrl
+        ? { annotatedNoseMouthGuideBlob, annotatedNoseMouthGuideThumbnailUrl }
+        : {}),
+      ...(annotatedVerticalThirdsGuideBlob && annotatedVerticalThirdsGuideThumbnailUrl
+        ? { annotatedVerticalThirdsGuideBlob, annotatedVerticalThirdsGuideThumbnailUrl }
+        : {}),
+      ...(annotatedJawAngleGuideBlob && annotatedJawAngleGuideThumbnailUrl
+        ? { annotatedJawAngleGuideBlob, annotatedJawAngleGuideThumbnailUrl }
         : {}),
       ...(annotatedProfileJawGuideBlob && annotatedProfileJawGuideThumbnailUrl
         ? {
@@ -1241,6 +1275,11 @@ export class CaptureSession {
             annotatedSmileLipsGuideThumbnailUrl,
           }
         : {}),
+      ...(mouthToNoseWidthRatio !== undefined ? { mouthToNoseWidthRatio } : {}),
+      ...(ovalMouthOverUpperLineWidthRatio !== undefined
+        ? { ovalMouthOverUpperLineWidthRatio }
+        : {}),
+      ...(frontalJawAngleDeg !== undefined ? { frontalJawAngleDeg } : {}),
     };
     this.capturedPoses.push(captured);
 
@@ -1275,6 +1314,7 @@ export class CaptureSession {
           annotatedOvalGuideThumbnailUrl,
           annotatedNoseMouthGuideThumbnailUrl,
           annotatedVerticalThirdsGuideThumbnailUrl,
+          annotatedJawAngleGuideThumbnailUrl,
           annotatedProfileJawGuideThumbnailUrl,
           annotatedJawUpLowerArcGuideThumbnailUrl,
           annotatedCrownPhotoFlatThumbnailUrl,

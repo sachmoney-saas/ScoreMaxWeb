@@ -239,6 +239,7 @@ export default function NewAnalysis() {
               { type: "image/png" },
             ),
             lang: language,
+            captureMetadata: trace.captureMetadata,
           });
         }
       }

@@ -186,6 +186,7 @@ WITH expected_scan_assets_columns(column_name) AS (
     ('mime_type'),
     ('byte_size'),
     ('checksum_sha256'),
+    ('capture_metadata'),
     ('upload_status'),
     ('captured_at'),
     ('created_at'),

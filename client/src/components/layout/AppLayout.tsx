@@ -69,7 +69,7 @@ import {
   analysisElapsedAnchorEpochMs,
   formatAnalysisElapsedLabel,
 } from "@/components/analysis/AnalysisProcessingState";
-import { useAppLanguage } from "@/lib/i18n";
+import { useAppLanguage, i18n } from "@/lib/i18n";
 import { formatSubscriberStandardQuotaSidebarLine } from "@/lib/subscriber-standard-analysis-copy";
 
 type SidebarNavItem = {
@@ -331,7 +331,9 @@ function ModernAppSidebar() {
                 onClick={closeMobileSidebar}
               >
                 <SettingsIcon className="mr-2 h-4 w-4 text-zinc-400" />
-                <span>Paramètres</span>
+                <span>
+                  {i18n(language, { en: "Settings", fr: "Paramètres" })}
+                </span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild className="rounded-xl text-zinc-100 focus:bg-white/10 focus:text-white">
@@ -341,7 +343,9 @@ function ModernAppSidebar() {
                 onClick={closeMobileSidebar}
               >
                 <CreditCard className="mr-2 h-4 w-4 text-zinc-400" />
-                <span>Facturation</span>
+                <span>
+                  {i18n(language, { en: "Billing", fr: "Facturation" })}
+                </span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/10" />
@@ -350,7 +354,9 @@ function ModernAppSidebar() {
               onClick={() => signOut()}
             >
               <LogOut className="mr-2 h-4 w-4 text-zinc-400" />
-              <span>Déconnexion</span>
+              <span>
+                {i18n(language, { en: "Log out", fr: "Déconnexion" })}
+              </span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -365,7 +371,10 @@ function ModernAppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location === "/app/protocol"}
-                    tooltip="Mon protocole"
+                    tooltip={i18n(language, {
+                      en: "My protocol",
+                      fr: "Mon protocole",
+                    })}
                     className={cn(
                       scoreRingMatchMetallicPillClassName,
                       "h-11 w-full rounded-xl px-3 !text-zinc-950",
@@ -385,7 +394,10 @@ function ModernAppSidebar() {
                     >
                       <ClipboardList className="h-4 w-4 shrink-0 !text-zinc-900" />
                       <span className="font-semibold text-zinc-950">
-                        Mon protocole
+                        {i18n(language, {
+                          en: "My protocol",
+                          fr: "Mon protocole",
+                        })}
                       </span>
                     </Link>
                   </SidebarMenuButton>
@@ -402,7 +414,10 @@ function ModernAppSidebar() {
         {/* p-0: match footer email strip width (SidebarGroup defaults to p-2 and narrows rows). */}
         <SidebarGroup className="p-0">
           <SidebarGroupLabel className="text-[11px] uppercase tracking-[0.14em] text-white">
-            Mes analyses
+            {i18n(language, {
+              en: "My analyses",
+              fr: "Mes analyses",
+            })}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <div className="mb-3 space-y-1.5">
@@ -412,7 +427,10 @@ function ModernAppSidebar() {
                 onClick={closeMobileSidebar}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Nouvelle analyse
+                {i18n(language, {
+                  en: "New analysis",
+                  fr: "Nouvelle analyse",
+                })}
               </Link>
               {subscriberQuotaSidebarLine ? (
                 <p className="flex items-start gap-1.5 px-1 text-[11px] leading-snug text-zinc-400">

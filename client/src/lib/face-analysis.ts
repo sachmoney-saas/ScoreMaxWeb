@@ -254,6 +254,7 @@ export async function uploadScanAsset(params: {
   assetTypeCode: SignedUploadScanAssetCode;
   file: File;
   lang?: AppLanguage;
+  captureMetadata?: Record<string, unknown>;
 }): Promise<void> {
   const lang = params.lang ?? getPreferredLanguage();
   if (!["image/jpeg", "image/png"].includes(params.file.type)) {
@@ -330,6 +331,9 @@ export async function uploadScanAsset(params: {
     byte_size: params.file.size,
     upload_status: "uploaded",
     captured_at: new Date().toISOString(),
+    ...(params.captureMetadata && Object.keys(params.captureMetadata).length > 0
+      ? { capture_metadata: params.captureMetadata }
+      : {}),
   });
 
   if (insertError) {

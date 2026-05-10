@@ -20,7 +20,8 @@ export interface ProtocolHubNavTabsProps {
 }
 
 /**
- * Navigation Protocole / Recommandations (vue globale) — même famille visuelle que l’analyse.
+ * Navigation Protocole / Recommandations — barre glass (comme l’analyse),
+ * rendue au-dessus du panneau contenu par `ProtocolPageShell`.
  */
 export function ProtocolHubNavTabs({ language, active }: ProtocolHubNavTabsProps) {
   const protocolSelected = active === "protocol";
@@ -50,7 +51,9 @@ export function ProtocolHubNavTabs({ language, active }: ProtocolHubNavTabsProps
         </Link>
         <Link
           href={PROTOCOL_RECOMMENDATIONS_PATH}
-          className={recSelected ? appHubTabLinkActiveClassName : appHubTabLinkInactiveClassName}
+          className={
+            recSelected ? appHubTabLinkActiveClassName : appHubTabLinkInactiveClassName
+          }
         >
           <span className="relative z-10">
             {i18n(language, { en: "Recommendations", fr: "Recommandations" })}

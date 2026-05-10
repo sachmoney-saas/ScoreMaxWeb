@@ -247,11 +247,11 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     qualityGateRequired: true,
     entryDelayMs: 2200,
     /**
-     * Après un gros plan œil très serré : le visage doit d'abord redevenir petit dans le cadre
-     * (recul réel du téléphone) avant que le rapprochement pour le hairline soit validé — évite
-     * deux clichés quasi identiques/pris trop vite.
+     * Après un gros plan œil très serré : le visage doit d'abord redevenir plus petit dans le cadre
+     * (recul du téléphone) avant que le rapprochement pour le hairline soit validé — évite
+     * deux clichés quasi identiques. Seuil plus souple que 0.34 (trop exigeant sur mobile).
      */
-    requirePullBackBeforeAlign: { maxFaceRatio: 0.34, minStableFrames: 15 },
+    requirePullBackBeforeAlign: { maxFaceRatio: 0.48, minStableFrames: 12 },
   },
 ];
 
@@ -274,7 +274,8 @@ export function prefersRelaxedPcWebcamCaptureFraming(): boolean {
 
 /** Seuils un peu plus bas que mobile : le visage peut occuper moins de cadre (webcam plus loin du visage). */
 const DESKTOP_RELAXED_MIN_FACE_RATIO: Partial<Record<PoseId, number>> = {
-  frontal: 0.11,
+  /** Face de face : ~0,10 vs 0,13 mobile — un cran de recul supplémentaire sur PC. */
+  frontal: 0.1,
   "closeup-eye": 0.6,
 };
 

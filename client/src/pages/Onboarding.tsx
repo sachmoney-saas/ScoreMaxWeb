@@ -778,6 +778,7 @@ export default function Onboarding() {
               { type: "image/png" },
             ),
             lang: language,
+            captureMetadata: trace.captureMetadata,
           });
         }
       }

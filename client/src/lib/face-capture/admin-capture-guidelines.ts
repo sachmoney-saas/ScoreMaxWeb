@@ -6,6 +6,7 @@
 //    des deux yeux (moyenne Y des anneaux paupière) et milieu des lèvres (13/14).
 // ============================================================
 
+import { getPreferredLanguage, type AppLanguage } from "@/lib/i18n";
 import { CAPTURE_MAX_LONG_EDGE_PX } from './CameraManager';
 import {
   FACEMESH_LEFT_EYE_ORDERED,
@@ -16,6 +17,9 @@ import {
 import { FACEMESH_FACE_OVAL_JAW_LOWER_ARC_ORDERED, FACEMESH_FACE_OVAL_ORDERED } from './facemesh-face-oval';
 import type { LandmarkPoint, PoseId } from './types';
 import {
+  FACEMESH_CHIN_CENTER,
+  FACEMESH_FRONTAL_JAW_LEFT_LATERAL,
+  FACEMESH_FRONTAL_JAW_RIGHT_LATERAL,
   FACEMESH_JAW_LEFT_HEMISPHERE_TO_CHIN_ORDERED,
   FACEMESH_JAW_RIGHT_HEMISPHERE_TO_CHIN_ORDERED,
 } from './facemesh-profile-jaw';
@@ -24,6 +28,102 @@ import { videoNormToElementPx } from './MaskRenderer';
 /** Accent SaaS (~ Tailwind sky-300) pour tous les tracés de mesure capture. */
 export const CAPTURE_GUIDE_ACCENT_STROKE_RGBA = 'rgba(125, 211, 252, 0.94)';
 export const CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA = 'rgba(186, 230, 253, 0.95)';
+
+/**
+ * Largeur bouche / largeur nez, même définition géométrique que les traits horizontaux
+ * narinaire (98↔327) et commissures (61↔291) — portées |Δx| en coordonnées normalisées.
+ */
+export function mouthToNoseWidthRatioFromLandmarks(
+  landmarks: LandmarkPoint[],
+): number | null {
+  const nL = landmarks[98];
+  const nR = landmarks[327];
+  const mL = landmarks[61];
+  const mR = landmarks[291];
+  if (
+    !nL ||
+    !nR ||
+    !mL ||
+    !mR ||
+    nL.x === undefined ||
+    nR.x === undefined ||
+    mL.x === undefined ||
+    mR.x === undefined
+  ) {
+    return null;
+  }
+  /** Pas de filtre `visibility` : les mêmes points servent déjà aux traits ; Face Landmarker peut mettre des scores bas alors que x/y sont exploitables. */
+  const noseW = Math.abs(nR.x - nL.x);
+  const mouthW = Math.abs(mR.x - mL.x);
+  if (!(noseW > 1e-6 && Number.isFinite(mouthW))) return null;
+  const ratio = mouthW / noseW;
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
+}
+
+/** Affichage locale du multiplicateur `0,85x` / `0.85x` (2 décimales). */
+function formatRatioMultiplierText(lang: AppLanguage, ratio: number): string {
+  const ratioStr = ratio.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${ratioStr}x`;
+}
+
+/** Texte bleu clair + contour, sans fond (repères ratio). */
+function drawAccentRatioTextMapped(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  minDimPx: number,
+  text: string,
+): void {
+  const fontPx = Math.max(22, minDimPx * 0.044);
+  ctx.save();
+  ctx.font = `700 ${fontPx}px system-ui, "Segoe UI", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.lineWidth = Math.max(4, minDimPx * 0.006);
+  ctx.strokeStyle = 'rgba(15, 20, 28, 0.52)';
+  ctx.strokeText(text, cx, cy);
+  ctx.fillStyle = CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA;
+  ctx.fillText(text, cx, cy);
+  ctx.restore();
+}
+
+/**
+ * Repère ovale (deux horizontales) : largeur segment bas (bouche sur l’ovale) / largeur segment haut (ligne yeux).
+ * — le « petit » segment bas vaut `ratio` fois le « grand » segment haut lorsque ratio &lt; 1.
+ */
+export function ovalGuideMouthOverUpperLineWidthRatioFromLandmarks(
+  landmarks: LandmarkPoint[],
+): number | null {
+  const yMouth = guidelineMouthInteriorYNorm(landmarks);
+  const yEyesDown = guidelineBelowEyesYNorm(landmarks);
+  if (yMouth === null || yEyesDown === null) return null;
+
+  const spanMouth = horizontalExtentsOnFaceOval(landmarks, yMouth);
+  const spanEye = horizontalExtentsOnFaceOval(landmarks, yEyesDown);
+  if (!spanMouth || !spanEye) return null;
+
+  const mouthW = Math.abs(spanMouth[1] - spanMouth[0]);
+  const upperW = Math.abs(spanEye[1] - spanEye[0]);
+  if (!(upperW > 1e-6 && Number.isFinite(mouthW))) return null;
+  const ratio = mouthW / upperW;
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
+}
+
+function drawNoseMouthRatioLabelMapped(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  minDimPx: number,
+  ratio: number,
+): void {
+  const lang = getPreferredLanguage();
+  drawAccentRatioTextMapped(ctx, cx, cy, minDimPx, formatRatioMultiplierText(lang, ratio));
+}
 
 export type LandmarkPxMapper = (nx: number, ny: number) => { x: number; y: number };
 
@@ -275,6 +375,14 @@ function drawOrientationGuidelinesMapped(
 
   drawEndpointsAccent(ctx, eyeL.x, eyeL.y, eyeR.x, eyeR.y);
   drawEndpointsAccent(ctx, mouthL.x, mouthL.y, mouthR.x, mouthR.y);
+
+  const ovRatio = ovalGuideMouthOverUpperLineWidthRatioFromLandmarks(landmarks);
+  if (ovRatio !== null) {
+    const lang = getPreferredLanguage();
+    const cx = (eyeL.x + eyeR.x + mouthL.x + mouthR.x) * 0.25;
+    const cy = (eyeL.y + mouthL.y) * 0.5;
+    drawAccentRatioTextMapped(ctx, cx, cy, minDimPx, formatRatioMultiplierText(lang, ovRatio));
+  }
 }
 
 function drawNoseMouthWidthMapped(
@@ -330,6 +438,47 @@ function drawNoseMouthWidthMapped(
 
   drawEndpointsAccent(ctx, noseA.x, noseA.y, noseB.x, noseB.y);
   drawEndpointsAccent(ctx, mouthA.x, mouthA.y, mouthB.x, mouthB.y);
+
+  const ratio = mouthToNoseWidthRatioFromLandmarks(landmarks);
+  if (ratio !== null) {
+    const cx = (noseA.x + noseB.x + mouthA.x + mouthB.x) * 0.25;
+    const cy = (noseA.y + mouthA.y) * 0.5;
+    drawNoseMouthRatioLabelMapped(ctx, cx, cy, minDimPx, ratio);
+  }
+}
+
+/** Libellé « Yeux » / « Bouche » à côté des petits traits horizontaux du tiers vertical. */
+function drawVerticalThirdsTickLabelsMapped(
+  ctx: CanvasRenderingContext2D,
+  side: 'left' | 'right',
+  minDimPx: number,
+  tickHalf: number,
+  tickCenterPx: { x: number; y: number },
+  title: string,
+): void {
+  const safeTitle = title.trim();
+  if (!safeTitle) return;
+
+  const pad = Math.max(8, minDimPx * 0.014);
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = side === 'right' ? 'left' : 'right';
+  const anchorX =
+    side === 'right'
+      ? tickCenterPx.x + tickHalf + pad
+      : tickCenterPx.x - tickHalf - pad;
+
+  const fontTitle = Math.max(13, minDimPx * 0.029);
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.lineWidth = Math.max(3, minDimPx * 0.0045);
+  ctx.font = `600 ${fontTitle}px system-ui, "Segoe UI", sans-serif`;
+  ctx.strokeStyle = 'rgba(15, 20, 28, 0.52)';
+  ctx.strokeText(safeTitle, anchorX, tickCenterPx.y);
+  ctx.fillStyle = CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA;
+  ctx.fillText(safeTitle, anchorX, tickCenterPx.y);
+  ctx.restore();
 }
 
 function drawVerticalThirdsMapped(
@@ -406,6 +555,220 @@ function drawVerticalThirdsMapped(
     ctx.stroke();
   }
 
+  ctx.restore();
+
+  const lang = getPreferredLanguage();
+  const eyesTitle = lang === 'fr' ? 'Yeux' : 'Eyes';
+  const mouthTitle = lang === 'fr' ? 'Bouche' : 'Mouth';
+
+  const canvasRight = toPx(1, 0.5).x;
+  const midSpinePx = toPx(xMidN, (yTopN + yBotN) * 0.5);
+  const labelsOnTickRightSide = midSpinePx.x < canvasRight * 0.5;
+
+  drawVerticalThirdsTickLabelsMapped(
+    ctx,
+    labelsOnTickRightSide ? 'right' : 'left',
+    minDimPx,
+    tickHalf,
+    toPx(xMidN, ye),
+    eyesTitle,
+  );
+  drawVerticalThirdsTickLabelsMapped(
+    ctx,
+    labelsOnTickRightSide ? 'right' : 'left',
+    minDimPx,
+    tickHalf,
+    toPx(xMidN, ym),
+    mouthTitle,
+  );
+}
+
+/**
+ * Indices latéraux bas de mâchoire (ovale Mesh) utilisés aussi en profil.
+ * En face pure, ils peuvent parfois tomber peu visibles ou produire une géométrie dégradée —
+ * dans ce cas on retombe sur {@link FACEMESH_JAW_FALLBACK_FACE_LEFT} / RIGHT.
+ */
+const PRIMARY_JAW_L_R: readonly [number, number] = [
+  FACEMESH_FRONTAL_JAW_LEFT_LATERAL,
+  FACEMESH_FRONTAL_JAW_RIGHT_LATERAL,
+];
+/** Fallback : points ovale gauche/droite (alignés sur `FACEMESH_FACE_OVAL_ORDERED`), souvent plus stables « face ». */
+const FACEMESH_JAW_FALLBACK_FACE_LEFT = 234;
+const FACEMESH_JAW_FALLBACK_FACE_RIGHT = 454;
+
+const JAW_VISIBILITY_MIN = 0.08;
+
+/** Décal vertical du sommet du V sous le menton ; fraction de (menton − milieu yeux). */
+const FRONTAL_JAW_APEX_Y_FRAC_FACE_H = 0.38;
+
+function tryFrontalJawAngleGeomWithLateralIndices(
+  landmarks: LandmarkPoint[],
+  jawLi: number,
+  jawRi: number,
+): {
+  angleDeg: number;
+  jawL: { x: number; y: number };
+  jawR: { x: number; y: number };
+  apex: { x: number; y: number };
+} | null {
+  const jawLM = landmarks[jawLi];
+  const jawRM = landmarks[jawRi];
+  const chin = landmarks[FACEMESH_CHIN_CENTER];
+  const outerL = landmarks[33];
+  const outerR = landmarks[263];
+  if (
+    !jawLM ||
+    !jawRM ||
+    !chin ||
+    !outerL ||
+    !outerR ||
+    jawLM.x === undefined ||
+    jawLM.y === undefined ||
+    jawRM.x === undefined ||
+    jawRM.y === undefined ||
+    chin.x === undefined ||
+    chin.y === undefined ||
+    outerL.y === undefined ||
+    outerR.y === undefined
+  ) {
+    return null;
+  }
+  const visJL = jawLM.visibility ?? 1;
+  const visJR = jawRM.visibility ?? 1;
+  const visChin = chin.visibility ?? 1;
+  if (visJL < JAW_VISIBILITY_MIN || visJR < JAW_VISIBILITY_MIN || visChin < JAW_VISIBILITY_MIN) {
+    return null;
+  }
+
+  const eyeMidY = (outerL.y + outerR.y) * 0.5;
+  const faceRefH = Math.max(0.03, chin.y - eyeMidY);
+  const apex = {
+    x: chin.x,
+    y: chin.y + faceRefH * FRONTAL_JAW_APEX_Y_FRAC_FACE_H,
+  };
+
+  const vLx = jawLM.x - apex.x;
+  const vLy = jawLM.y - apex.y;
+  const vRx = jawRM.x - apex.x;
+  const vRy = jawRM.y - apex.y;
+  const lenL = Math.hypot(vLx, vLy);
+  const lenR = Math.hypot(vRx, vRy);
+  if (lenL < 1e-5 || lenR < 1e-5) return null;
+  const c = (vLx * vRx + vLy * vRy) / (lenL * lenR);
+  const angleRad = Math.acos(Math.max(-1, Math.min(1, c)));
+  const angleDeg = (angleRad * 180) / Math.PI;
+  if (!Number.isFinite(angleDeg)) return null;
+
+  /** Rejette seulement le dégénéré quasi nul (> ~179.9° côté autre coupe). */
+  if (angleDeg < 2 || angleDeg > 178) return null;
+
+  return {
+    angleDeg,
+    jawL: { x: jawLM.x, y: jawLM.y },
+    jawR: { x: jawRM.x, y: jawRM.y },
+    apex,
+  };
+}
+
+/** Géométrie normalisée : latéraux ovale MediaPipe avec repli indices joues. */
+function frontalJawAngleNormGeometry(landmarks: LandmarkPoint[]): {
+  angleDeg: number;
+  jawL: { x: number; y: number };
+  jawR: { x: number; y: number };
+  apex: { x: number; y: number };
+} | null {
+  const pairs: readonly [number, number][] = [
+    [PRIMARY_JAW_L_R[0], PRIMARY_JAW_L_R[1]],
+    [FACEMESH_JAW_FALLBACK_FACE_LEFT, FACEMESH_JAW_FALLBACK_FACE_RIGHT],
+  ];
+  for (const [jl, jr] of pairs) {
+    const g = tryFrontalJawAngleGeomWithLateralIndices(landmarks, jl, jr);
+    if (g) return g;
+  }
+  return null;
+}
+
+export type FrontalJawAngleMetrics = {
+  /** Angle au sommet (sous le menton), entre sommet → latéraux mâchoire, en degrés. */
+  angleDeg: number;
+};
+
+export function frontalJawAngleMetricsFromLandmarks(
+  landmarks: LandmarkPoint[],
+): FrontalJawAngleMetrics | null {
+  const g = frontalJawAngleNormGeometry(landmarks);
+  if (!g) return null;
+  return { angleDeg: g.angleDeg };
+}
+
+function drawFrontalJawAngleMapped(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  toPx: LandmarkPxMapper,
+  minDimPx: number,
+): void {
+  /** Même contour bas d’ovale que la pose « menton levé » (visage vers le haut). */
+  drawJawUpLowerArcMapped(ctx, landmarks, toPx, minDimPx);
+
+  const geo = frontalJawAngleNormGeometry(landmarks);
+  if (!geo) return;
+
+  const PL = toPx(geo.jawL.x, geo.jawL.y);
+  const PR = toPx(geo.jawR.x, geo.jawR.y);
+  const V = toPx(geo.apex.x, geo.apex.y);
+
+  const lineW = Math.max(2, minDimPx * 0.0035);
+  const uLx = PL.x - V.x;
+  const uLy = PL.y - V.y;
+  const uRx = PR.x - V.x;
+  const uRy = PR.y - V.y;
+  const lenL = Math.hypot(uLx, uLy);
+  const lenR = Math.hypot(uRx, uRy);
+  if (lenL < 1e-3 || lenR < 1e-3) return;
+
+  const aL = Math.atan2(uLy, uLx);
+  const aR = Math.atan2(uRy, uRx);
+  const rArc = Math.min(lenL, lenR) * 0.15;
+  const rArcClamped = Math.max(minDimPx * 0.014, Math.min(rArc, minDimPx * 0.11));
+
+  let delta = aR - aL;
+  while (delta <= -Math.PI) delta += 2 * Math.PI;
+  while (delta > Math.PI) delta -= 2 * Math.PI;
+  const anticlockwise = delta < 0;
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
+  ctx.lineWidth = lineW;
+  ctx.beginPath();
+  ctx.moveTo(PL.x, PL.y);
+  ctx.lineTo(V.x, V.y);
+  ctx.lineTo(PR.x, PR.y);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(V.x, V.y, rArcClamped, aL, aR, anticlockwise);
+  ctx.stroke();
+  ctx.restore();
+
+  drawEndpointsAccent(ctx, PL.x, PL.y, V.x, V.y);
+  drawEndpointsAccent(ctx, PR.x, PR.y, V.x, V.y);
+
+  const label = `${Math.round(geo.angleDeg)}°`;
+  const fontPx = Math.max(13, minDimPx * 0.038);
+  const labelY = V.y + rArcClamped + fontPx * 0.85;
+  ctx.save();
+  ctx.font = `700 ${fontPx}px system-ui, "Segoe UI", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(4, minDimPx * 0.007);
+  ctx.strokeStyle = 'rgba(15, 20, 28, 0.55)';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.strokeText(label, V.x, labelY);
+  ctx.fillStyle = CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA;
+  ctx.fillText(label, V.x, labelY);
   ctx.restore();
 }
 
@@ -529,6 +892,7 @@ export function drawLiveColoredPoseGuidesOnOverlayCanvas(
     drawOrientationGuidelinesMapped(ctx, landmarks, mapper, minDim);
     drawNoseMouthWidthMapped(ctx, landmarks, mapper, minDim);
     drawVerticalThirdsMapped(ctx, landmarks, mapper, minDim);
+    drawFrontalJawAngleMapped(ctx, landmarks, mapper, minDim);
   } else if (poseId === 'profile-left' || poseId === 'profile-right') {
     drawProfileJawMapped(ctx, landmarks, mapper, minDim, poseId);
   } else if (poseId === 'jaw-up') {
@@ -562,6 +926,21 @@ export function drawAdminVerticalThirdsGuidelinesOnCanvas(
 ): void {
   const minDim = Math.min(outW, outH);
   drawVerticalThirdsMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim);
+}
+
+/**
+ * Face de face : arc mandibulaire bas (ovale MediaPipe, comme jaw-up), puis angle mâchoire
+ * (V sous le menton), arc d’angle et libellé en degrés (bleu clair).
+ */
+export function drawAdminFrontalJawAngleGuidelinesOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): void {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return;
+  const minDim = Math.min(outW, outH);
+  drawFrontalJawAngleMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim);
 }
 
 /**

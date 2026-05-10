@@ -398,11 +398,12 @@ VALUES
   ('GUIDE_TRACE_FACE_FRONT_OVAL', 'Repère frontal : ovale', FALSE, 101, TRUE),
   ('GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH', 'Repère frontal : nez–bouche', FALSE, 102, TRUE),
   ('GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS', 'Repère frontal : tiers verticaux', FALSE, 103, TRUE),
-  ('GUIDE_TRACE_PROFILE_LEFT_JAW', 'Repère profil gauche : mâchoire', FALSE, 104, TRUE),
-  ('GUIDE_TRACE_PROFILE_RIGHT_JAW', 'Repère profil droit : mâchoire', FALSE, 105, TRUE),
-  ('GUIDE_TRACE_LOOK_UP_JAW_ARC', 'Repère regard haut : arc mâchoire', FALSE, 106, TRUE),
-  ('GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR', 'Repère couronne (miroir)', FALSE, 107, TRUE),
-  ('GUIDE_TRACE_SMILE_LIPS', 'Repère sourire : lèvres', FALSE, 108, TRUE)
+  ('GUIDE_TRACE_FACE_FRONT_JAW_ANGLE', 'Repère frontal : angle mâchoire', FALSE, 104, TRUE),
+  ('GUIDE_TRACE_PROFILE_LEFT_JAW', 'Repère profil gauche : mâchoire', FALSE, 105, TRUE),
+  ('GUIDE_TRACE_PROFILE_RIGHT_JAW', 'Repère profil droit : mâchoire', FALSE, 106, TRUE),
+  ('GUIDE_TRACE_LOOK_UP_JAW_ARC', 'Repère regard haut : arc mâchoire', FALSE, 107, TRUE),
+  ('GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR', 'Repère couronne (miroir)', FALSE, 108, TRUE),
+  ('GUIDE_TRACE_SMILE_LIPS', 'Repère sourire : lèvres', FALSE, 109, TRUE)
 ON CONFLICT (code) DO UPDATE
 SET
   label_fr = EXCLUDED.label_fr,
@@ -442,6 +443,7 @@ CREATE TABLE IF NOT EXISTS public.scan_assets (
   byte_size BIGINT,
   checksum_sha256 TEXT,
   upload_status TEXT DEFAULT 'pending' NOT NULL,
+  capture_metadata JSONB DEFAULT '{}'::jsonb NOT NULL,
   captured_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
@@ -586,6 +588,9 @@ BEGIN
       UNIQUE (session_id, asset_type_code, r2_key);
   END IF;
 END $$;
+
+ALTER TABLE public.scan_assets
+  ADD COLUMN IF NOT EXISTS capture_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE INDEX IF NOT EXISTS scoremax_scan_sessions_user_created_idx
   ON public.scan_sessions (user_id, created_at DESC);

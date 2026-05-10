@@ -6,8 +6,7 @@
 // Résolution = celle du bitmap source (ratio pixel 1, pas de sur-échantillonnage).
 // ============================================================
 //
-// Pose de face : 3 PNG (ovale + nez/bouche + tiers verticaux).
-// Pose de face : 3 PNG (guides ovale / nez–bouche / tiers sur le cliché ; pas de maillage blanc hors debug).
+// Pose de face : 4 PNG (ovale + nez/bouche + tiers verticaux + angle mâchoire).
 // Pose profil : 1 PNG (arc mâchoire bleu sur le cliché ; pas de maillage).
 // Pose menton levé : 1 PNG (arc mandibulaire bas sur le cliché ; pas de maillage).
 // Pose sommet du crâne : 1 PNG (photo miroir seule, sans repères dessinés).
@@ -15,6 +14,7 @@
 // Poses œil / front (hairline) : pas de PNG aplati admin.
 
 import {
+  drawAdminFrontalJawAngleGuidelinesOnCanvas,
   drawAdminJawUpLowerArcGuideOnCanvas,
   drawAdminNoseMouthWidthGuidelinesOnCanvas,
   drawAdminOrientationGuidelinesOnCanvas,
@@ -40,6 +40,7 @@ export type AdminFlattenedGuideEncoding =
       ovalFlat: Blob;
       noseMouthFlat: Blob;
       verticalThirdsFlat: Blob;
+      jawAngleFlat: Blob;
     }
   | {
       variant: 'profile';
@@ -236,7 +237,7 @@ function isCloseupHairlinePoseId(id: PoseId): id is 'closeup-hairline' {
 }
 
 /**
- * PNG aplatis admin : 3 variantes pour la face de face ; 1 par profil (arc mâchoire)
+ * PNG aplatis admin : 4 variantes pour la face de face ; 1 par profil (arc mâchoire)
  * ; 1 pour menton levé ; 1 pour sommet du crâne (photo seule) ; 1 pour sourire (lèvres).
  * Hors `DEBUG_CAPTURE_WHITE_FACE_MESH`, pas de masque blanc Wireframe sur ces composites.
  */
@@ -327,9 +328,17 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       drawAdminVerticalThirdsGuidelinesOnCanvas,
       false,
     );
+    const jawAngleFlat = await renderSingleFlatGuidePng(
+      bitmap,
+      opts.landmarks,
+      opts.sourceVideoWidth,
+      opts.sourceVideoHeight,
+      drawAdminFrontalJawAngleGuidelinesOnCanvas,
+      false,
+    );
 
-    if (!ovalFlat || !noseMouthFlat || !verticalThirdsFlat) return null;
-    return { variant: 'frontal', ovalFlat, noseMouthFlat, verticalThirdsFlat };
+    if (!ovalFlat || !noseMouthFlat || !verticalThirdsFlat || !jawAngleFlat) return null;
+    return { variant: 'frontal', ovalFlat, noseMouthFlat, verticalThirdsFlat, jawAngleFlat };
   } catch {
     return null;
   } finally {
