@@ -173,18 +173,18 @@ export function BodyfatCompositionMatrixVisual({
       : null;
 
   const wrapMax = compact
-    ? "mx-auto w-full max-w-[13rem] sm:max-w-[14rem]"
+    ? "mx-auto w-full max-w-[min(100%,16.5rem)] sm:max-w-[18.5rem]"
     : "mx-auto w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]";
   const gridShell = compact
-    ? "grid grid-cols-[16px_1fr_16px] grid-rows-[16px_1fr_16px] items-center gap-0.5"
+    ? "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]"
     : "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]";
   const labelClass = compact
-    ? "text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-400"
+    ? "text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:tracking-[0.16em]"
     : "text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400";
-  const pad = compact ? "p-1.5" : "p-2";
-  const cellGap = compact ? "gap-[2px]" : "gap-0.5";
-  const cellRound = compact ? "rounded-[2px]" : "rounded-[3px] sm:rounded-sm";
-  const ringUser = compact ? "ring-1 ring-white/85" : "ring-2 ring-white/80";
+  const pad = compact ? "p-2" : "p-2";
+  const cellGap = compact ? "gap-0.5" : "gap-0.5";
+  const cellRound = compact ? "rounded-[3px] sm:rounded-sm" : "rounded-[3px] sm:rounded-sm";
+  const ringUser = compact ? "ring-2 ring-white/85" : "ring-2 ring-white/80";
 
   return (
     <div className={wrapMax}>
@@ -224,7 +224,11 @@ export function BodyfatCompositionMatrixVisual({
                 const bg = isUser
                   ? "#e9f1f4"
                   : (`rgba(154,174,181,${baseOpacity})` as string);
-                const shadow = isUser ? "0 0 14px rgba(255,255,255,0.45)" : undefined;
+                const shadow = isUser
+                  ? compact
+                    ? "0 0 16px rgba(255,255,255,0.5)"
+                    : "0 0 18px rgba(255,255,255,0.55)"
+                  : undefined;
                 const cellClass = cn(
                   cellRound,
                   "transition",
@@ -310,7 +314,7 @@ export function BodyfatWeakestScoreCallout({
     <div
       className={
         compact
-          ? "mx-auto mt-3 w-full max-w-[14rem] text-center"
+          ? "mx-auto mt-3 w-full max-w-[min(100%,16.5rem)] sm:max-w-[18.5rem] text-center"
           : "mx-auto mt-5 w-full max-w-md text-center"
       }
     >

@@ -60,18 +60,18 @@ export function EyebrowBoldFeminineMatrix({
       : null;
 
   const outerWrap = compact
-    ? "mx-auto w-full max-w-[13rem] sm:max-w-[14rem]"
+    ? "mx-auto w-full max-w-[min(100%,16.5rem)] sm:max-w-[18.5rem]"
     : "w-full";
   const gridShell = compact
-    ? "grid grid-cols-[16px_1fr_16px] grid-rows-[16px_1fr_16px] items-center gap-0.5"
+    ? "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]"
     : "grid grid-cols-[60px_1fr_60px] grid-rows-[24px_1fr_24px] items-center gap-1";
   const labelClass = compact
-    ? "text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-400"
+    ? "text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:tracking-[0.16em]"
     : "text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400";
-  const pad = compact ? "p-1.5" : "p-2";
-  const cellGap = compact ? "gap-[2px]" : "gap-0.5";
-  const cellRound = compact ? "rounded-[2px]" : "rounded-md";
-  const ringUser = compact ? "ring-1 ring-white/85" : "ring-2 ring-white/80";
+  const pad = compact ? "p-2" : "p-2";
+  const cellGap = compact ? "gap-0.5" : "gap-0.5";
+  const cellRound = compact ? "rounded-[3px] sm:rounded-sm" : "rounded-md";
+  const ringUser = compact ? "ring-2 ring-white/85" : "ring-2 ring-white/80";
 
   const matrixShell = cn(
     "relative aspect-square w-full border border-white/10 bg-white/[0.03]",
@@ -80,7 +80,7 @@ export function EyebrowBoldFeminineMatrix({
   );
 
   const userShadow = compact
-    ? "0 0 14px rgba(255,255,255,0.45)"
+    ? "0 0 16px rgba(255,255,255,0.5)"
     : "0 0 18px rgba(255,255,255,0.55)";
 
   return (
