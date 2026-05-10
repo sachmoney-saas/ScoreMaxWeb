@@ -37,10 +37,10 @@ type GuideDrawer = (
 export type AdminFlattenedGuideEncoding =
   | {
       variant: 'frontal';
-      ovalFlat: Blob;
-      noseMouthFlat: Blob;
-      verticalThirdsFlat: Blob;
-      jawAngleFlat: Blob;
+      ovalFlat: Blob | null;
+      noseMouthFlat: Blob | null;
+      verticalThirdsFlat: Blob | null;
+      jawAngleFlat: Blob | null;
     }
   | {
       variant: 'profile';
@@ -311,7 +311,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminOrientationGuidelinesOnCanvas,
       false,
-    );
+    ).catch(() => null);
     const noseMouthFlat = await renderSingleFlatGuidePng(
       bitmap,
       opts.landmarks,
@@ -319,7 +319,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminNoseMouthWidthGuidelinesOnCanvas,
       false,
-    );
+    ).catch(() => null);
     const verticalThirdsFlat = await renderSingleFlatGuidePng(
       bitmap,
       opts.landmarks,
@@ -327,7 +327,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminVerticalThirdsGuidelinesOnCanvas,
       false,
-    );
+    ).catch(() => null);
     const jawAngleFlat = await renderSingleFlatGuidePng(
       bitmap,
       opts.landmarks,
@@ -335,9 +335,9 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminFrontalJawAngleGuidelinesOnCanvas,
       false,
-    );
+    ).catch(() => null);
 
-    if (!ovalFlat || !noseMouthFlat || !verticalThirdsFlat || !jawAngleFlat) return null;
+    if (!ovalFlat && !noseMouthFlat && !verticalThirdsFlat && !jawAngleFlat) return null;
     return { variant: 'frontal', ovalFlat, noseMouthFlat, verticalThirdsFlat, jawAngleFlat };
   } catch {
     return null;

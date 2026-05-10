@@ -21,6 +21,7 @@ import {
   buildPayload,
   createAnalysisJob,
   loadRequiredAssets,
+  parseGuideTraceMetricsFromStoredRequestPayload,
   refreshScanSessionProgress,
   requiredAssetCodes,
   type ScanSessionRow,
@@ -599,7 +600,7 @@ export function createV1AnalysesRouter(): Router {
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
           .select(
-            "id, status, trigger_source, version, started_at, completed_at, failed_at, error_code, error_message, created_at",
+            "id, status, trigger_source, version, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
           )
           .eq("id", params.jobId)
           .eq("user_id", userId)
@@ -636,6 +637,9 @@ export function createV1AnalysesRouter(): Router {
           data: {
             job,
             results: results ?? [],
+            capture_guide_metrics: parseGuideTraceMetricsFromStoredRequestPayload(
+              (job as { request_payload?: unknown }).request_payload,
+            ),
           },
           error: null,
         });
@@ -766,7 +770,7 @@ export function createV1AnalysesRouter(): Router {
         const { data: latestJob, error: latestJobError } = await supabaseAdmin
           .from("analysis_jobs")
           .select(
-            "id, status, trigger_source, started_at, completed_at, failed_at, error_code, error_message, created_at",
+            "id, status, trigger_source, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
           )
           .eq("user_id", userId)
           .neq("status", "failed")
@@ -815,6 +819,9 @@ export function createV1AnalysesRouter(): Router {
           data: {
             job: latestJob,
             results: results ?? [],
+            capture_guide_metrics: parseGuideTraceMetricsFromStoredRequestPayload(
+              (latestJob as { request_payload?: unknown }).request_payload,
+            ),
           },
           error: null,
         });

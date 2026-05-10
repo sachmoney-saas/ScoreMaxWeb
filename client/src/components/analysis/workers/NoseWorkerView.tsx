@@ -9,6 +9,10 @@ import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { workerMetricAnchorId, workerSectionAnchorId } from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
+  CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO,
+  type GuideTraceMetricsForAnalysis,
+} from "@shared/schema";
+import {
   getEnum,
   getScore,
   hasAnyScore,
@@ -35,12 +39,14 @@ export interface NoseWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
   heroAside?: React.ReactNode;
+  captureGuideMetrics?: GuideTraceMetricsForAnalysis | null;
 }
 
 export function NoseWorkerView({
   aggregates,
   language,
   heroAside,
+  captureGuideMetrics,
 }: NoseWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -188,8 +194,29 @@ export function NoseWorkerView({
     return sectionTip;
   };
 
+  const mouthOverNose = captureGuideMetrics?.[CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO];
+
   return (
     <div className="space-y-4">
+      {mouthOverNose !== undefined && Number.isFinite(mouthOverNose) ? (
+        <p className="text-[11px] leading-snug text-zinc-500" role="note">
+          <span className="font-semibold uppercase tracking-[0.12em] text-zinc-500">
+            {i18n(language, { en: "Capture geometry", fr: "Géométrie capture" })}
+          </span>
+          <span className="ml-1.5 font-mono text-zinc-400">
+            {i18n(language, {
+              en: `mouth width / nose width ${mouthOverNose.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4,
+              })}`,
+              fr: `largeur bouche / largeur nez ${mouthOverNose.toLocaleString("fr-FR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4,
+              })}`,
+            })}
+          </span>
+        </p>
+      ) : null}
       <WorkerHero
         eyebrow={i18n(language, { en: "Nose architecture", fr: "Architecture du nez" })}
         title={i18n(language, {

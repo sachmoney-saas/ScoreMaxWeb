@@ -37,6 +37,7 @@ import { HairWorkerView } from "@/components/analysis/workers/HairWorkerView";
 import { SkinTintWorkerView } from "@/components/analysis/workers/SkinTintWorkerView";
 import { NeckWorkerView } from "@/components/analysis/workers/NeckWorkerView";
 import { RecommendationsSection } from "@/components/analysis/RecommendationsSection";
+import type { GuideTraceMetricsForAnalysis } from "@shared/schema";
 import {
   analysisBackNavButtonClassName,
   analysisSurfaceCardClassName,
@@ -260,6 +261,7 @@ export default function WorkerDetails() {
         language,
         cardClassName: analysisSurfaceCardClassName,
         heroAside: dedicatedWorker ? adminHeroAside : undefined,
+        captureGuideMetrics: analysis?.capture_guide_metrics,
       })}
 
       {entries.length > 0 ? (
@@ -280,6 +282,7 @@ function renderWorkerBody({
   language,
   cardClassName,
   heroAside,
+  captureGuideMetrics,
 }: {
   worker: string;
   outputAggregates: Record<string, unknown>;
@@ -287,6 +290,7 @@ function renderWorkerBody({
   language: ReturnType<typeof useAppLanguage>;
   cardClassName: string;
   heroAside?: React.ReactNode;
+  captureGuideMetrics?: GuideTraceMetricsForAnalysis | null;
 }): React.ReactNode {
   switch (worker) {
     case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
@@ -294,11 +298,11 @@ function renderWorkerBody({
     case "skin":          return <SkinWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "bodyfat":       return <BodyfatWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "symmetry_shape": return <SymmetryShapeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
-    case "jaw":           return <JawWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "jaw":           return <JawWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} captureGuideMetrics={captureGuideMetrics} />;
     case "eye_brows":     return <EyeBrowsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "eyes":          return <EyesWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
-    case "nose":          return <NoseWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "nose":          return <NoseWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} captureGuideMetrics={captureGuideMetrics} />;
     case "chin":          return <ChinWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "cheeks":        return <CheeksWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "smile":         return <SmileWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;

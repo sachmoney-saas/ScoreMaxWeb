@@ -4,8 +4,14 @@ import {
   type AnalysisTier,
 } from "@shared/oneshot";
 import {
+  ANALYSIS_METADATA_GUIDE_TRACE_METRICS,
+  CAPTURE_META_FRONT_JAW_ANGLE_DEG,
+  CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO,
+  CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO,
+  FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES,
   REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
   SCAN_ASSET_TO_CANONICAL_SLOT,
+  type GuideTraceMetricsForAnalysis,
   type OnboardingScanAssetCode,
 } from "@shared/schema";
 import { ApiError } from "./errors";
@@ -124,6 +130,109 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return Buffer.from(arrayBuffer).toString("base64");
 }
 
+function pickFiniteMetric(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+/**
+ * Dernières métriques repères face (par type d’asset), lues en base pour enrichir
+ * `AnalysesRequest.metadata` — uniquement des nombres réellement stockés à l’upload.
+ */
+export async function loadLatestFrontalGuideTraceMetrics(params: {
+  userId: string;
+  sessionId: string;
+}): Promise<GuideTraceMetricsForAnalysis> {
+  const { data, error } = await supabaseAdmin
+    .from("scan_assets")
+    .select("asset_type_code, capture_metadata, created_at")
+    .eq("user_id", params.userId)
+    .eq("session_id", params.sessionId)
+    .in("asset_type_code", [...FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES])
+    .in("upload_status", ["uploaded", "validated"])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to load guide trace capture metadata",
+      details: error,
+    });
+  }
+
+  const metrics: GuideTraceMetricsForAnalysis = {};
+
+  /** Plus récent d’abord ; on prend la première valeur finie trouvée par type (ré-upload / métadonnée manquante). */
+  const metasByAsset = new Map<string, Record<string, unknown>[]>();
+  for (const raw of data ?? []) {
+    const row = raw as {
+      asset_type_code: string;
+      capture_metadata: Record<string, unknown> | null;
+    };
+    const list = metasByAsset.get(row.asset_type_code) ?? [];
+    list.push(row.capture_metadata ?? {});
+    metasByAsset.set(row.asset_type_code, list);
+  }
+
+  const mergeFromKeylists = (
+    assetCode: (typeof FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES)[number],
+    metaKey:
+      | typeof CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO
+      | typeof CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO
+      | typeof CAPTURE_META_FRONT_JAW_ANGLE_DEG,
+  ): void => {
+    const list = metasByAsset.get(assetCode);
+    if (!list) return;
+    for (const meta of list) {
+      const v = pickFiniteMetric(meta[metaKey]);
+      if (v !== undefined) {
+        metrics[metaKey] = v;
+        return;
+      }
+    }
+  };
+
+  mergeFromKeylists(
+    "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
+    CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO,
+  );
+  mergeFromKeylists(
+    "GUIDE_TRACE_FACE_FRONT_OVAL",
+    CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO,
+  );
+  mergeFromKeylists(
+    "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
+    CAPTURE_META_FRONT_JAW_ANGLE_DEG,
+  );
+
+  return metrics;
+}
+
+export function parseGuideTraceMetricsFromStoredRequestPayload(
+  requestPayload: unknown,
+): GuideTraceMetricsForAnalysis | null {
+  if (!requestPayload || typeof requestPayload !== "object" || Array.isArray(requestPayload)) {
+    return null;
+  }
+  const root = requestPayload as Record<string, unknown>;
+  const block = root[ANALYSIS_METADATA_GUIDE_TRACE_METRICS];
+  if (!block || typeof block !== "object" || Array.isArray(block)) {
+    return null;
+  }
+  const m = block as Record<string, unknown>;
+  const metrics: GuideTraceMetricsForAnalysis = {};
+  const rn = pickFiniteMetric(m[CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO]);
+  if (rn !== undefined) metrics[CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO] = rn;
+  const ro = pickFiniteMetric(m[CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO]);
+  if (ro !== undefined) metrics[CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO] = ro;
+  const ra = pickFiniteMetric(m[CAPTURE_META_FRONT_JAW_ANGLE_DEG]);
+  if (ra !== undefined) metrics[CAPTURE_META_FRONT_JAW_ANGLE_DEG] = ra;
+  return Object.keys(metrics).length > 0 ? metrics : null;
+}
+
 async function buildAnalysisImages(assets: ScanAssetRow[]) {
   return Promise.all(
     assets.map(async (asset) => {
@@ -164,6 +273,21 @@ export async function buildPayload(params: {
   const tier: AnalysisTier = params.tier ?? "standard";
   const runs = ANALYSIS_TIER_RUNS[tier];
 
+  const guideTraceMetrics = await loadLatestFrontalGuideTraceMetrics({
+    userId: params.userId,
+    sessionId: params.sessionId,
+  });
+
+  const metadata: Record<string, unknown> = {
+    source: params.source,
+    userId: params.userId,
+    sessionId: params.sessionId,
+    tier,
+  };
+  if (Object.keys(guideTraceMetrics).length > 0) {
+    metadata[ANALYSIS_METADATA_GUIDE_TRACE_METRICS] = guideTraceMetrics;
+  }
+
   return analysesRequestSchema.parse({
     requestId: `${params.userId}-${params.sessionId}-${Date.now()}`,
     images: await buildAnalysisImages(params.assets),
@@ -176,12 +300,7 @@ export async function buildPayload(params: {
       promptVersion: "latest" as const,
       runs,
     })),
-    metadata: {
-      source: params.source,
-      userId: params.userId,
-      sessionId: params.sessionId,
-      tier,
-    },
+    metadata,
     ...(params.lang !== undefined ? { lang: params.lang } : {}),
   });
 }

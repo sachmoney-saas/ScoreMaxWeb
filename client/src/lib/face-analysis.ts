@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import {
   REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
   SCAN_ASSET_TO_CANONICAL_SLOT,
+  type GuideTraceMetricsForAnalysis,
   type OnboardingScanAssetCode,
   type SignedUploadScanAssetCode,
 } from "@shared/schema";
@@ -114,7 +115,6 @@ export type AnalysisLaunchResponse = {
     status: "queued" | "running" | "completed" | "failed";
   };
 };
-
 export type RawAnalysisRun = {
   analysisId?: string;
   runIndex?: number;
@@ -167,6 +167,8 @@ export type PersistedAnalysisDetailResponse = {
     result: Record<string, unknown>;
     created_at: string;
   }>;
+  /** Repères géométriques mesurés à la capture ; relus depuis le job (pas agrégateur LLM). */
+  capture_guide_metrics?: GuideTraceMetricsForAnalysis | null;
 };
 
 export type LatestAnalysisResponse = PersistedAnalysisDetailResponse;

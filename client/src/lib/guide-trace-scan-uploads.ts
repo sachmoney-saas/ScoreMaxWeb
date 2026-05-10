@@ -26,30 +26,24 @@ export function guideTraceBlobUploadsFromCapturedPose(
   switch (pose.poseId) {
     case "frontal":
       if (pose.annotatedOvalGuideBlob) {
-        const meta: Record<string, unknown> | undefined =
-          pose.ovalMouthOverUpperLineWidthRatio !== undefined
-            ? {
-                [CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO]:
-                  pose.ovalMouthOverUpperLineWidthRatio,
-              }
-            : undefined;
         uploads.push({
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_OVAL",
           fileLabel: "oval",
           blob: pose.annotatedOvalGuideBlob,
-          ...(meta ? { captureMetadata: meta } : {}),
+          captureMetadata: {
+            [CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO]:
+              pose.ovalMouthOverUpperLineWidthRatio ?? null,
+          },
         });
       }
       if (pose.annotatedNoseMouthGuideBlob) {
-        const meta: Record<string, unknown> | undefined =
-          pose.mouthToNoseWidthRatio !== undefined
-            ? { [CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO]: pose.mouthToNoseWidthRatio }
-            : undefined;
         uploads.push({
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
           fileLabel: "nose-mouth",
           blob: pose.annotatedNoseMouthGuideBlob,
-          ...(meta ? { captureMetadata: meta } : {}),
+          captureMetadata: {
+            [CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO]: pose.mouthToNoseWidthRatio ?? null,
+          },
         });
       }
       if (pose.annotatedVerticalThirdsGuideBlob) {
@@ -60,15 +54,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
         });
       }
       if (pose.annotatedJawAngleGuideBlob) {
-        const meta: Record<string, unknown> | undefined =
-          pose.frontalJawAngleDeg !== undefined
-            ? { [CAPTURE_META_FRONT_JAW_ANGLE_DEG]: pose.frontalJawAngleDeg }
-            : undefined;
         uploads.push({
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
           fileLabel: "jaw-angle",
           blob: pose.annotatedJawAngleGuideBlob,
-          ...(meta ? { captureMetadata: meta } : {}),
+          captureMetadata: {
+            [CAPTURE_META_FRONT_JAW_ANGLE_DEG]: pose.frontalJawAngleDeg ?? null,
+          },
         });
       }
       break;

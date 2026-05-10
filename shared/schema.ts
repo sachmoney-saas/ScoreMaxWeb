@@ -69,6 +69,29 @@ export const CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO =
 /** Angle au sommet du repère V mâchoire (degrés), face de face. */
 export const CAPTURE_META_FRONT_JAW_ANGLE_DEG = "front_jaw_angle_deg" as const;
 
+/**
+ * Clé sous `AnalysesRequest.metadata` : mesures issues de `scan_assets.capture_metadata`,
+ * relues côté serveur au lancement (nombres finis uniquement ; rien d’inventé).
+ */
+export const ANALYSIS_METADATA_GUIDE_TRACE_METRICS = "guide_trace_metrics" as const;
+
+/** PNG repère frontal dont les métriques `CAPTURE_META_*` sont fusionnées pour l’analyse. */
+export const FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES = [
+  "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
+  "GUIDE_TRACE_FACE_FRONT_OVAL",
+  "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
+] as const;
+
+export type FrontalGuideTraceMetricAssetCode =
+  (typeof FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES)[number];
+
+/** Métriques des repères 2D face de face, jointes au payload vers ScanFace. */
+export type GuideTraceMetricsForAnalysis = {
+  [CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO]?: number;
+  [CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO]?: number;
+  [CAPTURE_META_FRONT_JAW_ANGLE_DEG]?: number;
+};
+
 export const analysisJobs = pgTable("analysis_jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
   user_id: uuid("user_id").notNull(),

@@ -1188,16 +1188,24 @@ export class CaptureSession {
           poseId: poseState.poseId,
         });
         if (flattened?.variant === "frontal") {
-          annotatedOvalGuideBlob = flattened.ovalFlat;
-          annotatedNoseMouthGuideBlob = flattened.noseMouthFlat;
-          annotatedVerticalThirdsGuideBlob = flattened.verticalThirdsFlat;
-          annotatedJawAngleGuideBlob = flattened.jawAngleFlat;
-          annotatedOvalGuideThumbnailUrl = URL.createObjectURL(flattened.ovalFlat);
-          annotatedNoseMouthGuideThumbnailUrl = URL.createObjectURL(flattened.noseMouthFlat);
-          annotatedVerticalThirdsGuideThumbnailUrl = URL.createObjectURL(
-            flattened.verticalThirdsFlat,
-          );
-          annotatedJawAngleGuideThumbnailUrl = URL.createObjectURL(flattened.jawAngleFlat);
+          if (flattened.ovalFlat) {
+            annotatedOvalGuideBlob = flattened.ovalFlat;
+            annotatedOvalGuideThumbnailUrl = URL.createObjectURL(flattened.ovalFlat);
+          }
+          if (flattened.noseMouthFlat) {
+            annotatedNoseMouthGuideBlob = flattened.noseMouthFlat;
+            annotatedNoseMouthGuideThumbnailUrl = URL.createObjectURL(flattened.noseMouthFlat);
+          }
+          if (flattened.verticalThirdsFlat) {
+            annotatedVerticalThirdsGuideBlob = flattened.verticalThirdsFlat;
+            annotatedVerticalThirdsGuideThumbnailUrl = URL.createObjectURL(
+              flattened.verticalThirdsFlat,
+            );
+          }
+          if (flattened.jawAngleFlat) {
+            annotatedJawAngleGuideBlob = flattened.jawAngleFlat;
+            annotatedJawAngleGuideThumbnailUrl = URL.createObjectURL(flattened.jawAngleFlat);
+          }
         } else if (flattened?.variant === "profile") {
           annotatedProfileJawGuideBlob = flattened.profileJawFlat;
           annotatedProfileJawGuideThumbnailUrl = URL.createObjectURL(flattened.profileJawFlat);

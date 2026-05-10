@@ -76,11 +76,13 @@ function drawAccentRatioTextMapped(
   cy: number,
   minDimPx: number,
   text: string,
+  opts?: { textAlign?: CanvasTextAlign },
 ): void {
   const fontPx = Math.max(22, minDimPx * 0.044);
+  const textAlign = opts?.textAlign ?? 'center';
   ctx.save();
   ctx.font = `700 ${fontPx}px system-ui, "Segoe UI", sans-serif`;
-  ctx.textAlign = 'center';
+  ctx.textAlign = textAlign;
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
   ctx.miterLimit = 2;
@@ -120,9 +122,17 @@ function drawNoseMouthRatioLabelMapped(
   cy: number,
   minDimPx: number,
   ratio: number,
+  opts?: { textAlign?: CanvasTextAlign },
 ): void {
   const lang = getPreferredLanguage();
-  drawAccentRatioTextMapped(ctx, cx, cy, minDimPx, formatRatioMultiplierText(lang, ratio));
+  drawAccentRatioTextMapped(
+    ctx,
+    cx,
+    cy,
+    minDimPx,
+    formatRatioMultiplierText(lang, ratio),
+    opts,
+  );
 }
 
 export type LandmarkPxMapper = (nx: number, ny: number) => { x: number; y: number };
@@ -441,9 +451,11 @@ function drawNoseMouthWidthMapped(
 
   const ratio = mouthToNoseWidthRatioFromLandmarks(landmarks);
   if (ratio !== null) {
-    const cx = (noseA.x + noseB.x + mouthA.x + mouthB.x) * 0.25;
+    const rightX = Math.max(noseA.x, noseB.x, mouthA.x, mouthB.x);
+    const labelPad = Math.max(12, minDimPx * 0.026);
+    const cx = rightX + labelPad;
     const cy = (noseA.y + mouthA.y) * 0.5;
-    drawNoseMouthRatioLabelMapped(ctx, cx, cy, minDimPx, ratio);
+    drawNoseMouthRatioLabelMapped(ctx, cx, cy, minDimPx, ratio, { textAlign: 'left' });
   }
 }
 
@@ -938,7 +950,6 @@ export function drawAdminFrontalJawAngleGuidelinesOnCanvas(
   outW: number,
   outH: number,
 ): void {
-  if (landmarks.length < 400 || outW < 16 || outH < 16) return;
   const minDim = Math.min(outW, outH);
   drawFrontalJawAngleMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim);
 }

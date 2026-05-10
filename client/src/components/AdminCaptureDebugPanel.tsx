@@ -628,13 +628,13 @@ export function AdminCaptureDebugPanel({
   const crownUrl = payload.annotatedCrownPhotoFlatThumbnailUrl;
   const smileUrl = payload.annotatedSmileLipsGuideThumbnailUrl;
 
-  const hasFrontalFlat = Boolean(ovalUrl && nmUrl && vtUrl && jawAngleUrl);
+  const hasAnyFrontalGuidePng = Boolean(ovalUrl || nmUrl || vtUrl || jawAngleUrl);
   const hasProfileFlat = Boolean(jawUrl);
   const hasJawUpFlat = Boolean(jawUpUrl);
   const hasCrownFlat = Boolean(crownUrl);
   const hasSmileFlat = Boolean(smileUrl);
   const hasFlatPng =
-    hasFrontalFlat || hasProfileFlat || hasJawUpFlat || hasCrownFlat || hasSmileFlat;
+    hasAnyFrontalGuidePng || hasProfileFlat || hasJawUpFlat || hasCrownFlat || hasSmileFlat;
 
   return (
     <div
@@ -717,46 +717,54 @@ export function AdminCaptureDebugPanel({
             </a>
           ) : (
             <>
-              <a
-                href={ovalUrl}
-                download={`${payload.poseId}-annotated-oval-guide.png`}
-                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-              >
-                {i18n(language, {
-                  en: 'Download PNG — oval guides',
-                  fr: 'Télécharger PNG — repères ovale',
-                })}
-              </a>
-              <a
-                href={nmUrl}
-                download={`${payload.poseId}-annotated-nose-mouth-guide.png`}
-                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-              >
-                {i18n(language, {
-                  en: 'Download PNG — nose & mouth',
-                  fr: 'Télécharger PNG — nez & bouche',
-                })}
-              </a>
-              <a
-                href={vtUrl}
-                download={`${payload.poseId}-annotated-vertical-thirds-guide.png`}
-                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-              >
-                {i18n(language, {
-                  en: 'Download PNG — vertical thirds',
-                  fr: 'Télécharger PNG — tiers verticaux',
-                })}
-              </a>
-              <a
-                href={jawAngleUrl}
-                download={`${payload.poseId}-annotated-jaw-angle-guide.png`}
-                className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-              >
-                {i18n(language, {
-                  en: 'Download PNG — jaw angle (front)',
-                  fr: 'Télécharger PNG — angle mâchoire (face)',
-                })}
-              </a>
+              {ovalUrl ? (
+                <a
+                  href={ovalUrl}
+                  download={`${payload.poseId}-annotated-oval-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — oval guides',
+                    fr: 'Télécharger PNG — repères ovale',
+                  })}
+                </a>
+              ) : null}
+              {nmUrl ? (
+                <a
+                  href={nmUrl}
+                  download={`${payload.poseId}-annotated-nose-mouth-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — nose & mouth',
+                    fr: 'Télécharger PNG — nez & bouche',
+                  })}
+                </a>
+              ) : null}
+              {vtUrl ? (
+                <a
+                  href={vtUrl}
+                  download={`${payload.poseId}-annotated-vertical-thirds-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — vertical thirds',
+                    fr: 'Télécharger PNG — tiers verticaux',
+                  })}
+                </a>
+              ) : null}
+              {jawAngleUrl ? (
+                <a
+                  href={jawAngleUrl}
+                  download={`${payload.poseId}-annotated-jaw-angle-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — jaw angle (front)',
+                    fr: 'Télécharger PNG — angle mâchoire (face)',
+                  })}
+                </a>
+              ) : null}
             </>
           )}
         </div>
@@ -833,67 +841,75 @@ export function AdminCaptureDebugPanel({
             </div>
           ) : (
             <div className="flex flex-col items-center gap-8">
-              <div className="w-full">
-                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                  {i18n(language, { en: 'Oval alignment — flat', fr: 'Alignement ovale — fichier aplati' })}
-                </p>
-                <img
-                  src={ovalUrl}
-                  alt=""
-                  width={payload.outputWidth}
-                  height={payload.outputHeight}
-                  className="mx-auto block h-auto w-full max-w-full rounded-md"
-                  decoding="async"
-                />
-              </div>
-              <div className="w-full">
-                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                  {i18n(language, {
-                    en: 'Nose & mouth widths — flat',
-                    fr: 'Largeur nez ↔ bouche — fichier aplati',
-                  })}
-                </p>
-                <img
-                  src={nmUrl}
-                  alt=""
-                  width={payload.outputWidth}
-                  height={payload.outputHeight}
-                  className="mx-auto block h-auto w-full max-w-full rounded-md"
-                  decoding="async"
-                />
-              </div>
-              <div className="w-full">
-                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                  {i18n(language, {
-                    en: 'Vertical thirds — flat (eyes midpoint, lips midpoint)',
-                    fr: 'Tiers verticaux — fichier aplati (milieu des yeux, milieu des lèvres)',
-                  })}
-                </p>
-                <img
-                  src={vtUrl}
-                  alt=""
-                  width={payload.outputWidth}
-                  height={payload.outputHeight}
-                  className="mx-auto block h-auto w-full max-w-full rounded-md"
-                  decoding="async"
-                />
-              </div>
-              <div className="w-full">
-                <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                  {i18n(language, {
-                    en: 'Jaw angle (front) — flat',
-                    fr: 'Angle mâchoire (face) — fichier aplati',
-                  })}
-                </p>
-                <img
-                  src={jawAngleUrl}
-                  alt=""
-                  width={payload.outputWidth}
-                  height={payload.outputHeight}
-                  className="mx-auto block h-auto w-full max-w-full rounded-md"
-                  decoding="async"
-                />
-              </div>
+              {ovalUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, { en: 'Oval alignment — flat', fr: 'Alignement ovale — fichier aplati' })}
+                  </p>
+                  <img
+                    src={ovalUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {nmUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Nose & mouth widths — flat',
+                      fr: 'Largeur nez ↔ bouche — fichier aplati',
+                    })}
+                  </p>
+                  <img
+                    src={nmUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {vtUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Vertical thirds — flat (eyes midpoint, lips midpoint)',
+                      fr: 'Tiers verticaux — fichier aplati (milieu des yeux, milieu des lèvres)',
+                    })}
+                  </p>
+                  <img
+                    src={vtUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {jawAngleUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Jaw angle (front) — flat',
+                      fr: 'Angle mâchoire (face) — fichier aplati',
+                    })}
+                  </p>
+                  <img
+                    src={jawAngleUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
             </div>
           )
         ) : isEyeOrHairlineCloseup ? (

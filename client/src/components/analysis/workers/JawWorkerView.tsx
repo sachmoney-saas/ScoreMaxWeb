@@ -9,6 +9,11 @@ import { calculateWorkerFaceScore } from "@/lib/face-analysis-score";
 import { workerMetricAnchorId, workerSectionAnchorId } from "@/lib/worker-view-anchor";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
+  CAPTURE_META_FRONT_JAW_ANGLE_DEG,
+  CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO,
+  type GuideTraceMetricsForAnalysis,
+} from "@shared/schema";
+import {
   getEnum,
   getScore,
   hasAnyScore,
@@ -42,9 +47,16 @@ export interface JawWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
   heroAside?: React.ReactNode;
+  /** Métriques repères 2D mesurées au déclenchement (persistées sur le job). */
+  captureGuideMetrics?: GuideTraceMetricsForAnalysis | null;
 }
 
-export function JawWorkerView({ aggregates, language, heroAside }: JawWorkerViewProps) {
+export function JawWorkerView({
+  aggregates,
+  language,
+  heroAside,
+  captureGuideMetrics,
+}: JawWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -121,8 +133,41 @@ export function JawWorkerView({ aggregates, language, heroAside }: JawWorkerView
         ],
   );
 
+  const jawAngleDeg = captureGuideMetrics?.[CAPTURE_META_FRONT_JAW_ANGLE_DEG];
+  const ovalMouthRatio = captureGuideMetrics?.[CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO];
+  const captureFacts =
+    jawAngleDeg !== undefined || ovalMouthRatio !== undefined
+      ? [
+          jawAngleDeg !== undefined && Number.isFinite(jawAngleDeg)
+            ? i18n(language, {
+                en: `front jaw angle ${Math.round(jawAngleDeg)}°`,
+                fr: `angle mâchoire face ${Math.round(jawAngleDeg)}°`,
+              })
+            : null,
+          ovalMouthRatio !== undefined && Number.isFinite(ovalMouthRatio)
+            ? `${i18n(language, {
+                en: "oval mouth / upper chord",
+                fr: "ovale bouche / corde haute",
+              })} ${ovalMouthRatio.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 3,
+              })}`
+            : null,
+        ]
+          .filter((s): s is string => typeof s === "string" && s.length > 0)
+          .join(" · ")
+      : null;
+
   return (
     <div className="space-y-4">
+      {captureFacts ? (
+        <p className="text-[11px] leading-snug text-zinc-500" role="note">
+          <span className="font-semibold uppercase tracking-[0.12em] text-zinc-500">
+            {i18n(language, { en: "Capture geometry", fr: "Géométrie capture" })}
+          </span>
+          <span className="ml-1.5 font-mono text-zinc-400">{captureFacts}</span>
+        </p>
+      ) : null}
       <WorkerHero
         eyebrow={i18n(language, {
           en: "Jaw architecture",
