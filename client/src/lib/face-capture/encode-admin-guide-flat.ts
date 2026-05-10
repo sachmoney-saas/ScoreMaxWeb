@@ -7,10 +7,11 @@
 // ============================================================
 //
 // Pose de face : 3 PNG (ovale + nez/bouche + tiers verticaux).
-// Pose profil : 1 PNG (masque complet + arc mâchoire bleu 2D sur le JPEG).
-// Pose menton levé : 1 PNG (masque complet + arc mandibulaire bas sur le JPEG).
-// Pose sommet du crâne : 1 PNG (photo miroir seule, sans masque ni repères).
-// Pose sourire : 1 PNG (masque + contours lèvres bleu clair).
+// Pose de face : 3 PNG (guides ovale / nez–bouche / tiers sur le cliché ; pas de maillage blanc hors debug).
+// Pose profil : 1 PNG (arc mâchoire bleu sur le cliché ; pas de maillage).
+// Pose menton levé : 1 PNG (arc mandibulaire bas sur le cliché ; pas de maillage).
+// Pose sommet du crâne : 1 PNG (photo miroir seule, sans repères dessinés).
+// Pose sourire : 1 PNG (photo + contours lèvres bleu clair, sans masque blanc hors debug).
 // Poses œil / front (hairline) : pas de PNG aplati admin.
 
 import {
@@ -235,9 +236,9 @@ function isCloseupHairlinePoseId(id: PoseId): id is 'closeup-hairline' {
 }
 
 /**
- * PNG aplatis admin : 3 variantes pour la face de face ; 1 par profil (arc mâchoire) ;
- * 1 pour menton levé ; 1 pour sommet du crâne (photo seule) ; 1 pour sourire (lèvres).
- * Poses gros plan œil et hairline : pas de fichiers aplatis (JPEG d’analyse inchangé).
+ * PNG aplatis admin : 3 variantes pour la face de face ; 1 par profil (arc mâchoire)
+ * ; 1 pour menton levé ; 1 pour sommet du crâne (photo seule) ; 1 pour sourire (lèvres).
+ * Hors `DEBUG_CAPTURE_WHITE_FACE_MESH`, pas de masque blanc Wireframe sur ces composites.
  */
 export async function encodeAdminGuideFlattenedPair(opts: {
   photoBlob: Blob;
@@ -296,7 +297,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         opts.sourceVideoWidth,
         opts.sourceVideoHeight,
         (ctx, lm, ow, oh) => drawAdminSmileLipsGuideOnCanvas(ctx, lm, ow, oh),
-        true,
+        false,
       );
       if (!smileLipsFlat) return null;
       return { variant: 'smileLips', smileLipsFlat };

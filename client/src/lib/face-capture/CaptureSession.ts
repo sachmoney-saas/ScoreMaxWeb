@@ -16,12 +16,7 @@ import { MotionTracker } from "./MotionTracker";
 import { PoseValidator } from "./PoseValidator";
 import { evaluateFrameQualityForCapture, evaluateFrameQualityMinimal } from "./QualityGate";
 import { faceRatio } from "./strategies/PoseStrategy";
-import {
-  drawLiveColoredPoseGuidesOnOverlayCanvas,
-  jpegOutputDimensions,
-  posesWithColoredGuideLinesOnly,
-} from "./admin-capture-guidelines";
-import { DEBUG_CAPTURE_WHITE_FACE_MESH } from "./capture-render-debug";
+import { jpegOutputDimensions } from "./admin-capture-guidelines";
 import { encodeAdminGuideFlattenedPair } from "./encode-admin-guide-flat";
 
 export interface CapturedPose {
@@ -450,43 +445,13 @@ export class CaptureSession {
     ctx.clearRect(0, 0, g.width, g.height);
   }
 
-  /** Repères bleus (canvas 2D) — alignés sur MaskRenderer.previewCover après flip CSS selfie. */
-  private paintPoseGuideLayers(
-    landmarks: LandmarkPoint[],
-    vw: number,
-    vh: number,
-    poseId: PoseId,
-  ): void {
-    const g = this.guideOverlayCanvas;
-    if (!g || !this.videoEl) return;
-    const ew = this.videoEl.clientWidth || 1;
-    const eh = this.videoEl.clientHeight || 1;
-    const pr =
-      typeof window !== "undefined"
-        ? Math.min(window.devicePixelRatio ?? 1, 1.25)
-        : 1;
-    const bw = Math.max(2, Math.round(ew * pr));
-    const bh = Math.max(2, Math.round(eh * pr));
-    if (g.width !== bw || g.height !== bh) {
-      g.width = bw;
-      g.height = bh;
-    }
-    g.style.width = `${ew}px`;
-    g.style.height = `${eh}px`;
-    const ctx = g.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(pr, 0, 0, pr, 0, 0);
-    ctx.clearRect(0, 0, ew, eh);
-    drawLiveColoredPoseGuidesOnOverlayCanvas(ctx, landmarks, vw, vh, ew, eh, poseId);
-  }
-
   /**
-   * Masque WebGL (optionnel selon pose) + calque 2D pour les poses « repères bleus seuls ».
-   * Barre de scan : inchangée (vert) ; maillage blanc : réactivable via {@link DEBUG_CAPTURE_WHITE_FACE_MESH}.
+   * Live : masque WebGL (filaire blanc). Les repères bleu clair ne s’affichent pas ici —
+   * ils sont dessinés uniquement sur les PNG stockés (`encode-admin-guide-flat`).
    */
   private renderPoseOverlays(
     frame: FaceFrame,
-    poseDef: PoseDefinition,
+    _poseDef: PoseDefinition,
     isExtrapolated: boolean,
     alignmentQuality: number,
   ): void {
@@ -495,9 +460,6 @@ export class CaptureSession {
     const vh = frame.frameHeight;
     const ew = this.videoEl.clientWidth || 1;
     const eh = this.videoEl.clientHeight || 1;
-
-    const hideWireMesh =
-      posesWithColoredGuideLinesOnly(poseDef.id) && !DEBUG_CAPTURE_WHITE_FACE_MESH;
 
     if (isExtrapolated) {
       this.maskRenderer.clear();
@@ -510,19 +472,12 @@ export class CaptureSession {
     if (this.state === "Holding") {
       this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh, {
         holdingProgress: this.holdProgress,
-        hideFaceOverlay: hideWireMesh,
       });
     } else {
-      this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh, {
-        hideFaceOverlay: hideWireMesh,
-      });
+      this.maskRenderer.render(frame.landmarks, vw, vh, ew, eh);
     }
 
-    if (hideWireMesh) {
-      this.paintPoseGuideLayers(frame.landmarks, vw, vh, poseDef.id);
-    } else {
-      this.clearGuideOverlayCanvas();
-    }
+    this.clearGuideOverlayCanvas();
   }
 
   private onLandmarks(
