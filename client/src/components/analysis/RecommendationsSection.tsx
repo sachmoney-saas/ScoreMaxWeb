@@ -7,6 +7,11 @@ import {
 
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
+  educationalDisclaimerI18n,
+  educationalDisclaimerNoticeClassName,
+  educationalDisclaimerWrapperClassName,
+} from "@/lib/educational-disclaimer";
+import {
   useMatchedRecommendations,
   useRecommendationActions,
   type RecommendationAction,
@@ -225,12 +230,11 @@ export function RecommendationsSection({
           </section>
         ) : null}
 
-      <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
-        {i18n(language, {
-          en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
-          fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",
-        })}
-      </p>
+      <div className={educationalDisclaimerWrapperClassName}>
+        <p className={educationalDisclaimerNoticeClassName}>
+          {i18n(language, educationalDisclaimerI18n)}
+        </p>
+      </div>
     </div>
   );
 }

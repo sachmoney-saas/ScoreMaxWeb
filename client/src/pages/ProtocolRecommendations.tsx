@@ -25,6 +25,11 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useAnalysisHistory } from "@/hooks/use-supabase";
+import {
+  educationalDisclaimerI18n,
+  educationalDisclaimerNoticeClassName,
+  educationalDisclaimerWrapperClassName,
+} from "@/lib/educational-disclaimer";
 
 const recommendationsPageTitleI18n = {
   en: "Recommendations",
@@ -289,12 +294,11 @@ export default function ProtocolRecommendationsPage() {
           </div>
         )}
 
-        <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
-          {i18n(language, {
-            en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
-            fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",
-          })}
-        </p>
+        <div className={educationalDisclaimerWrapperClassName}>
+          <p className={educationalDisclaimerNoticeClassName}>
+            {i18n(language, educationalDisclaimerI18n)}
+          </p>
+        </div>
       </div>
     </ProtocolPageShell>
   );

@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   CheckCircle2,
@@ -246,8 +247,8 @@ export default function AdminPage() {
     return <UsersManagementPage />;
   }
 
-  if (location === "/admin/analysis-failures") {
-    return <AnalysisFailureLogsPage />;
+  if (location.startsWith("/admin/analysis")) {
+    return <AdminAnalysisPage />;
   }
 
   const isLoading = isLoadingProfiles || isLoadingMetrics || isLoadingGrowth;
@@ -274,6 +275,7 @@ export default function AdminPage() {
 
 function UsersManagementPage() {
   const { user, session } = useAuth();
+  const [, setLocation] = useLocation();
   const { data: profiles = [], isLoading } = useAllProfiles();
   const { updateProfile, isUpdating } = useProfile();
   const { toast } = useToast();
@@ -301,6 +303,12 @@ function UsersManagementPage() {
       return matchesSearch && matchesRole && matchesOnboarding;
     });
   }, [onboardingFilter, profiles, roleFilter, searchQuery]);
+
+  function viewUserActivity(profile: AdminProfile) {
+    const email = profile.email?.trim();
+    if (!email) return;
+    setLocation(`/admin/analysis?search=${encodeURIComponent(email)}`);
+  }
 
   async function handleToggleSubscriber(profile: AdminProfile) {
     const accessToken = session?.access_token;
@@ -453,30 +461,62 @@ function UsersManagementPage() {
           onToggleOnboarding={handleToggleOnboarding}
           onToggleRole={handleToggleRole}
           onToggleSubscriber={handleToggleSubscriber}
+          onViewActivity={viewUserActivity}
         />
       )}
     </div>
   );
 }
 
-function AnalysisFailureLogsPage() {
-  const [, setLocation] = useLocation();
+function AdminAnalysisPage() {
+  const [location, setLocation] = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [listRowSnapshot, setListRowSnapshot] = useState<AdminAnalysisFailure | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<NonNullable<AdminAnalysisJobsFilters["status"]>>(
     "all",
   );
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.split("?")[1] ?? "");
+    const search = q.get("search") ?? "";
+    setSearchQuery(search);
+  }, [location]);
+
+  useEffect(() => {
+    const current = new URLSearchParams(location.split("?")[1] ?? "");
+    const nextSearch = searchQuery.trim();
+
+    if (!nextSearch) {
+      if (current.has("search")) {
+        current.delete("search");
+        const nextQuery = current.toString();
+        setLocation(nextQuery ? `/admin/analysis?${nextQuery}` : "/admin/analysis");
+      }
+      return;
+    }
+
+    if (current.get("search") !== nextSearch) {
+      current.set("search", nextSearch);
+      setLocation(`/admin/analysis?${current.toString()}`);
+    }
+  }, [location, searchQuery, setLocation]);
 
   const listFilters = useMemo<AdminAnalysisJobsFilters>(() => {
     return {
       status: statusFilter,
-      limit: 150,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
       ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
     };
-  }, [searchQuery, statusFilter]);
+  }, [page, searchQuery, statusFilter]);
 
-  const { data: jobs = [], isLoading } = useAdminAnalysisJobs(listFilters);
+  const { data, isLoading, isFetching } = useAdminAnalysisJobs(listFilters);
+  const jobs = data?.jobs ?? [];
+  const totalJobs = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalJobs / pageSize));
   const {
     data: jobDetail,
     isLoading: detailLoading,
@@ -491,7 +531,6 @@ function AnalysisFailureLogsPage() {
   void sheetOpen;
   void setListRowSnapshot;
   void listRowSnapshot;
-  void setLocation;
 
   const deleteJobMutation = useDeleteAdminAnalysisJob();
   const { toast } = useToast();
@@ -500,6 +539,16 @@ function AnalysisFailureLogsPage() {
     () => jobs.filter((row) => row.status === "failed").length,
     [jobs],
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   function openDetail(row: AdminAnalysisFailure) {
     setLocation(`/admin/analysis-jobs/${row.id}`);
@@ -651,7 +700,7 @@ function AnalysisFailureLogsPage() {
         </SheetContent>
       </Sheet>
 
-      {isLoading ? (
+      {isLoading && jobs.length === 0 ? (
         <div className="space-y-4">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-96 w-full" />
@@ -661,9 +710,9 @@ function AnalysisFailureLogsPage() {
           <div className="grid gap-4 md:grid-cols-3">
             <StatCard
               title="Analyses chargées"
-              value={jobs.length}
+              value={totalJobs}
               icon={<BarChart3 className="h-4 w-4 text-sky-400" />}
-              description="Liste courante (max 150, plus récentes d'abord)"
+              description="Résultats trouvés sur toute base"
             />
             <StatCard
               title="Dernière activité"
@@ -689,7 +738,13 @@ function AnalysisFailureLogsPage() {
                 <CardTitle>Toutes les analyses</CardTitle>
                 <CardDescription className="text-zinc-400">
                   Clique une ligne pour les images détaillées, le payload et impersonation.
+                  {isFetching ? " Actualisation…" : ""}
                 </CardDescription>
+                {searchQuery.trim() ? (
+                  <p className="text-xs text-sky-200/80">
+                    Recherche active sur <span className="font-mono">{searchQuery.trim()}</span>
+                  </p>
+                ) : null}
               </div>
               <div className="grid w-full gap-3 md:grid-cols-[1fr_180px] xl:w-auto xl:min-w-[420px]">
                 <div className="relative">
@@ -829,6 +884,31 @@ function AnalysisFailureLogsPage() {
                       )}
                     </TableBody>
                   </Table>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-sm text-zinc-400">
+                <p>
+                  Page {page} / {totalPages} · {totalJobs} résultat(s)
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/15 bg-black/25"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/15 bg-black/25"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Suivant
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -1022,6 +1102,7 @@ type UserManagementProps = {
   onToggleOnboarding: (profile: AdminProfile) => void;
   onToggleRole: (profile: AdminProfile) => void;
   onToggleSubscriber: (profile: AdminProfile) => void;
+  onViewActivity: (profile: AdminProfile) => void;
 };
 
 function UserManagement(props: UserManagementProps) {
@@ -1078,6 +1159,7 @@ function UserManagement(props: UserManagementProps) {
                   <TableHead className="text-zinc-400">Abonné</TableHead>
                   <TableHead className="text-zinc-400">Onboarding</TableHead>
                   <TableHead className="text-zinc-400">Dernière activité</TableHead>
+                  <TableHead className="text-zinc-400">Activité</TableHead>
                   <TableHead className="text-zinc-400">Inscription</TableHead>
                   <TableHead className="text-right text-zinc-400">Actions</TableHead>
                 </TableRow>
@@ -1151,6 +1233,18 @@ function UserManagement(props: UserManagementProps) {
                             <Clock className="h-3 w-3" />
                             {formatDate(profile.last_active_at, "dd MMM, HH:mm")}
                           </span>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={!profile.email}
+                            className="text-zinc-200 hover:bg-white/10 hover:text-white"
+                            onClick={() => props.onViewActivity(profile)}
+                          >
+                            <Activity className="mr-2 h-4 w-4" />
+                            Voir logs
+                          </Button>
                         </TableCell>
                         <TableCell className="text-sm text-zinc-400">
                           {formatDate(profile.created_at ?? profile.createdAt, "dd/MM/yyyy")}

@@ -26,7 +26,8 @@ const analysisJobParamsSchema = z.object({
 });
 
 const adminAnalysisJobsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(100),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
   status: z.enum(["all", "failed", "completed", "queued", "running"]).default("all"),
   search: z.string().trim().optional(),
 });
@@ -125,7 +126,7 @@ export function createV1AdminRouter(): Router {
         jobsQuery = jobsQuery.eq("user_id", query.userId);
       }
 
-      const { data: jobsData, error: jobsError } = await jobsQuery;
+      const { data: jobsData, error: jobsError, count } = await jobsQuery;
       if (jobsError) {
         throw new ApiError({
           code: "INTERNAL_SERVER_ERROR",
@@ -136,6 +137,7 @@ export function createV1AdminRouter(): Router {
       }
 
       const jobs = (jobsData ?? []) as AnalysisFailureRow[];
+      const total = count ?? jobs.length;
       const userIds = Array.from(new Set(jobs.map((job) => job.user_id)));
       const jobIds = jobs.map((job) => job.id);
       const sessionIds = Array.from(
@@ -244,15 +246,32 @@ export function createV1AdminRouter(): Router {
         .from("analysis_jobs")
         .select(
           "id, user_id, session_id, status, trigger_source, version, error_code, error_message, created_at, started_at, failed_at, completed_at",
+          { count: "exact" },
         )
-        .order("created_at", { ascending: false })
-        .limit(query.limit);
+        .order("created_at", { ascending: false });
 
       if (query.status !== "all") {
         jobsQuery = jobsQuery.eq("status", query.status);
       }
 
-      const { data: jobsData, error: jobsError } = await jobsQuery;
+      if (query.search) {
+        const search = query.search.replace(/,/g, " ").trim();
+        jobsQuery = jobsQuery.or(
+          [
+            `id.ilike.%${search}%`,
+            `user_id.ilike.%${search}%`,
+            `session_id.ilike.%${search}%`,
+            `error_code.ilike.%${search}%`,
+            `error_message.ilike.%${search}%`,
+            `trigger_source.ilike.%${search}%`,
+            `status.ilike.%${search}%`,
+          ].join(","),
+        );
+      }
+
+      jobsQuery = jobsQuery.range(query.offset, query.offset + query.limit - 1);
+
+      const { data: jobsData, error: jobsError, count } = await jobsQuery;
       if (jobsError) {
         throw new ApiError({
           code: "INTERNAL_SERVER_ERROR",
@@ -263,6 +282,7 @@ export function createV1AdminRouter(): Router {
       }
 
       const jobs = (jobsData ?? []) as AnalysisFailureRow[];
+      const total = count ?? jobs.length;
       const userIds = Array.from(new Set(jobs.map((j) => j.user_id)));
       const jobIds = jobs.map((j) => j.id);
       const sessionIds = Array.from(
@@ -335,26 +355,10 @@ export function createV1AdminRouter(): Router {
         scan_asset_count: job.session_id ? (scanAssetCountsBySession.get(job.session_id) ?? 0) : 0,
       }));
 
-      const jobsOut =
-        query.search?.trim().length
-          ? enriched.filter((job) => {
-              const s = query.search!.toLowerCase();
-              return [
-                job.id,
-                job.user_id,
-                job.user_email,
-                job.session_id,
-                job.error_code,
-                job.error_message,
-                job.status,
-              ].some((value) => value?.toLowerCase().includes(s));
-            })
-          : enriched;
-
       res.status(200).json({
         ok: true,
         httpStatus: 200,
-        data: { jobs: jobsOut },
+        data: { jobs: enriched, total },
         error: null,
       });
     } catch (error) {

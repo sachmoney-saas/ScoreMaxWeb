@@ -26,6 +26,7 @@ import {
 import Protocol from "@/pages/Protocol";
 import ProtocolRecommendations from "@/pages/ProtocolRecommendations";
 import Settings from "@/pages/Settings";
+import SupportClient from "@/pages/SupportClient";
 import Billing from "@/pages/Billing";
 import MentionsLegales from "@/pages/MentionsLegales";
 import CGU from "@/pages/CGU";
@@ -174,6 +175,10 @@ function Router() {
           <ProtectedRoute component={Settings} />
         </Route>
 
+        <Route path="/support-client">
+          <ProtectedRoute component={SupportClient} />
+        </Route>
+
         <Route path="/billing">
           <ProtectedRoute component={Billing} />
         </Route>
@@ -185,8 +190,11 @@ function Router() {
         <Route path="/admin/users">
           <ProtectedRoute component={AdminPage} />
         </Route>
-        <Route path="/admin/analysis-failures">
+        <Route path="/admin/analysis">
           <ProtectedRoute component={AdminPage} />
+        </Route>
+        <Route path="/admin/analysis-failures">
+          <Redirect to="/admin/analysis" />
         </Route>
         <Route path="/admin/analysis-jobs/:jobId">
           <ProtectedRoute component={AdminAnalysisJobDetailPage} />

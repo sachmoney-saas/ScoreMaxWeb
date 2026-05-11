@@ -114,8 +114,30 @@ export type AdminAnalysisJobDetail = {
 type AdminAnalysisJobsEnvelope = {
   data: {
     jobs: AdminAnalysisJobRow[];
+    total: number;
   };
 };
+
+function sanitizeAdminAnalysisSearch(search: string): string {
+  const cleaned = search.trim().replace(/,/g, " ");
+  if (!cleaned) return "";
+  return cleaned;
+}
+
+function escapeAdminAnalysisSearch(search: string): string {
+  return search.replace(/[%_]/g, "\\$&");
+}
+
+function joinAdminAnalysisSearchTerms(search: string): string {
+  const terms = sanitizeAdminAnalysisSearch(search).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return "";
+  return terms.map((term) => escapeAdminAnalysisSearch(term)).join(" ");
+}
+
+function normalizeAdminAnalysisSearch(search?: string): string {
+  if (!search) return "";
+  return joinAdminAnalysisSearchTerms(search);
+}
 
 type AdminAnalysisJobDetailEnvelope = {
   data: AdminAnalysisJobDetail;
@@ -125,25 +147,35 @@ export type AdminAnalysisJobsFilters = {
   /** défaut serveur : all */
   status?: "all" | "failed" | "completed" | "queued" | "running";
   limit?: number;
+  offset?: number;
   search?: string;
+};
+
+export type AdminAnalysisJobsResult = {
+  jobs: AdminAnalysisJobRow[];
+  total: number;
 };
 
 export async function fetchAdminAnalysisJobs(
   accessToken: string,
   filters?: AdminAnalysisJobsFilters,
-): Promise<AdminAnalysisJobRow[]> {
+): Promise<AdminAnalysisJobsResult> {
   const q = new URLSearchParams();
   if (filters?.status) q.set("status", filters.status);
   if (filters?.limit != null) q.set("limit", String(filters.limit));
-  if (filters?.search?.trim()) q.set("search", filters.search.trim());
+  if (filters?.offset != null) q.set("offset", String(filters.offset));
+  const search = normalizeAdminAnalysisSearch(filters?.search);
+  if (search) q.set("search", search);
   const qs = q.toString();
   const url = qs ? `/v1/admin/analysis-jobs?${qs}` : "/v1/admin/analysis-jobs";
 
   const response = await apiRequest("GET", url, undefined, {
     Authorization: `Bearer ${accessToken}`,
   });
-  const json = (await response.json()) as AdminAnalysisJobsEnvelope;
-  return json.data.jobs;
+  const json = (await response.json()) as AdminAnalysisJobsEnvelope & {
+    data: { jobs: AdminAnalysisJobRow[]; total: number };
+  };
+  return json.data;
 }
 
 export async function fetchAdminAnalysisJobDetail(params: {

@@ -89,7 +89,7 @@ export default function AdminAnalysisJobDetailPage() {
   if (isError || !data) {
     return (
       <div className="space-y-4 p-6 text-zinc-100">
-        <Button variant="ghost" className="gap-2" onClick={() => setLocation("/admin/analysis-failures")}>
+        <Button variant="ghost" className="gap-2" onClick={() => setLocation("/admin/analysis")}>
           <ArrowLeft className="h-4 w-4" /> Retour logs
         </Button>
         <Card className="border-white/10 bg-black/25">
@@ -103,7 +103,7 @@ export default function AdminAnalysisJobDetailPage() {
     <div className="space-y-6 p-6 text-zinc-50">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-2">
-          <Button variant="ghost" className="gap-2 px-0 text-zinc-300 hover:bg-transparent hover:text-white" onClick={() => setLocation("/admin/analysis-failures")}>
+          <Button variant="ghost" className="gap-2 px-0 text-zinc-300 hover:bg-transparent hover:text-white" onClick={() => setLocation("/admin/analysis")}>
             <ArrowLeft className="h-4 w-4" /> Retour logs
           </Button>
           <div>

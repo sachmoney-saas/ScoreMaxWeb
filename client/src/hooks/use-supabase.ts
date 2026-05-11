@@ -432,11 +432,12 @@ export function useAdminAnalysisJobs(
 ) {
   const { isAdmin } = useAuth();
 
-  return useQuery<AdminAnalysisJobRow[]>({
+  return useQuery<{ jobs: AdminAnalysisJobRow[]; total: number }>({
     queryKey: ["admin-analysis-jobs", filters ?? {}],
     queryFn: async () => fetchAdminAnalysisJobs(await getAccessToken(), filters),
     enabled: isAdmin && (options?.enabled ?? true),
     staleTime: 0,
+    placeholderData: (previousData) => previousData,
   });
 }
 

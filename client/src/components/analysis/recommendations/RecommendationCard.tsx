@@ -261,7 +261,7 @@ export function RecommendationCard({
         !isDocument && "rounded-xl transition duration-300 hover:border-white/35",
       )}
     >
-      <CardContent className="space-y-4 p-5">
+      <CardContent className="space-y-4 px-6 py-5 sm:px-7">
         <div className="flex items-start gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <div

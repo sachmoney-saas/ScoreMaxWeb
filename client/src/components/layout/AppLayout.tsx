@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Settings as SettingsIcon,
   CreditCard,
+  MessageCircle,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -174,10 +175,10 @@ function ModernAppSidebar() {
           isActive: (path) => path === "/admin/users",
         },
         {
-          href: "/admin/analysis-failures",
+          href: "/admin/analysis",
           label: "Logs analyses",
           icon: AlertTriangle,
-          isActive: (path) => path === "/admin/analysis-failures",
+          isActive: (path) => path === "/admin/analysis" || path === "/admin/analysis-failures",
         },
         {
           href: "/admin/recommendations",
@@ -295,6 +296,18 @@ function ModernAppSidebar() {
                 <SettingsIcon className="mr-2 h-4 w-4 text-zinc-400" />
                 <span>
                   {i18n(language, { en: "Settings", fr: "Paramètres" })}
+                </span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="rounded-xl text-zinc-100 focus:bg-white/10 focus:text-white">
+              <Link
+                href="/support-client"
+                className="flex w-full cursor-pointer items-center"
+                onClick={closeMobileSidebar}
+              >
+                <MessageCircle className="mr-2 h-4 w-4 text-zinc-400" />
+                <span>
+                  {i18n(language, { en: "Client Support", fr: "Support Client" })}
                 </span>
               </Link>
             </DropdownMenuItem>

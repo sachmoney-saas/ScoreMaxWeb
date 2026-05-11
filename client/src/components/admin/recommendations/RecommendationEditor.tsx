@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, Save } from "lucide-react";
+import { Clipboard, Loader2, Save, Upload } from "lucide-react";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,12 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import type { WorkerAggregateCatalogEntry } from "@/lib/face-analysis-display";
-import { extractReferencedKeys } from "@/lib/recommendation-condition";
-import { sanitizeProtocolSlots } from "@/lib/protocol-slots";
+import {
+  extractReferencedKeys,
+  validateCondition,
+  type AllowedAggregate,
+} from "@/lib/recommendation-condition";
+import { PROTOCOL_SLOTS, sanitizeProtocolSlots } from "@/lib/protocol-slots";
 import type {
   Condition,
   Recommendation,
@@ -41,12 +45,243 @@ import { useUpsertRecommendation } from "./hooks";
 import { ProtocolSlotsPicker } from "./ProtocolSlotsPicker";
 import { StepsEditor } from "./StepsEditor";
 import { TargetsPicker } from "./TargetsPicker";
+import { TARGETS_COPY } from "./recommendation-targets-copy";
 
 /* ============================================================================
  * Form state — keeps DB shape + a local-only `enabled` flag
  * ========================================================================= */
 
 type FormState = Recommendation & { enabled: boolean };
+
+type JsonImportResult = {
+  form: FormState;
+  applied: string[];
+  warnings: string[];
+};
+
+const recommendationTypes = ["soft", "hard"] as const satisfies readonly RecommendationType[];
+const recommendationCategories = [
+  "habit",
+  "exercise",
+  "topical",
+  "nutrition",
+  "device",
+  "injectable",
+  "energy",
+  "surgery",
+  "device_clinical",
+  "cosmetic",
+] as const satisfies readonly RecommendationCategory[];
+const recommendationRisks = ["none", "low", "medium", "high"] as const satisfies readonly RecommendationRisk[];
+const recommendationEvidences = ["community", "studies", "medical"] as const satisfies readonly RecommendationEvidence[];
+const recommendationDurationUnits = [
+  "days",
+  "weeks",
+  "months",
+  "session",
+  "permanent",
+] as const satisfies readonly RecommendationDurationUnit[];
+
+const JSON_PROMPT = `Tu dois générer une recommandation ScoreMax au format JSON strict.
+Réponds uniquement avec un objet JSON valide, sans markdown.
+
+Structure exacte :
+{
+  "id": "worker.slug_snake_case",
+  "type": "soft" | "hard",
+  "category": "habit" | "exercise" | "topical" | "nutrition" | "device" | "injectable" | "energy" | "surgery" | "device_clinical" | "cosmetic",
+  "priority": 0-100,
+  "title_fr": "Titre français court",
+  "title_en": "Short English title",
+  "summary_fr": "Résumé français concret, orienté action",
+  "summary_en": "Concrete action-oriented English summary",
+  "steps": [{ "fr": "Étape en français", "en": "Step in English" }],
+  "duration_value": number | null,
+  "duration_unit": "days" | "weeks" | "months" | "session" | "permanent" | null,
+  "cost_min": number | null,
+  "cost_max": number | null,
+  "cost_currency": "EUR" | null,
+  "risk": "none" | "low" | "medium" | "high",
+  "evidence": "community" | "studies" | "medical",
+  "targets": ["aggregate_key"],
+  "conditions": { "all": true },
+  "source_url": string | null,
+  "protocol_slots": ["morning" | "midday" | "evening" | "night" | "weekly" | "general"],
+  "enabled": true
+}
+
+Règles :
+- id doit commencer par le code worker affiché dans l'interface, exemple: eyes.my_recommendation.
+- FR et EN obligatoires pour title, summary et chaque step.
+- steps doit être un tableau d'objets { "fr": string, "en": string }.
+- targets contient les clés de métriques concernées par la reco.
+- conditions utilise ce DSL uniquement :
+  { "all": true }
+  { "score_lte": { "key": "metric_key", "value": 5 } }
+  { "score_gte": { "key": "metric_key", "value": 7 } }
+  { "enum_in": { "key": "metric_key", "values": ["value"] } }
+  { "and": [condition, condition] }
+  { "or": [condition, condition] }
+- soft = routine, exercice, soin, habitude, accessoire non médical.
+- hard = intervention clinique, injectable, chirurgie, énergie, device clinique.
+- protocol_slots détermine où la reco apparaît dans Mon protocole. Laisser [] pour une cure ponctuelle.
+- Ne mets aucune clé inconnue.`;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOneOf<T extends readonly string[]>(value: unknown, allowed: T): value is T[number] {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value);
+}
+
+function optionalNumber(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (value === undefined || value === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function optionalString(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (typeof value === "string") return value;
+  return undefined;
+}
+
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return Array.from(new Set(value.filter((v): v is string => typeof v === "string")));
+}
+
+function normalizeSteps(value: unknown): Recommendation["steps"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const steps = value
+    .filter(isPlainObject)
+    .map((step) => ({
+      fr: typeof step.fr === "string" ? step.fr : "",
+      en: typeof step.en === "string" ? step.en : "",
+    }))
+    .filter((step) => step.fr.trim() || step.en.trim());
+  return steps;
+}
+
+function isCondition(value: unknown): value is Condition {
+  if (!isPlainObject(value)) return false;
+  if (value.all === true) return true;
+  if (isPlainObject(value.score_lte)) {
+    return typeof value.score_lte.key === "string" && typeof value.score_lte.value === "number";
+  }
+  if (isPlainObject(value.score_gte)) {
+    return typeof value.score_gte.key === "string" && typeof value.score_gte.value === "number";
+  }
+  if (isPlainObject(value.enum_in)) {
+    return typeof value.enum_in.key === "string" && Array.isArray(value.enum_in.values) && value.enum_in.values.every((v) => typeof v === "string");
+  }
+  if (Array.isArray(value.and)) return value.and.every(isCondition);
+  if (Array.isArray(value.or)) return value.or.every(isCondition);
+  return false;
+}
+
+function allowedAggregatesFromCatalog(catalog: WorkerAggregateCatalogEntry[]): AllowedAggregate[] {
+  return catalog.map((entry) => ({
+    key: entry.key,
+    kind: entry.kind,
+    allowedValues: entry.enumValues?.map((v) => v.value),
+  }));
+}
+
+function applyRecommendationJson(
+  current: FormState,
+  input: unknown,
+  worker: string,
+  catalog: WorkerAggregateCatalogEntry[],
+  isEditing: boolean,
+): JsonImportResult {
+  if (!isPlainObject(input)) {
+    throw new Error("Le JSON doit être un objet.");
+  }
+
+  const next: FormState = { ...current, worker };
+  const applied: string[] = [];
+  const warnings: string[] = [];
+
+  const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    next[key] = value;
+    applied.push(key);
+  };
+
+  if (!isEditing && typeof input.id === "string") {
+    if (input.id.startsWith(`${worker}.`)) {
+      setField("id", input.id);
+    } else {
+      warnings.push(`id ignoré: il doit commencer par ${worker}.`);
+    }
+  } else if (isEditing && input.id !== undefined) {
+    warnings.push("id ignoré: l'ID est immuable en édition.");
+  }
+
+  if (isOneOf(input.type, recommendationTypes)) setField("type", input.type);
+  if (isOneOf(input.category, recommendationCategories)) setField("category", input.category);
+  if (isOneOf(input.risk, recommendationRisks)) setField("risk", input.risk);
+  if (isOneOf(input.evidence, recommendationEvidences)) setField("evidence", input.evidence);
+  if (isOneOf(input.duration_unit, recommendationDurationUnits) || input.duration_unit === null) {
+    setField("duration_unit", input.duration_unit);
+  }
+
+  for (const key of ["title_en", "title_fr", "summary_en", "summary_fr"] as const) {
+    if (typeof input[key] === "string") setField(key, input[key]);
+  }
+
+  for (const key of ["priority", "duration_value", "cost_min", "cost_max"] as const) {
+    const value = optionalNumber(input[key]);
+    if (value !== undefined) setField(key, key === "priority" && value !== null ? Math.max(0, Math.min(100, value)) : value);
+  }
+
+  const costCurrency = optionalString(input.cost_currency);
+  if (costCurrency !== undefined) setField("cost_currency", costCurrency);
+
+  const sourceUrl = optionalString(input.source_url);
+  if (sourceUrl !== undefined) setField("source_url", sourceUrl);
+
+  if (typeof input.enabled === "boolean") setField("enabled", input.enabled);
+
+  const targets = normalizeStringArray(input.targets);
+  if (targets) setField("targets", targets);
+
+  const steps = normalizeSteps(input.steps);
+  if (steps) setField("steps", steps);
+
+  if (input.protocol_slots !== undefined) {
+    const slots = sanitizeProtocolSlots(input.protocol_slots);
+    setField("protocol_slots", slots);
+    if (Array.isArray(input.protocol_slots) && slots.length !== input.protocol_slots.length) {
+      warnings.push(`protocol_slots invalides supprimés. Valeurs autorisées: ${PROTOCOL_SLOTS.join(", ")}.`);
+    }
+  }
+
+  if (input.conditions !== undefined) {
+    if (isCondition(input.conditions)) {
+      const validation = validateCondition(input.conditions, allowedAggregatesFromCatalog(catalog));
+      if (validation.valid) {
+        setField("conditions", input.conditions);
+      } else {
+        warnings.push(`conditions ignorées: ${validation.issues.map((i) => i.message).join(" ")}`);
+      }
+    } else {
+      warnings.push("conditions ignorées: DSL invalide.");
+    }
+  }
+
+  return { form: next, applied, warnings };
+}
+
+function buildPromptForWorker(worker: string, catalog: WorkerAggregateCatalogEntry[]): string {
+  const metrics = catalog
+    .map((entry) => `- ${entry.key} (${entry.kind ?? "unknown"})${entry.enumValues?.length ? ` valeurs: ${entry.enumValues.map((v) => v.value).join(", ")}` : ""}`)
+    .join("\n");
+
+  return `${JSON_PROMPT}\n\nWorker courant: ${worker}\nMétriques disponibles:\n${metrics || "- Aucune métrique documentée"}`;
+}
 
 function makeEmpty(worker: string): FormState {
   return {
@@ -177,10 +412,16 @@ export function RecommendationEditor({
   const isEditing = rec !== null;
 
   const [form, setForm] = React.useState<FormState>(() => makeEmpty(worker));
+  const [jsonImportText, setJsonImportText] = React.useState("");
+  const [jsonImportError, setJsonImportError] = React.useState<string | null>(null);
+  const [jsonImportWarnings, setJsonImportWarnings] = React.useState<string[]>([]);
 
   React.useEffect(() => {
     if (!open) return;
     setForm(rec ? fromRecord(rec) : makeEmpty(worker));
+    setJsonImportText("");
+    setJsonImportError(null);
+    setJsonImportWarnings([]);
   }, [open, rec, worker]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
@@ -201,6 +442,35 @@ export function RecommendationEditor({
     () => suggestId(worker, form.title_en),
     [worker, form.title_en],
   );
+
+  const promptJson = React.useMemo(() => buildPromptForWorker(worker, catalog), [worker, catalog]);
+
+  const handleInjectJson = (): void => {
+    try {
+      const parsed = JSON.parse(jsonImportText);
+      const result = applyRecommendationJson(form, parsed, worker, catalog, isEditing);
+      setForm(result.form);
+      setJsonImportError(null);
+      setJsonImportWarnings(result.warnings);
+      if (result.applied.length === 0) {
+        setJsonImportWarnings((warnings) =>
+          warnings.length > 0 ? warnings : ["Aucun champ reconnu dans ce JSON."],
+        );
+      }
+      toast({
+        title: "JSON injecté",
+        description: result.applied.length > 0 ? `${result.applied.length} champ(s) mis à jour` : "Aucun champ appliqué",
+      });
+    } catch (error) {
+      setJsonImportError(error instanceof Error ? error.message : String(error));
+      setJsonImportWarnings([]);
+    }
+  };
+
+  const handleCopyPrompt = async (): Promise<void> => {
+    await navigator.clipboard.writeText(promptJson);
+    toast({ title: "Prompt JSON copié", description: "Colle-le dans l'IA pour générer une reco conforme." });
+  };
 
   const handleSave = (): void => {
     if (!form.id.trim()) {
@@ -264,6 +534,43 @@ export function RecommendationEditor({
         </SheetHeader>
 
         <div className="flex-1 px-6 py-5">
+          {!isEditing ? (
+            <div className="mb-4 space-y-4 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Import JSON / prompt IA</p>
+                  <p className="text-xs text-zinc-400">
+                    Copie la structure exacte ou colle un JSON pour remplir le formulaire.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" className="border-white/15 bg-black/20 text-white hover:bg-white/10" onClick={handleCopyPrompt}>
+                    <Clipboard className="mr-2 h-4 w-4" />
+                    Prompt JSON
+                  </Button>
+                  <Button type="button" className="bg-cyan-400 text-zinc-950 hover:bg-cyan-300" onClick={handleInjectJson}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Injecter JSON
+                  </Button>
+                </div>
+              </div>
+              <Textarea
+                value={jsonImportText}
+                onChange={(e) => setJsonImportText(e.target.value)}
+                placeholder='{"id":"eyes.my_reco","title_fr":"..."}'
+                className="min-h-40 border-white/10 bg-black/30 font-mono text-xs text-zinc-100 placeholder:text-zinc-600"
+              />
+              {jsonImportError ? <p className="text-xs text-rose-300">{jsonImportError}</p> : null}
+              {jsonImportWarnings.length > 0 ? (
+                <ul className="space-y-1 text-xs text-amber-200">
+                  {jsonImportWarnings.map((warning) => (
+                    <li key={warning}>⚠ {warning}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+
           <Accordion
             type="multiple"
             defaultValue={["identity", "matching", "content"]}
@@ -556,11 +863,10 @@ function MatchingSection({
 
       <div className="space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
-          Métriques ciblées (targets)
+          {TARGETS_COPY.title}
         </p>
         <p className="text-xs text-zinc-400">
-          Ces métriques seront affichées dans le bloc "Pour toi" et boosteront le
-          ranking de pertinence pour les users qui ont un faible score dessus.
+          {TARGETS_COPY.description}
         </p>
         <TargetsPicker
           catalog={catalog}

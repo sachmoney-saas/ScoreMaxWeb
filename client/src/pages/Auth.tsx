@@ -135,10 +135,10 @@ export default function AuthPage() {
             <p className="text-pretty text-sm leading-snug text-zinc-400">
               {i18n(language, {
                 en: isLogin
-                  ? "Sign in to ScoreMax and pick up your analysis where you left off."
+                  ? "Sign in to ScoreMax"
                   : "Start your first analysis and get your personalized improvement plan.",
                 fr: isLogin
-                  ? "Accède à ton espace ScoreMax et reprends ton analyse là où tu l'as laissée."
+                  ? "Accède à ton espace ScoreMax"
                   : "Lance ta première analyse et découvre tes axes d'amélioration personnalisés.",
               })}
             </p>

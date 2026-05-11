@@ -1,8 +1,13 @@
 import * as React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Sparkles, Syringe } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, Sparkles, Syringe } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
@@ -27,6 +32,11 @@ import {
   recommendationsReportShellClassName,
   recommendationsReportHorizontalInsetClassName,
 } from "@/components/analysis/recommendations/recommendations-report-theme";
+import {
+  educationalDisclaimerI18n,
+  educationalDisclaimerNoticeClassName,
+  educationalDisclaimerWrapperClassName,
+} from "@/lib/educational-disclaimer";
 import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
 import {
   analysisTabActiveMetallicTriggerClassName,
@@ -168,6 +178,33 @@ function scoreSeverityBlurb(
  * Section: a single critical point + its recommendations
  * ========================================================================= */
 
+/** Diamètre de l’anneau sous `lg`, borné selon la largeur utile — premier paint SSR = 54 px. */
+function useMobileRecoHeroRingDiameter(): number {
+  const [px, setPx] = React.useState(54);
+  React.useLayoutEffect(() => {
+    function sync() {
+      if (typeof window === "undefined") return;
+      if (window.matchMedia("(min-width: 1024px)").matches) return;
+      const w = window.visualViewport?.width ?? window.innerWidth;
+      setPx(Math.min(60, Math.max(42, Math.round(w * 0.128))));
+    }
+    sync();
+    const mq =
+      typeof window !== "undefined"
+        ? window.matchMedia("(min-width: 1024px)")
+        : null;
+    window.addEventListener("resize", sync);
+    window.visualViewport?.addEventListener("resize", sync);
+    mq?.addEventListener("change", sync);
+    return () => {
+      window.removeEventListener("resize", sync);
+      window.visualViewport?.removeEventListener("resize", sync);
+      mq?.removeEventListener("change", sync);
+    };
+  }, []);
+  return px;
+}
+
 function CriticalPointSection({
   point,
   language,
@@ -182,6 +219,8 @@ function CriticalPointSection({
   showHardmaxxing: boolean;
 }) {
   const aggregates = React.useMemo<Record<string, unknown>>(() => ({}), []);
+  const mobileRingPx = useMobileRecoHeroRingDiameter();
+  const [recoOpen, setRecoOpen] = React.useState(true);
 
   const soft = point.matchedRecommendations.filter((r) => r.type === "soft");
   const hard = point.matchedRecommendations.filter((r) => r.type === "hard");
@@ -190,38 +229,93 @@ function CriticalPointSection({
   const visibleHard = showHardmaxxing ? hard : [];
 
   return (
-    <section className="space-y-6 border-b border-white/10 pb-10 last:border-b-0 last:pb-0">
-      <div
-        className={cn(
-          scoreRingMatchMetallicPillClassName,
-          "w-full rounded-xl px-5 py-5 sm:px-8 sm:py-7",
-        )}
+    <section>
+      <Collapsible
+        open={recoOpen}
+        onOpenChange={setRecoOpen}
+        className="flex flex-col"
       >
-        <div className="relative z-[1] flex w-full flex-col gap-6 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
-          <div className="min-w-0 w-full flex-1 space-y-3 lg:max-w-none">
-            <h3 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-950 sm:text-[1.65rem] sm:leading-[1.15]">
-              {point.aggregateLabel}
-            </h3>
-            <p className="w-full max-w-none text-sm leading-relaxed text-zinc-800">
-              {scoreSeverityBlurb(point.score, language)}
-            </p>
-          </div>
-
-          <div className="flex w-full shrink-0 items-center justify-center sm:justify-start lg:w-auto lg:justify-end">
-            <MiniRing
-              score={point.score}
-              scale={10}
-              size={80}
-              fractionDigits={1}
-              highlight="weakness"
-              trackStroke="rgba(39,39,42,0.22)"
-              centerFill="#09090b"
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            aria-label={
+              recoOpen
+                ? i18n(language, {
+                    en: "Collapse recommendations for this measure",
+                    fr: "Replier les recommandations pour cette mesure",
+                  })
+                : i18n(language, {
+                    en: "Expand recommendations for this measure",
+                    fr: "Déplier les recommandations pour cette mesure",
+                  })
+            }
+            className={cn(
+              scoreRingMatchMetallicPillClassName,
+              "relative w-full rounded-xl px-5 py-5 text-left outline-none transition hover:brightness-[1.02] sm:px-8 sm:py-7",
+              "focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
+            )}
+          >
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute right-3 top-3 z-[2] h-5 w-5 text-zinc-700/85 transition-transform duration-200 sm:right-5 sm:top-5",
+                recoOpen && "rotate-180",
+              )}
             />
-          </div>
-        </div>
-      </div>
+            {/* Mobile / tablette : titre + score sur une seule ligne, typo fluide ; desktop : mise en page actuelle */}
+            <div className="relative z-[1] w-full pr-10 sm:pr-11 lg:pr-12">
+              <div className="lg:hidden">
+                <div className="flex min-w-0 flex-nowrap items-center gap-2">
+                  <h3 className="min-w-0 flex-1 truncate font-display font-bold leading-tight tracking-tight text-zinc-950 text-[clamp(0.875rem,3.85vw,1.125rem)]">
+                    {point.aggregateLabel}
+                  </h3>
+                  <MiniRing
+                    score={point.score}
+                    scale={10}
+                    size={mobileRingPx}
+                    fractionDigits={1}
+                    highlight="weakness"
+                    trackStroke="rgba(39,39,42,0.22)"
+                    centerFill="#09090b"
+                  />
+                </div>
+                <p className="mt-2 max-w-none text-[clamp(0.625rem,2.95vw,0.8125rem)] leading-snug text-zinc-800 sm:text-xs sm:leading-relaxed">
+                  {scoreSeverityBlurb(point.score, language)}
+                </p>
+              </div>
 
-      <div className="space-y-4">
+              <div className="hidden gap-10 lg:flex lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0 flex-1 space-y-3">
+                  <h3 className="font-display text-2xl font-bold leading-tight tracking-tight text-zinc-950 sm:text-[1.65rem] sm:leading-[1.15]">
+                    {point.aggregateLabel}
+                  </h3>
+                  <p className="max-w-none text-sm leading-relaxed text-zinc-800">
+                    {scoreSeverityBlurb(point.score, language)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center justify-end">
+                  <MiniRing
+                    score={point.score}
+                    scale={10}
+                    size={80}
+                    fractionDigits={1}
+                    highlight="weakness"
+                    trackStroke="rgba(39,39,42,0.22)"
+                    centerFill="#09090b"
+                  />
+                </div>
+              </div>
+            </div>
+          </button>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <div
+            className={cn(
+              "space-y-4 pt-4 sm:pt-5",
+              recommendationsReportHorizontalInsetClassName,
+            )}
+          >
         {(!showSoftmaxxing &&
           soft.length > 0 &&
           showHardmaxxing &&
@@ -293,7 +387,9 @@ function CriticalPointSection({
           </div>
         </div>
       ) : null}
-      </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
@@ -329,7 +425,7 @@ function WorkerOrphansUnderTab({
   return (
     <section
       className={cn(
-        "mt-8 space-y-3 border-t border-white/10 pt-8",
+        "mt-6 space-y-3 border-t border-white/10 pt-6",
         recommendationsReportHorizontalInsetClassName,
       )}
     >
@@ -602,7 +698,7 @@ function CriticalPointsRecommendationsImpl({
   /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="relative space-y-10">
+    <div className="relative flex flex-col gap-6 sm:gap-8">
       {visibleWorkerGroups.length > 0 ? (
         <div className="space-y-5">
           <RecommendationsTypeFilterBar
@@ -642,12 +738,12 @@ function CriticalPointsRecommendationsImpl({
                     }
                     className={RECOMMENDATIONS_WORKER_TAB_TRIGGER_CLASS}
                   >
-                    <span className="relative z-10 flex flex-col items-start gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
-                      <span className="block max-w-[10rem] truncate sm:max-w-none">
+                    <span className="relative z-10 flex min-w-0 w-full flex-nowrap items-center gap-1.5 sm:gap-2">
+                      <span className="min-w-0 flex-1 truncate text-left text-[clamp(0.75rem,3.4vw,0.875rem)] font-medium leading-tight sm:text-sm">
                         {label}
                       </span>
                       {worst !== null ? (
-                        <span className="font-display text-[10px] tabular-nums tracking-tight text-zinc-400 opacity-90">
+                        <span className="shrink-0 font-display text-[10px] tabular-nums tracking-tight text-zinc-400 opacity-90 sm:text-xs">
                           {worst.toFixed(1)}
                         </span>
                       ) : null}
@@ -665,7 +761,7 @@ function CriticalPointsRecommendationsImpl({
               className="mt-0 focus-visible:outline-none"
             >
               <div className={recommendationsReportShellClassName}>
-                <div className="w-full space-y-10">
+                <div className="flex w-full flex-col gap-4 sm:gap-5">
                   {group.criticalPoints.length === 0 ? (
                     <p
                       className={cn(
@@ -706,12 +802,16 @@ function CriticalPointsRecommendationsImpl({
         </div>
       ) : null}
 
-      <p className="border-t border-white/10 pt-4 text-[11px] leading-relaxed text-zinc-400">
-        {i18n(language, {
-          en: "Educational content only — not medical advice. Hard interventions require a qualified professional.",
-          fr: "Contenu éducatif uniquement — ne constitue pas un avis médical. Les interventions hard nécessitent un professionnel qualifié.",
-        })}
-      </p>
+      <div
+        className={cn(
+          recommendationsReportHorizontalInsetClassName,
+          educationalDisclaimerWrapperClassName,
+        )}
+      >
+        <p className={educationalDisclaimerNoticeClassName}>
+          {i18n(language, educationalDisclaimerI18n)}
+        </p>
+      </div>
     </div>
   );
 }

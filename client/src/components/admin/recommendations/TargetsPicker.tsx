@@ -3,6 +3,7 @@ import { CheckCircle2, Search, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { WorkerAggregateCatalogEntry } from "@/lib/face-analysis-display";
+import { TARGETS_COPY } from "./recommendation-targets-copy";
 
 export function TargetsPicker({
   catalog,
@@ -41,9 +42,8 @@ export function TargetsPicker({
           <div className="flex-1">
             <p className="font-semibold">Suggestion</p>
             <p className="mt-0.5 text-sky-200/90">
-              Ces métriques sont utilisées dans tes conditions mais pas dans tes
-              targets&nbsp;: <code className="font-mono text-[11px]">{missingTargets.join(", ")}</code>.
-              Ajoute-les pour qu'elles influencent la pertinence et la copy "Pour toi".
+              {TARGETS_COPY.suggestion} <code className="font-mono text-[11px]">{missingTargets.join(", ")}</code>.
+              {TARGETS_COPY.suggestionAction}
             </p>
             <Button
               type="button"
