@@ -15,7 +15,19 @@ import pinoHttp from "pino-http";
 const app = express();
 const httpServer = createServer(app);
 
-app.use(express.json({ limit: serverEnv.SCOREMAX_PAYLOAD_LIMIT }));
+/**
+ * Capture the raw UTF-8 body alongside JSON parsing so signed webhook
+ * handlers (Dodo Payments today, others tomorrow) can re-verify HMAC
+ * signatures against the exact bytes Dodo signed.
+ */
+app.use(
+  express.json({
+    limit: serverEnv.SCOREMAX_PAYLOAD_LIMIT,
+    verify: (req, _res, buf) => {
+      (req as Request).rawBody = buf.toString("utf8");
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: false }));
 
 app.get(["/health", "/healthz"], (_req, res) => {

@@ -11,6 +11,11 @@ export const profiles = pgTable("profiles", {
   is_subscriber: boolean("is_subscriber").default(false).notNull(),
   stripe_customer_id: text("stripe_customer_id"),
   stripe_subscription_id: text("stripe_subscription_id"),
+  /**
+   * Dodo Payments customer id (`cus_...`). Set on first successful checkout,
+   * reused for portal sessions and reconciliation across webhooks.
+   */
+  dodo_customer_id: text("dodo_customer_id"),
   subscription_status: text("subscription_status"),
   has_accepted_terms: boolean("has_accepted_terms").default(false).notNull(),
   has_completed_onboarding: boolean("has_completed_onboarding").default(false).notNull(),
@@ -215,6 +220,46 @@ export type PremiumAccessState = {
   is_admin: boolean;
   active_subscription: ActiveSubscriptionSummary | null;
 };
+
+/**
+ * ScoreMax subscription plans exposed at checkout.
+ * Pricing lives in the Dodo Payments dashboard — these constants only
+ * carry display metadata and the dashboard product mapping (via env).
+ */
+export const SUBSCRIPTION_PLANS = ["monthly", "yearly"] as const;
+export type Plan = (typeof SUBSCRIPTION_PLANS)[number];
+
+export type PlanDisplay = {
+  id: Plan;
+  /** Marketing label rendered in the UI. */
+  label_fr: string;
+  /** Pre-tax price displayed in the UI. Stays in sync with the Dodo product. */
+  price_label_fr: string;
+  /** Billing cadence, used for the "/mois" or "/an" suffix. */
+  cadence_fr: "mois" | "an";
+  /** Optional short tagline shown under the price. */
+  tagline_fr?: string;
+};
+
+export const PLAN_DISPLAY: Record<Plan, PlanDisplay> = {
+  monthly: {
+    id: "monthly",
+    label_fr: "Mensuel",
+    price_label_fr: "24,80 €",
+    cadence_fr: "mois",
+  },
+  yearly: {
+    id: "yearly",
+    label_fr: "Annuel",
+    price_label_fr: "178 €",
+    cadence_fr: "an",
+    tagline_fr: "Économisez environ 40 % vs mensuel",
+  },
+};
+
+export function isPlan(value: string): value is Plan {
+  return (SUBSCRIPTION_PLANS as readonly string[]).includes(value);
+}
 
 /**
  * Huit clichés JPEG requis pour l’onboarding / une analyse complète ScanFace.
