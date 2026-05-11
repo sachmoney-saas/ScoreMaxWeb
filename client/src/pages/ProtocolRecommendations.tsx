@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppLanguage, i18n, type AppLanguage } from "@/lib/i18n";
 import { analysisHistoryGlobalScoreSummary } from "@/lib/analysis-history-global-summary";
+import { AuthenticatedThumbnail } from "@/components/analysis/AuthenticatedThumbnail";
 import { buildAnalysisThumbnailUrl, type AnalysisHistoryItem } from "@/lib/face-analysis";
 import { buildAnalysisViewHref } from "@/lib/analysis-view-href";
 import { countUniqueSurfacedRecommendationsForHistoryJob } from "@/lib/critical-points";
@@ -233,14 +234,18 @@ export default function ProtocolRecommendationsPage() {
                 >
                   <div className="relative h-[4.75rem] w-[4.75rem] shrink-0 overflow-hidden rounded-lg border border-white/12 bg-black/25">
                     {analysis.has_thumbnail && userId ? (
-                      <img
+                      <AuthenticatedThumbnail
                         src={buildAnalysisThumbnailUrl({
                           userId,
                           jobId: analysis.id,
                         })}
                         alt=""
                         className="h-full w-full object-cover [transform:scaleX(-1)]"
-                        loading="lazy"
+                        fallback={
+                          <div className="flex h-full w-full items-center justify-center text-[10px] text-zinc-500">
+                            —
+                          </div>
+                        }
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-[10px] text-zinc-500">

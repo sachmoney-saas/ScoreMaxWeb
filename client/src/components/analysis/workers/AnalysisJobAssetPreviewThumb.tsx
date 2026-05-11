@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { AuthenticatedThumbnail } from "@/components/analysis/AuthenticatedThumbnail";
 
 /**
  * Miniature depuis `GET /v1/analyses/:jobId/asset` — masquée si 404 / erreur réseau.
@@ -17,8 +18,7 @@ export function AnalysisJobAssetPreviewThumb({
   imgClassName?: string;
   onUnavailable?: () => void;
 }) {
-  const [broken, setBroken] = React.useState(false);
-  if (!src || broken) return null;
+  if (!src) return null;
   return (
     <div
       className={cn(
@@ -26,16 +26,15 @@ export function AnalysisJobAssetPreviewThumb({
         className,
       )}
     >
-      <img
+      <AuthenticatedThumbnail
         src={src}
         alt={alt}
-        loading="lazy"
-        decoding="async"
         className={cn("h-full w-full object-cover", imgClassName)}
-        onError={() => {
-          onUnavailable?.();
-          setBroken(true);
-        }}
+        fallback={
+          <div className="flex aspect-square items-center justify-center text-xs text-zinc-500">
+            —
+          </div>
+        }
       />
     </div>
   );

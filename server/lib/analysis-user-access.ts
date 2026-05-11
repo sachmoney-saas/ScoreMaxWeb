@@ -2,27 +2,7 @@ import { requireAdminUser, requireUserId } from "./auth";
 import { ApiError } from "./errors";
 import { supabaseAdmin } from "./supabase-admin";
 
-/** L'utilisateur authentifié consulte lui-même ce `subjectUserId`, ou est admin. */
-export async function assertCallerIsSubjectUserOrAdmin(
-  authorizationHeader: string | undefined,
-  subjectUserId: string,
-): Promise<void> {
-  const callerId = await requireUserId(authorizationHeader);
-  if (callerId === subjectUserId) {
-    return;
-  }
-  await requireAdminUser(authorizationHeader);
-}
-
-/**
- * La requête cite `claimedOwnerUserId` comme propriétaire du job :
- * soit c'est bien le JWT, soit c'est admin et la citation correspond au job.
- */
-export async function assertCallerCanAccessJobForClaimedOwner(
-  authorizationHeader: string | undefined,
-  jobId: string,
-  claimedOwnerUserId: string,
-): Promise<void> {
+export async function loadAnalysisJobOwner(jobId: string): Promise<string> {
   const { data: job, error } = await supabaseAdmin
     .from("analysis_jobs")
     .select("user_id")
@@ -38,7 +18,32 @@ export async function assertCallerCanAccessJobForClaimedOwner(
     });
   }
 
-  const ownerId = job.user_id as string;
+  return job.user_id as string;
+}
+
+/** L'utilisateur authentifié consulte lui-même ce `subjectUserId`, ou est admin. */
+export async function assertCallerIsSubjectUserOrAdmin(
+  authorizationHeader: string | undefined,
+  subjectUserId: string,
+): Promise<void> {
+  const callerId = await requireUserId(authorizationHeader);
+  if (callerId === subjectUserId) {
+    return;
+  }
+  await requireAdminUser(authorizationHeader);
+}
+
+/**
+ * La requête doit viser le vrai propriétaire du job.
+ * On ne fait pas confiance à `userId` côté client pour l'autorité.
+ */
+export async function assertCallerCanAccessAnalysisJob(
+  authorizationHeader: string | undefined,
+  jobId: string,
+  claimedOwnerUserId: string,
+): Promise<string> {
+  const ownerId = await loadAnalysisJobOwner(jobId);
+
   if (claimedOwnerUserId !== ownerId) {
     throw new ApiError({
       code: "VALIDATION_ERROR",
@@ -48,4 +53,5 @@ export async function assertCallerCanAccessJobForClaimedOwner(
   }
 
   await assertCallerIsSubjectUserOrAdmin(authorizationHeader, ownerId);
+  return ownerId;
 }

@@ -40,7 +40,7 @@ import {
 import { supabaseAdmin } from "../lib/supabase-admin";
 import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 import {
-  assertCallerCanAccessJobForClaimedOwner,
+  assertCallerCanAccessAnalysisJob,
   assertCallerIsSubjectUserOrAdmin,
 } from "../lib/analysis-user-access";
 
@@ -609,7 +609,11 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
-        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+        const ownerId = await assertCallerCanAccessAnalysisJob(
+          req.headers.authorization,
+          params.jobId,
+          userId,
+        );
 
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
@@ -632,7 +636,7 @@ export function createV1AnalysesRouter(): Router {
           .from("analysis_results")
           .select("worker, prompt_version, result, created_at")
           .eq("analysis_job_id", params.jobId)
-          .eq("user_id", userId)
+          .eq("user_id", ownerId)
           .order("created_at", { ascending: true });
 
         if (resultsError) {
@@ -670,7 +674,11 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
-        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+        const ownerId = await assertCallerCanAccessAnalysisJob(
+          req.headers.authorization,
+          params.jobId,
+          userId,
+        );
 
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
@@ -691,7 +699,7 @@ export function createV1AnalysesRouter(): Router {
           .from("analysis_job_assets")
           .select("scan_asset_id")
           .eq("analysis_job_id", params.jobId)
-          .eq("user_id", userId)
+          .eq("user_id", ownerId)
           .eq("asset_type_code", "FACE_FRONT")
           .maybeSingle();
 
@@ -708,7 +716,7 @@ export function createV1AnalysesRouter(): Router {
           .from("scan_assets")
           .select("id, r2_bucket, r2_key, mime_type")
           .eq("id", jobAsset.scan_asset_id)
-          .eq("user_id", userId)
+          .eq("user_id", ownerId)
           .maybeSingle();
 
         if (scanAssetError || !scanAsset) {
@@ -755,7 +763,11 @@ export function createV1AnalysesRouter(): Router {
         const { userId, assetTypeCode } =
           req.query as z.infer<typeof analysisJobAssetQuerySchema>;
 
-        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+        const ownerId = await assertCallerCanAccessAnalysisJob(
+          req.headers.authorization,
+          params.jobId,
+          userId,
+        );
 
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
@@ -776,7 +788,7 @@ export function createV1AnalysesRouter(): Router {
           .from("analysis_job_assets")
           .select("scan_asset_id")
           .eq("analysis_job_id", params.jobId)
-          .eq("user_id", userId)
+          .eq("user_id", ownerId)
           .eq("asset_type_code", assetTypeCode)
           .maybeSingle();
 
@@ -793,7 +805,7 @@ export function createV1AnalysesRouter(): Router {
           .from("scan_assets")
           .select("id, r2_bucket, r2_key, mime_type")
           .eq("id", jobAsset.scan_asset_id)
-          .eq("user_id", userId)
+          .eq("user_id", ownerId)
           .maybeSingle();
 
         if (scanAssetError || !scanAsset) {
@@ -839,11 +851,15 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
-        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+        const ownerId = await assertCallerCanAccessAnalysisJob(
+          req.headers.authorization,
+          params.jobId,
+          userId,
+        );
 
         const deleted = await deleteAnalysisJobAndAssets({
           jobId: params.jobId,
-          userId,
+          userId: ownerId,
           deleteSessionIfOrphaned: true,
         });
 

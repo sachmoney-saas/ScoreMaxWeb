@@ -74,7 +74,7 @@ import {
   useAdminAnalysisJobDetail,
   useAdminAnalysisJobs,
   useAdminMetrics,
-  useDeleteAdminAnalysisFailure,
+  useDeleteAdminAnalysisJob,
   useProfile,
   useUserGrowth,
 } from "@/hooks/use-supabase";
@@ -233,8 +233,7 @@ export function useAllProfiles() {
 
 export default function AdminPage() {
   const { isAdmin } = useAuth();
-  const [, setLocation] = useLocation();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: profiles = [], isLoading: isLoadingProfiles } = useAllProfiles();
   const { data: metrics, isLoading: isLoadingMetrics } = useAdminMetrics();
   const { data: growthData = [], isLoading: isLoadingGrowth } = useUserGrowth();
@@ -461,8 +460,8 @@ function UsersManagementPage() {
 }
 
 function AnalysisFailureLogsPage() {
+  const [, setLocation] = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [detailJobId, setDetailJobId] = useState<string | null>(null);
   const [listRowSnapshot, setListRowSnapshot] = useState<AdminAnalysisFailure | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<NonNullable<AdminAnalysisJobsFilters["status"]>>(
@@ -482,11 +481,19 @@ function AnalysisFailureLogsPage() {
     data: jobDetail,
     isLoading: detailLoading,
     isError: detailError,
-  } = useAdminAnalysisJobDetail(detailJobId, {
-    enabled: sheetOpen && !!detailJobId,
+  } = useAdminAnalysisJobDetail(null, {
+    enabled: false,
   });
+  void jobDetail;
+  void detailLoading;
+  void detailError;
+  void setSheetOpen;
+  void sheetOpen;
+  void setListRowSnapshot;
+  void listRowSnapshot;
+  void setLocation;
 
-  const deleteFailureMutation = useDeleteAdminAnalysisFailure();
+  const deleteJobMutation = useDeleteAdminAnalysisJob();
   const { toast } = useToast();
 
   const failedCount = useMemo(
@@ -495,28 +502,17 @@ function AnalysisFailureLogsPage() {
   );
 
   function openDetail(row: AdminAnalysisFailure) {
-    setListRowSnapshot(row);
-    setDetailJobId(row.id);
-    setSheetOpen(true);
+    setLocation(`/admin/analysis-jobs/${row.id}`);
   }
 
-  useEffect(() => {
-    if (!sheetOpen) {
-      setDetailJobId(null);
-      setListRowSnapshot(null);
-    }
-  }, [sheetOpen]);
 
-  async function handleDeleteFailure(job: AdminAnalysisFailure) {
+  async function handleDeleteJob(job: AdminAnalysisFailure) {
     try {
-      const deleted = await deleteFailureMutation.mutateAsync(job.id);
+      const deleted = await deleteJobMutation.mutateAsync(job.id);
       toast({
-        title: "Analyse échouée supprimée",
+        title: "Analyse supprimée",
         description: `${deleted.deleted_scan_asset_count} asset(s) et ${deleted.deleted_storage_object_count} fichier(s) Storage supprimés.`,
       });
-      if (detailJobId === job.id) {
-        setSheetOpen(false);
-      }
     } catch (error) {
       toast({ variant: "destructive", title: "Suppression impossible", description: getErrorMessage(error) });
     }
@@ -574,11 +570,11 @@ function AnalysisFailureLogsPage() {
                       Impersonifier
                     </Link>
                   </Button>
-                  {jobDetail.job.status === "failed" && listRowSnapshot ? (
-                    <DeleteFailureDialog
-                      disabled={deleteFailureMutation.isPending}
-                      failure={listRowSnapshot}
-                      onDelete={() => handleDeleteFailure(listRowSnapshot)}
+                  {listRowSnapshot && (jobDetail.job.status === "failed" || jobDetail.job.status === "completed") ? (
+                    <DeleteAnalysisJobDialog
+                      disabled={deleteJobMutation.isPending}
+                      job={listRowSnapshot}
+                      onDelete={() => handleDeleteJob(listRowSnapshot)}
                     />
                   ) : null}
                 </div>
@@ -750,7 +746,7 @@ function AnalysisFailureLogsPage() {
                             }}
                             className={cn(
                               "cursor-pointer border-white/10 transition-colors hover:bg-white/[0.07]",
-                              job.status === "failed" ? "opacity-95" : "",
+                              job.status === "failed" || job.status === "completed" ? "opacity-95" : "",
                             )}
                             onClick={() => openDetail(job)}
                           >
@@ -812,11 +808,11 @@ function AnalysisFailureLogsPage() {
                                 e.stopPropagation();
                               }}
                             >
-                              {job.status === "failed" ? (
-                                <DeleteFailureDialog
-                                  disabled={deleteFailureMutation.isPending}
-                                  failure={job}
-                                  onDelete={() => handleDeleteFailure(job)}
+                              {job.status === "failed" || job.status === "completed" ? (
+                                <DeleteAnalysisJobDialog
+                                  disabled={deleteJobMutation.isPending}
+                                  job={job}
+                                  onDelete={() => handleDeleteJob(job)}
                                 />
                               ) : (
                                 <span className="text-xs text-zinc-600">—</span>
@@ -843,7 +839,17 @@ function AnalysisFailureLogsPage() {
   );
 }
 
-function DeleteFailureDialog({ disabled, failure, onDelete }: { disabled: boolean; failure: AdminAnalysisFailure; onDelete: () => void }) {
+function DeleteAnalysisJobDialog({
+  disabled,
+  job,
+  onDelete,
+}: {
+  disabled: boolean;
+  job: AdminAnalysisFailure;
+  onDelete: () => void;
+}) {
+  const isFailed = job.status === "failed";
+
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -859,15 +865,19 @@ function DeleteFailureDialog({ disabled, failure, onDelete }: { disabled: boolea
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Supprimer cette recherche échouée ?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {isFailed ? "Supprimer cette recherche échouée ?" : "Supprimer cette analyse terminée ?"}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Cette action supprimera définitivement le job échoué, ses résultats partiels, ses liens d'assets, les fichiers Storage non partagés et la session si elle devient orpheline. Les assets encore utilisés par une autre analyse seront conservés.
+            Cette action supprimera définitivement le job, ses résultats, ses liens d'assets, les fichiers Storage non partagés et la session si elle devient orpheline. Les assets encore utilisés par une autre analyse seront conservés.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400">
-          <div className="font-mono">job: {failure.id}</div>
-          <div className="font-mono">session: {failure.session_id ?? "—"}</div>
-          <div className="mt-2 text-zinc-300">{failure.error_message ?? "Aucun message d'erreur enregistré."}</div>
+          <div className="font-mono">job: {job.id}</div>
+          <div className="font-mono">session: {job.session_id ?? "—"}</div>
+          {isFailed ? (
+            <div className="mt-2 text-zinc-300">{job.error_message ?? "Aucun message d'erreur enregistré."}</div>
+          ) : null}
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Annuler</AlertDialogCancel>

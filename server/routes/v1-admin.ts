@@ -437,11 +437,19 @@ export function createV1AdminRouter(): Router {
           user_email: (profile as ProfileLookupRow | null)?.email ?? null,
           results: results ?? [],
           capture_guide_metrics: captureGuideMetrics,
+          request_payload: jobRow.request_payload ?? null,
           request_payload_summary: requestPayloadSummary,
           linked_assets: (jobAssets ?? []).map((a) => ({
             asset_type_code: a.asset_type_code as string,
             scan_asset_id: a.scan_asset_id as string,
           })),
+          oneshot_images: Array.isArray((jobRow.request_payload as { images?: unknown } | null)?.images)
+            ? ((jobRow.request_payload as { images: Array<{ imageId?: string; mimeType?: string; base64?: string }> }).images ?? []).map((image) => ({
+                imageId: image.imageId ?? "",
+                mimeType: image.mimeType ?? "",
+                base64: image.base64 ?? "",
+              }))
+            : [],
         },
         error: null,
       });
@@ -584,6 +592,26 @@ export function createV1AdminRouter(): Router {
         ok: true,
         httpStatus: 200,
         data: state,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/admin/analysis-jobs/:jobId", async (req, res, next) => {
+    try {
+      await requireAdminUser(req.headers.authorization);
+      const params = analysisJobParamsSchema.parse(req.params);
+      const deleted = await deleteAnalysisJobAndAssets({
+        jobId: params.jobId,
+        deleteSessionIfOrphaned: true,
+      });
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: deleted,
         error: null,
       });
     } catch (error) {

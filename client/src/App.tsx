@@ -4,7 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { AuthProvider } from "@/hooks/use-auth";
 import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -18,6 +18,7 @@ import AnalysisDetails from "@/pages/AnalysisDetails";
 import WorkerDetails from "@/pages/WorkerDetails";
 import AgeDetails from "@/pages/AgeDetails";
 import AdminPage from "@/pages/Admin";
+import AdminAnalysisJobDetailPage from "@/pages/AdminAnalysisJobDetail";
 import {
   AdminRecommendationsOverview,
   AdminRecommendationsWorker,
@@ -47,14 +48,13 @@ function ProtectedRoute({
 }: {
   component: React.ComponentType;
 }) {
-  const { user } = useAuth();
   const { status } = useOnboardingGate();
 
   if (status === "loading") {
     return <FullScreenLoader />;
   }
 
-  if (!user || status === "anon") {
+  if (status === "anon") {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
   }
 
@@ -72,14 +72,13 @@ function ProtectedRoute({
 }
 
 function OnboardingRoute() {
-  const { user, isLoading } = useAuth();
   const { status } = useOnboardingGate();
 
-  if (isLoading || status === "loading") {
+  if (status === "loading") {
     return <FullScreenLoader />;
   }
 
-  if (!user) {
+  if (status === "anon") {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
   }
 
@@ -94,10 +93,25 @@ function OnboardingRoute() {
   );
 }
 
-function Router() {
-  const { user, isLoading } = useAuth();
-  const { status: gate } = useOnboardingGate();
+function AuthRedirectRoute() {
+  const { status } = useOnboardingGate();
 
+  if (status === "loading") {
+    return <FullScreenLoader />;
+  }
+
+  if (status === "ok") {
+    return <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />;
+  }
+
+  if (status === "needs_onboarding") {
+    return <Redirect to="/onboarding" />;
+  }
+
+  return <AuthPage />;
+}
+
+function Router() {
   return (
     <LanguageProvider>
       <Switch>
@@ -117,30 +131,10 @@ function Router() {
         </Route>
 
         <Route path={AUTH_CONFIG.LOGIN_PATH}>
-          {user ? (
-            isLoading || gate === "loading" ? (
-              <FullScreenLoader />
-            ) : gate === "ok" ? (
-              <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />
-            ) : (
-              <Redirect to="/onboarding" />
-            )
-          ) : (
-            <AuthPage />
-          )}
+          <AuthRedirectRoute />
         </Route>
         <Route path={AUTH_CONFIG.REGISTER_PATH}>
-          {user ? (
-            isLoading || gate === "loading" ? (
-              <FullScreenLoader />
-            ) : gate === "ok" ? (
-              <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />
-            ) : (
-              <Redirect to="/onboarding" />
-            )
-          ) : (
-            <AuthPage />
-          )}
+          <AuthRedirectRoute />
         </Route>
 
         <Route path="/onboarding">
@@ -193,6 +187,9 @@ function Router() {
         </Route>
         <Route path="/admin/analysis-failures">
           <ProtectedRoute component={AdminPage} />
+        </Route>
+        <Route path="/admin/analysis-jobs/:jobId">
+          <ProtectedRoute component={AdminAnalysisJobDetailPage} />
         </Route>
         <Route path="/admin/recommendations">
           <ProtectedRoute component={AdminRecommendationsOverview} />

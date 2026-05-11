@@ -7,7 +7,7 @@ import {
 } from "@shared/schema";
 import { useAuth } from "./use-auth";
 import {
-  deleteAdminAnalysisFailure,
+  deleteAdminAnalysisJob,
   fetchAdminAnalysisFailures,
   fetchAdminAnalysisJobDetail,
   fetchAdminAnalysisJobs,
@@ -408,18 +408,22 @@ export function useAdminAnalysisFailures(options?: { enabled?: boolean }) {
   });
 }
 
-export function useDeleteAdminAnalysisFailure() {
+export function useDeleteAdminAnalysisJob() {
   const queryClient = useQueryClient();
 
   return useMutation<DeleteAdminAnalysisFailureResponse, Error, string>({
     mutationFn: async (jobId: string) =>
-      deleteAdminAnalysisFailure({ accessToken: await getAccessToken(), jobId }),
+      deleteAdminAnalysisJob({ accessToken: await getAccessToken(), jobId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-analysis-failures"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analysis-jobs"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analysis-job-detail"] });
     },
   });
+}
+
+export function useDeleteAdminAnalysisFailure() {
+  return useDeleteAdminAnalysisJob();
 }
 
 export function useAdminAnalysisJobs(

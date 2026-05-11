@@ -1,8 +1,8 @@
 // ============================================================
 // Silhouette nez « vue profil » : suites d’indices issus de
 // `FACEMESH_NOSE` (mediapipe face_mesh_connections).
-// — profile-left  : hémicycle mâchoire 397 → chaîne côté narinaire gauche.
-// — profile-right : hémicycle 172 → chaîne côté narinaire droit.
+// Côté visible caméra pour les profils : drawProfileNoseMapped inverse ces chaînes par rapport
+// au poseId, sinon MediaPipe trace le côté opposé du nez sur les vues latérales.
 // ============================================================
 
 /** Du radier (168) vers l’aile / base narinaire gauche (98). */

@@ -850,8 +850,8 @@ function drawProfileNoseMapped(
 
   const chain =
     poseId === 'profile-right'
-      ? FACEMESH_PROFILE_RIGHT_VISIBLE_NOSE_ORDERED
-      : FACEMESH_PROFILE_LEFT_VISIBLE_NOSE_ORDERED;
+      ? FACEMESH_PROFILE_LEFT_VISIBLE_NOSE_ORDERED
+      : FACEMESH_PROFILE_RIGHT_VISIBLE_NOSE_ORDERED;
 
   const pts: { x: number; y: number }[] = [];
   for (const idx of chain) {

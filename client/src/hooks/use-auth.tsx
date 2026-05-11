@@ -11,7 +11,6 @@ import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { AUTH_CONFIG } from "@/config/auth";
 import {
   readAdminCaptureUxEnabledFromStorage,
   writeAdminCaptureUxEnabledToStorage,
@@ -93,7 +92,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (event === "SIGNED_OUT") {
           queryClient.clear();
-          window.location.href = AUTH_CONFIG.LOGIN_PATH;
         }
 
         if (session?.user) {
@@ -117,10 +115,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryKey: ["profile", user?.id],
       queryFn: async () => {
         if (!user) return null;
-        const queryKey = ["profile", user.id] as const;
-        const cachedProfile =
-          queryClient.getQueryData<Profile>(queryKey) ?? null;
-
         const { data, error } = await supabase
           .from("profiles")
           .select("*")
@@ -128,11 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single();
 
         if (error) {
-          console.warn(
-            "Profile fetch failed, using cached profile if available.",
-            error,
-          );
-          return cachedProfile;
+          console.warn("Profile fetch failed.", error);
+          return null;
         }
 
         return data as Profile;

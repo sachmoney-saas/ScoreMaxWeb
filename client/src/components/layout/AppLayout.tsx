@@ -8,6 +8,7 @@ import {
 } from "@/hooks/use-supabase";
 import { analysisHistoryGlobalScoreSummary } from "@/lib/analysis-history-global-summary";
 import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
+import { AuthenticatedThumbnail } from "@/components/analysis/AuthenticatedThumbnail";
 import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
 import { Link, useLocation } from "wouter";
 import {
@@ -440,14 +441,24 @@ function ModernAppSidebar() {
                     >
                       <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20">
                         {analysis.has_thumbnail && user?.id ? (
-                          <img
+                          <AuthenticatedThumbnail
                             src={buildAnalysisThumbnailUrl({
                               userId: user.id,
                               jobId: analysis.id,
                             })}
                             alt="Photo de face"
                             className="h-full w-full object-cover"
-                            loading="lazy"
+                            fallback={
+                              isAnalysisLoading ? (
+                                <div className="flex h-full w-full items-center justify-center bg-black/30 text-zinc-300">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                </div>
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
+                                  —
+                                </div>
+                              )
+                            }
                           />
                         ) : isAnalysisLoading ? (
                           <div className="flex h-full w-full items-center justify-center bg-black/30 text-zinc-300">

@@ -47,18 +47,25 @@ export async function fetchAdminAnalysisFailures(accessToken: string): Promise<A
   return json.data.failures;
 }
 
-export async function deleteAdminAnalysisFailure(params: {
+export async function deleteAdminAnalysisJob(params: {
   accessToken: string;
   jobId: string;
 }): Promise<DeleteAdminAnalysisFailureResponse> {
   const response = await apiRequest(
     "DELETE",
-    `/v1/admin/analysis-failures/${params.jobId}`,
+    `/v1/admin/analysis-jobs/${params.jobId}`,
     undefined,
     { Authorization: `Bearer ${params.accessToken}` },
   );
   const json = (await response.json()) as DeleteAdminAnalysisFailureEnvelope;
   return json.data;
+}
+
+export async function deleteAdminAnalysisFailure(params: {
+  accessToken: string;
+  jobId: string;
+}): Promise<DeleteAdminAnalysisFailureResponse> {
+  return deleteAdminAnalysisJob(params);
 }
 
 /** Ligne liste jobs admin — même shape que les échecs enrichis (email, counts). */
@@ -94,8 +101,14 @@ export type AdminAnalysisJobDetail = {
     created_at: string;
   }>;
   capture_guide_metrics: unknown;
+  request_payload: unknown;
   request_payload_summary: unknown;
   linked_assets: AdminLinkedAsset[];
+  oneshot_images: Array<{
+    imageId: string;
+    mimeType: string;
+    base64: string;
+  }>;
 };
 
 type AdminAnalysisJobsEnvelope = {
