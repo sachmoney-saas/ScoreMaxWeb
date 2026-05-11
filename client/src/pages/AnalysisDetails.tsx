@@ -1,10 +1,12 @@
-import * as React from "react";
-import { useParams } from "wouter";
+
+import { useParams, useSearch } from "wouter";
 import { AnalysisResultsSection } from "@/components/analysis/AnalysisResultsSection";
 import { analysisSurfaceCardClassName } from "@/components/analysis/workers/_shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAnalysisDetail } from "@/hooks/use-supabase";
+import { useAuth } from "@/hooks/use-auth";
+import { parseAdminImpersonationUserId } from "@/lib/analysis-view-href";
 
 function AnalysisDetailsSkeleton() {
   return (
@@ -21,7 +23,13 @@ function AnalysisDetailsSkeleton() {
 
 export default function AnalysisDetails() {
   const params = useParams<{ jobId: string }>();
-  const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId);
+  const search = useSearch();
+  const { isAdmin } = useAuth();
+  const impersonatedUserId = parseAdminImpersonationUserId(search, isAdmin);
+
+  const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId, {
+    subjectUserId: impersonatedUserId,
+  });
 
   if (isLoading) {
     return <AnalysisDetailsSkeleton />;

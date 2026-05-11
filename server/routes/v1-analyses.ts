@@ -39,6 +39,10 @@ import {
 } from "../lib/r2-storage";
 import { supabaseAdmin } from "../lib/supabase-admin";
 import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
+import {
+  assertCallerCanAccessJobForClaimedOwner,
+  assertCallerIsSubjectUserOrAdmin,
+} from "../lib/analysis-user-access";
 
 const analysesMetadataSchema = z.object({
   userId: z.string().min(1),
@@ -508,6 +512,8 @@ export function createV1AnalysesRouter(): Router {
       try {
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
+        await assertCallerIsSubjectUserOrAdmin(req.headers.authorization, userId);
+
         const { data: jobs, error: jobsError } = await supabaseAdmin
           .from("analysis_jobs")
           .select("id, status, version, created_at, completed_at")
@@ -603,13 +609,14 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
+        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
           .select(
-            "id, status, trigger_source, version, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
+            "id, user_id, status, trigger_source, version, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
           )
           .eq("id", params.jobId)
-          .eq("user_id", userId)
           .maybeSingle();
 
         if (jobError || !job) {
@@ -663,11 +670,12 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
+        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
           .select("id")
           .eq("id", params.jobId)
-          .eq("user_id", userId)
           .maybeSingle();
 
         if (jobError || !job) {
@@ -747,11 +755,12 @@ export function createV1AnalysesRouter(): Router {
         const { userId, assetTypeCode } =
           req.query as z.infer<typeof analysisJobAssetQuerySchema>;
 
+        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
           .select("id")
           .eq("id", params.jobId)
-          .eq("user_id", userId)
           .maybeSingle();
 
         if (jobError || !job) {
@@ -830,6 +839,8 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
+        await assertCallerCanAccessJobForClaimedOwner(req.headers.authorization, params.jobId, userId);
+
         const deleted = await deleteAnalysisJobAndAssets({
           jobId: params.jobId,
           userId,
@@ -856,6 +867,8 @@ export function createV1AnalysesRouter(): Router {
         const { userId } = req.query as z.infer<
           typeof latestAnalysisQuerySchema
         >;
+
+        await assertCallerIsSubjectUserOrAdmin(req.headers.authorization, userId);
 
         const { data: latestJob, error: latestJobError } = await supabaseAdmin
           .from("analysis_jobs")

@@ -151,6 +151,8 @@ export type AnalysisHistoryItem = {
 export type PersistedAnalysisDetailResponse = {
   job: {
     id: string;
+    /** Propriétaire du job ; nécessaire pour les miniatures d’assets (admin impersonation). */
+    user_id?: string;
     status: "queued" | "running" | "completed" | "failed";
     trigger_source: "onboarding_auto" | "user_rerun" | "admin";
     version: number;
@@ -442,10 +444,13 @@ export async function runFaceAnalysis(params: {
 
 export async function fetchAnalysisHistory(
   userId: string,
+  headers?: HeadersInit,
 ): Promise<AnalysisHistoryItem[]> {
   const response = await apiRequest(
     "GET",
     `/v1/analyses/history?userId=${encodeURIComponent(userId)}`,
+    undefined,
+    headers,
   );
   const json = (await response.json()) as {
     data: AnalysisHistoryItem[];
@@ -457,10 +462,14 @@ export async function fetchAnalysisHistory(
 export async function fetchAnalysisDetail(params: {
   userId: string;
   jobId: string;
+  /** Auth explicite (recommandé : session Supabase) pour l’accès admin / impersonation. */
+  headers?: HeadersInit;
 }): Promise<AnalysisDetailResponse> {
   const response = await apiRequest(
     "GET",
     `/v1/analyses/${params.jobId}?userId=${encodeURIComponent(params.userId)}`,
+    undefined,
+    params.headers,
   );
   const json = (await response.json()) as {
     data: AnalysisDetailResponse;
@@ -472,10 +481,13 @@ export async function fetchAnalysisDetail(params: {
 export async function deleteAnalysisJob(params: {
   userId: string;
   jobId: string;
+  headers?: HeadersInit;
 }): Promise<void> {
   await apiRequest(
     "DELETE",
     `/v1/analyses/${params.jobId}?userId=${encodeURIComponent(params.userId)}`,
+    undefined,
+    params.headers,
   );
 }
 
@@ -504,10 +516,13 @@ export function buildAnalysisJobAssetPreviewUrl(params: {
 
 export async function fetchLatestFaceAnalysis(
   userId: string,
+  headers?: HeadersInit,
 ): Promise<LatestAnalysisResponse | null> {
   const response = await apiRequest(
     "GET",
     `/v1/analyses/latest?userId=${encodeURIComponent(userId)}`,
+    undefined,
+    headers,
   );
   const json = (await response.json()) as {
     data: LatestAnalysisResponse | null;

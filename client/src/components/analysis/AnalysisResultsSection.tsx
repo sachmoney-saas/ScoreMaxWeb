@@ -1037,8 +1037,14 @@ export function AnalysisResultsSection({
   }
 
   const globalScore = calculateGlobalFaceScore(results);
-  const buildWorkerHref = (worker: string) =>
-    `/app/analyses/${analysis.job.id}/workers/${encodeURIComponent(worker)}`;
+  const buildWorkerHref = (workerName: string) => {
+    const trimmed = search.startsWith("?") ? search.slice(1) : search;
+    const params = new URLSearchParams(trimmed || undefined);
+    const query = params.toString();
+    return `/app/analyses/${analysis.job.id}/workers/${encodeURIComponent(workerName)}${query ? `?${query}` : ""}`;
+  };
+
+  const scanPreviewUserId = analysis.job.user_id ?? user?.id;
 
   const ageResult = results.find((r) => isAgeWorker(r.worker));
   const coloringResult = results.find((r) => r.worker === "coloring");
@@ -1105,8 +1111,8 @@ export function AnalysisResultsSection({
         <TabsContent value="overview" className="mt-0">
           <AnalysisJobScanPreviewProvider
             value={
-              user?.id
-                ? { jobId: analysis.job.id, userId: user.id }
+              scanPreviewUserId
+                ? { jobId: analysis.job.id, userId: scanPreviewUserId }
                 : null
             }
           >

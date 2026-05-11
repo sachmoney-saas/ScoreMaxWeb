@@ -172,9 +172,8 @@ export function BodyfatCompositionMatrixVisual({
       ? Math.min(rows - 1, Math.max(0, Math.floor(10 - sharpness)))
       : null;
 
-  const wrapMax = compact
-    ? "mx-auto w-full max-w-[min(100%,16.5rem)] sm:max-w-[18.5rem]"
-    : "mx-auto w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]";
+  const wrapMax =
+    "mx-auto w-full max-w-[min(100%,12rem)] sm:max-w-[14rem]";
   const gridShell = compact
     ? "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]"
     : "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]";
@@ -314,7 +313,7 @@ export function BodyfatWeakestScoreCallout({
     <div
       className={
         compact
-          ? "mx-auto mt-3 w-full max-w-[min(100%,16.5rem)] sm:max-w-[18.5rem] text-center"
+          ? "mx-auto mt-3 w-full max-w-[min(100%,12rem)] sm:max-w-[14rem] text-center"
           : "mx-auto mt-5 w-full max-w-md text-center"
       }
     >

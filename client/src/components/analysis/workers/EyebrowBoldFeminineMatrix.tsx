@@ -59,8 +59,13 @@ export function EyebrowBoldFeminineMatrix({
       ? Math.min(cols - 1, Math.max(0, Math.floor(10 - femScore)))
       : null;
 
+  /**
+   * Cartes overview : même plafond que `BodyfatCompositionMatrixVisual`.
+   * Ne pas envelopper ce composant dans un `flex justify-center` sans élargir l’item — sinon la grille
+   * reste à sa largeur intrinsèque (effet « tout petit »).
+   */
   const outerWrap = compact
-    ? "mx-auto w-full max-w-[min(100%,16.5rem)] sm:max-w-[18.5rem]"
+    ? "mx-auto w-full max-w-[min(100%,12rem)] sm:max-w-[14rem]"
     : "w-full";
   const gridShell = compact
     ? "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]"
@@ -84,7 +89,7 @@ export function EyebrowBoldFeminineMatrix({
     : "0 0 18px rgba(255,255,255,0.55)";
 
   return (
-    <div className={cn(compact ? "space-y-2" : "space-y-3", className)}>
+    <div className={cn(compact ? "w-full space-y-2" : "space-y-3", className)}>
       <div className={outerWrap}>
         <div className={gridShell}>
           <div />

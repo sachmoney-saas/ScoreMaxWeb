@@ -7,7 +7,6 @@ import { createPortal } from 'react-dom';
 import { Link } from 'wouter';
 import { Settings2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AdminCaptureDebugPanel } from '@/components/AdminCaptureDebugPanel';
-import { FaceCaptureFrontalMaskGuideSvg } from '@/components/FaceCaptureFrontalMaskGuideSvg';
 import { useFaceCapture, listVideoInputDevices } from '../lib/face-capture';
 import type { CapturedPose } from '../lib/face-capture/CaptureSession';
 import { CAPTURE_POSES, type PoseId } from '../lib/face-capture/types';
@@ -556,17 +555,6 @@ export function FaceCaptureView({
               >
                 {instruction}
               </p>
-              {activePoseId === 'frontal' ? (
-                <div className="pointer-events-none absolute left-0 right-0 top-[4.5rem] z-20 flex justify-center px-4 sm:top-[5rem]">
-                  <FaceCaptureFrontalMaskGuideSvg
-                    className="h-[6.75rem] w-[5.25rem] opacity-[0.97] sm:h-[7.75rem] sm:w-24 drop-shadow-[0_6px_22px_rgba(0,0,0,0.55)]"
-                    title={i18n(language, {
-                      en: 'Front view with the white alignment mask over your face.',
-                      fr: 'Visage de face avec le masque blanc d’alignement.',
-                    })}
-                  />
-                </div>
-              ) : null}
 
               {state.sessionState === 'Holding' &&
               state.validation?.poseId === activePoseId ? (

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useParams } from "wouter";
+import { Link, useParams, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -47,6 +47,7 @@ import {
 } from "@/components/analysis/workers/_shared";
 import { AnalysisTopNavTabs } from "@/components/analysis/AnalysisTopNavTabs";
 import { ArrowLeft, Braces, Copy } from "lucide-react";
+import { parseAdminImpersonationUserId } from "@/lib/analysis-view-href";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -119,6 +120,8 @@ export default function WorkerDetails() {
     if (!analysis) return undefined;
     return analysis.results.find((result) => result.worker === worker);
   }, [analysis, worker]);
+
+  const assetPreviewUserId = analysis?.job.user_id ?? user?.id;
 
   const resultPayload = row && isRecord(row.result) ? row.result : null;
   const outputAggregates = resultPayload && isRecord(resultPayload.outputAggregates)
@@ -266,18 +269,18 @@ export default function WorkerDetails() {
         heroAside: dedicatedWorker ? adminHeroAside : undefined,
         captureGuideMetrics: analysis?.capture_guide_metrics,
         eyeCloseupAssetSrc:
-          worker === "eye_brows" && analysis && user?.id
+          worker === "eye_brows" && analysis && assetPreviewUserId
             ? buildAnalysisJobAssetPreviewUrl({
                 jobId: analysis.job.id,
-                userId: user.id,
+                userId: assetPreviewUserId,
                 assetTypeCode: "EYE_CLOSEUP",
               })
             : null,
         verticalThirdsAssetSrc:
-          worker === "symmetry_shape" && analysis && user?.id
+          worker === "symmetry_shape" && analysis && assetPreviewUserId
             ? buildAnalysisJobAssetPreviewUrl({
                 jobId: analysis.job.id,
-                userId: user.id,
+                userId: assetPreviewUserId,
                 assetTypeCode: "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
               })
             : null,

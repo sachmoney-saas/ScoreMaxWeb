@@ -1202,7 +1202,7 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
           </p>
         </div>
       </div>
-      <div className="flex w-full justify-center">
+      <div className="w-full min-w-0">
         <EyebrowBoldFeminineMatrix
           thickness={thickness.score}
           density={density.score}

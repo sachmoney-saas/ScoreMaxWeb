@@ -23,6 +23,19 @@ import {
   ovalGuideMouthOverUpperLineWidthRatioFromLandmarks,
 } from "./admin-capture-guidelines";
 import { encodeAdminGuideFlattenedPair } from "./encode-admin-guide-flat";
+import { eyeBlinkMax } from "./strategies/helpers";
+
+/**
+ * Après le hold frontal uniquement : petite attente si les blendshapes indiquent encore
+ * les yeux trop fermés. Dépasser le plafond ⇒ on déclenche quand même (même philosophie
+ * que la porte exposition — pas de barre infinie).
+ */
+const FRONTAL_SHUTTER_BLINK_WAIT_MAX_MS = 2400;
+const FRONTAL_SHUTTER_BLINK_POLL_MS = 50;
+/** Sous ce max(eyeBlinkL, eyeBlinkR) les yeux sont considérés assez ouverts pour le JPEG. */
+const FRONTAL_SHUTTER_BLINK_ACCEPT_MAX = 0.22;
+/** Filtre jitter MediaPipe : N détections OK d’affilée. */
+const FRONTAL_SHUTTER_OPEN_STREAK = 2;
 
 export interface CapturedPose {
   poseId: PoseId;
@@ -1054,6 +1067,48 @@ export class CaptureSession {
     }));
   }
 
+  /**
+   * Ultime filet sur la pose frontale : si au moment du déclenchement les yeux semblent
+   * encore fermés (blendshapes), on attend brièvement des frames « ouvertes » stables.
+   * Ne modifie pas le couple JPEG/landmarks : le cliché suit toujours `sendFrame` dans
+   * `captureFrame`. Sans blendshapes ou après timeout → comportement inchangé.
+   */
+  private async waitFrontalOpenEyesForShutterGate(): Promise<void> {
+    const video = this.videoEl;
+    if (!video || video.videoWidth <= 0) return;
+
+    const deadline = performance.now() + FRONTAL_SHUTTER_BLINK_WAIT_MAX_MS;
+    let streak = 0;
+    while (performance.now() < deadline) {
+      this.detector.sendFrame(video);
+      const landmarksOk =
+        this.lastSeenLandmarks &&
+        this.lastSeenLandmarks.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD;
+
+      const blinkPeak = eyeBlinkMax(this.lastSeenBlendshapes ?? {});
+      /** Pas de signaux blink : ne pas retarder UX (dégradation modèle / appareil). */
+      if (blinkPeak === null) {
+        return;
+      }
+
+      if (!landmarksOk) {
+        streak = 0;
+        await new Promise((r) => setTimeout(r, FRONTAL_SHUTTER_BLINK_POLL_MS));
+        continue;
+      }
+
+      if (blinkPeak <= FRONTAL_SHUTTER_BLINK_ACCEPT_MAX) {
+        streak += 1;
+        if (streak >= FRONTAL_SHUTTER_OPEN_STREAK) {
+          return;
+        }
+      } else {
+        streak = 0;
+      }
+      await new Promise((r) => setTimeout(r, FRONTAL_SHUTTER_BLINK_POLL_MS));
+    }
+  }
+
   private async captureCurrentPose(): Promise<void> {
     if (!this.videoEl) return;
     const idx = this.currentPoseIndex;
@@ -1081,6 +1136,10 @@ export class CaptureSession {
      * avant de capturer ; au-delà, on capture quand même (le hold a déjà
      * été tenu, on ne va pas faire poireauter l'utilisateur indéfiniment).
      *
+     * **Exception : cliché frontal** — après exposition + léger settle, courte attente si
+     * `eyeBlinkLeft`/`eyeBlinkRight` sont encore élevées ; au-delà d’un délai plafonné le
+     * cliché part comme avant pour ne pas faire « charger à l’infini » (voir `waitFrontalOpenEyesForShutterGate`).
+     *
      * Pour les poses **suivantes**, l'exposition caméra suit déjà le flux depuis
      * plusieurs secondes : on borne beaucoup plus court pour éviter le masque figé trop longtemps (4+1).
      */
@@ -1104,6 +1163,10 @@ export class CaptureSession {
     const settleDelayMs = isFirstExposureCriticalShot ? 52 : 18;
     if (this.videoEl?.videoWidth && this.videoEl.videoHeight) {
       await new Promise((r) => setTimeout(r, settleDelayMs));
+    }
+
+    if (poseState.poseId === "frontal") {
+      await this.waitFrontalOpenEyesForShutterGate();
     }
 
     const cooldownMs = this.config.cooldownMs ?? 300;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -24,12 +24,17 @@ import {
   Trash2,
   TrendingUp,
   UserCheck,
+  UserRound,
   Users,
   XCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import type { Profile } from "@shared/schema";
+import {
+  GUIDE_TRACE_SCAN_ASSET_CODES,
+  REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
+} from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,16 +60,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import {
-  useAdminAnalysisFailures,
+  useAdminAnalysisJobDetail,
+  useAdminAnalysisJobs,
   useAdminMetrics,
   useDeleteAdminAnalysisFailure,
   useProfile,
   useUserGrowth,
 } from "@/hooks/use-supabase";
-import type { AdminAnalysisFailure } from "@/lib/admin-analysis";
+import {
+  buildAdminAnalysisJobAssetUrl,
+  type AdminAnalysisFailure,
+  type AdminAnalysisJobsFilters,
+} from "@/lib/admin-analysis";
 import {
   grantUserSubscription,
   revokeUserSubscription,
@@ -72,6 +90,7 @@ import {
 import { deleteUserAccountAsAdmin } from "@/lib/admin-users-api";
 import { queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 
 type AdminProfile = Profile & {
   user_id?: string;
@@ -95,6 +114,99 @@ function getProfileId(profile: Pick<AdminProfile, "id" | "user_id">) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Une erreur est survenue.";
+}
+
+function AdminAnalysisAssetThumb({
+  jobId,
+  assetTypeCode,
+  label,
+}: {
+  jobId: string;
+  assetTypeCode: string;
+  label: string;
+}) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [phase, setPhase] = useState<"loading" | "missing" | "ready">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setPhase("loading");
+    setObjectUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (error || !token || cancelled) {
+          if (!cancelled) setPhase("missing");
+          return;
+        }
+
+        const res = await fetch(buildAdminAnalysisJobAssetUrl(jobId, assetTypeCode), {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok || cancelled) {
+          if (!cancelled) setPhase("missing");
+          return;
+        }
+
+        const blob = await res.blob();
+        if (!blob.type.startsWith("image/")) {
+          if (!cancelled) setPhase("missing");
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+
+        setObjectUrl(url);
+        setPhase("ready");
+      } catch {
+        if (!cancelled) setPhase("missing");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, assetTypeCode]);
+
+  useEffect(() => {
+    return () => {
+      setObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, []);
+
+  return (
+    <div className="space-y-1.5">
+      <p className="line-clamp-2 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
+        {label}
+      </p>
+      <div className="overflow-hidden rounded-xl border border-white/10 bg-black/35">
+        {phase === "loading" ? (
+          <div className="aspect-square animate-pulse bg-white/10" />
+        ) : phase === "missing" || !objectUrl ? (
+          <div className="flex aspect-square flex-col items-center justify-center gap-1 p-2 text-center text-[11px] text-zinc-500">
+            Absent
+          </div>
+        ) : (
+          <img alt="" src={objectUrl} className="aspect-square w-full object-cover" />
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function useAllProfiles() {
@@ -349,67 +461,199 @@ function UsersManagementPage() {
 }
 
 function AnalysisFailureLogsPage() {
-  const { data: failures = [], isLoading } = useAdminAnalysisFailures();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [detailJobId, setDetailJobId] = useState<string | null>(null);
+  const [listRowSnapshot, setListRowSnapshot] = useState<AdminAnalysisFailure | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<NonNullable<AdminAnalysisJobsFilters["status"]>>(
+    "all",
+  );
+
+  const listFilters = useMemo<AdminAnalysisJobsFilters>(() => {
+    return {
+      status: statusFilter,
+      limit: 150,
+      ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+    };
+  }, [searchQuery, statusFilter]);
+
+  const { data: jobs = [], isLoading } = useAdminAnalysisJobs(listFilters);
+  const {
+    data: jobDetail,
+    isLoading: detailLoading,
+    isError: detailError,
+  } = useAdminAnalysisJobDetail(detailJobId, {
+    enabled: sheetOpen && !!detailJobId,
+  });
+
   const deleteFailureMutation = useDeleteAdminAnalysisFailure();
   const { toast } = useToast();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [errorCodeFilter, setErrorCodeFilter] = useState("all");
 
-  const errorCodes = useMemo(() => {
-    return Array.from(
-      new Set(failures.map((failure) => failure.error_code).filter((code): code is string => Boolean(code))),
-    ).sort();
-  }, [failures]);
+  const failedCount = useMemo(
+    () => jobs.filter((row) => row.status === "failed").length,
+    [jobs],
+  );
 
-  const filteredFailures = useMemo(() => {
-    const query = searchQuery.toLowerCase().trim();
+  function openDetail(row: AdminAnalysisFailure) {
+    setListRowSnapshot(row);
+    setDetailJobId(row.id);
+    setSheetOpen(true);
+  }
 
-    return failures.filter((failure) => {
-      const matchesCode = errorCodeFilter === "all" || failure.error_code === errorCodeFilter;
-      const matchesSearch =
-        !query ||
-        [
-          failure.id,
-          failure.user_id,
-          failure.user_email,
-          failure.session_id,
-          failure.error_code,
-          failure.error_message,
-        ].some((value) => value?.toLowerCase().includes(query));
-
-      return matchesCode && matchesSearch;
-    });
-  }, [errorCodeFilter, failures, searchQuery]);
-
-  const latestFailure = failures[0];
-  const mostCommonCode = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const failure of failures) {
-      const code = failure.error_code ?? "UNKNOWN";
-      counts.set(code, (counts.get(code) ?? 0) + 1);
+  useEffect(() => {
+    if (!sheetOpen) {
+      setDetailJobId(null);
+      setListRowSnapshot(null);
     }
+  }, [sheetOpen]);
 
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
-  }, [failures]);
-
-  async function handleDeleteFailure(failure: AdminAnalysisFailure) {
+  async function handleDeleteFailure(job: AdminAnalysisFailure) {
     try {
-      const deleted = await deleteFailureMutation.mutateAsync(failure.id);
+      const deleted = await deleteFailureMutation.mutateAsync(job.id);
       toast({
-        title: "Recherche échouée supprimée",
+        title: "Analyse échouée supprimée",
         description: `${deleted.deleted_scan_asset_count} asset(s) et ${deleted.deleted_storage_object_count} fichier(s) Storage supprimés.`,
       });
+      if (detailJobId === job.id) {
+        setSheetOpen(false);
+      }
     } catch (error) {
       toast({ variant: "destructive", title: "Suppression impossible", description: getErrorMessage(error) });
     }
   }
 
+  const latestJob = jobs[0];
+
   return (
     <div className="space-y-6">
-      <AdminPageHeader
-        title="Logs d'analyse"
-        description="Consulte les jobs ScoreMax échoués, leurs erreurs, puis supprime proprement les recherches mortes et leurs assets."
-      />
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent
+          side="right"
+          className="w-full border-white/10 bg-zinc-950 p-0 text-zinc-50 sm:max-w-3xl"
+        >
+          {detailLoading ? (
+            <div className="flex h-40 items-center justify-center px-6 text-sm text-zinc-500">
+              Chargement…
+            </div>
+          ) : detailError || !jobDetail ? (
+            <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-6 text-center">
+              <p className="text-sm font-medium text-white">Détail indisponible</p>
+              <p className="max-w-sm text-sm text-zinc-500">
+                Réessaie ou vérifie les droits admin. Le job peut avoir été supprimé.
+              </p>
+            </div>
+          ) : (
+            <ScrollArea className="h-[100dvh]">
+              <div className="space-y-8 p-6 pb-16 pt-14">
+                <SheetHeader className="space-y-2 text-left">
+                  <SheetTitle className="text-xl text-white">
+                    Job {jobDetail.job.id.slice(0, 8)}…
+                  </SheetTitle>
+                  <SheetDescription className="text-zinc-400">
+                    {jobDetail.user_email ?? jobDetail.job.user_id}
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      jobDetail.job.status === "failed" && "border-red-400/45 text-red-200",
+                      jobDetail.job.status === "completed" &&
+                        "border-emerald-400/45 text-emerald-100",
+                      (jobDetail.job.status === "queued" ||
+                        jobDetail.job.status === "running") &&
+                        "border-sky-400/45 text-sky-100",
+                    )}
+                  >
+                    {jobDetail.job.status}
+                  </Badge>
+                  <Button variant="outline" size="sm" asChild className="border-white/20 bg-black/25">
+                    <Link href={`/app/analyses/${jobDetail.job.id}?asUser=${jobDetail.job.user_id}`}>
+                      <UserRound className="mr-2 h-4 w-4" />
+                      Impersonifier
+                    </Link>
+                  </Button>
+                  {jobDetail.job.status === "failed" && listRowSnapshot ? (
+                    <DeleteFailureDialog
+                      disabled={deleteFailureMutation.isPending}
+                      failure={listRowSnapshot}
+                      onDelete={() => handleDeleteFailure(listRowSnapshot)}
+                    />
+                  ) : null}
+                </div>
+
+                {jobDetail.job.status === "failed" ? (
+                  <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm">
+                    <p className="font-medium text-red-100">{jobDetail.job.error_code ?? "UNKNOWN"}</p>
+                    <p className="mt-2 text-zinc-300">
+                      {jobDetail.job.error_message ?? "—"}
+                    </p>
+                  </div>
+                ) : null}
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-white">
+                    Repères géométriques (capture)
+                  </h3>
+                  {jobDetail.capture_guide_metrics != null ? (
+                    <pre className="max-h-52 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-zinc-300">
+                      {JSON.stringify(jobDetail.capture_guide_metrics, null, 2)}
+                    </pre>
+                  ) : (
+                    <p className="text-sm text-zinc-500">Aucune métrique stockée.</p>
+                  )}
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-white">
+                    Clichés onboarding (8)
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {REQUIRED_ONBOARDING_SCAN_ASSET_CODES.map((code) => (
+                      <AdminAnalysisAssetThumb key={code} jobId={jobDetail.job.id} assetTypeCode={code} label={code} />
+                    ))}
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-white">
+                    Images repères GUIDE_TRACE
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {GUIDE_TRACE_SCAN_ASSET_CODES.map((code) => (
+                      <AdminAnalysisAssetThumb key={code} jobId={jobDetail.job.id} assetTypeCode={code} label={code} />
+                    ))}
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-white">Payload résumé (admin)</h3>
+                  <pre className="max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-zinc-300">
+                    {JSON.stringify(jobDetail.request_payload_summary, null, 2)}
+                  </pre>
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-white">Résultats workers</h3>
+                  <pre className="max-h-96 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-zinc-300">
+                    {JSON.stringify(jobDetail.results, null, 2)}
+                  </pre>
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-sm font-semibold text-white">
+                    Assets liés ({jobDetail.linked_assets.length})
+                  </h3>
+                  <pre className="max-h-48 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-[11px] text-zinc-300">
+                    {JSON.stringify(jobDetail.linked_assets, null, 2)}
+                  </pre>
+                </section>
+              </div>
+            </ScrollArea>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {isLoading ? (
         <div className="space-y-4">
@@ -420,53 +664,58 @@ function AnalysisFailureLogsPage() {
         <>
           <div className="grid gap-4 md:grid-cols-3">
             <StatCard
-              title="Échecs affichés"
-              value={failures.length}
+              title="Analyses chargées"
+              value={jobs.length}
+              icon={<BarChart3 className="h-4 w-4 text-sky-400" />}
+              description="Liste courante (max 150, plus récentes d'abord)"
+            />
+            <StatCard
+              title="Dernière activité"
+              value={
+                latestJob
+                  ? formatDate(latestJob.created_at, "dd MMM yyyy, HH:mm")
+                  : "—"
+              }
+              icon={<Clock className="h-4 w-4 text-emerald-300" />}
+              description={latestJob?.user_email ?? latestJob?.user_id ?? "Aucune analyse"}
+            />
+            <StatCard
+              title="Échecs (Lot)"
+              value={failedCount}
               icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
-              description="Jobs en statut failed"
-            />
-            <StatCard
-              title="Dernier échec"
-              value={latestFailure ? formatDate(latestFailure.failed_at ?? latestFailure.created_at, "dd MMM, HH:mm") : "—"}
-              icon={<Clock className="h-4 w-4 text-sky-400" />}
-              description={latestFailure?.user_email ?? latestFailure?.user_id ?? "Aucun échec"}
-            />
-            <StatCard
-              title="Code principal"
-              value={mostCommonCode}
-              icon={<ShieldAlert className="h-4 w-4 text-red-300" />}
-              description="Code d'erreur le plus fréquent"
+              description="Jobs failed parmi les résultats filtrés"
             />
           </div>
 
           <Card className={adminPanelClassName}>
             <CardHeader className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="space-y-1">
-                <CardTitle>Recherches échouées</CardTitle>
+                <CardTitle>Toutes les analyses</CardTitle>
                 <CardDescription className="text-zinc-400">
-                  {filteredFailures.length} résultat{filteredFailures.length > 1 ? "s" : ""} sur {failures.length} échec{failures.length > 1 ? "s" : ""} chargé{failures.length > 1 ? "s" : ""}.
+                  Clique une ligne pour les images détaillées, le payload et impersonation.
                 </CardDescription>
               </div>
-              <div className="grid w-full gap-3 md:grid-cols-[1fr_220px] xl:w-auto">
+              <div className="grid w-full gap-3 md:grid-cols-[1fr_180px] xl:w-auto xl:min-w-[420px]">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
                   <Input
-                    placeholder="Rechercher email, job, session, erreur..."
+                    placeholder="Rechercher email, job, session, erreur…"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     className="h-10 border-white/15 bg-black/25 pl-9 text-zinc-50 placeholder:text-zinc-500"
                   />
                 </div>
-                <Select value={errorCodeFilter} onValueChange={setErrorCodeFilter}>
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
                   <SelectTrigger className="h-10 border-white/15 bg-black/25 text-zinc-50">
                     <Filter className="mr-2 h-4 w-4 text-zinc-400" />
-                    <SelectValue />
+                    <SelectValue placeholder="Statut" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les codes</SelectItem>
-                    {errorCodes.map((code) => (
-                      <SelectItem key={code} value={code}>{code}</SelectItem>
-                    ))}
+                    <SelectItem value="all">Tous les statuts</SelectItem>
+                    <SelectItem value="completed">Terminées</SelectItem>
+                    <SelectItem value="failed">Échouées</SelectItem>
+                    <SelectItem value="queued">En file</SelectItem>
+                    <SelectItem value="running">En cours</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -477,60 +726,108 @@ function AnalysisFailureLogsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="border-white/10 hover:bg-transparent">
-                        <TableHead className="text-zinc-400">Échec</TableHead>
+                        <TableHead className="text-zinc-400">Création</TableHead>
                         <TableHead className="text-zinc-400">Utilisateur</TableHead>
-                        <TableHead className="text-zinc-400">Job / session</TableHead>
-                        <TableHead className="text-zinc-400">Erreur</TableHead>
+                        <TableHead className="text-zinc-400">Job</TableHead>
+                        <TableHead className="text-zinc-400">Statut</TableHead>
+                        <TableHead className="text-zinc-400 max-w-xl">Erreur</TableHead>
                         <TableHead className="text-zinc-400">Assets</TableHead>
                         <TableHead className="text-right text-zinc-400">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredFailures.length > 0 ? (
-                        filteredFailures.map((failure) => (
-                          <TableRow key={failure.id} className="border-white/10 hover:bg-white/[0.06]">
-                            <TableCell className="min-w-40 text-sm text-zinc-300">
-                              {formatDate(failure.failed_at ?? failure.created_at, "dd MMM yyyy, HH:mm")}
+                      {jobs.length > 0 ? (
+                        jobs.map((job) => (
+                          <TableRow
+                            key={job.id}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                openDetail(job);
+                              }
+                            }}
+                            className={cn(
+                              "cursor-pointer border-white/10 transition-colors hover:bg-white/[0.07]",
+                              job.status === "failed" ? "opacity-95" : "",
+                            )}
+                            onClick={() => openDetail(job)}
+                          >
+                            <TableCell className="min-w-36 whitespace-nowrap text-sm text-zinc-300">
+                              {formatDate(job.created_at, "dd MMM yyyy, HH:mm")}
                             </TableCell>
-                            <TableCell className="min-w-72">
+                            <TableCell className="min-w-60">
                               <div className="flex flex-col gap-1">
-                                <span className="font-medium">{failure.user_email ?? "Email indisponible"}</span>
-                                <span className="font-mono text-[11px] text-zinc-500">{failure.user_id}</span>
+                                <span className="font-medium text-zinc-100">
+                                  {job.user_email ?? "Email indisponible"}
+                                </span>
+                                <span className="font-mono text-[11px] text-zinc-500">{job.user_id}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="min-w-72">
+                            <TableCell className="max-w-[200px]">
                               <div className="flex flex-col gap-1 font-mono text-[11px] text-zinc-400">
-                                <span>job: {failure.id}</span>
-                                <span>session: {failure.session_id ?? "—"}</span>
+                                <span className="truncate" title={job.id}>
+                                  {job.id.slice(0, 8)}…
+                                </span>
+                                <span>{job.session_id ? `${job.session_id.slice(0, 8)}…` : "—"}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="min-w-80 max-w-xl">
-                              <div className="space-y-2">
-                                <Badge variant="outline" className="border-red-300/45 bg-red-500/15 text-red-100">
-                                  {failure.error_code ?? "UNKNOWN"}
-                                </Badge>
-                                <p className="line-clamp-3 text-sm text-zinc-300">
-                                  {failure.error_message ?? "Aucun message d'erreur enregistré."}
-                                </p>
-                              </div>
+                            <TableCell className="min-w-[100px]">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs",
+                                  job.status === "failed" && "border-red-400/45 text-red-200",
+                                  job.status === "completed" &&
+                                    "border-emerald-400/40 text-emerald-100",
+                                  (job.status === "queued" || job.status === "running") &&
+                                    "border-sky-400/45 text-sky-100",
+                                )}
+                              >
+                                {job.status}
+                              </Badge>
                             </TableCell>
-                            <TableCell className="min-w-36 text-sm text-zinc-300">
-                              <div>{failure.asset_count} lié(s)</div>
-                              <div className="text-xs text-zinc-500">{failure.scan_asset_count} scan asset(s)</div>
+                            <TableCell className="max-w-xl min-w-[120px]">
+                              {job.status === "failed" ? (
+                                <div className="space-y-1">
+                                  <span className="inline-flex rounded-md border border-red-400/30 bg-red-500/10 px-2 py-0.5 font-mono text-[11px] text-red-200">
+                                    {job.error_code ?? "UNKNOWN"}
+                                  </span>
+                                  <p className="line-clamp-2 text-sm text-zinc-400">
+                                    {job.error_message ?? "—"}
+                                  </p>
+                                </div>
+                              ) : (
+                                <span className="text-zinc-500">—</span>
+                              )}
                             </TableCell>
-                            <TableCell className="text-right">
-                              <DeleteFailureDialog
-                                disabled={deleteFailureMutation.isPending}
-                                failure={failure}
-                                onDelete={() => handleDeleteFailure(failure)}
-                              />
+                            <TableCell className="min-w-[100px] text-sm text-zinc-300">
+                              <div>{job.asset_count} liés</div>
+                              <div className="text-xs text-zinc-500">{job.scan_asset_count} scan(s)</div>
+                            </TableCell>
+                            <TableCell
+                              className="text-right"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                            >
+                              {job.status === "failed" ? (
+                                <DeleteFailureDialog
+                                  disabled={deleteFailureMutation.isPending}
+                                  failure={job}
+                                  onDelete={() => handleDeleteFailure(job)}
+                                />
+                              ) : (
+                                <span className="text-xs text-zinc-600">—</span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="h-28 text-center text-zinc-400">
-                            Aucun échec d'analyse trouvé.
+                          <TableCell colSpan={7} className="h-28 text-center text-zinc-400">
+                            Aucune analyse ne correspond aux filtres.
                           </TableCell>
                         </TableRow>
                       )}

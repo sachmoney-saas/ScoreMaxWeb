@@ -9,7 +9,12 @@ import { useAuth } from "./use-auth";
 import {
   deleteAdminAnalysisFailure,
   fetchAdminAnalysisFailures,
+  fetchAdminAnalysisJobDetail,
+  fetchAdminAnalysisJobs,
   type AdminAnalysisFailure,
+  type AdminAnalysisJobDetail,
+  type AdminAnalysisJobRow,
+  type AdminAnalysisJobsFilters,
   type DeleteAdminAnalysisFailureResponse,
 } from "@/lib/admin-analysis";
 import {
@@ -255,7 +260,12 @@ export function useAnalysisHistory(options?: { enabled?: boolean }) {
         return [];
       }
 
-      return fetchAnalysisHistory(user.id);
+      const authHeaders = await bearerHeadersFromSupabase();
+      if (!authHeaders) {
+        return [];
+      }
+
+      return fetchAnalysisHistory(user.id, authHeaders);
     },
     enabled: !!user?.id && (options?.enabled ?? true),
     refetchInterval: (query) => {
@@ -278,7 +288,11 @@ export function useDeleteAnalysisJob() {
         throw new Error("User is required to delete an analysis");
       }
 
-      await deleteAnalysisJob({ userId: user.id, jobId });
+      await deleteAnalysisJob({
+        userId: user.id,
+        jobId,
+        headers: { Authorization: `Bearer ${await getAccessToken()}` },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["analysis-history", user?.id] });
@@ -288,19 +302,36 @@ export function useDeleteAnalysisJob() {
   });
 }
 
-export function useAnalysisDetail(jobId: string | undefined, options?: { enabled?: boolean }) {
+export function useAnalysisDetail(
+  jobId: string | undefined,
+  options?: { enabled?: boolean; subjectUserId?: string },
+) {
   const { user } = useAuth();
 
+  const subjectUserId =
+    options?.subjectUserId && options.subjectUserId.length > 0
+      ? options.subjectUserId
+      : user?.id;
+
   return useQuery<AnalysisDetailResponse | null>({
-    queryKey: ["analysis-detail", user?.id, jobId],
+    queryKey: ["analysis-detail", subjectUserId, jobId],
     queryFn: async () => {
-      if (!user?.id || !jobId) {
+      if (!subjectUserId || !jobId) {
         return null;
       }
 
-      return fetchAnalysisDetail({ userId: user.id, jobId });
+      const authHeaders = await bearerHeadersFromSupabase();
+      if (!authHeaders) {
+        return null;
+      }
+
+      return fetchAnalysisDetail({
+        userId: subjectUserId,
+        jobId,
+        headers: authHeaders,
+      });
     },
-    enabled: !!user?.id && !!jobId && (options?.enabled ?? true),
+    enabled: !!subjectUserId && !!jobId && (options?.enabled ?? true),
     refetchInterval: (query) => {
       const state = query.state.data;
       if (!state?.job) {
@@ -325,7 +356,12 @@ export function useLatestFaceAnalysis(options?: { enabled?: boolean }) {
         return null;
       }
 
-      return fetchLatestFaceAnalysis(user.id);
+      const authHeaders = await bearerHeadersFromSupabase();
+      if (!authHeaders) {
+        return null;
+      }
+
+      return fetchLatestFaceAnalysis(user.id, authHeaders);
     },
     enabled: !!user?.id && (options?.enabled ?? true),
     refetchInterval: (query) => {
@@ -340,6 +376,15 @@ export function useLatestFaceAnalysis(options?: { enabled?: boolean }) {
     },
     staleTime: 0,
   });
+}
+
+async function bearerHeadersFromSupabase(): Promise<{ Authorization: string } | null> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (typeof token !== "string" || token.length === 0) {
+    return null;
+  }
+  return { Authorization: `Bearer ${token}` };
 }
 
 async function getAccessToken(): Promise<string> {
@@ -371,7 +416,40 @@ export function useDeleteAdminAnalysisFailure() {
       deleteAdminAnalysisFailure({ accessToken: await getAccessToken(), jobId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-analysis-failures"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-analysis-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-analysis-job-detail"] });
     },
+  });
+}
+
+export function useAdminAnalysisJobs(
+  filters: AdminAnalysisJobsFilters | undefined,
+  options?: { enabled?: boolean },
+) {
+  const { isAdmin } = useAuth();
+
+  return useQuery<AdminAnalysisJobRow[]>({
+    queryKey: ["admin-analysis-jobs", filters ?? {}],
+    queryFn: async () => fetchAdminAnalysisJobs(await getAccessToken(), filters),
+    enabled: isAdmin && (options?.enabled ?? true),
+    staleTime: 0,
+  });
+}
+
+export function useAdminAnalysisJobDetail(jobId: string | null, options?: { enabled?: boolean }) {
+  const { isAdmin } = useAuth();
+
+  return useQuery<AdminAnalysisJobDetail | null>({
+    queryKey: ["admin-analysis-job-detail", jobId],
+    queryFn: async () => {
+      if (!jobId) return null;
+      return fetchAdminAnalysisJobDetail({
+        accessToken: await getAccessToken(),
+        jobId,
+      });
+    },
+    enabled: isAdmin && !!jobId && (options?.enabled ?? true),
+    staleTime: 0,
   });
 }
 
