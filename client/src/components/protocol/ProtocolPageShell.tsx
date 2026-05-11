@@ -22,11 +22,37 @@ export const protocolPageBodyGlassClassName = cn(
 export const protocolPageTitleClassName =
   "font-display text-2xl font-bold leading-snug tracking-tight text-zinc-950 sm:text-3xl";
 
+function formatProtocolHeaderToday(language: AppLanguage, date: Date): string {
+  return new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function localDateIsoDay(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function ProtocolPageTitle({ language }: { language: AppLanguage }) {
+  const today = new Date();
+
   return (
-    <h1 className={cn(protocolPageTitleClassName, "text-center")}>
-      {i18n(language, { en: "My protocol", fr: "Mon protocole" })}
-    </h1>
+    <div className="flex flex-col items-center gap-1 text-center">
+      <h1 className={protocolPageTitleClassName}>
+        {i18n(language, { en: "My protocol", fr: "Mon protocole" })}
+      </h1>
+      <time
+        dateTime={localDateIsoDay(today)}
+        className="font-display text-sm font-semibold text-zinc-800/95 sm:text-base"
+      >
+        {formatProtocolHeaderToday(language, today)}
+      </time>
+    </div>
   );
 }
 

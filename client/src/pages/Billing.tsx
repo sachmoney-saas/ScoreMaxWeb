@@ -23,12 +23,12 @@ const billingPanelClassName =
 
 const PLAN_BENEFITS: Record<Plan, string[]> = {
   monthly: [
-    "Analyses illimitées",
+    "1 analyse par semaine",
     "Recommandations personnalisées",
     "Support prioritaire",
   ],
   yearly: [
-    "Analyses illimitées",
+    "1 analyse par semaine",
     "Recommandations personnalisées",
     "Support prioritaire",
     "2 mois offerts vs mensuel",
@@ -183,19 +183,19 @@ export default function Billing() {
         })}
       </div>
 
-      <Card className={billingPanelClassName}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Paiement &amp; factures
-          </CardTitle>
-          <CardDescription className="text-zinc-300">
-            Cartes, factures, annulation : tout se passe sur votre portail
-            sécurisé Dodo Payments.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isSubscriber ? (
+      {isSubscriber && (
+        <Card className={billingPanelClassName}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Paiement &amp; factures
+            </CardTitle>
+            <CardDescription className="text-zinc-300">
+              Cartes, factures, annulation : tout se passe sur votre portail
+              sécurisé Dodo Payments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <Button
               variant="outline"
               onClick={() => portalMutation.mutate()}
@@ -207,13 +207,9 @@ export default function Billing() {
                 "Ouvrir le portail Dodo"
               )}
             </Button>
-          ) : (
-            <p className="text-sm text-zinc-300">
-              Souscrivez à une offre pour accéder à votre portail de gestion.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

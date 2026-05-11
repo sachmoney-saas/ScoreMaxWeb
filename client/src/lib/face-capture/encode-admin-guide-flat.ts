@@ -45,6 +45,12 @@ export type AdminFlattenedGuideEncoding =
       verticalThirdsFlat: Blob | null;
       jawAngleFlat: Blob | null;
       faceShapeContourFlat: Blob | null;
+      /**
+       * Cliché frontal + voile sombre 40 % + maillage blanc WebGL (sans guides
+       * bleus 2D). Sert de vignette d’analyse dans la sidebar (préféré au
+       * `FACE_FRONT` brut côté serveur) — `null` si MaskRenderer indisponible.
+       */
+      maskOverlayFlat: Blob | null;
     }
   | {
       variant: 'profile';
@@ -149,6 +155,12 @@ async function renderSingleFlatGuidePng(
   drawGuides: GuideDrawer,
   /** Si faux : composite photo + lignes uniquement (`DEBUG_CAPTURE_WHITE_FACE_MESH` peut forcer le contraire à la compil.). */
   includeWhiteFaceMeshLayer: boolean,
+  /**
+   * Opacité ∈ [0,1] d’un voile noir posé **entre** la photo (et le maillage debug)
+   * et les guides bleus. Utilisé sur les 5 PNG frontaux pour faire ressortir les
+   * traits bleus sans assombrir les guides eux-mêmes. 0/omis → composite intact.
+   */
+  darkenBackgroundOpacity = 0,
 ): Promise<Blob | null> {
   const w = bitmap.width;
   const h = bitmap.height;
@@ -212,7 +224,95 @@ async function renderSingleFlatGuidePng(
     if (drawWireMeshLayer) {
       cx.drawImage(mask, 0, 0, w, h);
     }
+    // Voile sombre posé AVANT les guides : la photo (et le maillage debug)
+    // sont assombris, les traits bleus restent à pleine intensité.
+    if (darkenBackgroundOpacity > 0) {
+      const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
+      const prevAlpha = cx.globalAlpha;
+      cx.globalAlpha = alpha;
+      cx.fillStyle = '#000000';
+      cx.fillRect(0, 0, w, h);
+      cx.globalAlpha = prevAlpha;
+    }
     cx.drawImage(guide, 0, 0, w, h);
+
+    return await canvasToPng(composite);
+  } finally {
+    maskRenderer?.dispose();
+    remove();
+  }
+}
+
+/**
+ * PNG aplati frontal : cliché selfie (miroir) → voile noir 40 % → maillage blanc
+ * WebGL par-dessus, **sans** guides 2D bleus. Utilisé comme vignette d’analyse
+ * (sidebar) à la place du `FACE_FRONT` brut.
+ *
+ * Ordre des couches volontairement différent de `renderSingleFlatGuidePng` :
+ * ici le maillage est posé **au-dessus** du voile (le voile assombrit la photo,
+ * le maillage blanc reste à pleine intensité).
+ */
+async function renderFrontalMaskOverlayFlatPng(
+  bitmap: ImageBitmap,
+  landmarks: LandmarkPoint[],
+  videoW: number,
+  videoH: number,
+  /** Opacité ∈ [0,1] du voile noir posé sur la photo avant le maillage. */
+  darkenBackgroundOpacity: number,
+): Promise<Blob | null> {
+  const w = bitmap.width;
+  const h = bitmap.height;
+  if (w < 16 || h < 16 || landmarks.length < 100 || videoW < 8 || videoH < 8) return null;
+
+  const lmFlat = mirrorLandmarksNormalizedX(landmarks);
+
+  const { remove, photo, mask } = mountScratchStack(w, h);
+  photo.style.width = `${w}px`;
+  photo.style.height = `${h}px`;
+  photo.width = w;
+  photo.height = h;
+  mask.style.width = `${w}px`;
+  mask.style.height = `${h}px`;
+
+  let maskRenderer: MaskRenderer | null = null;
+  try {
+    const pctx = photo.getContext('2d');
+    if (!pctx) return null;
+    pctx.setTransform(1, 0, 0, 1, 0, 0);
+    pctx.translate(w, 0);
+    pctx.scale(-1, 1);
+    pctx.drawImage(bitmap, 0, 0, w, h);
+    pctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    void mask.offsetHeight;
+    maskRenderer = new MaskRenderer();
+    maskRenderer.init(mask, {
+      skipResizeObserver: true,
+      preserveDrawingBuffer: true,
+      overlayPixelRatio: 1,
+    });
+    maskRenderer.setAlignmentQuality(1);
+    maskRenderer.render(lmFlat, videoW, videoH, 0, 0, {
+      staticCssSize: { w, h },
+      landmarkFrame: 'jpegBitmap',
+    });
+
+    const composite = document.createElement('canvas');
+    composite.width = w;
+    composite.height = h;
+    const cx = composite.getContext('2d');
+    if (!cx) return null;
+
+    cx.drawImage(photo, 0, 0, w, h);
+    const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
+    if (alpha > 0) {
+      const prevAlpha = cx.globalAlpha;
+      cx.globalAlpha = alpha;
+      cx.fillStyle = '#000000';
+      cx.fillRect(0, 0, w, h);
+      cx.globalAlpha = prevAlpha;
+    }
+    cx.drawImage(mask, 0, 0, w, h);
 
     return await canvasToPng(composite);
   } finally {
@@ -335,6 +435,13 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       return { variant: 'smileLips', smileLipsFlat };
     }
 
+    /**
+     * Voile sombre uniforme posé sur la photo (et l’éventuel maillage debug)
+     * pour les 5 PNG frontaux : les traits bleus ressortent davantage sans
+     * altérer leur teinte. 0.4 = ~60 % de la photo visible, 40 % noir.
+     */
+    const FRONTAL_BG_DARKEN_OPACITY = 0.4;
+
     const ovalFlat = await renderSingleFlatGuidePng(
       bitmap,
       opts.landmarks,
@@ -342,6 +449,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminOrientationGuidelinesOnCanvas,
       false,
+      FRONTAL_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const noseMouthFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -350,6 +458,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminNoseMouthWidthGuidelinesOnCanvas,
       false,
+      FRONTAL_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const verticalThirdsFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -358,6 +467,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminVerticalThirdsGuidelinesOnCanvas,
       false,
+      FRONTAL_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const jawAngleFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -366,6 +476,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminFrontalJawAngleGuidelinesOnCanvas,
       false,
+      FRONTAL_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const faceShapeContourFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -374,9 +485,24 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminFaceShapeContourGuideOnCanvas,
       false,
+      FRONTAL_BG_DARKEN_OPACITY,
+    ).catch(() => null);
+    const maskOverlayFlat = await renderFrontalMaskOverlayFlatPng(
+      bitmap,
+      opts.landmarks,
+      opts.sourceVideoWidth,
+      opts.sourceVideoHeight,
+      FRONTAL_BG_DARKEN_OPACITY,
     ).catch(() => null);
 
-    if (!ovalFlat && !noseMouthFlat && !verticalThirdsFlat && !jawAngleFlat && !faceShapeContourFlat)
+    if (
+      !ovalFlat &&
+      !noseMouthFlat &&
+      !verticalThirdsFlat &&
+      !jawAngleFlat &&
+      !faceShapeContourFlat &&
+      !maskOverlayFlat
+    )
       return null;
     return {
       variant: 'frontal',
@@ -385,6 +511,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       verticalThirdsFlat,
       jawAngleFlat,
       faceShapeContourFlat,
+      maskOverlayFlat,
     };
   } catch {
     return null;

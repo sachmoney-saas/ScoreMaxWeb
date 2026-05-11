@@ -292,6 +292,12 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
   "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
   "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
+  /**
+   * Cliché frontal selfie avec voile sombre 40 % sous le maillage facial blanc
+   * (sans guides bleus). Utilisé comme vignette d’analyse — préféré à
+   * `FACE_FRONT` pour la sidebar dès qu’il est disponible.
+   */
+  "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
   "GUIDE_TRACE_PROFILE_LEFT_JAW",
   "GUIDE_TRACE_PROFILE_RIGHT_JAW",
   "GUIDE_TRACE_PROFILE_LEFT_NOSE",

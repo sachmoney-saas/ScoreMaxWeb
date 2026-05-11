@@ -1117,8 +1117,21 @@ function ringVerticesUnique(indices: readonly number[]): readonly number[] {
 }
 
 /**
- * PNG aplati pose sourire : lèvre ext. + int. (contours MediaPipe), bleu clair.
+ * PNG aplati pose sourire : composite à trois couches sur la photo.
+ *
+ *   1. voile sombre 40 % partout SAUF à l’intérieur du contour extérieur des
+ *      lèvres (les dents et la zone lèvres restent à pleine luminosité) ;
+ *   2. remplissage bleu (donut) entre contour extérieur et contour intérieur
+ *      des lèvres → « lèvres en bleu », l’ouverture de la bouche reste claire ;
+ *   3. contours bleus existants (ext. + int.) par-dessus pour garder un trait
+ *      net même quand le remplissage manque de contraste sur peau claire.
+ *
+ * Si les anneaux MediaPipe sont manquants on dégrade vers l’ancien rendu
+ * (simple contour) pour ne pas masquer la photo sans rendu utile.
  */
+const SMILE_LIPS_BG_DARKEN_RGBA = 'rgba(0, 0, 0, 0.4)';
+const SMILE_LIPS_BLUE_FILL_RGBA = 'rgba(125, 211, 252, 0.55)';
+
 export function drawAdminSmileLipsGuideOnCanvas(
   ctx: CanvasRenderingContext2D,
   landmarks: LandmarkPoint[],
@@ -1130,33 +1143,73 @@ export function drawAdminSmileLipsGuideOnCanvas(
   const stroke = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
   const lineW = Math.max(2, Math.min(outW, outH) * 0.0032);
 
-  const drawRing = (indicesIn: readonly number[]) => {
+  /** Convertit un anneau MediaPipe en polygone canvas (null si un point manque). */
+  const ringPolygon = (
+    indicesIn: readonly number[],
+  ): { x: number; y: number }[] | null => {
     const indices = ringVerticesUnique(indicesIn);
     const pts: { x: number; y: number }[] = [];
     for (const idx of indices) {
       const lm = landmarks[idx];
-      if (!lm || lm.x === undefined || lm.y === undefined) {
-        return;
-      }
+      if (!lm || lm.x === undefined || lm.y === undefined) return null;
       pts.push(normPointToBmpPx(lm.x, lm.y, outW, outH));
     }
-    if (pts.length < 2) return;
-    ctx.beginPath();
-    ctx.moveTo(pts[0]!.x, pts[0]!.y);
-    for (let i = 1; i < pts.length; i++) {
-      ctx.lineTo(pts[i]!.x, pts[i]!.y);
-    }
-    ctx.closePath();
-    ctx.stroke();
+    return pts.length >= 3 ? pts : null;
   };
 
+  const tracePolygon = (poly: { x: number; y: number }[]) => {
+    ctx.moveTo(poly[0]!.x, poly[0]!.y);
+    for (let i = 1; i < poly.length; i++) {
+      ctx.lineTo(poly[i]!.x, poly[i]!.y);
+    }
+    ctx.closePath();
+  };
+
+  const outerPoly = ringPolygon(FACEMESH_LIP_OUTER_ORDERED);
+  const innerPoly = ringPolygon(FACEMESH_LIP_INNER_ORDERED);
+
   ctx.save();
+
+  // 1) Voile sombre partout sauf intérieur du contour extérieur des lèvres.
+  if (outerPoly) {
+    ctx.beginPath();
+    ctx.rect(0, 0, outW, outH);
+    tracePolygon(outerPoly);
+    ctx.fillStyle = SMILE_LIPS_BG_DARKEN_RGBA;
+    ctx.fill('evenodd');
+  }
+
+  // 2) Remplissage bleu des lèvres (anneau ext. ⊖ anneau int. via evenodd).
+  if (outerPoly && innerPoly) {
+    ctx.beginPath();
+    tracePolygon(outerPoly);
+    tracePolygon(innerPoly);
+    ctx.fillStyle = SMILE_LIPS_BLUE_FILL_RGBA;
+    ctx.fill('evenodd');
+  } else if (outerPoly) {
+    /** Contour intérieur indispo : fallback rempli plein (sans découpe bouche). */
+    ctx.beginPath();
+    tracePolygon(outerPoly);
+    ctx.fillStyle = SMILE_LIPS_BLUE_FILL_RGBA;
+    ctx.fill();
+  }
+
+  // 3) Contours bleus marqués (ext. + int.) — au-dessus du remplissage.
   ctx.strokeStyle = stroke;
   ctx.lineWidth = lineW;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  drawRing(FACEMESH_LIP_OUTER_ORDERED);
-  drawRing(FACEMESH_LIP_INNER_ORDERED);
+  if (outerPoly) {
+    ctx.beginPath();
+    tracePolygon(outerPoly);
+    ctx.stroke();
+  }
+  if (innerPoly) {
+    ctx.beginPath();
+    tracePolygon(innerPoly);
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 

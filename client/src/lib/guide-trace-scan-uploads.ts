@@ -70,6 +70,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           blob: pose.annotatedFaceShapeContourGuideBlob,
         });
       }
+      if (pose.annotatedFrontalMaskOverlayFlatBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
+          fileLabel: "mask-overlay",
+          blob: pose.annotatedFrontalMaskOverlayFlatBlob,
+        });
+      }
       break;
     case "profile-left":
       if (pose.annotatedProfileJawGuideBlob) {

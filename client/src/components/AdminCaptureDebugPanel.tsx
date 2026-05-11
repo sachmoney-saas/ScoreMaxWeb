@@ -691,13 +691,16 @@ export function AdminCaptureDebugPanel({
   const vtUrl = payload.annotatedVerticalThirdsGuideThumbnailUrl;
   const jawAngleUrl = payload.annotatedJawAngleGuideThumbnailUrl;
   const fcUrl = payload.annotatedFaceShapeContourGuideThumbnailUrl;
+  const maskOverlayUrl = payload.annotatedFrontalMaskOverlayFlatThumbnailUrl;
   const jawUrl = payload.annotatedProfileJawGuideThumbnailUrl;
   const profileNoseUrl = payload.annotatedProfileNoseGuideThumbnailUrl;
   const jawUpUrl = payload.annotatedJawUpLowerArcGuideThumbnailUrl;
   const crownUrl = payload.annotatedCrownPhotoFlatThumbnailUrl;
   const smileUrl = payload.annotatedSmileLipsGuideThumbnailUrl;
 
-  const hasAnyFrontalGuidePng = Boolean(ovalUrl || nmUrl || vtUrl || jawAngleUrl || fcUrl);
+  const hasAnyFrontalGuidePng = Boolean(
+    ovalUrl || nmUrl || vtUrl || jawAngleUrl || fcUrl || maskOverlayUrl,
+  );
   const hasProfileFlat = Boolean(jawUrl || profileNoseUrl);
   const hasJawUpFlat = Boolean(jawUpUrl);
   const hasCrownFlat = Boolean(crownUrl);
@@ -875,6 +878,18 @@ export function AdminCaptureDebugPanel({
                   {i18n(language, {
                     en: 'Download PNG — face shape contour',
                     fr: 'Télécharger PNG — contour forme du visage',
+                  })}
+                </a>
+              ) : null}
+              {maskOverlayUrl ? (
+                <a
+                  href={maskOverlayUrl}
+                  download={`${payload.poseId}-annotated-mask-overlay.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — dark photo + white mesh',
+                    fr: 'Télécharger PNG — photo sombre + maillage blanc',
                   })}
                 </a>
               ) : null}
@@ -1072,6 +1087,24 @@ export function AdminCaptureDebugPanel({
                   </p>
                   <img
                     src={fcUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {maskOverlayUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Mask overlay — flat (dark photo + white mesh)',
+                      fr: 'Maillage blanc — fichier aplati (photo assombrie + maillage)',
+                    })}
+                  </p>
+                  <img
+                    src={maskOverlayUrl}
                     alt=""
                     width={payload.outputWidth}
                     height={payload.outputHeight}

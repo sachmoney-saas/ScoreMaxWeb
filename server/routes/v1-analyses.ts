@@ -695,15 +695,25 @@ export function createV1AnalysesRouter(): Router {
           });
         }
 
-        const { data: jobAsset, error: jobAssetError } = await supabaseAdmin
+        /**
+         * Vignette d’analyse (sidebar) : on préfère le composite
+         * `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` (photo selfie assombrie 40 % +
+         * maillage blanc) quand il est disponible, sinon fallback sur la photo
+         * `FACE_FRONT` brute (anciennes analyses sans nouveau guide).
+         */
+        const THUMBNAIL_ASSET_TYPE_CODES_BY_PRIORITY = [
+          "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
+          "FACE_FRONT",
+        ] as const;
+
+        const { data: jobAssets, error: jobAssetError } = await supabaseAdmin
           .from("analysis_job_assets")
-          .select("scan_asset_id")
+          .select("scan_asset_id, asset_type_code")
           .eq("analysis_job_id", params.jobId)
           .eq("user_id", ownerId)
-          .eq("asset_type_code", "FACE_FRONT")
-          .maybeSingle();
+          .in("asset_type_code", [...THUMBNAIL_ASSET_TYPE_CODES_BY_PRIORITY]);
 
-        if (jobAssetError || !jobAsset) {
+        if (jobAssetError) {
           throw new ApiError({
             code: "IMAGE_NOT_FOUND",
             status: 404,
@@ -712,10 +722,34 @@ export function createV1AnalysesRouter(): Router {
           });
         }
 
+        const jobAssetByCode = new Map<string, string>();
+        for (const row of (jobAssets ?? []) as Array<{
+          scan_asset_id: string;
+          asset_type_code: string;
+        }>) {
+          jobAssetByCode.set(row.asset_type_code, row.scan_asset_id);
+        }
+
+        const selectedScanAssetId = (() => {
+          for (const code of THUMBNAIL_ASSET_TYPE_CODES_BY_PRIORITY) {
+            const id = jobAssetByCode.get(code);
+            if (id) return id;
+          }
+          return null;
+        })();
+
+        if (!selectedScanAssetId) {
+          throw new ApiError({
+            code: "IMAGE_NOT_FOUND",
+            status: 404,
+            message: "Analysis thumbnail not found",
+          });
+        }
+
         const { data: scanAsset, error: scanAssetError } = await supabaseAdmin
           .from("scan_assets")
           .select("id, r2_bucket, r2_key, mime_type")
-          .eq("id", jobAsset.scan_asset_id)
+          .eq("id", selectedScanAssetId)
           .eq("user_id", ownerId)
           .maybeSingle();
 
