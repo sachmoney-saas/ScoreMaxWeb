@@ -381,6 +381,13 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       return { variant: 'closeupEye', eyeContoursFlat };
     }
 
+    /**
+     * Voile sombre uniforme posé sur la photo (et l’éventuel maillage debug)
+     * avant les guides bleus — partagé entre tous les guide-traces (frontal,
+     * profil, menton levé). 0.4 = ~60 % photo visible, 40 % noir.
+     */
+    const GUIDE_TRACE_BG_DARKEN_OPACITY = 0.4;
+
     if (isProfilePoseId(opts.poseId)) {
       const pid = opts.poseId;
       const profileJawFlat = await renderSingleFlatGuidePng(
@@ -390,6 +397,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         opts.sourceVideoHeight,
         (ctx, lm, ow, oh) => drawAdminProfileJawGuideOnCanvas(ctx, lm, ow, oh, pid),
         false,
+        GUIDE_TRACE_BG_DARKEN_OPACITY,
       );
       const profileNoseFlat = await renderSingleFlatGuidePng(
         bitmap,
@@ -398,6 +406,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         opts.sourceVideoHeight,
         (ctx, lm, ow, oh) => drawAdminProfileNoseGuideOnCanvas(ctx, lm, ow, oh, pid),
         false,
+        GUIDE_TRACE_BG_DARKEN_OPACITY,
       );
       if (!profileJawFlat) return null;
       return { variant: 'profile', profileJawFlat, profileNoseFlat };
@@ -411,6 +420,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         opts.sourceVideoHeight,
         (ctx, lm, ow, oh) => drawAdminJawUpLowerArcGuideOnCanvas(ctx, lm, ow, oh),
         false,
+        GUIDE_TRACE_BG_DARKEN_OPACITY,
       );
       if (!jawLowerArcFlat) return null;
       return { variant: 'jawUp', jawLowerArcFlat };
@@ -435,13 +445,6 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       return { variant: 'smileLips', smileLipsFlat };
     }
 
-    /**
-     * Voile sombre uniforme posé sur la photo (et l’éventuel maillage debug)
-     * pour les 5 PNG frontaux : les traits bleus ressortent davantage sans
-     * altérer leur teinte. 0.4 = ~60 % de la photo visible, 40 % noir.
-     */
-    const FRONTAL_BG_DARKEN_OPACITY = 0.4;
-
     const ovalFlat = await renderSingleFlatGuidePng(
       bitmap,
       opts.landmarks,
@@ -449,7 +452,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminOrientationGuidelinesOnCanvas,
       false,
-      FRONTAL_BG_DARKEN_OPACITY,
+      GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const noseMouthFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -458,7 +461,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminNoseMouthWidthGuidelinesOnCanvas,
       false,
-      FRONTAL_BG_DARKEN_OPACITY,
+      GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const verticalThirdsFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -467,7 +470,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminVerticalThirdsGuidelinesOnCanvas,
       false,
-      FRONTAL_BG_DARKEN_OPACITY,
+      GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const jawAngleFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -476,7 +479,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminFrontalJawAngleGuidelinesOnCanvas,
       false,
-      FRONTAL_BG_DARKEN_OPACITY,
+      GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const faceShapeContourFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -485,14 +488,14 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       drawAdminFaceShapeContourGuideOnCanvas,
       false,
-      FRONTAL_BG_DARKEN_OPACITY,
+      GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
     const maskOverlayFlat = await renderFrontalMaskOverlayFlatPng(
       bitmap,
       opts.landmarks,
       opts.sourceVideoWidth,
       opts.sourceVideoHeight,
-      FRONTAL_BG_DARKEN_OPACITY,
+      GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
 
     if (

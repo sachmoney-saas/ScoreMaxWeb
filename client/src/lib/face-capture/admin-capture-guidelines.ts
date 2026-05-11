@@ -1213,8 +1213,16 @@ export function drawAdminSmileLipsGuideOnCanvas(
   ctx.restore();
 }
 
+const EYE_CLOSEUP_BG_DARKEN_RGBA = 'rgba(0, 0, 0, 0.4)';
+
 /**
- * PNG aplati gros plan œil : contours paupière (anneaux gauche + droite MediaPipe), bleu clair.
+ * PNG aplati gros plan œil : contours paupière (anneaux gauche + droite
+ * MediaPipe), bleu clair, **épaissis**. Un voile sombre 40 % est posé sur tout
+ * le reste de l’image — l’intérieur des deux anneaux d’œil reste à pleine
+ * intensité (même technique que `drawAdminSmileLipsGuideOnCanvas`).
+ *
+ * Dégradation : si un anneau manque, on rend le contour disponible sans voile
+ * sombre (mieux que rien — pas de découpe partielle qui assombrirait l’œil).
  */
 export function drawAdminCloseupEyeContoursGuideOnCanvas(
   ctx: CanvasRenderingContext2D,
@@ -1225,34 +1233,60 @@ export function drawAdminCloseupEyeContoursGuideOnCanvas(
   if (landmarks.length < 400 || outW < 16 || outH < 16) return;
 
   const stroke = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
-  const lineW = Math.max(2, Math.min(outW, outH) * 0.0032);
+  /** Trait épaissi (~2× les autres contours) pour bien marquer la forme de l’œil. */
+  const lineW = Math.max(3, Math.min(outW, outH) * 0.0072);
 
-  const drawRing = (indicesIn: readonly number[]) => {
+  const ringPolygon = (
+    indicesIn: readonly number[],
+  ): { x: number; y: number }[] | null => {
     const indices = ringVerticesUnique(indicesIn);
     const pts: { x: number; y: number }[] = [];
     for (const idx of indices) {
       const lm = landmarks[idx];
-      if (!lm || lm.x === undefined || lm.y === undefined) {
-        return;
-      }
+      if (!lm || lm.x === undefined || lm.y === undefined) return null;
       pts.push(normPointToBmpPx(lm.x, lm.y, outW, outH));
     }
-    if (pts.length < 2) return;
-    ctx.beginPath();
-    ctx.moveTo(pts[0]!.x, pts[0]!.y);
-    for (let i = 1; i < pts.length; i++) {
-      ctx.lineTo(pts[i]!.x, pts[i]!.y);
-    }
-    ctx.closePath();
-    ctx.stroke();
+    return pts.length >= 3 ? pts : null;
   };
 
+  const tracePolygon = (poly: { x: number; y: number }[]) => {
+    ctx.moveTo(poly[0]!.x, poly[0]!.y);
+    for (let i = 1; i < poly.length; i++) {
+      ctx.lineTo(poly[i]!.x, poly[i]!.y);
+    }
+    ctx.closePath();
+  };
+
+  const rightEye = ringPolygon(FACEMESH_RIGHT_EYE_ORDERED);
+  const leftEye = ringPolygon(FACEMESH_LEFT_EYE_ORDERED);
+
   ctx.save();
+
+  // 1) Voile sombre partout sauf l’intérieur des deux anneaux d’œil.
+  if (rightEye || leftEye) {
+    ctx.beginPath();
+    ctx.rect(0, 0, outW, outH);
+    if (rightEye) tracePolygon(rightEye);
+    if (leftEye) tracePolygon(leftEye);
+    ctx.fillStyle = EYE_CLOSEUP_BG_DARKEN_RGBA;
+    ctx.fill('evenodd');
+  }
+
+  // 2) Contours bleus épais — au-dessus du voile.
   ctx.strokeStyle = stroke;
   ctx.lineWidth = lineW;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  drawRing(FACEMESH_RIGHT_EYE_ORDERED);
-  drawRing(FACEMESH_LEFT_EYE_ORDERED);
+  if (rightEye) {
+    ctx.beginPath();
+    tracePolygon(rightEye);
+    ctx.stroke();
+  }
+  if (leftEye) {
+    ctx.beginPath();
+    tracePolygon(leftEye);
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
