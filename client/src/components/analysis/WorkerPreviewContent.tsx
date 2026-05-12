@@ -963,12 +963,12 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
 
 function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
   const previewJob = React.useContext(AnalysisJobScanPreviewContext);
-  const verticalThirdsGuideSrc =
+  const faceShapeContourGuideSrc =
     previewJob !== null
       ? buildAnalysisJobAssetPreviewUrl({
           jobId: previewJob.jobId,
           userId: previewJob.userId,
-          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
         })
       : null;
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
@@ -996,13 +996,9 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
       ) ?? shapeEnum.value
     : null;
 
-  const eyeSym = getScore(aggregates, "symmetry.eye_symmetry").score;
-  const browSym = getScore(aggregates, "symmetry.brow_symmetry").score;
-  const mouthSym = getScore(aggregates, "symmetry.mouth_symmetry").score;
-
   return (
     <div className="space-y-3">
-      <div className={`${PREVIEW_HERO} sm:flex-row sm:items-center sm:justify-center sm:gap-5`}>
+      <div className={PREVIEW_HERO}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Face shape", fr: "Forme du visage" })}
@@ -1019,27 +1015,13 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
           </p>
         </div>
         <AnalysisJobAssetPreviewThumb
-          src={verticalThirdsGuideSrc}
+          src={faceShapeContourGuideSrc}
           alt={i18n(language, {
-            en: "Front-face scan overlay: vertical-thirds guide lines",
-            fr: "Repère tiers verticaux sur ton visage (prise frontale)",
+            en: "Front-face scan overlay: face shape contour guide",
+            fr: "Repère contour de la forme du visage (prise frontale)",
           })}
-          className="h-28 w-[5.25rem] shrink-0"
+          className="h-48 w-40 shrink-0 sm:h-52 sm:w-44"
           imgClassName="object-cover"
-        />
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <MiniBar
-          label={i18n(language, { en: "Eyes", fr: "Yeux" })}
-          score={eyeSym}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Brows", fr: "Sourcils" })}
-          score={browSym}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Mouth", fr: "Bouche" })}
-          score={mouthSym}
         />
       </div>
     </div>

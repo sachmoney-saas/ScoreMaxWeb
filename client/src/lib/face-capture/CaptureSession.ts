@@ -58,8 +58,8 @@ export interface CapturedPose {
   annotatedFaceShapeContourGuideBlob?: Blob;
   annotatedFaceShapeContourGuideThumbnailUrl?: string;
   /**
-   * PNG aplati cliché frontal selfie + voile sombre 40 % + maillage blanc WebGL
-   * (sans guides bleus). Sert de vignette d’analyse côté sidebar.
+   * PNG aplati cliché frontal selfie + voile sombre + grille blanche 2D (ovale,
+   * axe médian, horizontales yeux/bouche). Vignette d’analyse côté sidebar.
    */
   annotatedFrontalMaskOverlayFlatBlob?: Blob;
   annotatedFrontalMaskOverlayFlatThumbnailUrl?: string;

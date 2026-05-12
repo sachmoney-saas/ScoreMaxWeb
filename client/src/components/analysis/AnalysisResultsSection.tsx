@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import * as React from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
@@ -9,9 +10,10 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type {
-  LatestAnalysisResponse,
-  PersistedWorkerAnalysisResult,
+import {
+  buildAnalysisJobAssetPreviewUrl,
+  type LatestAnalysisResponse,
+  type PersistedWorkerAnalysisResult,
 } from "@/lib/face-analysis";
 import {
   getWorkerDisplayLabel,
@@ -36,6 +38,7 @@ import {
   WorkerPreviewContent,
   AnalysisJobScanPreviewProvider,
 } from "@/components/analysis/WorkerPreviewContent";
+import { AuthenticatedThumbnail } from "@/components/analysis/AuthenticatedThumbnail";
 import { CriticalPointsRecommendations } from "@/components/analysis/CriticalPointsRecommendations";
 import {
   analysisSurfaceCardClassName,
@@ -481,17 +484,27 @@ function TierLadder({
         {SCORE_TIERS.map((_, i) => {
           const isActive = i === activeIndex;
           const isPast = i < activeIndex;
+          const isNext = !isActive && !isPast && i === activeIndex + 1;
           return (
             <div key={i} className="flex flex-1 items-center gap-1">
               <div
-                className={`h-1.5 flex-1 rounded-full transition ${
-                  isActive
-                    ? "bg-gradient-to-b from-white/90 to-zinc-400/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_0_0_1px_rgba(255,255,255,0.12),0_2px_8px_rgba(0,0,0,0.35)]"
-                    : isPast
-                      ? "bg-white/40"
-                      : "bg-white/10"
-                }`}
-              />
+                className={cn(
+                  "relative h-1.5 flex-1 overflow-hidden rounded-full transition",
+                  isActive &&
+                    "bg-gradient-to-b from-white/90 to-zinc-400/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_0_0_1px_rgba(255,255,255,0.12),0_2px_8px_rgba(0,0,0,0.35)]",
+                  isPast && "bg-white/40",
+                  isNext &&
+                    "bg-white/[0.14] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]",
+                  !isActive && !isPast && !isNext && "bg-white/10",
+                )}
+              >
+                {isNext ? (
+                  <span
+                    className="pointer-events-none absolute inset-y-0 left-0 w-[min(90%,4rem)] min-w-[1.25rem] rounded-full bg-gradient-to-r from-transparent via-white/55 to-transparent motion-safe:animate-brand-loader-shimmer motion-reduce:opacity-70"
+                    aria-hidden
+                  />
+                ) : null}
+              </div>
             </div>
           );
         })}
@@ -781,10 +794,13 @@ function GlobalScoreCard({
   score,
   results,
   language,
+  maskOverlayAsset,
 }: {
   score: GlobalFaceScore;
   results: NormalizedWorkerResult[];
   language: AppLanguage;
+  /** Présent pour les analyses récentes avec `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` uploadé. */
+  maskOverlayAsset: { jobId: string; userId: string } | null;
 }) {
   const rank = getScoreRank(score.score);
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
@@ -793,6 +809,14 @@ function GlobalScoreCard({
     [results, locale],
   );
   const hasTakeaways = strengths.length > 0 || weaknesses.length > 0;
+
+  const maskOverlaySrc = maskOverlayAsset
+    ? buildAnalysisJobAssetPreviewUrl({
+        userId: maskOverlayAsset.userId,
+        jobId: maskOverlayAsset.jobId,
+        assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
+      })
+    : null;
 
   return (
     <Card className={analysisSurfaceCardClassName}>
@@ -814,29 +838,53 @@ function GlobalScoreCard({
               hasTakeaways && "lg:pt-0.5",
             )}
           >
-            <ScoreRing
-              score={score.score}
-              scale={100}
-              fractionDigits={1}
-              className="h-40 w-40 sm:h-44 sm:w-44"
-            />
-            <div
-              className={cn(
-                "relative mx-auto mt-5 max-w-xl overflow-hidden rounded-2xl px-4 py-2.5 text-center",
-                scoreRingMatchMetallicPillClassName,
-              )}
-            >
-              <p
-                className="relative z-10 font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base [text-shadow:0_1px_0_rgba(255,255,255,0.65)]"
+            <div className="flex w-full flex-col items-center">
+              <div className="flex flex-row flex-nowrap items-center justify-center">
+                {maskOverlaySrc ? (
+                  <AuthenticatedThumbnail
+                    src={maskOverlaySrc}
+                    alt={i18n(language, {
+                      en: "Front face with mesh overlay",
+                      fr: "Visage de face avec maillage",
+                    })}
+                    hideWhenUnavailable
+                    wrapperClassName="relative h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-black/25 sm:h-36 sm:w-36"
+                    className="h-full w-full object-cover"
+                    fallback={
+                      <div className="flex h-full w-full items-center justify-center bg-black/30 text-zinc-400">
+                        <Loader2
+                          className="h-7 w-7 animate-spin sm:h-8 sm:w-8"
+                          aria-hidden
+                        />
+                      </div>
+                    }
+                  />
+                ) : null}
+                <ScoreRing
+                  score={score.score}
+                  scale={100}
+                  fractionDigits={1}
+                  className="h-36 w-36 shrink-0 sm:h-40 sm:w-40"
+                />
+              </div>
+              <div
+                className={cn(
+                  "relative mx-auto mt-5 max-w-xl overflow-hidden rounded-2xl px-4 py-2.5 text-center",
+                  scoreRingMatchMetallicPillClassName,
+                )}
               >
-                {rank.title}
-              </p>
+                <p
+                  className="relative z-10 font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base [text-shadow:0_1px_0_rgba(255,255,255,0.65)]"
+                >
+                  {rank.title}
+                </p>
+              </div>
+              <GlobalTierRelativeCopy
+                score0to100={score.score}
+                rankIndex={rank.index}
+                language={language}
+              />
             </div>
-            <GlobalTierRelativeCopy
-              score0to100={score.score}
-              rankIndex={rank.index}
-              language={language}
-            />
           </div>
 
           {hasTakeaways ? (
@@ -1122,6 +1170,11 @@ export function AnalysisResultsSection({
                 score={globalScore}
                 results={results}
                 language={language}
+                maskOverlayAsset={
+                  scanPreviewUserId
+                    ? { jobId: analysis.job.id, userId: scanPreviewUserId }
+                    : null
+                }
               />
             ) : (
               <KeyTakeawaysCard results={results} language={language} />

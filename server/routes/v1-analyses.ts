@@ -57,7 +57,12 @@ const latestAnalysisQuerySchema = z.object({
 /** Prévisualisation d’un scan lié au job (ex. gros plan œil, repère tiers verticaux). */
 const analysisJobAssetQuerySchema = z.object({
   userId: z.string().min(1),
-  assetTypeCode: z.enum(["EYE_CLOSEUP", "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS"]),
+  assetTypeCode: z.enum([
+    "EYE_CLOSEUP",
+    "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
+    "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
+    "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
+  ]),
 });
 
 const analysisJobParamsSchema = z.object({

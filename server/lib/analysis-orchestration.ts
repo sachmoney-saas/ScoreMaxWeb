@@ -266,7 +266,7 @@ export async function buildPayload(params: {
   sessionId: string;
   assets: ScanAssetRow[];
   source: "onboarding" | "manual_rescan";
-  /** Defaults to "standard" (5 runs/worker). Onboarding uses "freemium" (1 run). */
+  /** Defaults to "standard" (5 runs/worker). Onboarding uses "freemium" (2 runs). */
   tier?: AnalysisTier;
   lang?: string;
 }) {

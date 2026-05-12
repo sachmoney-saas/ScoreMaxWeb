@@ -17,6 +17,7 @@ import {
   drawAdminCloseupEyeContoursGuideOnCanvas,
   drawAdminFaceShapeContourGuideOnCanvas,
   drawAdminFrontalJawAngleGuidelinesOnCanvas,
+  drawAdminFrontalMaskOverlayGuidesOnCanvas,
   drawAdminJawUpLowerArcGuideOnCanvas,
   drawAdminNoseMouthWidthGuidelinesOnCanvas,
   drawAdminOrientationGuidelinesOnCanvas,
@@ -46,9 +47,9 @@ export type AdminFlattenedGuideEncoding =
       jawAngleFlat: Blob | null;
       faceShapeContourFlat: Blob | null;
       /**
-       * Cliché frontal + voile sombre 40 % + maillage blanc WebGL (sans guides
-       * bleus 2D). Sert de vignette d’analyse dans la sidebar (préféré au
-       * `FACE_FRONT` brut côté serveur) — `null` si MaskRenderer indisponible.
+       * Cliché frontal + voile sombre + grille blanche 2D (ovale + axe médian
+       * et horizontales yeux/bouche). Vignette d’analyse (sidebar) — `null` si
+       * repères indisponibles.
        */
       maskOverlayFlat: Blob | null;
     }
@@ -244,20 +245,16 @@ async function renderSingleFlatGuidePng(
 }
 
 /**
- * PNG aplati frontal : cliché selfie (miroir) → voile noir 40 % → maillage blanc
- * WebGL par-dessus, **sans** guides 2D bleus. Utilisé comme vignette d’analyse
- * (sidebar) à la place du `FACE_FRONT` brut.
- *
- * Ordre des couches volontairement différent de `renderSingleFlatGuidePng` :
- * ici le maillage est posé **au-dessus** du voile (le voile assombrit la photo,
- * le maillage blanc reste à pleine intensité).
+ * PNG `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : cliché selfie (miroir) → voile sombre
+ * → traits blancs 2D (contour ovale + axe médian type tiers verticaux + deux horizontales
+ * pleines à hauteur yeux / bouche, sans texte ni maillage facettes).
  */
 async function renderFrontalMaskOverlayFlatPng(
   bitmap: ImageBitmap,
   landmarks: LandmarkPoint[],
   videoW: number,
   videoH: number,
-  /** Opacité ∈ [0,1] du voile noir posé sur la photo avant le maillage. */
+  /** Opacité ∈ [0,1] du voile noir posé sur la photo avant les traits blancs. */
   darkenBackgroundOpacity: number,
 ): Promise<Blob | null> {
   const w = bitmap.width;
@@ -266,59 +263,30 @@ async function renderFrontalMaskOverlayFlatPng(
 
   const lmFlat = mirrorLandmarksNormalizedX(landmarks);
 
-  const { remove, photo, mask } = mountScratchStack(w, h);
-  photo.style.width = `${w}px`;
-  photo.style.height = `${h}px`;
-  photo.width = w;
-  photo.height = h;
-  mask.style.width = `${w}px`;
-  mask.style.height = `${h}px`;
+  const composite = document.createElement('canvas');
+  composite.width = w;
+  composite.height = h;
+  const cx = composite.getContext('2d');
+  if (!cx) return null;
 
-  let maskRenderer: MaskRenderer | null = null;
-  try {
-    const pctx = photo.getContext('2d');
-    if (!pctx) return null;
-    pctx.setTransform(1, 0, 0, 1, 0, 0);
-    pctx.translate(w, 0);
-    pctx.scale(-1, 1);
-    pctx.drawImage(bitmap, 0, 0, w, h);
-    pctx.setTransform(1, 0, 0, 1, 0, 0);
+  cx.setTransform(1, 0, 0, 1, 0, 0);
+  cx.translate(w, 0);
+  cx.scale(-1, 1);
+  cx.drawImage(bitmap, 0, 0, w, h);
+  cx.setTransform(1, 0, 0, 1, 0, 0);
 
-    void mask.offsetHeight;
-    maskRenderer = new MaskRenderer();
-    maskRenderer.init(mask, {
-      skipResizeObserver: true,
-      preserveDrawingBuffer: true,
-      overlayPixelRatio: 1,
-    });
-    maskRenderer.setAlignmentQuality(1);
-    maskRenderer.render(lmFlat, videoW, videoH, 0, 0, {
-      staticCssSize: { w, h },
-      landmarkFrame: 'jpegBitmap',
-    });
-
-    const composite = document.createElement('canvas');
-    composite.width = w;
-    composite.height = h;
-    const cx = composite.getContext('2d');
-    if (!cx) return null;
-
-    cx.drawImage(photo, 0, 0, w, h);
-    const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
-    if (alpha > 0) {
-      const prevAlpha = cx.globalAlpha;
-      cx.globalAlpha = alpha;
-      cx.fillStyle = '#000000';
-      cx.fillRect(0, 0, w, h);
-      cx.globalAlpha = prevAlpha;
-    }
-    cx.drawImage(mask, 0, 0, w, h);
-
-    return await canvasToPng(composite);
-  } finally {
-    maskRenderer?.dispose();
-    remove();
+  const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
+  if (alpha > 0) {
+    const prevAlpha = cx.globalAlpha;
+    cx.globalAlpha = alpha;
+    cx.fillStyle = '#000000';
+    cx.fillRect(0, 0, w, h);
+    cx.globalAlpha = prevAlpha;
   }
+
+  drawAdminFrontalMaskOverlayGuidesOnCanvas(cx, lmFlat, w, h);
+
+  return await canvasToPng(composite);
 }
 
 function isProfilePoseId(id: PoseId): id is 'profile-left' | 'profile-right' {

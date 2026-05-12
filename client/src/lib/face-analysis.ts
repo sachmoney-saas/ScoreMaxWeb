@@ -204,7 +204,7 @@ const SCANFACE_WORKERS = [
  * Build the per-worker analyses array sent to the API.
  *
  * `tier` controls the number of runs requested per worker:
- *   - "freemium" → 1 run  (used during onboarding, ~5× cheaper)
+ *   - "freemium" → 2 runs (used during onboarding, ~2.5× cheaper than standard)
  *   - "standard" → 5 runs (default for paid re-analyses)
  *
  * `imageId` is intentionally omitted — ScanFace resolves images from
@@ -500,7 +500,9 @@ export function buildAnalysisThumbnailUrl(params: {
 
 export type AnalysisJobAssetPreviewCode =
   | "EYE_CLOSEUP"
-  | "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS";
+  | "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS"
+  | "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR"
+  | "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY";
 
 export function buildAnalysisJobAssetPreviewUrl(params: {
   userId: string;

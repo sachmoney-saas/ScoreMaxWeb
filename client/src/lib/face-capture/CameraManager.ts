@@ -3,6 +3,7 @@
 // ============================================================
 
 import type { CameraConfig } from './types';
+import { ANALYSIS_CAPTURE_UNSHARP_MASK, applyUnsharpMaskInPlace } from './unsharp-mask';
 
 export type CameraState = 'idle' | 'requesting' | 'starting' | 'running' | 'stopped' | 'error';
 
@@ -239,8 +240,25 @@ export class CameraManager {
       return null;
     }
     ctx.drawImage(drawSource, 0, 0, targetW, targetH);
+    /**
+     * `onPixelsDrawn` doit voir l’image **non sharpenée** : il sert à
+     * lire le bitmap pour aligner MediaPipe sur le même photogramme.
+     * Le sharpen ne change pas la géométrie, mais on garde la séparation
+     * propre (pixels d’analyse = pixels que MediaPipe a vus).
+     */
     onPixelsDrawn?.();
     bitmap?.close?.();
+
+    /**
+     * Netteté uniforme appliquée à TOUTES les captures avant encodage
+     * JPEG. Profite ainsi à la fois :
+     *   • aux 8 photos envoyées à l’API d’analyse (toutes passent ici),
+     *   • aux 14 PNG « guide trace » qui re-décodent ce même blob via
+     *     `createImageBitmap(opts.photoBlob)` dans `encodeAdminGuideFlattenedPair`.
+     * Pas de cas particulier pour la pose `SKIN` : voir les pores plus nets
+     * améliore aussi l’analyse de peau.
+     */
+    applyUnsharpMaskInPlace(canvas, ctx, ANALYSIS_CAPTURE_UNSHARP_MASK);
 
     return new Promise(resolve =>
       canvas.toBlob(

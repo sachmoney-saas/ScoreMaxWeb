@@ -600,6 +600,130 @@ function drawVerticalThirdsMapped(
   );
 }
 
+const MASK_OVERLAY_WHITE_STROKE_RGBA = 'rgba(255, 255, 255, 0.94)';
+
+/**
+ * Calque blanc du PNG `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : contour ovale visage +
+ * les **trois segments verticaux** du repère tiers (même géométrie que
+ * `drawVerticalThirdsMapped`, sans ticks ni libellés) + **deux horizontales pleines**
+ * à la hauteur milieu yeux (`guidelineBothEyesMidYNorm`) et milieu bouche, cordées
+ * sur l’ovale (ligne haute = niveau yeux, pas « sous les yeux » comme l’ovale
+ * diagnostic bleu). Pas de maillage facettes, pas de pastilles d’extrémité.
+ */
+function drawMaskOverlayWhiteGuidesMapped(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  toPx: LandmarkPxMapper,
+  minDimPx: number,
+): void {
+  const outerL = landmarks[33];
+  const outerR = landmarks[263];
+  if (
+    !outerL ||
+    !outerR ||
+    outerL.x === undefined ||
+    outerR.x === undefined ||
+    outerL.y === undefined ||
+    outerR.y === undefined
+  ) {
+    return;
+  }
+
+  const xMidN = (outerL.x + outerR.x) * 0.5;
+  const spanY = verticalExtentsOnFaceOval(landmarks, xMidN);
+  if (!spanY) return;
+  const [yTopN, yBotN] = spanY;
+  if (yBotN - yTopN < 1e-4) return;
+
+  const yEyes = guidelineBothEyesMidYNorm(landmarks);
+  const yMouthMid = guidelineMouthInteriorYNorm(landmarks);
+  if (yEyes === null || yMouthMid === null) return;
+
+  const eps = Math.max(1e-5, (yBotN - yTopN) * 0.01);
+  const clampY = (y: number) => Math.min(yBotN - eps, Math.max(yTopN + eps, y));
+
+  const ye = clampY(yEyes);
+  const ym = clampY(yMouthMid);
+
+  const yLow = Math.min(ye, ym);
+  const yHigh = Math.max(ye, ym);
+
+  const minSep = (yBotN - yTopN) * 0.028;
+  if (yLow - yTopN < minSep || yBotN - yHigh < minSep || yHigh - yLow < minSep) {
+    return;
+  }
+
+  const lineWOval = Math.max(2.75, minDimPx * 0.004);
+  const lineWGrid = Math.max(2, minDimPx * 0.0035);
+
+  function strokeVerticalSegment(y0n: number, y1n: number) {
+    const a = toPx(xMidN, y0n);
+    const b = toPx(xMidN, y1n);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = MASK_OVERLAY_WHITE_STROKE_RGBA;
+
+  // 1) Contour ovale visage (fermé)
+  const chain = ringVerticesUnique(FACEMESH_FACE_OVAL_ORDERED as readonly number[]);
+  const ovalPts: { x: number; y: number }[] = [];
+  for (const idx of chain) {
+    const lm = landmarks[idx];
+    if (!lm || lm.x === undefined || lm.y === undefined) {
+      ctx.restore();
+      return;
+    }
+    ovalPts.push(toPx(lm.x, lm.y));
+  }
+  if (ovalPts.length >= 3) {
+    ctx.lineWidth = lineWOval;
+    ctx.beginPath();
+    ctx.moveTo(ovalPts[0]!.x, ovalPts[0]!.y);
+    for (let i = 1; i < ovalPts.length; i++) {
+      ctx.lineTo(ovalPts[i]!.x, ovalPts[i]!.y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // 2) Même axe médian que les tiers verticaux : trois segments colinéaires (sans ticks ni libellés).
+  ctx.lineWidth = lineWGrid;
+  strokeVerticalSegment(yTopN, yLow);
+  strokeVerticalSegment(yLow, yHigh);
+  strokeVerticalSegment(yHigh, yBotN);
+
+  // 3) Horizontales pleines aux niveaux yeux / bouche (remplacent les petits traits d’intersection).
+  for (const yn of [ye, ym]) {
+    const span = horizontalExtentsOnFaceOval(landmarks, yn);
+    if (!span) continue;
+    const left = toPx(span[0], yn);
+    const right = toPx(span[1], yn);
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y);
+    ctx.lineTo(right.x, right.y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+export function drawAdminFrontalMaskOverlayGuidesOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): void {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return;
+  const minDim = Math.min(outW, outH);
+  drawMaskOverlayWhiteGuidesMapped(ctx, landmarks, jpegLandmarkPxMapper(outW, outH), minDim);
+}
+
 /**
  * Indices latéraux bas de mâchoire (ovale Mesh) utilisés aussi en profil.
  * En face pure, ils peuvent parfois tomber peu visibles ou produire une géométrie dégradée —
