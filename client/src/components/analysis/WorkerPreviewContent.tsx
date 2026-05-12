@@ -1033,6 +1033,32 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Jaw ------------------------------------- */
 
 function JawPreview({ aggregates, language }: PreviewProps) {
+  const previewJob = React.useContext(AnalysisJobScanPreviewContext);
+  const jawAngleSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
+        })
+      : null;
+  const profileRightSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_PROFILE_RIGHT_JAW",
+        })
+      : null;
+  const profileLeftSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_PROFILE_LEFT_JAW",
+        })
+      : null;
+
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const width = getScore(aggregates, "frontal_geometry.jaw_width");
   const jawFace = getScore(
@@ -1124,6 +1150,46 @@ function JawPreview({ aggregates, language }: PreviewProps) {
             />
           ) : null}
         </div>
+        {(profileRightSrc || jawAngleSrc || profileLeftSrc) ? (
+          <div
+            className="grid w-full max-w-xl grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-end gap-1.5 sm:gap-2"
+            aria-label={i18n(language, {
+              en: "Jaw guide traces: right profile, frontal angle, left profile",
+              fr: "Repères mâchoire : profil droit, angle frontal, profil gauche",
+            })}
+          >
+            <AnalysisJobAssetPreviewThumb
+              src={profileRightSrc}
+              alt={i18n(language, {
+                en: "Scan overlay: right profile jaw guide",
+                fr: "Repère mâchoire — profil droit",
+              })}
+              className="min-h-0 w-full max-h-[8.5rem] sm:max-h-[9.5rem]"
+              imgClassName="max-h-[8.5rem] sm:max-h-[9.5rem]"
+              imgFit="contain"
+            />
+            <AnalysisJobAssetPreviewThumb
+              src={jawAngleSrc}
+              alt={i18n(language, {
+                en: "Scan overlay: frontal jaw angle guide",
+                fr: "Repère angle mâchoire — face",
+              })}
+              className="min-h-0 w-full max-h-[10rem] sm:max-h-[11rem]"
+              imgClassName="max-h-[10rem] sm:max-h-[11rem]"
+              imgFit="contain"
+            />
+            <AnalysisJobAssetPreviewThumb
+              src={profileLeftSrc}
+              alt={i18n(language, {
+                en: "Scan overlay: left profile jaw guide",
+                fr: "Repère mâchoire — profil gauche",
+              })}
+              className="min-h-0 w-full max-h-[8.5rem] sm:max-h-[9.5rem]"
+              imgClassName="max-h-[8.5rem] sm:max-h-[9.5rem]"
+              imgFit="contain"
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1729,8 +1795,9 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
           en: "Smile pose scan overlay: lip contour guide",
           fr: "Repère lèvres — prise de vue sourire",
         })}
-        className="mx-auto h-40 w-36 shrink-0 sm:h-44 sm:w-40"
-        imgClassName="object-cover"
+        imgFit="contain"
+        className="mx-auto w-full max-w-[min(100%,22rem)] shrink-0"
+        imgClassName="max-h-[13rem] sm:max-h-[15rem]"
       />
       <div className="grid grid-cols-3 gap-2">
         <MiniBar

@@ -17,6 +17,9 @@
 // Poses œil / front (hairline) : pas de PNG aplati admin hormis gros plan œil (contours).
 
 import {
+  applyTransparentCutoutCloseupEyesToContext,
+  applyTransparentCutoutSmileLipsToContext,
+  applyTransparentCutoutSmileTeethToContext,
   drawAdminCloseupEyeContoursGuideOnCanvas,
   drawAdminFaceShapeContourGuideOnCanvas,
   drawAdminFrontalJawAngleGuidelinesOnCanvas,
@@ -56,12 +59,14 @@ type GuideCropper = (
   outH: number,
 ) => LandmarkBoundingBoxPx | null;
 
+/** Détourage PNG alpha : hors masque MediaPipe → pixels transparents (`destination-in`). */
+type TransparentCutoutKind = 'smile-lips' | 'smile-teeth' | 'eye-closeup';
+
 /**
  * Marge relative (proportion de la bbox feature) appliquée de chaque côté lors
  * du recadrage des 4 PNG admin centrés sur une zone d’intérêt (lèvres au repos,
  * lèvres au sourire, dents, gros plan œil). 0.35 = +35 % sur chaque côté ⇒ la
- * feature occupe ≈ 60 % de l’image finale, le reste donne le contexte (peau /
- * voile noir).
+ * feature occupe ≈ 60 % de l’image finale, le reste est transparent après détourage.
  */
 const GUIDE_TRACE_FEATURE_CROP_MARGIN = 0.35;
 
@@ -80,10 +85,8 @@ export type AdminFlattenedGuideEncoding =
        */
       maskOverlayFlat: Blob | null;
       /**
-       * Variante « lèvres au repos » sur la pose de face : mêmes calques que
-       * `GUIDE_TRACE_SMILE_LIPS` (remplissage bleu intérieur lèvres + voile
-       * noir opaque partout sauf le ring lèvres). `null` si
-       * `FACEMESH_LIP_OUTER_ORDERED` indispo.
+       * Variante « lèvres au repos » sur la pose de face : même détourage transparent
+       * que `GUIDE_TRACE_SMILE_LIPS` (`applyTransparentCutoutSmileLipsToContext`).
        */
       lipsFlat: Blob | null;
     }
@@ -100,8 +103,7 @@ export type AdminFlattenedGuideEncoding =
       variant: 'smileLips';
       smileLipsFlat: Blob;
       /**
-       * Variante « dents » : photo + voile noir opaque sur tout sauf l’intérieur
-       * de la bouche. `null` si `FACEMESH_LIP_INNER_ORDERED` indispo.
+       * Variante « dents » : détourage transparent sur l’intérieur bouche uniquement.
        */
       smileTeethFlat: Blob | null;
     }
@@ -186,6 +188,8 @@ async function renderSingleFlatGuidePng(
    * est `null` (landmarks manquants), on retombe sur le composite intégral.
    */
   cropper?: GuideCropper,
+  /** Si défini : pas de calque voile noir — détourage transparent sur la zone d’intérêt. */
+  transparentCutout?: TransparentCutoutKind,
 ): Promise<Blob | null> {
   const w = bitmap.width;
   const h = bitmap.height;
@@ -237,36 +241,49 @@ async function renderSingleFlatGuidePng(
 
     const gctx = guide.getContext('2d');
     if (!gctx) return null;
-    gctx.setTransform(1, 0, 0, 1, 0, 0);
-    drawGuides(gctx, lmFlat, w, h);
+    if (!transparentCutout) {
+      gctx.setTransform(1, 0, 0, 1, 0, 0);
+      drawGuides(gctx, lmFlat, w, h);
+    }
 
     const composite = document.createElement('canvas');
     composite.width = photo.width;
     composite.height = photo.height;
-    const cx = composite.getContext('2d');
+    const cx = composite.getContext('2d', { alpha: true });
     if (!cx) return null;
     cx.drawImage(photo, 0, 0, w, h);
     if (drawWireMeshLayer) {
       cx.drawImage(mask, 0, 0, w, h);
     }
-    // Voile sombre posé AVANT les guides : la photo (et le maillage debug)
-    // sont assombris, les traits bleus restent à pleine intensité.
-    if (darkenBackgroundOpacity > 0) {
-      const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
-      const prevAlpha = cx.globalAlpha;
-      cx.globalAlpha = alpha;
-      cx.fillStyle = '#000000';
-      cx.fillRect(0, 0, w, h);
-      cx.globalAlpha = prevAlpha;
+
+    if (transparentCutout) {
+      const ok =
+        transparentCutout === 'smile-lips'
+          ? applyTransparentCutoutSmileLipsToContext(cx, lmFlat, w, h)
+          : transparentCutout === 'smile-teeth'
+            ? applyTransparentCutoutSmileTeethToContext(cx, lmFlat, w, h)
+            : applyTransparentCutoutCloseupEyesToContext(cx, lmFlat, w, h);
+      if (!ok) return null;
+    } else {
+      // Voile sombre posé AVANT les guides : la photo (et le maillage debug)
+      // sont assombris, les traits bleus restent à pleine intensité.
+      if (darkenBackgroundOpacity > 0) {
+        const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
+        const prevAlpha = cx.globalAlpha;
+        cx.globalAlpha = alpha;
+        cx.fillStyle = '#000000';
+        cx.fillRect(0, 0, w, h);
+        cx.globalAlpha = prevAlpha;
+      }
+      cx.drawImage(guide, 0, 0, w, h);
     }
-    cx.drawImage(guide, 0, 0, w, h);
 
     const bbox = cropper ? cropper(lmFlat, w, h) : null;
     if (bbox) {
       const cropped = document.createElement('canvas');
       cropped.width = bbox.w;
       cropped.height = bbox.h;
-      const ccx = cropped.getContext('2d');
+      const ccx = cropped.getContext('2d', { alpha: true });
       if (!ccx) return null;
       ccx.drawImage(composite, bbox.x, bbox.y, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
       return await canvasToPng(cropped);
@@ -353,7 +370,7 @@ async function renderFrontalMaskOverlayFlatPng(
       const cropped = document.createElement('canvas');
       cropped.width = bbox.w;
       cropped.height = bbox.h;
-      const ccx = cropped.getContext('2d');
+      const ccx = cropped.getContext('2d', { alpha: true });
       if (!ccx) return null;
       ccx.drawImage(composite, bbox.x, bbox.y, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
       return await canvasToPng(cropped);
@@ -424,6 +441,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         0,
         (lm, ow, oh) =>
           landmarkBothEyesBoundingBoxPx(lm, ow, oh, GUIDE_TRACE_FEATURE_CROP_MARGIN),
+        'eye-closeup',
       );
       if (!eyeContoursFlat) return null;
       return { variant: 'closeupEye', eyeContoursFlat };
@@ -495,6 +513,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         false,
         0,
         lipsCropper,
+        'smile-lips',
       );
       if (!smileLipsFlat) return null;
       const smileTeethFlat = await renderSingleFlatGuidePng(
@@ -506,6 +525,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         false,
         0,
         lipsCropper,
+        'smile-teeth',
       ).catch(() => null);
       return { variant: 'smileLips', smileLipsFlat, smileTeethFlat };
     }
@@ -563,10 +583,8 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
     /**
-     * Variante « lèvres » au repos : on réutilise exactement le calque de
-     * `GUIDE_TRACE_SMILE_LIPS` (qui gère lui-même le voile sombre + le ring
-     * lèvres) — d’où `darkenBackgroundOpacity = 0` ici. Recadré sur la bbox
-     * des lèvres pour cibler la zone d’intérêt, comme `SMILE_LIPS` / `SMILE_TEETH`.
+     * Variante « lèvres » au repos : même détourage transparent + recadrage que
+     * `GUIDE_TRACE_SMILE_LIPS`.
      */
     const lipsFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -578,6 +596,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       0,
       (lm, ow, oh) =>
         landmarkLipsOuterBoundingBoxPx(lm, ow, oh, GUIDE_TRACE_FEATURE_CROP_MARGIN),
+      'smile-lips',
     ).catch(() => null);
 
     if (

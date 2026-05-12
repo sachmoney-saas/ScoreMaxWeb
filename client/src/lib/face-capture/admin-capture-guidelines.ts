@@ -1338,6 +1338,131 @@ function ringVerticesUnique(indices: readonly number[]): readonly number[] {
   return indices;
 }
 
+/** Anneau MediaPipe → polygone fermé en pixels JPEG (`null` si points manquants). */
+function landmarksContourPolygonPx(
+  landmarks: LandmarkPoint[],
+  orderedIndices: readonly number[],
+  outW: number,
+  outH: number,
+): { x: number; y: number }[] | null {
+  const indices = ringVerticesUnique(orderedIndices);
+  const pts: { x: number; y: number }[] = [];
+  for (const idx of indices) {
+    const lm = landmarks[idx];
+    if (!lm || lm.x === undefined || lm.y === undefined) return null;
+    pts.push(normPointToBmpPx(lm.x, lm.y, outW, outH));
+  }
+  return pts.length >= 3 ? pts : null;
+}
+
+function canvasTraceClosedPolygon(
+  ctx: CanvasRenderingContext2D,
+  poly: { x: number; y: number }[],
+): void {
+  ctx.moveTo(poly[0]!.x, poly[0]!.y);
+  for (let i = 1; i < poly.length; i++) {
+    ctx.lineTo(poly[i]!.x, poly[i]!.y);
+  }
+  ctx.closePath();
+}
+
+/**
+ * Réduit l’alpha du contenu déjà dessiné sur `ctx` aux seuls pixels sous le masque :
+ * **anneau** entre contours lèvres extérieur / intérieur MediaPipe (équivalent visuel au
+ * voile noir historique, mais avec transparence au lieu du noir).
+ */
+export function applyTransparentCutoutSmileLipsToContext(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): boolean {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return false;
+  const outer = landmarksContourPolygonPx(
+    landmarks,
+    FACEMESH_LIP_OUTER_ORDERED,
+    outW,
+    outH,
+  );
+  if (!outer) return false;
+  const inner = landmarksContourPolygonPx(
+    landmarks,
+    FACEMESH_LIP_INNER_ORDERED,
+    outW,
+    outH,
+  );
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  canvasTraceClosedPolygon(ctx, outer);
+  if (inner) canvasTraceClosedPolygon(ctx, inner);
+  ctx.fill(inner ? 'evenodd' : 'nonzero');
+  ctx.restore();
+  return true;
+}
+
+/**
+ * Ne conserve que l’intérieur de la bouche (anneau intérieur des lèvres), comme la variante dents.
+ */
+export function applyTransparentCutoutSmileTeethToContext(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): boolean {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return false;
+  const inner = landmarksContourPolygonPx(
+    landmarks,
+    FACEMESH_LIP_INNER_ORDERED,
+    outW,
+    outH,
+  );
+  if (!inner) return false;
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  canvasTraceClosedPolygon(ctx, inner);
+  ctx.fill();
+  ctx.restore();
+  return true;
+}
+
+/**
+ * Union des deux anneaux paupière (comme le voile hors œil).
+ */
+export function applyTransparentCutoutCloseupEyesToContext(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): boolean {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return false;
+  const right = landmarksContourPolygonPx(
+    landmarks,
+    FACEMESH_RIGHT_EYE_ORDERED,
+    outW,
+    outH,
+  );
+  const left = landmarksContourPolygonPx(
+    landmarks,
+    FACEMESH_LEFT_EYE_ORDERED,
+    outW,
+    outH,
+  );
+  if (!right && !left) return false;
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  if (right) canvasTraceClosedPolygon(ctx, right);
+  if (left) canvasTraceClosedPolygon(ctx, left);
+  ctx.fill('nonzero');
+  ctx.restore();
+  return true;
+}
+
 /**
  * PNG aplati pose sourire (et variante face « lèvres au repos ») : composite à
  * **deux passes d’assombrissement** sur la photo, sans aucun trait ni

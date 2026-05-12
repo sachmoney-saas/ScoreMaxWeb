@@ -64,9 +64,8 @@ export interface CapturedPose {
   annotatedFrontalMaskOverlayFlatBlob?: Blob;
   annotatedFrontalMaskOverlayFlatThumbnailUrl?: string;
   /**
-   * PNG aplati cliché frontal + variante « lèvres » : mêmes calques que
-   * `GUIDE_TRACE_SMILE_LIPS` (remplissage bleu intérieur lèvres + voile sombre
-   * partout sauf le ring lèvres) — au repos plutôt que sur un sourire.
+   * PNG aplati cliché frontal + lèvres au repos : **anneau labial** conservé,
+   * hors contour transparent (RGBA). Recadré comme `GUIDE_TRACE_SMILE_LIPS`.
    */
   annotatedFrontalLipsGuideBlob?: Blob;
   annotatedFrontalLipsGuideThumbnailUrl?: string;
@@ -79,16 +78,13 @@ export interface CapturedPose {
   /** PNG aplati menton levé : cliché + masque + arc mandibulaire bas (hors analyse). */
   annotatedJawUpLowerArcGuideBlob?: Blob;
   annotatedJawUpLowerArcGuideThumbnailUrl?: string;
-  /** PNG aplati sourire : cliché + masque + contours lèvres (hors analyse). */
+  /** PNG aplati sourire : anneau des lèvres détouré (transparent hors masque). */
   annotatedSmileLipsGuideBlob?: Blob;
   annotatedSmileLipsGuideThumbnailUrl?: string;
-  /**
-   * PNG aplati sourire (variante dents) : cliché + voile noir opaque partout
-   * sauf l’intérieur de la bouche. Pas de tracé ni de remplissage des lèvres.
-   */
+  /** PNG aplati sourire (dents) : intérieur bouche uniquement, hors masque transparent. */
   annotatedSmileTeethGuideBlob?: Blob;
   annotatedSmileTeethGuideThumbnailUrl?: string;
-  /** PNG aplati gros plan œil : cliché + contours paupières bleu (hors analyse). */
+  /** PNG aplati gros plan yeux : zones paupière conservées, hors masque transparent (pas de traits 2D). */
   annotatedCloseupEyeContoursGuideBlob?: Blob;
   annotatedCloseupEyeContoursGuideThumbnailUrl?: string;
   /** Largeur bouche / largeur nez (indices 61↔291 vs 98↔327), même calcul que sur le PNG nez–bouche. */

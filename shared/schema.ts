@@ -300,10 +300,8 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
    */
   "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
   /**
-   * Variante « lèvres » prise sur la pose de face (mêmes calques que
-   * `GUIDE_TRACE_SMILE_LIPS` : remplissage bleu intérieur lèvres + voile
-   * noir opaque partout sauf le ring lèvres). Complète le repère sourire
-   * pour analyser les lèvres au repos.
+   * Variante « lèvres » pose de face : PNG recadré + **alpha** — anneau labial uniquement
+   * (hors contour = transparent), identique au détourage de `GUIDE_TRACE_SMILE_LIPS`.
    */
   "GUIDE_TRACE_FACE_FRONT_LIPS",
   "GUIDE_TRACE_PROFILE_LEFT_JAW",
@@ -311,13 +309,15 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_PROFILE_LEFT_NOSE",
   "GUIDE_TRACE_PROFILE_RIGHT_NOSE",
   "GUIDE_TRACE_LOOK_UP_JAW_ARC",
+  /**
+   * Pose sourire : cliché recadré ; **anneau des lèvres** conservé, hors masque transparent (PNG alpha).
+   */
   "GUIDE_TRACE_SMILE_LIPS",
   /**
-   * Variante « dents » du repère sourire : photo + voile noir opaque partout
-   * SAUF l’intérieur de la bouche (pas de remplissage ni contour des lèvres),
-   * pour faire ressortir la teinte naturelle des dents.
+   * Pose sourire : cliché recadré ; **intérieur de bouche / dents** conservé, reste transparent.
    */
   "GUIDE_TRACE_SMILE_TEETH",
+  /** Gros plan yeux : cliché recadré ; **zones paupière** conservées, reste transparent. */
   "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
 ] as const;
 
