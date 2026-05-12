@@ -36,7 +36,7 @@ function radarLabelLines(label: string): string[] {
 const WORKER_RADAR_PRESETS = {
   default: {
     viewPadX: 66,
-    viewPadY: 58,
+    viewPadY: 62,
     size: 400,
     maxRadius: 142,
     labelOffset: 36,
@@ -47,7 +47,7 @@ const WORKER_RADAR_PRESETS = {
   },
   large: {
     viewPadX: 82,
-    viewPadY: 72,
+    viewPadY: 77,
     size: 480,
     maxRadius: 174,
     labelOffset: 48,
@@ -211,7 +211,8 @@ export function WorkerSignatureRadar({
         const scoreFont = Math.max(11.25, fontSize - 2.1);
         const scoreOutlineW = Math.max(1, scoreFont * 0.068);
         const labelLift = fontSize * 0.52;
-        const scoreDrop = fontSize * 0.72;
+        const labelScoreGap = fontSize * 0.32;
+        const scoreDrop = fontSize * 0.72 + labelScoreGap;
         const lines = radarLabelLines(d.label);
         const lineHeight = fontSize * 1.12;
         const multilineExtra = lines.length > 1 ? (lines.length - 1) * lineHeight : 0;

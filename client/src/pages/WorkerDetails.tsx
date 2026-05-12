@@ -316,14 +316,6 @@ export default function WorkerDetails() {
                 assetTypeCode: "GUIDE_TRACE_PROFILE_LEFT_JAW",
               })
             : null,
-        noseFrontNoseMouthGuideSrc:
-          worker === "nose" && analysis && assetPreviewUserId
-            ? buildAnalysisJobAssetPreviewUrl({
-                jobId: analysis.job.id,
-                userId: assetPreviewUserId,
-                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
-              })
-            : null,
         eyeCloseupContoursGuideSrc:
           worker === "eyes" && analysis && assetPreviewUserId
             ? buildAnalysisJobAssetPreviewUrl({
@@ -359,7 +351,6 @@ function renderWorkerBody({
   jawFrontOvalGuideSrc,
   jawFrontalAngleGuideSrc,
   jawProfileLeftGuideSrc,
-  noseFrontNoseMouthGuideSrc,
   eyeCloseupContoursGuideSrc,
 }: {
   worker: string;
@@ -375,7 +366,6 @@ function renderWorkerBody({
   jawFrontOvalGuideSrc?: string | null;
   jawFrontalAngleGuideSrc?: string | null;
   jawProfileLeftGuideSrc?: string | null;
-  noseFrontNoseMouthGuideSrc?: string | null;
   eyeCloseupContoursGuideSrc?: string | null;
 }): React.ReactNode {
   switch (worker) {
@@ -425,8 +415,6 @@ function renderWorkerBody({
         aggregates={outputAggregates}
         language={language}
         heroAside={heroAside}
-        captureGuideMetrics={captureGuideMetrics}
-        noseFrontNoseMouthGuideSrc={noseFrontNoseMouthGuideSrc}
       />
     );
     case "chin":          return <ChinWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;

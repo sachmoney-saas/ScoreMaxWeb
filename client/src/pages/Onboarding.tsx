@@ -8,7 +8,6 @@ import {
   LogOut,
   ScanFace,
   Trash2,
-  Upload,
   Users,
   MoreVertical,
 } from "lucide-react";
@@ -223,57 +222,55 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
   const potentialX = xToPixel(potentialScore);
 
   return (
-    <div className={cn(saasGlassInsetClassName, "min-w-0 space-y-2 p-2.5 sm:space-y-3 sm:p-4")}>
-      <div className={cn(saasGlassInsetClassName, "min-w-0 rounded-xl p-2 sm:p-3.5")}>
-          <div className="mx-auto max-w-xl text-center">
-            <h3 className="font-hero text-xl font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-3xl md:text-4xl">
-              {i18n(language, {
-                en: "Your score isn't fixed",
-                fr: "Ton score n'est pas figé",
-              })}
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-300 sm:mt-2 sm:text-base">
-              {i18n(language, {
-                en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
-                fr: "De petits changements réguliers se cumulent avec le temps. Suis ta progression et regarde ton score évoluer.",
-              })}
-            </p>
-          </div>
+    <div className="min-w-0 space-y-2 sm:space-y-2.5">
+      <div className="mx-auto max-w-xl text-center">
+        <h3 className="font-hero text-lg font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-2xl md:text-3xl">
+          {i18n(language, {
+            en: "Your score isn't fixed",
+            fr: "Ton score n'est pas figé",
+          })}
+        </h3>
+        <p className="mt-1 text-[11px] leading-snug text-zinc-300 sm:mt-1.5 sm:text-sm sm:leading-relaxed md:text-base">
+          {i18n(language, {
+            en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
+            fr: "De petits changements réguliers se cumulent avec le temps. Suis ta progression et regarde ton score évoluer.",
+          })}
+        </p>
+      </div>
 
-          <div className="mt-3 flex items-end justify-center gap-4 text-center sm:mt-6 sm:gap-9">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
-                {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
-              </p>
-              <p className="mt-1 font-display text-4xl tracking-tight text-zinc-100 sm:mt-2 sm:text-6xl">
-                {scoreLabel}
-              </p>
-            </div>
-            <div
-              className="pb-2 text-3xl font-light text-zinc-200 sm:pb-3 sm:text-5xl"
-              aria-hidden
-            >
-              →
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
-                {i18n(language, { en: "Potential", fr: "Potentiel" })}
-              </p>
-              <p className="mt-1 font-display text-4xl tracking-tight text-white sm:mt-2 sm:text-6xl">
-                {potentialScore.toFixed(1)}
-              </p>
-            </div>
-          </div>
+      <div className="flex items-end justify-center gap-3 pt-0.5 text-center sm:gap-7 md:gap-9">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
+            {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
+          </p>
+          <p className="mt-0.5 font-display text-3xl tracking-tight text-zinc-100 sm:mt-1 sm:text-5xl md:text-6xl">
+            {scoreLabel}
+          </p>
+        </div>
+        <div
+          className="pb-1.5 text-2xl font-light text-zinc-200 sm:pb-2 md:pb-3 md:text-5xl"
+          aria-hidden
+        >
+          →
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
+            {i18n(language, { en: "Potential", fr: "Potentiel" })}
+          </p>
+          <p className="mt-0.5 font-display text-3xl tracking-tight text-white sm:mt-1 sm:text-5xl md:text-6xl">
+            {potentialScore.toFixed(1)}
+          </p>
+        </div>
+      </div>
 
-          <div className="mt-2 flex w-full min-w-0 justify-center sm:mt-5">
-            <div className="w-[90%] max-w-[504px] max-h-[min(24dvh,200px)] sm:max-h-none">
-            <svg
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="mx-auto block h-full max-h-[min(24dvh,200px)] w-full max-w-full sm:max-h-none"
-              preserveAspectRatio="xMidYMid meet"
-              role="img"
-              aria-label="Score distribution chart"
-            >
+      <div className="flex w-full min-w-0 justify-center pt-0.5 sm:pt-1">
+        <svg
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          className="mx-auto block h-auto w-full max-h-[clamp(104px,min(22dvw,28dvh),152px)] sm:max-h-[min(148px,30dvh)] md:max-h-[168px]"
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label="Score distribution chart"
+        >
               {[0.2, 0.4, 0.6, 0.8, 1].map((value) => (
                 <line
                   key={`grid-${value}`}
@@ -344,7 +341,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 x={(currentX + potentialX) / 2 + 4}
                 y={plotTop + plotHeight - 2}
                 transform={`rotate(-90 ${(currentX + potentialX) / 2 + 4} ${plotTop + plotHeight - 2})`}
-                fontSize="18"
+                fontSize="14"
                 fill="rgb(196 214 176)"
                 fontWeight="500"
                 letterSpacing="0.06em"
@@ -396,11 +393,12 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 letterSpacing="0.15em"
                 fontWeight="600"
               >
-                {i18n(language, { en: "OVERALL SCORE", fr: "SCORE GLOBAL" })}
+                {i18n(language, {
+                  en: "OVERALL SCORE (0–100)",
+                  fr: "SCORE GLOBAL (0–100)",
+                })}
               </text>
             </svg>
-            </div>
-          </div>
       </div>
     </div>
   );
@@ -593,7 +591,6 @@ export default function Onboarding() {
       Boolean(onboardingJobId && jobStatusValue !== "failed"));
 
   const showStepFooterNav = !isAnalysisRunning && !isLastStep;
-  const showLastStepLaunchCta = !isAnalysisRunning && isLastStep;
 
   const processingMessage =
     jobStatusValue === "completed"
@@ -720,8 +717,8 @@ export default function Onboarding() {
     setIsUploadingCaptures(true);
     setAnalysisMessage(
       i18n(language, {
-        en: "Uploading captures...",
-        fr: "Envoi des captures...",
+        en: "Preparing your analysis...",
+        fr: "Préparation de l'analyse...",
       }),
     );
     setShowCapturedPreview(false);
@@ -1034,11 +1031,86 @@ export default function Onboarding() {
                     minimalChrome
                     theme="dark"
                     showElapsedTimer={false}
+                    initializationStepTicker
                     title={i18n(language, {
                       en: "Initializing…",
                       fr: "Initialisation…",
                     })}
                   />
+                </div>
+              ) : isLastStep ? (
+                <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
+                  <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-5 text-center sm:gap-6">
+                    {analysisMessage ? (
+                      <div
+                        className={cn(
+                          saasGlassInsetClassName,
+                          "w-full p-3 text-left sm:p-4",
+                        )}
+                      >
+                        <div className="flex items-center justify-center gap-3 text-sm text-zinc-200">
+                          {isSubmitting || isUploadingCaptures ? (
+                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" />
+                          ) : null}
+                          <span>{analysisMessage}</span>
+                        </div>
+                        {isSubmitting || isUploadingCaptures ? (
+                          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                            <div className="h-full w-1/2 animate-pulse rounded-full bg-white/40" />
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <p className="font-hero text-[1.35rem] font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
+                      {i18n(language, {
+                        en: "Start your first analysis",
+                        fr: "Lance ta première analyse",
+                      })}
+                    </p>
+                    {isScanStatusError ? (
+                      <p className="text-sm text-red-600">
+                        {i18n(language, {
+                          en: "Unable to load your scan session. Refresh the page and try again.",
+                          fr: "Impossible de charger ta session. Actualise la page et réessaye.",
+                        })}
+                      </p>
+                    ) : null}
+                    <div className="w-full max-w-[360px]">
+                      <button
+                        type="button"
+                        onClick={() => void openOnboardingCapture()}
+                        disabled={
+                          isScanStatusLoading ||
+                          !onboardingSessionId ||
+                          isScanStatusError
+                        }
+                        className={cn(
+                          "flex w-full items-center justify-center gap-3 px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-55 sm:py-3.5",
+                          onboardingPrimaryCtaClassName,
+                        )}
+                      >
+                        {isScanStatusLoading ? (
+                          <span className="flex w-full items-center justify-center py-1">
+                            <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
+                          </span>
+                        ) : (
+                          <>
+                            <img
+                              src="/favicon.png"
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded-lg bg-black object-contain sm:h-10 sm:w-10"
+                            />
+                            <span className="text-sm font-semibold tracking-tight sm:text-base">
+                              {i18n(language, {
+                                en: "Launch analysis",
+                                fr: "Lancer l'analyse",
+                              })}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -1047,82 +1119,59 @@ export default function Onboarding() {
                     className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-gutter:stable]"
                   >
                     <div className="min-w-0 space-y-4 sm:space-y-5">
-                  {isSocialStep ? (
-                    <OnboardingSocialProofShowcase language={language} />
-                  ) : (
-                    <>
-                      <div
-                        className={
-                          isDatingStep
-                            ? "space-y-2 text-center sm:space-y-3"
-                            : "space-y-3 text-center"
-                        }
-                      >
-                        <motion.h1
+                      {isSocialStep ? (
+                        <OnboardingSocialProofShowcase language={language} />
+                      ) : (
+                        <div
                           className={
                             isDatingStep
-                              ? "mx-auto max-w-[18ch] text-xl font-hero font-semibold leading-snug tracking-[-0.015em] text-white sm:text-2xl md:text-[2rem]"
-                              : "mx-auto max-w-[min(100%,26ch)] text-2xl font-hero font-semibold leading-[1.08] tracking-[-0.015em] text-white sm:max-w-[28ch] sm:text-[2rem] md:text-[2.125rem]"
+                              ? "space-y-2 text-center sm:space-y-3"
+                              : "space-y-3 text-center"
                           }
                         >
-                          {currentStep.title}
-                        </motion.h1>
-                        {isDatingStep ? (
-                          <OnboardingBeforeAfterComparison language={language} />
-                        ) : (
-                          <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-zinc-300 sm:text-base">
-                            {currentStep.description}
-                          </p>
-                        )}
-                      </div>
-                    </>
-                  )}
+                          <motion.h1
+                            className={
+                              isDatingStep
+                                ? "mx-auto max-w-[18ch] text-xl font-hero font-semibold leading-snug tracking-[-0.015em] text-white sm:text-2xl md:text-[2rem]"
+                                : "mx-auto max-w-[min(100%,26ch)] text-2xl font-hero font-semibold leading-[1.08] tracking-[-0.015em] text-white sm:max-w-[28ch] sm:text-[2rem] md:text-[2.125rem]"
+                            }
+                          >
+                            {currentStep.title}
+                          </motion.h1>
+                          {isDatingStep ? (
+                            <OnboardingBeforeAfterComparison language={language} />
+                          ) : (
+                            <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-zinc-300 sm:text-base">
+                              {currentStep.description}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
-                {!isDatingStep &&
-                !isSocialStep &&
-                !isLastStep &&
-                currentStep.evidence.length > 0 ? (
-                  <div className={evidenceGridClassName}>
-                    {currentStep.evidence.map((block, index) => (
-                      <div
-                        key={`onboarding-evidence-${index}`}
-                        className={cn(
-                          saasGlassInsetClassName,
-                          "flex min-h-full flex-col p-3 text-left sm:p-5",
-                        )}
-                      >
-                        <p className="text-sm font-semibold leading-relaxed text-zinc-100 sm:text-base">
-                          {block.claim}
-                        </p>
-                        {block.source ? (
-                          <p className="mt-auto pt-3 text-xs leading-relaxed text-zinc-400 sm:text-sm">
-                            {block.source}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-
-                {isLastStep ? (
-                  <div className="mx-auto w-full max-w-sm text-center">
-                    <p className="text-center text-[1.35rem] font-hero font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
-                      {i18n(language, {
-                        en: "Start your first analysis",
-                        fr: "Lance ta première analyse",
-                      })}
-                    </p>
-                    {isScanStatusError ? (
-                      <p className="mt-2 text-sm text-red-600 sm:mt-3">
-                        {i18n(language, {
-                          en: "Unable to load your scan session. Refresh the page and try again.",
-                          fr: "Impossible de charger ta session. Actualise la page et réessaye.",
-                        })}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-
+                      {!isDatingStep &&
+                      !isSocialStep &&
+                      currentStep.evidence.length > 0 ? (
+                        <div className={evidenceGridClassName}>
+                          {currentStep.evidence.map((block, index) => (
+                            <div
+                              key={`onboarding-evidence-${index}`}
+                              className={cn(
+                                saasGlassInsetClassName,
+                                "flex min-h-full flex-col p-3 text-left sm:p-5",
+                              )}
+                            >
+                              <p className="text-sm font-semibold leading-relaxed text-zinc-100 sm:text-base">
+                                {block.claim}
+                              </p>
+                              {block.source ? (
+                                <p className="mt-auto pt-3 text-xs leading-relaxed text-zinc-400 sm:text-sm">
+                                  {block.source}
+                                </p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1169,44 +1218,6 @@ export default function Onboarding() {
                         </Button>
                       </div>
                     ) : null}
-
-                    {showLastStepLaunchCta ? (
-                      <div className="mx-auto flex w-full max-w-sm justify-center">
-                        <button
-                          type="button"
-                          onClick={() => void openOnboardingCapture()}
-                          disabled={
-                            isScanStatusLoading ||
-                            !onboardingSessionId ||
-                            isScanStatusError
-                          }
-                          className={cn(
-                            "flex w-full max-w-[360px] items-center justify-center gap-3 px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-55 sm:py-3.5",
-                            onboardingPrimaryCtaClassName,
-                          )}
-                        >
-                          {isScanStatusLoading ? (
-                            <span className="flex w-full items-center justify-center py-1">
-                              <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
-                            </span>
-                          ) : (
-                            <>
-                              <img
-                                src="/favicon.png"
-                                alt=""
-                                className="h-9 w-9 shrink-0 rounded-lg bg-black object-contain sm:h-10 sm:w-10"
-                              />
-                              <span className="text-sm font-semibold tracking-tight sm:text-base">
-                                {i18n(language, {
-                                  en: "Launch analysis",
-                                  fr: "Lancer l'analyse",
-                                })}
-                              </span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
                 </>
               )}
@@ -1229,15 +1240,23 @@ export default function Onboarding() {
           <DialogHeader>
             <DialogTitle className="font-hero text-2xl font-semibold leading-[1.06] tracking-[-0.015em] text-zinc-50 sm:text-3xl">
               {i18n(language, {
-                en: "Captures review",
-                fr: "Aperçu des captures",
+                en: "Pose preview",
+                fr: "Aperçu des poses",
               })}
             </DialogTitle>
-            <DialogDescription className="text-zinc-400">
-              {i18n(language, {
-                en: `${capturedPoses.length}/8 captures — check the quality before uploading.`,
-                fr: `${capturedPoses.length}/8 captures — vérifie la qualité avant d'uploader.`,
-              })}
+            <DialogDescription className="space-y-1.5 text-zinc-400">
+              <span className="block">
+                {i18n(language, {
+                  en: "Check quality before launching.",
+                  fr: "Vérifie la qualité avant de lancer.",
+                })}
+              </span>
+              <span className="block text-sm opacity-95">
+                {i18n(language, {
+                  en: `${capturedPoses.length}/8 poses.`,
+                  fr: `${capturedPoses.length}/8 poses.`,
+                })}
+              </span>
             </DialogDescription>
           </DialogHeader>
 
@@ -1286,11 +1305,11 @@ export default function Onboarding() {
               {isUploadingCaptures ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Upload className="mr-2 h-4 w-4" />
+                <ScanFace className="mr-2 h-4 w-4 shrink-0" />
               )}
               {i18n(language, {
-                en: "Upload captures",
-                fr: "Uploader les captures",
+                en: "Launch analysis",
+                fr: "Lancer l'analyse",
               })}
             </Button>
           </div>

@@ -12,9 +12,9 @@ export const recommendationsReportShellClassName = cn(
   "px-0 pt-0 pb-8 sm:pb-10 md:pb-11",
 );
 
-/** Marge latérale pour textes / grilles qui ne doivent pas toucher le bord du verre. */
+/** Marge latérale pour textes / grilles qui ne doivent pas toucher le bord du verre (~moitié du pas précédent). */
 export const recommendationsReportHorizontalInsetClassName =
-  "px-5 sm:px-8 md:px-11";
+  "px-2.5 sm:px-4 md:px-[1.375rem]";
 export const recommendationsReportTabsListClassName = cn(
   "inline-flex h-auto max-h-none min-h-[2.75rem] w-fit max-w-full flex-wrap justify-start gap-0.5",
   "rounded-lg border border-zinc-200 bg-zinc-100 p-1 text-zinc-700 sm:flex-nowrap",

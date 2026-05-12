@@ -907,6 +907,7 @@ function GlobalScoreCard({
   /** Présent pour les analyses récentes avec `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` uploadé. */
   maskOverlayAsset: { jobId: string; userId: string } | null;
 }) {
+  const { profile, user } = useAuth();
   const rank = getScoreRank(score.score);
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const { strengths, weaknesses } = React.useMemo(
@@ -922,6 +923,12 @@ function GlobalScoreCard({
         assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
       })
     : null;
+
+  const headlineDisplayName =
+    profile?.full_name?.trim() ||
+    profile?.email ||
+    user?.email ||
+    null;
 
   return (
     <Card className={analysisSurfaceCardClassName}>
@@ -972,11 +979,24 @@ function GlobalScoreCard({
                   className="h-36 w-36 shrink-0 sm:h-40 sm:w-40"
                 />
               </div>
+              {headlineDisplayName ? (
+                <p
+                  className="mt-2 max-w-full truncate px-2 text-center font-display text-lg font-semibold leading-tight tracking-tight text-white sm:text-xl"
+                  title={headlineDisplayName}
+                >
+                  {headlineDisplayName}
+                </p>
+              ) : null}
               {/*
                 Titre de palier sur une seule ligne (évite coupure avant « NPC » quand la
                 colonne est étroite, ex. sidebar ouverte). Défilement horizontal si besoin.
               */}
-              <div className="mx-auto mt-5 w-full min-w-0 max-w-full">
+              <div
+                className={cn(
+                  "mx-auto w-full min-w-0 max-w-full",
+                  headlineDisplayName ? "mt-1.5 sm:mt-2" : "mt-5",
+                )}
+              >
                 <div className="max-w-full overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
                   <div className="flex justify-center">
                     <div
@@ -1202,8 +1222,18 @@ export function AnalysisResultsSection({
           elapsedAnchorEpochMs={analysisElapsedAnchorEpochMs(analysis.job.created_at)}
           message={
             analysis.job.status === "queued"
-              ? "Analyse en file d'attente..."
-              : "Analyse ScoreMax en cours..."
+              ? i18n(language, {
+                  en: "Analysis queued...",
+                  fr: "Analyse en file d'attente...",
+                })
+              : i18n(language, {
+                  en: "Running ScoreMax analysis...",
+                  fr: "Analyse ScoreMax en cours...",
+                })
+          }
+          analysisStepTicker={
+            analysis.job.status === "queued" ||
+            analysis.job.status === "running"
           }
         />
       </div>

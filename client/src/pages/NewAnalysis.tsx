@@ -7,7 +7,7 @@ import {
   Camera,
   Loader2,
   Lock,
-  Upload,
+  ScanFace,
 } from "lucide-react";
 import type { OnboardingScanAssetCode } from "@shared/schema";
 import { FaceCaptureView } from "@/components/FaceCaptureView";
@@ -144,8 +144,8 @@ export default function NewAnalysis() {
               })
             : isUploadingAll
               ? i18n(language, {
-                  en: "Uploading captures...",
-                  fr: "Envoi des captures...",
+                  en: "Preparing your analysis...",
+                  fr: "Préparation de l'analyse...",
                 })
               : message;
 
@@ -298,8 +298,8 @@ export default function NewAnalysis() {
 
       setMessage(
         i18n(language, {
-          en: `${codes.length} captures uploaded.`,
-          fr: `${codes.length} captures uploadées.`,
+          en: `${codes.length} poses ready.`,
+          fr: `${codes.length} poses prêtes.`,
         }),
       );
 
@@ -418,6 +418,9 @@ export default function NewAnalysis() {
             elapsedAnchorEpochMs={analysisElapsedAnchorEpochMs(
               jobStatus.data?.job.created_at,
             )}
+            analysisStepTicker={
+              jobStatusValue === "queued" || jobStatusValue === "running"
+            }
           />
         ) : (
           <>
@@ -591,7 +594,7 @@ export default function NewAnalysis() {
         />
       ) : null}
 
-      {/* ── Captured preview: show 8 images + upload button ── */}
+      {/* ── Captured preview: grilles des poses + Lancer l’analyse ── */}
       <Dialog
         open={
           showCapturedPreview &&
@@ -605,15 +608,23 @@ export default function NewAnalysis() {
           <DialogHeader>
             <DialogTitle className="font-display text-3xl tracking-tight text-zinc-50">
               {i18n(language, {
-                en: "Captures review",
-                fr: "Aperçu des captures",
+                en: "Pose preview",
+                fr: "Aperçu des poses",
               })}
             </DialogTitle>
-            <DialogDescription className="text-zinc-400">
-              {i18n(language, {
-                en: `${capturedPoses.length}/8 captures — check the quality before uploading.`,
-                fr: `${capturedPoses.length}/8 captures — vérifie la qualité avant d'uploader.`,
-              })}
+            <DialogDescription className="space-y-1.5 text-zinc-400">
+              <span className="block">
+                {i18n(language, {
+                  en: "Check quality before launching.",
+                  fr: "Vérifie la qualité avant de lancer.",
+                })}
+              </span>
+              <span className="block text-sm opacity-95">
+                {i18n(language, {
+                  en: `${capturedPoses.length}/8 poses.`,
+                  fr: `${capturedPoses.length}/8 poses.`,
+                })}
+              </span>
             </DialogDescription>
           </DialogHeader>
 
@@ -666,11 +677,11 @@ export default function NewAnalysis() {
               {isUploadingAll ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Upload className="mr-2 h-4 w-4" />
+                <ScanFace className="mr-2 h-4 w-4 shrink-0" />
               )}
               {i18n(language, {
-                en: "Upload captures",
-                fr: "Uploader les captures",
+                en: "Launch analysis",
+                fr: "Lancer l'analyse",
               })}
             </Button>
           </div>

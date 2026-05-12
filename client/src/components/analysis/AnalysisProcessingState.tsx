@@ -1,8 +1,254 @@
 import * as React from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
 import { analysisGlassPanelClassName } from "@/components/analysis/workers/_shared";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
+
+const INITIALIZATION_STEPS_TICKER_MS = 5000;
+
+/** Entre deux messages du ticker analyse in-app (~2 min avec ~27 lignes). */
+const ANALYSIS_STEPS_RANDOM_MS_MIN = 5000;
+const ANALYSIS_STEPS_RANDOM_MS_MAX = 10_000;
+
+const INITIALIZATION_TICKER_MESSAGES: ReadonlyArray<{
+  en: string;
+  fr: string;
+}> = [
+  {
+    fr: "Préparation des différents assets",
+    en: "Preparing heterogeneous asset payloads",
+  },
+  {
+    fr: "Agrégation des points de captures récupérés",
+    en: "Aggregating sampled capture landmarks",
+  },
+  {
+    fr: "Calibration du référentiel spatial normalisé",
+    en: "Calibrating normalized spatial reference frame",
+  },
+  {
+    fr: "Initialisation du pipeline de buffering entrant",
+    en: "Spinning up inbound buffer pipeline",
+  },
+  {
+    fr: "Alignement séquentiel des frames de poses",
+    en: "Sequential alignment of pose frames",
+  },
+  {
+    fr: "Vérification d'intégrité du lot avant fusion",
+    en: "Pre-merge batch integrity verification",
+  },
+  {
+    fr: "Synthèse des descripteurs géométriques intermédiaires",
+    en: "Synthesizing intermediate geometric descriptors",
+  },
+  {
+    fr: "Synchronisation sécurisée des canaux de transit de données",
+    en: "Secure handshake on data transit channels",
+  },
+];
+
+/** Références stables pour `useEffect` (évite resets du ticker si `schedule` est recréé). */
+const INITIALIZATION_TICKER_SCHEDULE = {
+  kind: "fixed",
+  intervalMs: INITIALIZATION_STEPS_TICKER_MS,
+} as const;
+
+const ANALYSIS_TICKER_SCHEDULE = {
+  kind: "random",
+  minMs: ANALYSIS_STEPS_RANDOM_MS_MIN,
+  maxMs: ANALYSIS_STEPS_RANDOM_MS_MAX,
+} as const;
+
+const ANALYSIS_TICKER_MESSAGES: ReadonlyArray<{ en: string; fr: string }> = [
+  { fr: "Harmonisation gauche-droite du visage.", en: "Left–right facial harmonisation." },
+  { fr: "Lecture des tiers verticaux.", en: "Reading vertical facial thirds." },
+  {
+    fr: "Mesure du rythme des cinquièmes sous les yeux.",
+    en: "Measuring horizontal fifths under the eyes.",
+  },
+  {
+    fr: "Analyse orbitaire et blanc scléral.",
+    en: "Orbital landmarks and scleral exposure.",
+  },
+  { fr: "Courbes et densité des sourcils.", en: "Brow shape and fullness." },
+  {
+    fr: "Profil du dos du nez et symétrie des narines.",
+    en: "Nasal dorsum profile and nostril symmetry.",
+  },
+  { fr: "Philtre, sillons et volume des lèvres.", en: "Philtrum, folds and lip volume." },
+  { fr: "Volume et courbure des pommettes.", en: "Cheek volume and curvature." },
+  { fr: "Plan du menton et ligne mandibulaire.", en: "Chin plane and jawline contour." },
+  {
+    fr: "Angle de la mâchoire et relief latéral.",
+    en: "Gonial angle and lateral jaw relief.",
+  },
+  { fr: "Transition mâchoire–cou.", en: "Jaw-to-neck transition." },
+  {
+    fr: "Arc du sourire et équilibre des commissures.",
+    en: "Smile arc and commissure balance.",
+  },
+  {
+    fr: "Ligne frontale et densité des cheveux.",
+    en: "Hairline and perceived hair density.",
+  },
+  {
+    fr: "Contraste cheveux / peau aux tempes.",
+    en: "Hair-to-skin contrast at the temples.",
+  },
+  { fr: "Peau : homogénéité et micro-texture.", en: "Skin evenness and micro-texture." },
+  {
+    fr: "Teint : zones front / joues / nez.",
+    en: "Tone balance across forehead, cheeks and nose.",
+  },
+  { fr: "Rougeurs et micro-contrastes cutanés.", en: "Redness and subtle skin contrasts." },
+  {
+    fr: "Brillances et pores en lumière normée.",
+    en: "Shine and pore structure under normed light.",
+  },
+  {
+    fr: "Croisement des vues frontale et trois-quarts.",
+    en: "Cross-checking frontal and three-quarter views.",
+  },
+  {
+    fr: "Recoupement des poses pour plus de stabilité.",
+    en: "Cross-validating poses for stability.",
+  },
+  {
+    fr: "Points de repère sur la zone péri-orbitaire.",
+    en: "Anchoring peri-orbital reference points.",
+  },
+  {
+    fr: "Carte fine du nez : ombres et jonctions.",
+    en: "Fine nasal map — shadows and transitions.",
+  },
+  {
+    fr: "Géométrie du vermillon et du cupidon.",
+    en: "Vermillion contour and Cupid's bow geometry.",
+  },
+  { fr: "Indices de forme faciale globale.", en: "Global facial shape cues." },
+  { fr: "Calage sur le score global sur 100.", en: "Locking onto the score out of 100." },
+  { fr: "Pondération des scores par zone.", en: "Weighted scoring by facial zone." },
+  {
+    fr: "Préparation des textes et repères visuels.",
+    en: "Preparing captions and visual callouts.",
+  },
+];
+
+export type ProcessingTickerMessagePair = Readonly<{ en: string; fr: string }>;
+
+function mod(n: number, m: number): number {
+  return ((n % m) + m) % m;
+}
+
+type ProcessingStepTickerProps = {
+  tone: "on-dark" | "on-light";
+  messages: readonly ProcessingTickerMessagePair[];
+  schedule:
+    | typeof INITIALIZATION_TICKER_SCHEDULE
+    | typeof ANALYSIS_TICKER_SCHEDULE;
+  rowKeyPrefix: string;
+};
+
+function ProcessingStepTicker({ tone, messages, schedule, rowKeyPrefix }: ProcessingStepTickerProps) {
+  const language = useAppLanguage();
+  const n = messages.length;
+
+  const [activeIndex, setActiveIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    if (n <= 0) return;
+
+    if (schedule.kind === "fixed") {
+      const id = window.setInterval(() => {
+        setActiveIndex((previous) => (previous + 1) % n);
+      }, schedule.intervalMs);
+      return () => window.clearInterval(id);
+    }
+
+    let cancelled = false;
+    let timeoutId = 0;
+
+    const bump = () => {
+      setActiveIndex((previous) => (previous + 1) % n);
+      scheduleNext();
+    };
+
+    const scheduleNext = () => {
+      const span = Math.max(0, schedule.maxMs - schedule.minMs);
+      const delay =
+        schedule.minMs + (span > 0 ? Math.floor(Math.random() * (span + 1)) : 0);
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+        bump();
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [n, schedule]);
+
+  const indices = React.useMemo(
+    () =>
+      [
+        mod(activeIndex - 2, n),
+        mod(activeIndex - 1, n),
+        activeIndex,
+      ] as const,
+    [activeIndex, n],
+  );
+
+  const subtextMuted = tone === "on-dark" ? "text-zinc-500" : "text-slate-500";
+  const subtextMedium = tone === "on-dark" ? "text-zinc-400" : "text-slate-600";
+
+  const lines = indices.map((messageIndex, row) => ({
+    row,
+    key: `${rowKeyPrefix}-${messageIndex}`,
+    text: i18n(language, messages[messageIndex]),
+  }));
+
+  return (
+    <div
+      className="mx-auto mt-8 w-[min(100%,20rem)] sm:mt-10"
+      aria-live="polite"
+      aria-atomic={false}
+    >
+      <AnimatePresence mode="sync" initial={false}>
+        <motion.div
+          key={activeIndex}
+          initial={{ opacity: 0.72 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
+          className="flex flex-col gap-2 text-left font-sans"
+        >
+          {lines.map(({ row, key, text }) => (
+            <p
+              key={key}
+              className={cn(
+                "min-h-[1.35em] truncate text-[0.6875rem] leading-snug tracking-tight sm:text-[0.8125rem]",
+                row === 0 && cn("opacity-[0.32]", subtextMuted),
+                row === 1 && cn("opacity-70", subtextMedium),
+                row === 2 &&
+                  cn(
+                    "font-semibold tracking-[-0.01em]",
+                    tone === "on-dark" ? "text-white" : "text-slate-900",
+                  ),
+              )}
+              title={text}
+              aria-current={row === 2 ? "step" : undefined}
+            >
+              {text}
+            </p>
+          ))}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
 
 type AnalysisProcessingStateProps = {
   /** Contexte pour lecteurs d’écran (file vs analyse, etc.). */
@@ -26,6 +272,12 @@ type AnalysisProcessingStateProps = {
   showElapsedTimer?: boolean;
   /** Remplace le titre sous le loader (« Analyse en cours » par défaut). */
   title?: string | null;
+  /**
+   * Libellés pseudo-techniques — phase initialisation (onboarding après capture).
+   */
+  initializationStepTicker?: boolean;
+  /** Libellés pseudo-techniques — analyse in-app (file / résultats). */
+  analysisStepTicker?: boolean;
 };
 
 /** Format « 42 s » / « 3 min 12 s » pour sidebar et écran d’analyse. */
@@ -61,6 +313,8 @@ export function AnalysisProcessingState({
   elapsedAnchorEpochMs = null,
   showElapsedTimer = true,
   title: titleOverride = null,
+  initializationStepTicker = false,
+  analysisStepTicker = false,
 }: AnalysisProcessingStateProps) {
   const language = useAppLanguage();
   const isDark = theme === "dark";
@@ -156,6 +410,23 @@ export function AnalysisProcessingState({
         ) : null}
 
         <BrandLoaderTrack tone={tone} className={cn(trackGap, "w-[min(240px,85%)]")} />
+
+        {initializationStepTicker ? (
+          <ProcessingStepTicker
+            tone={tone}
+            messages={INITIALIZATION_TICKER_MESSAGES}
+            schedule={INITIALIZATION_TICKER_SCHEDULE}
+            rowKeyPrefix="init-step"
+          />
+        ) : null}
+        {!initializationStepTicker && analysisStepTicker ? (
+          <ProcessingStepTicker
+            tone={tone}
+            messages={ANALYSIS_TICKER_MESSAGES}
+            schedule={ANALYSIS_TICKER_SCHEDULE}
+            rowKeyPrefix="analysis-step"
+          />
+        ) : null}
       </div>
     </div>
   );

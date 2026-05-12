@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
 import { WaveBackground } from "@/components/background/WaveBackground";
+import { LandingCompleteAnalysisOrbit } from "@/components/landing/LandingCompleteAnalysisOrbit";
 import { FloatingHeader } from "@/components/layout/FloatingHeader";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -773,16 +774,16 @@ export default function Landing() {
     <div className="landing-grain min-h-screen bg-background relative">
       <FloatingHeader language={language} />
 
-      {/* Hero Section — exactly one viewport tall; flex keeps content + chevron inside */}
-      <section className="relative isolate flex h-[100svh] max-h-[100svh] flex-col overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-2 pt-[max(4.75rem,calc(env(safe-area-inset-top,0px)+1rem))] sm:pb-3 sm:pt-[max(5.25rem,calc(env(safe-area-inset-top,0px)+1.25rem))]">
+      {/* Hero — mobile : ~1 écran fixe ; md+ : zone un peu plus haute que la fenêtre pour aérer (H1 moins plaqué en haut). */}
+      <section className="relative isolate flex min-h-[100svh] h-[100svh] max-h-[100svh] flex-col overflow-x-hidden max-md:overflow-y-hidden md:h-auto md:max-h-none md:min-h-[108svh] md:overflow-y-visible bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-2 pt-[max(4.75rem,calc(env(safe-area-inset-top,0px)+1rem))] sm:pb-3 sm:pt-[max(5.25rem,calc(env(safe-area-inset-top,0px)+1.25rem))] lg:min-h-[min(118svh,1020px)] lg:pb-10 lg:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))]">
         <div className="relative mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col lg:max-w-[75%]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="relative z-10 flex min-h-0 flex-1 flex-col justify-center px-1 py-3 sm:px-2 sm:py-5 md:py-6"
+            className="relative z-10 flex min-h-0 flex-1 flex-col justify-center px-1 py-3 sm:px-2 sm:py-5 md:py-6 lg:justify-start lg:pt-[clamp(2.75rem,min(11svh,6.5rem),6.75rem)] xl:pt-[clamp(3.25rem,min(11.5svh,7rem),7.5rem)]"
           >
-            <div className="mx-auto w-full max-w-[36rem] -translate-y-2 space-y-4 text-center sm:-translate-y-3 sm:max-w-2xl sm:space-y-5 md:-translate-y-4 md:space-y-6 lg:max-w-3xl">
+            <div className="mx-auto w-full max-w-[36rem] -translate-y-2 space-y-4 text-center sm:-translate-y-3 sm:max-w-2xl sm:space-y-5 md:translate-y-0 md:space-y-6 lg:max-w-3xl">
               <motion.h1
                 variants={itemVariants}
                 className="mx-auto max-w-[min(100%,24rem)] font-hero text-[clamp(2.25rem,6.5vw+0.75rem,4.5rem)] font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white sm:max-w-2xl sm:leading-[1.08] md:max-w-3xl md:leading-[1.09] lg:max-w-4xl xl:text-[clamp(2.75rem,5vw+1rem,4.75rem)]"
@@ -821,12 +822,42 @@ export default function Landing() {
                     fr: "Découvrir mon score",
                   })}
                 </Link>
-                <p className="max-w-[min(100%,22rem)] text-center text-balance font-sans text-[13px] font-medium leading-snug tracking-tight text-foreground/55 sm:max-w-md sm:text-sm">
-                  {i18n(language, {
-                    en: "Built for people who take self-improvement seriously.",
-                    fr: "Pensé pour celles et ceux qui prennent leur progression au sérieux.",
+                <div
+                  role="img"
+                  aria-label={i18n(language, {
+                    en: "Before and after",
+                    fr: "Avant et après",
                   })}
-                </p>
+                  className="relative mt-1 w-full max-w-[min(100%,20rem)] sm:mt-2 sm:max-w-md"
+                >
+                  <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+                    <div className="relative min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
+                      <img
+                        src="/modelav1.jpeg"
+                        alt=""
+                        decoding="async"
+                        className="aspect-[4/5] w-full object-cover"
+                      />
+                    </div>
+                    <div className="relative min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
+                      <img
+                        src="/modelap1.jpeg"
+                        alt=""
+                        decoding="async"
+                        className="aspect-[4/5] w-full object-cover"
+                      />
+                    </div>
+                  </div>
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-[rgba(10,16,22,0.72)] text-white shadow-[0_8px_28px_-12px_rgba(0,0,0,0.85)] backdrop-blur-md sm:h-12 sm:w-12">
+                      <ArrowRight
+                        className="h-[1.35rem] w-[1.35rem] shrink-0 sm:h-6 sm:w-6"
+                        strokeWidth={2.4}
+                        aria-hidden
+                      />
+                    </span>
+                  </div>
+                </div>
               </motion.div>
             </div>
           </motion.div>
@@ -853,13 +884,13 @@ export default function Landing() {
       {/* Complete Analysis — mobile: hauteur au contenu (< 100vh OK) ; md+: 1 viewport, image calée en bas */}
       <section
         id="complete-analysis"
-        className="relative isolate flex flex-col overflow-hidden bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pb-0 pt-8 md:h-[100svh] md:max-h-[100svh] md:pt-10"
+        className="relative isolate flex flex-col overflow-x-clip overflow-y-visible bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pb-0 pt-8 md:h-[100svh] md:max-h-[100svh] md:pt-10"
       >
         <WaveBackground
           position="absolute"
           className="pointer-events-none z-0 !h-full !min-h-full !w-full"
         />
-        <div className="relative z-10 mx-auto flex w-full flex-col md:min-h-0 md:flex-1 lg:max-w-[75%]">
+        <div className="relative z-10 mx-auto flex w-full flex-col px-1 sm:px-2 md:min-h-0 md:flex-1 lg:max-w-[75%]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
@@ -876,14 +907,19 @@ export default function Landing() {
 
             <motion.div
               variants={itemVariants}
-              className="flex w-full max-w-2xl flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
+              className="flex w-full max-w-none flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
             >
-              <img
-                src="/model1.png"
-                alt="Your complete facial analysis model"
-                loading="lazy"
-                className="mx-auto block h-auto w-full object-contain object-bottom select-none md:h-full md:max-h-full"
-              />
+              <LandingCompleteAnalysisOrbit language={language}>
+                <img
+                  src="/model1.png"
+                  alt={i18n(language, {
+                    en: "Your complete facial analysis model",
+                    fr: "Modèle d'analyse complète du visage",
+                  })}
+                  loading="lazy"
+                  className="mx-auto block h-auto w-full max-w-2xl object-contain object-bottom select-none lg:max-w-4xl md:h-full md:max-h-full"
+                />
+              </LandingCompleteAnalysisOrbit>
             </motion.div>
           </motion.div>
         </div>

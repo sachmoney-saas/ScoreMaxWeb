@@ -383,6 +383,43 @@ function SidebarNewAnalysisPrimarySlot({
 const SIDEBAR_SURFACE_CLASS =
   "bg-[radial-gradient(ellipse_110%_70%_at_0%_-10%,rgba(248,250,252,0.24)_0%,transparent_52%),radial-gradient(circle_at_88%_108%,rgba(148,163,184,0.18)_0%,transparent_46%),linear-gradient(152deg,rgba(11,17,24,0.97)_0%,rgba(17,26,34,0.94)_42%,rgba(26,36,50,0.92)_100%)]";
 
+/** Pastille « certifié » — silhouette type badge (paths Lucide BadgeCheck), fond #d6e4ff. */
+function SidebarAccountVerifiedBadge({
+  language,
+}: {
+  language: AppLanguage;
+}) {
+  const label = i18n(language, {
+    en: "Verified ScoreMax member",
+    fr: "Membre ScoreMax certifié",
+  });
+  return (
+    <span
+      className="mt-0.5 inline-flex shrink-0 drop-shadow-[0_1px_10px_rgba(214,228,255,0.4)]"
+      role="img"
+      aria-label={label}
+    >
+      <svg width={20} height={20} viewBox="0 0 24 24" aria-hidden>
+        <path
+          fill="#d6e4ff"
+          stroke="rgba(255,255,255,0.5)"
+          strokeWidth={0.85}
+          strokeLinejoin="round"
+          d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+        />
+        <path
+          fill="none"
+          stroke="#0f172a"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="m9 12 2 2 4-4"
+        />
+      </svg>
+    </span>
+  );
+}
+
 function ModernAppSidebar() {
   const [location] = useLocation();
   const language = useAppLanguage();
@@ -417,6 +454,13 @@ function ModernAppSidebar() {
     }
     return analysisHistoryGlobalScoreSummary(latest.results).rankTitle;
   }, [analysisHistory]);
+
+  /** `profiles.full_name` si renseigné, sinon email profil ou session. */
+  const sidebarPrimaryIdentity = React.useMemo(() => {
+    const name = profile?.full_name?.trim();
+    if (name) return name;
+    return profile?.email ?? user?.email ?? "—";
+  }, [profile?.full_name, profile?.email, user?.email]);
 
   const adminItems: SidebarNavItem[] = isAdmin
     ? [
@@ -525,16 +569,19 @@ function ModernAppSidebar() {
             >
               {!isCollapsed ? (
                 <>
-                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold text-zinc-100">
-                      {profile?.email ?? "—"}
-                    </span>
-                    <span className="truncate text-xs text-zinc-400">
-                      {isHistoryLoading
-                        ? "…"
-                        : lastCompletedAnalysisTierLabel ??
-                          "Aucune analyse terminée"}
-                    </span>
+                  <div className="flex min-w-0 flex-1 items-start gap-2">
+                    <SidebarAccountVerifiedBadge language={language} />
+                    <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold text-zinc-100">
+                        {sidebarPrimaryIdentity}
+                      </span>
+                      <span className="truncate text-xs text-zinc-400">
+                        {isHistoryLoading
+                          ? "…"
+                          : lastCompletedAnalysisTierLabel ??
+                            "Aucune analyse terminée"}
+                      </span>
+                    </div>
                   </div>
                   <ChevronRight className="ml-auto size-4 shrink-0 text-zinc-400" />
                 </>

@@ -1,20 +1,5 @@
 import * as React from "react";
-import {
-  Activity,
-  Apple,
-  BookmarkCheck,
-  Check,
-  Droplets,
-  HeartPulse,
-  Loader2,
-  Scissors,
-  Sparkles,
-  Stethoscope,
-  Syringe,
-  Waves,
-  Wand2,
-  Zap,
-} from "lucide-react";
+import { BookmarkCheck, Check, Loader2 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,23 +28,6 @@ import { useIsRecommendationDocumentSurface } from "@/components/analysis/recomm
  * Visual helpers — kept here so any consumer (worker page, analysis tab) gets
  * the same look without duplicating code.
  * ========================================================================= */
-
-export function categoryIcon(category: RecommendationCategory): React.ReactNode {
-  const cls = "h-4 w-4";
-  switch (category) {
-    case "habit":           return <HeartPulse className={cls} />;
-    case "exercise":        return <Activity className={cls} />;
-    case "topical":         return <Droplets className={cls} />;
-    case "nutrition":       return <Apple className={cls} />;
-    case "device":          return <Wand2 className={cls} />;
-    case "injectable":      return <Syringe className={cls} />;
-    case "energy":          return <Zap className={cls} />;
-    case "surgery":         return <Scissors className={cls} />;
-    case "device_clinical": return <Stethoscope className={cls} />;
-    case "cosmetic":        return <Sparkles className={cls} />;
-    default:                return <Sparkles className={cls} />;
-  }
-}
 
 export function categoryLabel(
   category: RecommendationCategory,
@@ -242,6 +210,10 @@ export function RecommendationCard({
   const isHard = rec.type === "hard";
   const isInProtocol = action?.status === "saved";
 
+  const railDivider = isDocument
+    ? "md:border-zinc-200 md:border-r"
+    : "md:border-white/10 md:border-r";
+
   const toggleProtocol = (): void => {
     if (isInProtocol) {
       remove.mutate({ recommendationId: rec.id, worker });
@@ -261,222 +233,209 @@ export function RecommendationCard({
         !isDocument && "rounded-xl transition duration-300 hover:border-white/35",
       )}
     >
-      <CardContent className="space-y-4 px-6 py-5 sm:px-7">
-        <div className="flex items-start gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <div
-              className={cn(
-                "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                isHard
-                  ? isDocument
-                    ? "bg-rose-50 text-rose-700"
-                    : "bg-rose-400/12 text-rose-200"
-                  : isDocument
-                    ? "bg-emerald-50 text-emerald-800"
-                    : "bg-emerald-400/12 text-emerald-200",
-              )}
-            >
-              {categoryIcon(rec.category)}
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h4
-                  className={cn(
-                    "font-display text-base font-semibold leading-tight tracking-tight",
-                    isDocument ? "text-zinc-900" : "text-white",
-                  )}
-                >
-                  {title}
-                </h4>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ring-1 ring-inset",
-                    isHard
-                      ? isDocument
-                        ? "bg-rose-50 text-rose-900 ring-rose-200"
-                        : "bg-rose-400/12 text-rose-200 ring-rose-300/20"
-                      : isDocument
-                        ? "bg-emerald-50 text-emerald-900 ring-emerald-200"
-                        : "bg-emerald-400/12 text-emerald-200 ring-emerald-300/20",
-                  )}
-                >
-                  {isHard
-                    ? i18n(language, { en: "Hard", fr: "Hard" })
-                    : i18n(language, { en: "Soft", fr: "Soft" })}
-                </span>
-              </div>
-              <p
-                className={cn(
-                  "mt-1 text-xs uppercase tracking-[0.12em]",
-                  isDocument ? "text-zinc-500" : "text-zinc-500",
-                )}
-              >
-                {categoryLabel(rec.category, language)}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <p
-          className={cn(
-            "text-sm leading-relaxed",
-            isDocument ? "text-zinc-700" : "text-zinc-300",
-          )}
-        >
-          {summary}
-        </p>
-
-        {reason ? (
+      <CardContent className="p-0">
+        <div className="flex flex-col md:flex-row">
+          {/* Rail — identité & action */}
           <div
             className={cn(
-              "rounded-lg px-3 py-2 text-xs leading-relaxed",
-              isDocument
-                ? "border border-zinc-200 bg-zinc-50 text-zinc-800"
-                : "rounded-xl border border-white/10 bg-white/[0.04] text-zinc-300",
+              "flex shrink-0 flex-col gap-3 px-5 py-5 sm:gap-4 md:w-[min(100%,270px)] md:py-6",
+              "border-b pb-5 md:border-b-0 md:pb-6",
+              railDivider,
             )}
           >
-            <span
+            <h4
               className={cn(
-                "mr-1 font-semibold",
+                "font-display text-[1.05rem] font-semibold leading-snug tracking-tight sm:text-base",
                 isDocument ? "text-zinc-900" : "text-white",
               )}
             >
-              {i18n(language, { en: "Why:", fr: "Pourquoi :" })}
-            </span>
-            {reason}
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          {duration ? (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
-                isDocument
-                  ? "border border-zinc-200 bg-zinc-50 text-zinc-700"
-                  : "border border-white/10 bg-white/[0.04] text-zinc-300",
-              )}
-            >
-              <Waves className="h-3 w-3" />
-              {duration}
-            </span>
-          ) : null}
-          {cost ? (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
-                isDocument
-                  ? "border border-zinc-200 bg-zinc-50 text-zinc-700"
-                  : "border border-white/10 bg-white/[0.04] text-zinc-300",
-              )}
-            >
-              {cost}
-            </span>
-          ) : null}
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-inset ${
-              isDocument ? riskClassesDocument(rec.risk) : riskClasses(rec.risk)
-            }`}
-          >
-            {riskLabel(rec.risk, language)}
-          </span>
-        </div>
-
-        {rec.steps.length > 0 ? (
-          <div>
+              {title}
+            </h4>
             <p
               className={cn(
-                "text-[10px] font-semibold uppercase tracking-[0.14em]",
-                isDocument ? "text-zinc-500" : "text-zinc-500",
+                "text-[11px] font-semibold uppercase tracking-[0.14em]",
+                isDocument ? "text-zinc-500" : "text-zinc-400",
               )}
             >
-              {i18n(language, {
-                en: "Steps",
-                fr: "Étapes",
-              })}
+              {categoryLabel(rec.category, language)}
             </p>
-            <ol className="mt-2 space-y-2">
-              {rec.steps.map((step, idx) => (
-                <li
-                  key={idx}
-                  className={cn(
-                    "flex gap-3 rounded-lg px-3 py-2 text-xs leading-relaxed",
-                    isDocument
-                      ? "border border-zinc-100 bg-zinc-50 text-zinc-800"
-                      : "bg-white/[0.03] text-zinc-300",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "mt-px font-display text-sm font-bold tabular-nums",
-                      isDocument ? "text-zinc-500" : "text-zinc-500",
-                    )}
-                  >
-                    {idx + 1}.
-                  </span>
-                  <span>{language === "fr" ? step.fr : step.en}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Button
-            type="button"
-            size="sm"
-            variant={
-              isDocument
-                ? isInProtocol
-                  ? "secondary"
-                  : "outline"
-                : isInProtocol
-                  ? "secondary"
-                  : "ghost"
-            }
-            disabled={isPending}
-            onClick={toggleProtocol}
-            className={cn(
-              "h-8 gap-1.5 px-3 text-xs",
-              isDocument &&
-                "border-zinc-300 text-zinc-800 hover:bg-zinc-100 hover:text-zinc-900",
-            )}
-          >
-            {isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : isInProtocol ? (
-              <Check
-                className={cn(
-                  "h-3 w-3",
-                  isDocument ? "text-emerald-700" : "text-emerald-300",
-                )}
-              />
-            ) : (
-              <BookmarkCheck className="h-3 w-3" />
-            )}
-            {isInProtocol
-              ? i18n(language, {
-                  en: "In your protocol",
-                  fr: "Dans ton protocole",
-                })
-              : i18n(language, {
-                  en: "Add to my protocol",
-                  fr: "Ajouter à mon protocole",
-                })}
-          </Button>
-          {isInProtocol ? (
             <span
               className={cn(
-                "text-[11px]",
-                isDocument ? "text-zinc-500" : "text-zinc-500",
+                "w-fit rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ring-1 ring-inset",
+                isHard
+                  ? isDocument
+                    ? "bg-rose-50 text-rose-900 ring-rose-200"
+                    : "bg-rose-400/12 text-rose-200 ring-rose-300/20"
+                  : isDocument
+                    ? "bg-emerald-50 text-emerald-900 ring-emerald-200"
+                    : "bg-emerald-400/12 text-emerald-200 ring-emerald-300/20",
               )}
             >
-              {i18n(language, {
-                en: "Manage from your protocol",
-                fr: "Gérable depuis ton protocole",
-              })}
+              {isHard
+                ? i18n(language, { en: "Hardmaxxing", fr: "Hardmaxxing" })
+                : i18n(language, { en: "Softmaxxing", fr: "Softmaxxing" })}
             </span>
-          ) : null}
+            <div className="pt-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={
+                  isDocument
+                    ? isInProtocol
+                      ? "secondary"
+                      : "outline"
+                    : "ghost"
+                }
+                disabled={isPending}
+                onClick={toggleProtocol}
+                className={cn(
+                  "h-9 w-full gap-1.5 px-3 text-xs sm:h-10",
+                  isDocument &&
+                    !isInProtocol &&
+                    "border-zinc-300 text-zinc-800 hover:bg-zinc-100 hover:text-zinc-900",
+                  !isDocument &&
+                    !isInProtocol &&
+                    "border border-white/15 bg-white/[0.06] text-zinc-100 hover:bg-white/[0.11] hover:text-white",
+                  !isDocument &&
+                    isInProtocol &&
+                    cn(
+                      "!text-white shadow-none [&_svg]:!text-white",
+                      "border border-white/35 bg-white/12 hover:!text-white hover:bg-white/22",
+                      "active:!text-white active:bg-white/28",
+                      "focus-visible:!text-white",
+                    ),
+                )}
+              >
+                {isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                ) : isInProtocol ? (
+                  <Check
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0",
+                      isDocument ? "text-emerald-700" : "text-white",
+                    )}
+                  />
+                ) : (
+                  <BookmarkCheck className="h-3.5 w-3.5 shrink-0" />
+                )}
+                {isInProtocol
+                  ? i18n(language, {
+                      en: "In your protocol",
+                      fr: "Dans ton protocole",
+                    })
+                  : i18n(language, {
+                      en: "Add to my protocol",
+                      fr: "Ajouter à mon protocole",
+                    })}
+              </Button>
+            </div>
+          </div>
+
+          {/* Corps — lecture détaillée */}
+          <div className="min-w-0 flex-1 space-y-4 px-5 py-5 md:py-6 md:pl-6 md:pr-6">
+            <p
+              className={cn(
+                "text-sm leading-relaxed",
+                isDocument ? "text-zinc-700" : "text-zinc-300",
+              )}
+            >
+              {summary}
+            </p>
+
+            {reason ? (
+              <div
+                className={cn(
+                  "rounded-lg px-3 py-2 text-xs leading-relaxed",
+                  isDocument
+                    ? "border border-zinc-200 bg-zinc-50 text-zinc-800"
+                    : "rounded-xl border border-white/10 bg-white/[0.04] text-zinc-300",
+                )}
+              >
+                <span
+                  className={cn(
+                    "mr-1 font-semibold",
+                    isDocument ? "text-zinc-900" : "text-white",
+                  )}
+                >
+                  {i18n(language, { en: "Why:", fr: "Pourquoi :" })}
+                </span>
+                {reason}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              {duration ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+                    isDocument
+                      ? "border border-zinc-200 bg-zinc-50 text-zinc-700"
+                      : "border border-white/10 bg-white/[0.04] text-zinc-300",
+                  )}
+                >
+                  {duration}
+                </span>
+              ) : null}
+              {cost ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+                    isDocument
+                      ? "border border-zinc-200 bg-zinc-50 text-zinc-700"
+                      : "border border-white/10 bg-white/[0.04] text-zinc-300",
+                  )}
+                >
+                  {cost}
+                </span>
+              ) : null}
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-inset ${
+                  isDocument ? riskClassesDocument(rec.risk) : riskClasses(rec.risk)
+                }`}
+              >
+                {riskLabel(rec.risk, language)}
+              </span>
+            </div>
+
+            {rec.steps.length > 0 ? (
+              <div>
+                <p
+                  className={cn(
+                    "text-[10px] font-semibold uppercase tracking-[0.14em]",
+                    isDocument ? "text-zinc-500" : "text-zinc-500",
+                  )}
+                >
+                  {i18n(language, {
+                    en: "Steps",
+                    fr: "Étapes",
+                  })}
+                </p>
+                <ol className="mt-2 space-y-2">
+                  {rec.steps.map((step, idx) => (
+                    <li
+                      key={idx}
+                      className={cn(
+                        "flex gap-3 rounded-lg px-3 py-2 text-xs leading-relaxed",
+                        isDocument
+                          ? "border border-zinc-100 bg-zinc-50 text-zinc-800"
+                          : "bg-white/[0.03] text-zinc-300",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "mt-px font-display text-sm font-bold tabular-nums",
+                          isDocument ? "text-zinc-500" : "text-zinc-500",
+                        )}
+                      >
+                        {idx + 1}.
+                      </span>
+                      <span>{language === "fr" ? step.fr : step.en}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+          </div>
         </div>
       </CardContent>
     </Card>

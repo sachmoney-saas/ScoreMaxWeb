@@ -593,7 +593,7 @@ function PreviewSignatureRadar({
   const gradientId = React.useId().replace(/:/g, "");
   /** Horizontal pad for long labels; slightly tighter vertically to reduce empty bands in the SVG. */
   const viewPadX = 102;
-  const viewPadY = 84;
+  const viewPadY = 89;
   const size = 510;
   const center = size / 2;
   const maxRadius = 176;
@@ -731,7 +731,7 @@ function PreviewSignatureRadar({
           <React.Fragment key={`label-${i}`}>
             <text
               x={lp.x}
-              y={lp.y - 9}
+              y={lp.y - 11}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize="16"
@@ -743,7 +743,7 @@ function PreviewSignatureRadar({
             </text>
             <text
               x={lp.x}
-              y={lp.y + 14}
+              y={lp.y + 19}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize={scoreFontPx}
@@ -944,16 +944,28 @@ function BodyfatPreview({ aggregates, language }: PreviewProps) {
   const sharpness = getBodyfatCompositionSharpness(aggregates);
 
   const headline = bfDisplay ?? waterDisplay ?? "—";
+  const previewEyebrow =
+    bfDisplay !== null
+      ? i18n(language, {
+          en: "Global estimation",
+          fr: "Estimation globale",
+        })
+      : waterDisplay !== null
+        ? i18n(language, {
+            en: "Water retention",
+            fr: "Rétention d'eau",
+          })
+        : i18n(language, {
+            en: "Global estimation",
+            fr: "Estimation globale",
+          });
 
   return (
     <div className="space-y-4">
       <div className={PREVIEW_HERO}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
-            {i18n(language, {
-              en: "Global estimation",
-              fr: "Estimation globale",
-            })}
+            {previewEyebrow}
           </p>
           <p className="mt-1 font-display text-base font-bold text-white">
             {headline}

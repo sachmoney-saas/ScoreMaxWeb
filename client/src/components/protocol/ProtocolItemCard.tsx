@@ -7,7 +7,6 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 import { useDeleteRecommendationAction } from "@/lib/recommendations";
 import type { RecommendationRisk } from "@/lib/recommendations";
 import {
-  categoryIcon,
   categoryLabel,
   durationLabel,
   riskClasses,
@@ -62,7 +61,6 @@ export function ProtocolItemCard({
     language,
   );
 
-  const isHard = rec.type === "hard";
   const isSheet = surface === "sheet";
 
   const handleRemove = (): void => {
@@ -79,34 +77,19 @@ export function ProtocolItemCard({
     >
       <CardContent className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <div
+          <div className="min-w-0">
+            <h4
               className={
-                isHard
-                  ? isSheet
-                    ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-800"
-                    : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-400/12 text-rose-200"
-                  : isSheet
-                    ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-900"
-                    : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-400/12 text-emerald-200"
+                isSheet
+                  ? "font-display text-sm font-semibold leading-tight tracking-tight text-zinc-950"
+                  : "font-display text-sm font-semibold leading-tight tracking-tight text-white"
               }
             >
-              {categoryIcon(rec.category)}
-            </div>
-            <div className="min-w-0">
-              <h4
-                className={
-                  isSheet
-                    ? "font-display text-sm font-semibold leading-tight tracking-tight text-zinc-950"
-                    : "font-display text-sm font-semibold leading-tight tracking-tight text-white"
-                }
-              >
-                {title}
-              </h4>
-              <p className="mt-0.5 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
-                {categoryLabel(rec.category, language)}
-              </p>
-            </div>
+              {title}
+            </h4>
+            <p className="mt-0.5 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+              {categoryLabel(rec.category, language)}
+            </p>
           </div>
 
           {trailing ? <div className="shrink-0">{trailing}</div> : null}

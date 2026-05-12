@@ -166,7 +166,7 @@ export function RecommendationsSection({
         {matched.soft.length > 0 ? (
           <section className="space-y-4">
             <GroupHeader type="soft" count={matched.soft.length} language={language} />
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               {matched.soft.map((rec) => (
                 <RecommendationCard
                   key={rec.id}
@@ -184,7 +184,7 @@ export function RecommendationsSection({
         {matched.hard.length > 0 ? (
           <section className="space-y-4">
             <GroupHeader type="hard" count={matched.hard.length} language={language} />
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3">
               {matched.hard.map((rec) => (
                 <RecommendationCard
                   key={rec.id}

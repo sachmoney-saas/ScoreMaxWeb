@@ -258,7 +258,7 @@ function NeotenyComposite({
 
   /** Same letterboxing as `SkinRadarChart` so axis labels are not clipped. */
   const viewPadX = 62;
-  const viewPadY = 58;
+  const viewPadY = 62;
   const size = 400;
   const center = size / 2;
   const maxRadius = 146;
@@ -418,7 +418,7 @@ function NeotenyComposite({
           <React.Fragment key={`lbl-${i}`}>
             <text
               x={lp.x}
-              y={lp.y - 6}
+              y={lp.y - 8}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize="11"
@@ -430,7 +430,7 @@ function NeotenyComposite({
             </text>
             <text
               x={lp.x}
-              y={lp.y + 10}
+              y={lp.y + 14}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize="9.5"

@@ -38,7 +38,7 @@ function SkinRadarChart({
 }) {
   /** Horizontal pad for clipped labels; vertical pad slightly smaller to tighten the SVG letterbox. */
   const viewPadX = 84;
-  const viewPadY = 76;
+  const viewPadY = 82;
   const size = 520;
   const center = size / 2;
   const maxRadius = 192;
@@ -168,7 +168,7 @@ function SkinRadarChart({
           <>
             <text
               x={lp.x}
-              y={lp.y - 8}
+              y={lp.y - 10}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize={labelFont}
@@ -180,7 +180,7 @@ function SkinRadarChart({
             </text>
             <text
               x={lp.x}
-              y={lp.y + 12}
+              y={lp.y + 18}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize={scoreFont}

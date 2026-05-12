@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, Loader2, Sparkles, Syringe } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2, Syringe } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -334,17 +334,7 @@ function CriticalPointSection({
 
       {visibleSoft.length > 0 ? (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-900 ring-1 ring-inset ring-emerald-200">
-              <Sparkles className="h-3 w-3" />
-              {i18n(language, { en: "Softmaxxing", fr: "Softmaxxing" })}
-            </span>
-            <span className="text-[11px] text-zinc-400">
-              {visibleSoft.length}{" "}
-              {i18n(language, { en: "actions", fr: "actions" })}
-            </span>
-          </div>
-          <div className="grid w-full gap-4 md:grid-cols-2">
+          <div className="grid w-full grid-cols-1 gap-4">
             {visibleSoft.map((rec) => (
               <RecommendationCard
                 key={rec.id}
@@ -372,7 +362,7 @@ function CriticalPointSection({
               {i18n(language, { en: "interventions", fr: "interventions" })}
             </span>
           </div>
-          <div className="grid w-full gap-4 md:grid-cols-2">
+          <div className="grid w-full grid-cols-1 gap-4">
             {visibleHard.map((rec) => (
               <RecommendationCard
                 key={rec.id}
@@ -446,7 +436,7 @@ function WorkerOrphansUnderTab({
             })}
           </p>
         </header>
-        <div className="relative z-[1] mt-6 grid w-full gap-4 md:grid-cols-2">
+        <div className="relative z-[1] mt-6 grid w-full grid-cols-1 gap-4">
         {filtered.map((rec: MatchedRecommendation) => (
           <RecommendationCard
             key={rec.id}
