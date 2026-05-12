@@ -23,6 +23,7 @@ import {
 import {
   WorkerSignatureRadar,
   type WorkerSignatureRadarPoint,
+  WorkerStanceMatrix,
 } from "./workers/WorkerVisualizations";
 import { EyebrowBoldFeminineMatrix } from "./workers/EyebrowBoldFeminineMatrix";
 import {
@@ -34,6 +35,7 @@ import {
   getNumber,
   getScore,
   getString,
+  hasAnyScore,
 } from "./workers/_shared";
 import { AnalysisJobAssetPreviewThumb } from "./workers/AnalysisJobAssetPreviewThumb";
 
@@ -1299,26 +1301,73 @@ function CheeksPreview({ aggregates, language }: PreviewProps) {
     primaryOverall.score !== null || primaryOverall.argument
       ? primaryOverall
       : getScore(aggregates, "overall_cheek");
-  const height = getScore(
-    aggregates,
-    "profile_structure.cheekbone_height_peak",
-  );
-  const width = getScore(
+  const bizygomatic = getScore(
     aggregates,
     "frontal_structure.bizygomatic_width",
+  );
+  const malarProminence = getScore(
+    aggregates,
+    "frontal_structure.malar_eminence_prominence",
+  );
+  const cheekSymmetry = getScore(
+    aggregates,
+    "frontal_structure.cheek_symmetry",
+  );
+  const heightPeak = getScore(
+    aggregates,
+    "profile_structure.cheekbone_height_peak",
   );
   const projectionArch = getScore(
     aggregates,
     "profile_structure.zygomatic_projection_and_arch",
   );
-  const symmetry = getScore(
-    aggregates,
-    "frontal_structure.cheek_symmetry",
+  const ogee = getScore(aggregates, "profile_structure.ogee_curve");
+  const midfaceDominance = getScore(aggregates, "harmony.midface_dominance");
+
+  const radarLabels: Record<string, { en: string; fr: string }> = {
+    "frontal_structure.bizygomatic_width": { en: "Width", fr: "Largeur" },
+    "frontal_structure.malar_eminence_prominence": {
+      en: "Malar",
+      fr: "Malaire",
+    },
+    "frontal_structure.cheek_symmetry": { en: "Symmetry", fr: "Symétrie" },
+    "profile_structure.cheekbone_height_peak": {
+      en: "Height",
+      fr: "Hauteur",
+    },
+    "profile_structure.zygomatic_projection_and_arch": {
+      en: "Zyg. arch",
+      fr: "Arc zygom.",
+    },
+    "profile_structure.ogee_curve": { en: "Ogee", fr: "Ogee" },
+    "harmony.midface_dominance": { en: "Midface", fr: "Midface" },
+  };
+
+  const radarSource: { key: string; score: number | null }[] = [
+    { key: "frontal_structure.bizygomatic_width", score: bizygomatic.score },
+    {
+      key: "frontal_structure.malar_eminence_prominence",
+      score: malarProminence.score,
+    },
+    { key: "frontal_structure.cheek_symmetry", score: cheekSymmetry.score },
+    { key: "profile_structure.cheekbone_height_peak", score: heightPeak.score },
+    {
+      key: "profile_structure.zygomatic_projection_and_arch",
+      score: projectionArch.score,
+    },
+    { key: "profile_structure.ogee_curve", score: ogee.score },
+    { key: "harmony.midface_dominance", score: midfaceDominance.score },
+  ];
+
+  const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
+    d.score === null
+      ? []
+      : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
   );
 
   return (
     <div className="space-y-3">
-      <div className={PREVIEW_HERO}>
+      <div className={PREVIEW_HERO_SIGNATURE_RADAR}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Cheekbones", fr: "Pommettes" })}
@@ -1326,31 +1375,25 @@ function CheeksPreview({ aggregates, language }: PreviewProps) {
           <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-3">
             {projectionArch.argument ??
               overall.argument ??
-              height.argument ??
+              heightPeak.argument ??
               i18n(language, {
                 en: "Frontal and profile structure of the midface.",
                 fr: "Structure frontale et de profil du midface.",
               })}
           </p>
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <MiniBar
-          label={i18n(language, { en: "Height peak", fr: "Hauteur" })}
-          score={height.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Width", fr: "Largeur" })}
-          score={width.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Zygomatic arch", fr: "Arc zygomatique" })}
-          score={projectionArch.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Symmetry", fr: "Symétrie" })}
-          score={symmetry.score}
-        />
+        <div className="flex w-full justify-center px-0 sm:px-1">
+          {radarData.length >= 3 ? (
+            <WorkerSignatureRadar
+              data={radarData}
+              ariaLabel={i18n(language, {
+                en: "Cheek signature radar",
+                fr: "Radar de signature des pommettes",
+              })}
+              sizePreset="large"
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -1370,6 +1413,14 @@ function HairPreview({ aggregates, language }: PreviewProps) {
     aggregates,
     "hair_quality_and_health.health_appearance",
   );
+  const groomingQuality = getScore(
+    aggregates,
+    "grooming_and_haircut.grooming_quality",
+  );
+  const haircutControl = getScore(
+    aggregates,
+    "grooming_and_haircut.haircut_control",
+  );
   const textureEnum = getEnum(aggregates, "hair_characteristics.texture_type");
   const textureDisplay =
     textureEnum.value && !isUnknownEnumValue(textureEnum.value)
@@ -1381,8 +1432,13 @@ function HairPreview({ aggregates, language }: PreviewProps) {
         )
       : null;
 
+  const showGroomingCutMatrix = hasAnyScore(
+    groomingQuality.score,
+    haircutControl.score,
+  );
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className={PREVIEW_HERO}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
@@ -1406,6 +1462,37 @@ function HairPreview({ aggregates, language }: PreviewProps) {
           ) : null}
         </div>
       </div>
+      {showGroomingCutMatrix ? (
+        <div className="w-full min-w-0">
+          <WorkerStanceMatrix
+            xScore={groomingQuality.score}
+            yScore={haircutControl.score}
+            xLeft={{
+              en: "Rough upkeep",
+              fr: "Toilettage négligé",
+            }}
+            xRight={{
+              en: "Polished upkeep",
+              fr: "Toilettage soigné",
+            }}
+            yBottom={{
+              en: "Loose cut",
+              fr: "Coupe peu maîtrisée",
+            }}
+            yTop={{
+              en: "Sharp cut",
+              fr: "Coupe maîtrisée",
+            }}
+            language={language}
+            ariaLabel={{
+              en: "Grooming and haircut stance matrix",
+              fr: "Matrice toilettage et coupe",
+            }}
+            compact
+            quadrantPalette="performance"
+          />
+        </div>
+      ) : null}
       <div className="grid grid-cols-3 gap-2">
         <MiniBar
           label={i18n(language, { en: "Density", fr: "Densité" })}
@@ -1607,6 +1694,15 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Lips ------------------------------------- */
 
 function LipsPreview({ aggregates, language }: PreviewProps) {
+  const previewJob = React.useContext(AnalysisJobScanPreviewContext);
+  const smileLipsGuideSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_SMILE_LIPS",
+        })
+      : null;
   const fullness = getScore(aggregates, "proportions_and_width.lip_fullness");
   const ratio = getScore(aggregates, "proportions_and_width.upper_lower_ratio");
   const widthScore = getScore(aggregates, "proportions_and_width.lip_width");
@@ -1627,6 +1723,15 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
           </p>
         </div>
       </div>
+      <AnalysisJobAssetPreviewThumb
+        src={smileLipsGuideSrc}
+        alt={i18n(language, {
+          en: "Smile pose scan overlay: lip contour guide",
+          fr: "Repère lèvres — prise de vue sourire",
+        })}
+        className="mx-auto h-40 w-36 shrink-0 sm:h-44 sm:w-40"
+        imgClassName="object-cover"
+      />
       <div className="grid grid-cols-3 gap-2">
         <MiniBar
           label={i18n(language, { en: "Fullness", fr: "Volume" })}

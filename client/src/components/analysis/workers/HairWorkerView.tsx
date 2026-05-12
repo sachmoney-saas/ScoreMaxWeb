@@ -22,6 +22,7 @@ import {
   WorkerHero,
   workerSectionCardClassName,
 } from "./_shared";
+import { WorkerStanceMatrix } from "./WorkerVisualizations";
 
 const WORKER_KEY = "hair";
 
@@ -206,6 +207,28 @@ export function HairWorkerView({
 
   const textureTaxonomyAnchor = workerSectionAnchorId(WORKER_KEY, "texture-taxonomy");
 
+  const resolveHairGroomingCutMatrixCellTarget = React.useCallback(
+    (cx: number, ry: number): string => {
+      const groomingSynth = cx + 0.5;
+      const haircutSynth = 9.5 - ry;
+      return groomingSynth <= haircutSynth
+        ? workerMetricAnchorId(
+            WORKER_KEY,
+            "grooming_and_haircut.grooming_quality",
+          )
+        : workerMetricAnchorId(
+            WORKER_KEY,
+            "grooming_and_haircut.haircut_control",
+          );
+    },
+    [],
+  );
+
+  const showGroomingCutMatrix = hasAnyScore(
+    groomingQuality.score,
+    haircutControl.score,
+  );
+
   return (
     <div className="space-y-4">
       <WorkerHero
@@ -231,6 +254,62 @@ export function HairWorkerView({
           heroAside,
         )}
       />
+
+      {showGroomingCutMatrix ? (
+        <Card className={workerSectionCardClassName}>
+          <CardContent className="p-6 sm:p-8">
+            <div className="grid gap-6 lg:grid-cols-[1fr_1fr] lg:items-center">
+              <div className="space-y-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                  {i18n(language, {
+                    en: "Grooming & haircut",
+                    fr: "Toilettage et coupe",
+                  })}
+                </p>
+                <h3 className="font-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                  {i18n(language, {
+                    en: "Finish × control",
+                    fr: "Finition × contrôle",
+                  })}
+                </h3>
+                <p className="text-sm leading-relaxed text-zinc-400">
+                  {i18n(language, {
+                    en: "Day-to-day polish on the horizontal axis and how intentional your cut shape reads on the vertical. Tap any cell to scroll to the matching score block.",
+                    fr: "Le soin au quotidien sur l’axe horizontal et la maîtrise de la forme de coupe sur l’axe vertical. Touchez une case pour afficher le score correspondant.",
+                  })}
+                </p>
+              </div>
+              <WorkerStanceMatrix
+                xScore={groomingQuality.score}
+                yScore={haircutControl.score}
+                xLeft={{
+                  en: "Rough upkeep",
+                  fr: "Toilettage négligé",
+                }}
+                xRight={{
+                  en: "Polished upkeep",
+                  fr: "Toilettage soigné",
+                }}
+                yBottom={{
+                  en: "Loose cut",
+                  fr: "Coupe peu maîtrisée",
+                }}
+                yTop={{
+                  en: "Sharp cut",
+                  fr: "Coupe maîtrisée",
+                }}
+                language={language}
+                ariaLabel={{
+                  en: "Grooming and haircut stance matrix",
+                  fr: "Matrice toilettage et coupe",
+                }}
+                resolveCellTargetId={resolveHairGroomingCutMatrixCellTarget}
+                quadrantPalette="performance"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card
         id={textureTaxonomyAnchor}

@@ -298,13 +298,25 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
    * `FACE_FRONT` pour la sidebar dès qu’il est disponible.
    */
   "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
+  /**
+   * Variante « lèvres » prise sur la pose de face (mêmes calques que
+   * `GUIDE_TRACE_SMILE_LIPS` : remplissage bleu intérieur lèvres + voile
+   * sombre 40 % partout sauf le ring lèvres). Complète le repère sourire
+   * pour analyser les lèvres au repos.
+   */
+  "GUIDE_TRACE_FACE_FRONT_LIPS",
   "GUIDE_TRACE_PROFILE_LEFT_JAW",
   "GUIDE_TRACE_PROFILE_RIGHT_JAW",
   "GUIDE_TRACE_PROFILE_LEFT_NOSE",
   "GUIDE_TRACE_PROFILE_RIGHT_NOSE",
   "GUIDE_TRACE_LOOK_UP_JAW_ARC",
-  "GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR",
   "GUIDE_TRACE_SMILE_LIPS",
+  /**
+   * Variante « dents » du repère sourire : photo + voile sombre 40 % partout
+   * SAUF l’intérieur de la bouche (pas de remplissage ni contour des lèvres),
+   * pour faire ressortir la teinte naturelle des dents.
+   */
+  "GUIDE_TRACE_SMILE_TEETH",
   "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
 ] as const;
 

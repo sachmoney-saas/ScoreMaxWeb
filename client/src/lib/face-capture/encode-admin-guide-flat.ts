@@ -6,10 +6,13 @@
 // Résolution = celle du bitmap source (ratio pixel 1, pas de sur-échantillonnage).
 // ============================================================
 //
-// Pose de face : 5 PNG (ovale + nez/bouche + tiers verticaux + angle mâchoire + contour forme du visage).
+// Pose de face : 7 PNG (ovale + nez/bouche + tiers verticaux + angle mâchoire +
+//   contour forme du visage + maillage blanc 2D + variante lèvres au repos
+//   réutilisant les calques `GUIDE_TRACE_SMILE_LIPS`).
 // Pose profil : 2 PNG (mâchoire + silhouette nez côté visible).
 // Pose menton levé : 1 PNG (arc mandibulaire bas sur le cliché ; pas de maillage).
-// Pose sommet du crâne : 1 PNG (photo miroir seule, sans repères dessinés).
+// Pose sommet du crâne : aucun PNG aplati (la photo miroir seule n’apporte aucun
+// repère utile à l’admin — économise un encodage et un upload par capture).
 // Pose sourire : 1 PNG (photo + contours lèvres bleu clair, sans masque blanc hors debug).
 // Poses œil / front (hairline) : pas de PNG aplati admin hormis gros plan œil (contours).
 
@@ -24,6 +27,7 @@ import {
   drawAdminProfileJawGuideOnCanvas,
   drawAdminProfileNoseGuideOnCanvas,
   drawAdminSmileLipsGuideOnCanvas,
+  drawAdminSmileTeethGuideOnCanvas,
   drawAdminVerticalThirdsGuidelinesOnCanvas,
   mirrorLandmarksNormalizedX,
 } from './admin-capture-guidelines';
@@ -52,6 +56,13 @@ export type AdminFlattenedGuideEncoding =
        * repères indisponibles.
        */
       maskOverlayFlat: Blob | null;
+      /**
+       * Variante « lèvres au repos » sur la pose de face : mêmes calques que
+       * `GUIDE_TRACE_SMILE_LIPS` (remplissage bleu intérieur lèvres + voile
+       * sombre 40 % partout sauf le ring lèvres). `null` si
+       * `FACEMESH_LIP_OUTER_ORDERED` indispo.
+       */
+      lipsFlat: Blob | null;
     }
   | {
       variant: 'profile';
@@ -63,12 +74,13 @@ export type AdminFlattenedGuideEncoding =
       jawLowerArcFlat: Blob;
     }
   | {
-      variant: 'crownPhoto';
-      photoFlat: Blob;
-    }
-  | {
       variant: 'smileLips';
       smileLipsFlat: Blob;
+      /**
+       * Variante « dents » : photo + voile sombre 40 % sur tout sauf l’intérieur
+       * de la bouche. `null` si `FACEMESH_LIP_INNER_ORDERED` indispo.
+       */
+      smileTeethFlat: Blob | null;
     }
   | {
       variant: 'closeupEye';
@@ -77,23 +89,6 @@ export type AdminFlattenedGuideEncoding =
 
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
-}
-
-/** Photo JPEG retournée comme la préview selfie, sans masque ni calque 2D. */
-async function renderPhotoOnlyMirroredFlatPng(bitmap: ImageBitmap): Promise<Blob | null> {
-  const w = bitmap.width;
-  const h = bitmap.height;
-  if (w < 16 || h < 16) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.translate(w, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  return await canvasToPng(canvas);
 }
 
 /**
@@ -297,10 +292,6 @@ function isJawUpPoseId(id: PoseId): id is 'jaw-up' {
   return id === 'jaw-up';
 }
 
-function isCrownDownPoseId(id: PoseId): id is 'crown-down' {
-  return id === 'crown-down';
-}
-
 function isCloseupSmilePoseId(id: PoseId): id is 'closeup-smile' {
   return id === 'closeup-smile';
 }
@@ -315,8 +306,10 @@ function isCloseupHairlinePoseId(id: PoseId): id is 'closeup-hairline' {
 
 /**
  * PNG aplatis admin : 5 variantes pour la face de face ; 2 par profil (mâchoire + nez visible)
- * ; 1 pour menton levé ; 1 pour sommet du crâne (photo seule) ; 1 pour sourire (lèvres) ;
- * 1 pour gros plan œil (contours des deux yeux).
+ * ; 1 pour menton levé ; 1 pour sourire (lèvres + variante dents) ;
+ * 1 pour gros plan œil (contours des deux yeux). La pose `crown-down` (sommet du
+ * crâne) ne produit plus de PNG aplati : la photo miroir seule n’apportait aucun
+ * repère utile à l’admin.
  * Hors `DEBUG_CAPTURE_WHITE_FACE_MESH`, pas de masque blanc Wireframe sur ces composites.
  */
 export async function encodeAdminGuideFlattenedPair(opts: {
@@ -394,10 +387,13 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       return { variant: 'jawUp', jawLowerArcFlat };
     }
 
-    if (isCrownDownPoseId(opts.poseId)) {
-      const photoFlat = await renderPhotoOnlyMirroredFlatPng(bitmap);
-      if (!photoFlat) return null;
-      return { variant: 'crownPhoto', photoFlat };
+    if (opts.poseId === 'crown-down') {
+      /**
+       * Aucun PNG aplati pour le sommet du crâne — la photo miroir sans
+       * dessin/mesh n’apporte rien à l’admin et alourdirait la chaîne
+       * upload. Le JPEG `LOOK_DOWN` reste utilisé pour l’analyse.
+       */
+      return null;
     }
 
     if (isCloseupSmilePoseId(opts.poseId)) {
@@ -410,7 +406,15 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         false,
       );
       if (!smileLipsFlat) return null;
-      return { variant: 'smileLips', smileLipsFlat };
+      const smileTeethFlat = await renderSingleFlatGuidePng(
+        bitmap,
+        opts.landmarks,
+        opts.sourceVideoWidth,
+        opts.sourceVideoHeight,
+        (ctx, lm, ow, oh) => drawAdminSmileTeethGuideOnCanvas(ctx, lm, ow, oh),
+        false,
+      ).catch(() => null);
+      return { variant: 'smileLips', smileLipsFlat, smileTeethFlat };
     }
 
     const ovalFlat = await renderSingleFlatGuidePng(
@@ -465,6 +469,19 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
+    /**
+     * Variante « lèvres » au repos : on réutilise exactement le calque de
+     * `GUIDE_TRACE_SMILE_LIPS` (qui gère lui-même le voile sombre + le ring
+     * lèvres) — d’où `darkenBackgroundOpacity = 0` ici.
+     */
+    const lipsFlat = await renderSingleFlatGuidePng(
+      bitmap,
+      opts.landmarks,
+      opts.sourceVideoWidth,
+      opts.sourceVideoHeight,
+      (ctx, lm, ow, oh) => drawAdminSmileLipsGuideOnCanvas(ctx, lm, ow, oh),
+      false,
+    ).catch(() => null);
 
     if (
       !ovalFlat &&
@@ -472,7 +489,8 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       !verticalThirdsFlat &&
       !jawAngleFlat &&
       !faceShapeContourFlat &&
-      !maskOverlayFlat
+      !maskOverlayFlat &&
+      !lipsFlat
     )
       return null;
     return {
@@ -483,6 +501,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       jawAngleFlat,
       faceShapeContourFlat,
       maskOverlayFlat,
+      lipsFlat,
     };
   } catch {
     return null;

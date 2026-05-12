@@ -867,17 +867,27 @@ function GlobalScoreCard({
                   className="h-36 w-36 shrink-0 sm:h-40 sm:w-40"
                 />
               </div>
-              <div
-                className={cn(
-                  "relative mx-auto mt-5 max-w-xl overflow-hidden rounded-2xl px-4 py-2.5 text-center",
-                  scoreRingMatchMetallicPillClassName,
-                )}
-              >
-                <p
-                  className="relative z-10 font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base [text-shadow:0_1px_0_rgba(255,255,255,0.65)]"
-                >
-                  {rank.title}
-                </p>
+              {/*
+                Titre de palier sur une seule ligne (évite coupure avant « NPC » quand la
+                colonne est étroite, ex. sidebar ouverte). Défilement horizontal si besoin.
+              */}
+              <div className="mx-auto mt-5 w-full min-w-0 max-w-full">
+                <div className="max-w-full overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
+                  <div className="flex justify-center">
+                    <div
+                      className={cn(
+                        "relative w-max px-4 py-2.5 text-center",
+                        scoreRingMatchMetallicPillClassName,
+                      )}
+                    >
+                      <p
+                        className="relative z-10 whitespace-nowrap font-display text-sm font-bold leading-snug text-zinc-900 sm:text-base [text-shadow:0_1px_0_rgba(255,255,255,0.65)]"
+                      >
+                        {rank.title}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <GlobalTierRelativeCopy
                 score0to100={score.score}

@@ -1241,20 +1241,27 @@ function ringVerticesUnique(indices: readonly number[]): readonly number[] {
 }
 
 /**
- * PNG aplati pose sourire : composite à trois couches sur la photo.
+ * PNG aplati pose sourire (et variante face « lèvres au repos ») : composite à
+ * **deux passes d’assombrissement** sur la photo, sans aucun trait ni
+ * remplissage bleu — les lèvres conservent leur teinte naturelle, encadrées
+ * par deux zones sombres qui les font ressortir.
  *
- *   1. voile sombre 40 % partout SAUF à l’intérieur du contour extérieur des
- *      lèvres (les dents et la zone lèvres restent à pleine luminosité) ;
- *   2. remplissage bleu (donut) entre contour extérieur et contour intérieur
- *      des lèvres → « lèvres en bleu », l’ouverture de la bouche reste claire ;
- *   3. contours bleus existants (ext. + int.) par-dessus pour garder un trait
- *      net même quand le remplissage manque de contraste sur peau claire.
+ *   1. voile sombre **40 %** posé partout SAUF à l’intérieur du contour extérieur
+ *      des lèvres (= l’extérieur du visage est assombri ; le ring lèvres + la
+ *      bouche restent à pleine luminosité après cette passe) ;
+ *   2. voile sombre **50 %** posé uniquement à l’intérieur du contour intérieur
+ *      des lèvres (= dents / intérieur de la bouche assombris davantage).
  *
- * Si les anneaux MediaPipe sont manquants on dégrade vers l’ancien rendu
- * (simple contour) pour ne pas masquer la photo sans rendu utile.
+ * Au final :
+ *   • extérieur visage  →  40 % sombre
+ *   • ring lèvres       →  0 %  (teinte d’origine, pas de bleu)
+ *   • intérieur bouche  →  50 % sombre
+ *
+ * Dégradation : si `outerPoly` (contour extérieur des lèvres) manque, on ne
+ * rend rien — un voile uniforme n’apporterait aucune info utile.
  */
-const SMILE_LIPS_BG_DARKEN_RGBA = 'rgba(0, 0, 0, 0.4)';
-const SMILE_LIPS_BLUE_FILL_RGBA = 'rgba(125, 211, 252, 0.55)';
+const SMILE_LIPS_OUTER_DARKEN_RGBA = 'rgba(0, 0, 0, 0.4)';
+const SMILE_LIPS_MOUTH_DARKEN_RGBA = 'rgba(0, 0, 0, 0.5)';
 
 export function drawAdminSmileLipsGuideOnCanvas(
   ctx: CanvasRenderingContext2D,
@@ -1263,9 +1270,6 @@ export function drawAdminSmileLipsGuideOnCanvas(
   outH: number,
 ): void {
   if (landmarks.length < 400 || outW < 16 || outH < 16) return;
-
-  const stroke = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
-  const lineW = Math.max(2, Math.min(outW, outH) * 0.0032);
 
   /** Convertit un anneau MediaPipe en polygone canvas (null si un point manque). */
   const ringPolygon = (
@@ -1292,61 +1296,108 @@ export function drawAdminSmileLipsGuideOnCanvas(
   const outerPoly = ringPolygon(FACEMESH_LIP_OUTER_ORDERED);
   const innerPoly = ringPolygon(FACEMESH_LIP_INNER_ORDERED);
 
+  if (!outerPoly) return;
+
   ctx.save();
 
-  // 1) Voile sombre partout sauf intérieur du contour extérieur des lèvres.
-  if (outerPoly) {
-    ctx.beginPath();
-    ctx.rect(0, 0, outW, outH);
-    tracePolygon(outerPoly);
-    ctx.fillStyle = SMILE_LIPS_BG_DARKEN_RGBA;
-    ctx.fill('evenodd');
-  }
+  /**
+   * 1) Passe « extérieur » 40 % : rect + outerPoly en `evenodd` → seul
+   *    l’extérieur du contour des lèvres est assombri (la bouche et le ring
+   *    lèvres restent à pleine luminosité après cette passe).
+   */
+  ctx.beginPath();
+  ctx.rect(0, 0, outW, outH);
+  tracePolygon(outerPoly);
+  ctx.fillStyle = SMILE_LIPS_OUTER_DARKEN_RGBA;
+  ctx.fill('evenodd');
 
-  // 2) Remplissage bleu des lèvres (anneau ext. ⊖ anneau int. via evenodd).
-  if (outerPoly && innerPoly) {
-    ctx.beginPath();
-    tracePolygon(outerPoly);
-    tracePolygon(innerPoly);
-    ctx.fillStyle = SMILE_LIPS_BLUE_FILL_RGBA;
-    ctx.fill('evenodd');
-  } else if (outerPoly) {
-    /** Contour intérieur indispo : fallback rempli plein (sans découpe bouche). */
-    ctx.beginPath();
-    tracePolygon(outerPoly);
-    ctx.fillStyle = SMILE_LIPS_BLUE_FILL_RGBA;
-    ctx.fill();
-  }
-
-  // 3) Contours bleus marqués (ext. + int.) — au-dessus du remplissage.
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = lineW;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  if (outerPoly) {
-    ctx.beginPath();
-    tracePolygon(outerPoly);
-    ctx.stroke();
-  }
+  /**
+   * 2) Passe « intérieur bouche » 50 % : innerPoly seul → seul l’intérieur des
+   *    lèvres (dents) est assombri en plus. Le ring lèvres (entre outer et
+   *    inner) reste vierge → 0 % sombre, donc teinte d’origine.
+   */
   if (innerPoly) {
     ctx.beginPath();
     tracePolygon(innerPoly);
-    ctx.stroke();
+    ctx.fillStyle = SMILE_LIPS_MOUTH_DARKEN_RGBA;
+    ctx.fill();
   }
 
   ctx.restore();
 }
 
-const EYE_CLOSEUP_BG_DARKEN_RGBA = 'rgba(0, 0, 0, 0.4)';
+/**
+ * Variante « dents » du repère sourire : voile sombre 40 % posé sur tout le cliché
+ * SAUF l’intérieur de la bouche (anneau intérieur des lèvres). On ne dessine ni
+ * remplissage ni contour des lèvres — seule la zone des dents conserve sa teinte
+ * naturelle. Si `FACEMESH_LIP_INNER_ORDERED` est indisponible, on n’affiche rien
+ * (préférable à un voile plein qui n’apporterait aucune info).
+ */
+export function drawAdminSmileTeethGuideOnCanvas(
+  ctx: CanvasRenderingContext2D,
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+): void {
+  if (landmarks.length < 400 || outW < 16 || outH < 16) return;
+
+  /** Convertit un anneau MediaPipe en polygone canvas (null si un point manque). */
+  const ringPolygon = (
+    indicesIn: readonly number[],
+  ): { x: number; y: number }[] | null => {
+    const indices = ringVerticesUnique(indicesIn);
+    const pts: { x: number; y: number }[] = [];
+    for (const idx of indices) {
+      const lm = landmarks[idx];
+      if (!lm || lm.x === undefined || lm.y === undefined) return null;
+      pts.push(normPointToBmpPx(lm.x, lm.y, outW, outH));
+    }
+    return pts.length >= 3 ? pts : null;
+  };
+
+  const tracePolygon = (poly: { x: number; y: number }[]) => {
+    ctx.moveTo(poly[0]!.x, poly[0]!.y);
+    for (let i = 1; i < poly.length; i++) {
+      ctx.lineTo(poly[i]!.x, poly[i]!.y);
+    }
+    ctx.closePath();
+  };
+
+  const innerPoly = ringPolygon(FACEMESH_LIP_INNER_ORDERED);
+  if (!innerPoly) return;
+
+  ctx.save();
+  /**
+   * Voile sombre partout SAUF l’intérieur de la bouche :
+   *   • extérieur (peau, lèvres, environnement) → rect seul → impair → assombri
+   *   • intérieur bouche / dents → rect + inner = pair → conservé (teinte native)
+   */
+  ctx.beginPath();
+  ctx.rect(0, 0, outW, outH);
+  tracePolygon(innerPoly);
+  // Variante « dents » : même 40 % sombre que la passe extérieure de SMILE_LIPS.
+  ctx.fillStyle = SMILE_LIPS_OUTER_DARKEN_RGBA;
+  ctx.fill('evenodd');
+  ctx.restore();
+}
 
 /**
- * PNG aplati gros plan œil : contours paupière (anneaux gauche + droite
- * MediaPipe), bleu clair, **épaissis**. Un voile sombre 40 % est posé sur tout
- * le reste de l’image — l’intérieur des deux anneaux d’œil reste à pleine
- * intensité (même technique que `drawAdminSmileLipsGuideOnCanvas`).
+ * Voile sombre extra-fort posé hors des yeux : 80 % d’opacité = ~20 % de la
+ * photo visible autour des yeux. Le contraste fait ressortir l’œil sans
+ * trait dessiné par-dessus.
+ */
+const EYE_CLOSEUP_BG_DARKEN_RGBA = 'rgba(0, 0, 0, 0.8)';
+
+/**
+ * PNG aplati gros plan œil : **plus aucun trait dessiné**. Un voile sombre
+ * 80 % est posé sur tout le reste de l’image (technique `evenodd` identique à
+ * `drawAdminSmileLipsGuideOnCanvas`) — l’intérieur des deux anneaux d’œil
+ * reste à 100 % d’intensité, et le seul contraste sombre/clair fait ressortir
+ * fortement l’œil.
  *
- * Dégradation : si un anneau manque, on rend le contour disponible sans voile
- * sombre (mieux que rien — pas de découpe partielle qui assombrirait l’œil).
+ * Dégradation : si **les deux** anneaux manquent, on n’assombrit rien (pas
+ * d’overlay partiel qui couvrirait un œil). Si un seul anneau est dispo, on
+ * applique quand même la découpe sur celui-là — mieux que rien.
  */
 export function drawAdminCloseupEyeContoursGuideOnCanvas(
   ctx: CanvasRenderingContext2D,
@@ -1355,10 +1406,6 @@ export function drawAdminCloseupEyeContoursGuideOnCanvas(
   outH: number,
 ): void {
   if (landmarks.length < 400 || outW < 16 || outH < 16) return;
-
-  const stroke = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
-  /** Trait épaissi (~2× les autres contours) pour bien marquer la forme de l’œil. */
-  const lineW = Math.max(3, Math.min(outW, outH) * 0.0072);
 
   const ringPolygon = (
     indicesIn: readonly number[],
@@ -1384,33 +1431,14 @@ export function drawAdminCloseupEyeContoursGuideOnCanvas(
   const rightEye = ringPolygon(FACEMESH_RIGHT_EYE_ORDERED);
   const leftEye = ringPolygon(FACEMESH_LEFT_EYE_ORDERED);
 
+  if (!rightEye && !leftEye) return;
+
   ctx.save();
-
-  // 1) Voile sombre partout sauf l’intérieur des deux anneaux d’œil.
-  if (rightEye || leftEye) {
-    ctx.beginPath();
-    ctx.rect(0, 0, outW, outH);
-    if (rightEye) tracePolygon(rightEye);
-    if (leftEye) tracePolygon(leftEye);
-    ctx.fillStyle = EYE_CLOSEUP_BG_DARKEN_RGBA;
-    ctx.fill('evenodd');
-  }
-
-  // 2) Contours bleus épais — au-dessus du voile.
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = lineW;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  if (rightEye) {
-    ctx.beginPath();
-    tracePolygon(rightEye);
-    ctx.stroke();
-  }
-  if (leftEye) {
-    ctx.beginPath();
-    tracePolygon(leftEye);
-    ctx.stroke();
-  }
-
+  ctx.beginPath();
+  ctx.rect(0, 0, outW, outH);
+  if (rightEye) tracePolygon(rightEye);
+  if (leftEye) tracePolygon(leftEye);
+  ctx.fillStyle = EYE_CLOSEUP_BG_DARKEN_RGBA;
+  ctx.fill('evenodd');
   ctx.restore();
 }

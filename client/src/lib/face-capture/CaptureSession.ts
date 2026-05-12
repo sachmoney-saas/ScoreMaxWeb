@@ -63,6 +63,13 @@ export interface CapturedPose {
    */
   annotatedFrontalMaskOverlayFlatBlob?: Blob;
   annotatedFrontalMaskOverlayFlatThumbnailUrl?: string;
+  /**
+   * PNG aplati cliché frontal + variante « lèvres » : mêmes calques que
+   * `GUIDE_TRACE_SMILE_LIPS` (remplissage bleu intérieur lèvres + voile sombre
+   * partout sauf le ring lèvres) — au repos plutôt que sur un sourire.
+   */
+  annotatedFrontalLipsGuideBlob?: Blob;
+  annotatedFrontalLipsGuideThumbnailUrl?: string;
   /** PNG aplati profil : cliché + masque + arc mâchoire bleu (hors analyse). */
   annotatedProfileJawGuideBlob?: Blob;
   annotatedProfileJawGuideThumbnailUrl?: string;
@@ -72,12 +79,15 @@ export interface CapturedPose {
   /** PNG aplati menton levé : cliché + masque + arc mandibulaire bas (hors analyse). */
   annotatedJawUpLowerArcGuideBlob?: Blob;
   annotatedJawUpLowerArcGuideThumbnailUrl?: string;
-  /** PNG aplati sommet du crâne : photo miroir seule, sans masque (hors analyse). */
-  annotatedCrownPhotoFlatBlob?: Blob;
-  annotatedCrownPhotoFlatThumbnailUrl?: string;
   /** PNG aplati sourire : cliché + masque + contours lèvres (hors analyse). */
   annotatedSmileLipsGuideBlob?: Blob;
   annotatedSmileLipsGuideThumbnailUrl?: string;
+  /**
+   * PNG aplati sourire (variante dents) : cliché + voile sombre 40 % partout
+   * sauf l’intérieur de la bouche. Pas de tracé ni de remplissage des lèvres.
+   */
+  annotatedSmileTeethGuideBlob?: Blob;
+  annotatedSmileTeethGuideThumbnailUrl?: string;
   /** PNG aplati gros plan œil : cliché + contours paupières bleu (hors analyse). */
   annotatedCloseupEyeContoursGuideBlob?: Blob;
   annotatedCloseupEyeContoursGuideThumbnailUrl?: string;
@@ -104,11 +114,12 @@ export interface AdminCaptureDebugPayload {
   annotatedJawAngleGuideThumbnailUrl?: string;
   annotatedFaceShapeContourGuideThumbnailUrl?: string;
   annotatedFrontalMaskOverlayFlatThumbnailUrl?: string;
+  annotatedFrontalLipsGuideThumbnailUrl?: string;
   annotatedProfileJawGuideThumbnailUrl?: string;
   annotatedProfileNoseGuideThumbnailUrl?: string;
   annotatedJawUpLowerArcGuideThumbnailUrl?: string;
-  annotatedCrownPhotoFlatThumbnailUrl?: string;
   annotatedSmileLipsGuideThumbnailUrl?: string;
+  annotatedSmileTeethGuideThumbnailUrl?: string;
   annotatedCloseupEyeContoursGuideThumbnailUrl?: string;
 }
 
@@ -1255,16 +1266,18 @@ export class CaptureSession {
     let annotatedFaceShapeContourGuideThumbnailUrl: string | undefined;
     let annotatedFrontalMaskOverlayFlatBlob: Blob | undefined;
     let annotatedFrontalMaskOverlayFlatThumbnailUrl: string | undefined;
+    let annotatedFrontalLipsGuideBlob: Blob | undefined;
+    let annotatedFrontalLipsGuideThumbnailUrl: string | undefined;
     let annotatedProfileJawGuideBlob: Blob | undefined;
     let annotatedProfileJawGuideThumbnailUrl: string | undefined;
     let annotatedProfileNoseGuideBlob: Blob | undefined;
     let annotatedProfileNoseGuideThumbnailUrl: string | undefined;
     let annotatedJawUpLowerArcGuideBlob: Blob | undefined;
     let annotatedJawUpLowerArcGuideThumbnailUrl: string | undefined;
-    let annotatedCrownPhotoFlatBlob: Blob | undefined;
-    let annotatedCrownPhotoFlatThumbnailUrl: string | undefined;
     let annotatedSmileLipsGuideBlob: Blob | undefined;
     let annotatedSmileLipsGuideThumbnailUrl: string | undefined;
+    let annotatedSmileTeethGuideBlob: Blob | undefined;
+    let annotatedSmileTeethGuideThumbnailUrl: string | undefined;
     let annotatedCloseupEyeContoursGuideBlob: Blob | undefined;
     let annotatedCloseupEyeContoursGuideThumbnailUrl: string | undefined;
 
@@ -1308,6 +1321,12 @@ export class CaptureSession {
               flattened.maskOverlayFlat,
             );
           }
+          if (flattened.lipsFlat) {
+            annotatedFrontalLipsGuideBlob = flattened.lipsFlat;
+            annotatedFrontalLipsGuideThumbnailUrl = URL.createObjectURL(
+              flattened.lipsFlat,
+            );
+          }
         } else if (flattened?.variant === "profile") {
           annotatedProfileJawGuideBlob = flattened.profileJawFlat;
           annotatedProfileJawGuideThumbnailUrl = URL.createObjectURL(flattened.profileJawFlat);
@@ -1318,12 +1337,15 @@ export class CaptureSession {
         } else if (flattened?.variant === "jawUp") {
           annotatedJawUpLowerArcGuideBlob = flattened.jawLowerArcFlat;
           annotatedJawUpLowerArcGuideThumbnailUrl = URL.createObjectURL(flattened.jawLowerArcFlat);
-        } else if (flattened?.variant === "crownPhoto") {
-          annotatedCrownPhotoFlatBlob = flattened.photoFlat;
-          annotatedCrownPhotoFlatThumbnailUrl = URL.createObjectURL(flattened.photoFlat);
         } else if (flattened?.variant === "smileLips") {
           annotatedSmileLipsGuideBlob = flattened.smileLipsFlat;
           annotatedSmileLipsGuideThumbnailUrl = URL.createObjectURL(flattened.smileLipsFlat);
+          if (flattened.smileTeethFlat) {
+            annotatedSmileTeethGuideBlob = flattened.smileTeethFlat;
+            annotatedSmileTeethGuideThumbnailUrl = URL.createObjectURL(
+              flattened.smileTeethFlat,
+            );
+          }
         } else if (flattened?.variant === "closeupEye") {
           annotatedCloseupEyeContoursGuideBlob = flattened.eyeContoursFlat;
           annotatedCloseupEyeContoursGuideThumbnailUrl = URL.createObjectURL(
@@ -1382,6 +1404,12 @@ export class CaptureSession {
             annotatedFrontalMaskOverlayFlatThumbnailUrl,
           }
         : {}),
+      ...(annotatedFrontalLipsGuideBlob && annotatedFrontalLipsGuideThumbnailUrl
+        ? {
+            annotatedFrontalLipsGuideBlob,
+            annotatedFrontalLipsGuideThumbnailUrl,
+          }
+        : {}),
       ...(annotatedProfileJawGuideBlob && annotatedProfileJawGuideThumbnailUrl
         ? {
             annotatedProfileJawGuideBlob,
@@ -1400,16 +1428,16 @@ export class CaptureSession {
             annotatedJawUpLowerArcGuideThumbnailUrl,
           }
         : {}),
-      ...(annotatedCrownPhotoFlatBlob && annotatedCrownPhotoFlatThumbnailUrl
-        ? {
-            annotatedCrownPhotoFlatBlob,
-            annotatedCrownPhotoFlatThumbnailUrl,
-          }
-        : {}),
       ...(annotatedSmileLipsGuideBlob && annotatedSmileLipsGuideThumbnailUrl
         ? {
             annotatedSmileLipsGuideBlob,
             annotatedSmileLipsGuideThumbnailUrl,
+          }
+        : {}),
+      ...(annotatedSmileTeethGuideBlob && annotatedSmileTeethGuideThumbnailUrl
+        ? {
+            annotatedSmileTeethGuideBlob,
+            annotatedSmileTeethGuideThumbnailUrl,
           }
         : {}),
       ...(annotatedCloseupEyeContoursGuideBlob &&
@@ -1461,11 +1489,12 @@ export class CaptureSession {
           annotatedJawAngleGuideThumbnailUrl,
           annotatedFaceShapeContourGuideThumbnailUrl,
           annotatedFrontalMaskOverlayFlatThumbnailUrl,
+          annotatedFrontalLipsGuideThumbnailUrl,
           annotatedProfileJawGuideThumbnailUrl,
           annotatedProfileNoseGuideThumbnailUrl,
           annotatedJawUpLowerArcGuideThumbnailUrl,
-          annotatedCrownPhotoFlatThumbnailUrl,
           annotatedSmileLipsGuideThumbnailUrl,
+          annotatedSmileTeethGuideThumbnailUrl,
           annotatedCloseupEyeContoursGuideThumbnailUrl,
         },
       });

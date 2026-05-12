@@ -405,8 +405,10 @@ VALUES
   ('GUIDE_TRACE_PROFILE_LEFT_NOSE', 'Repère profil gauche : silhouette nez (côté visible)', FALSE, 112, TRUE),
   ('GUIDE_TRACE_PROFILE_RIGHT_NOSE', 'Repère profil droit : silhouette nez (côté visible)', FALSE, 113, TRUE),
   ('GUIDE_TRACE_LOOK_UP_JAW_ARC', 'Repère regard haut : arc mâchoire', FALSE, 107, TRUE),
-  ('GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR', 'Repère couronne (miroir)', FALSE, 108, TRUE),
+  ('GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR', 'Repère couronne (miroir) — désactivé', FALSE, 108, FALSE),
   ('GUIDE_TRACE_SMILE_LIPS', 'Repère sourire : lèvres', FALSE, 109, TRUE),
+  ('GUIDE_TRACE_SMILE_TEETH', 'Repère sourire : dents (overlay)', FALSE, 114, TRUE),
+  ('GUIDE_TRACE_FACE_FRONT_LIPS', 'Repère face : lèvres au repos', FALSE, 115, TRUE),
   ('GUIDE_TRACE_EYE_CLOSEUP_CONTOURS', 'Repère gros plan œil : contours', FALSE, 111, TRUE)
 ON CONFLICT (code) DO UPDATE
 SET

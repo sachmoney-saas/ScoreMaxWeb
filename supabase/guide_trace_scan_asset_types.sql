@@ -27,9 +27,18 @@ VALUES
 
   ('GUIDE_TRACE_LOOK_UP_JAW_ARC', 'Repère regard haut : arc mâchoire', FALSE, 107, TRUE),
 
-  ('GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR', 'Repère couronne (miroir)', FALSE, 108, TRUE),
+  -- `GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR` désactivé (`is_active=false`) :
+  -- la photo miroir sommet du crâne n’apporte aucun repère utile à l’admin —
+  -- on évite désormais l’encodage + l’upload pour cette pose. Les anciennes
+  -- analyses gardent leurs lignes existantes en base (pas de delete).
+  ('GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR', 'Repère couronne (miroir) — désactivé', FALSE, 108, FALSE),
 
   ('GUIDE_TRACE_SMILE_LIPS', 'Repère sourire : lèvres', FALSE, 109, TRUE),
+
+  -- Variante « lèvres » prise sur la pose de face (mêmes calques que SMILE_LIPS).
+  ('GUIDE_TRACE_FACE_FRONT_LIPS', 'Repère face : lèvres au repos', FALSE, 115, TRUE),
+
+  ('GUIDE_TRACE_SMILE_TEETH', 'Repère sourire : dents (overlay)', FALSE, 114, TRUE),
 
   ('GUIDE_TRACE_EYE_CLOSEUP_CONTOURS', 'Repère gros plan œil : contours', FALSE, 111, TRUE)
 

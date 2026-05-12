@@ -77,6 +77,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           blob: pose.annotatedFrontalMaskOverlayFlatBlob,
         });
       }
+      if (pose.annotatedFrontalLipsGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_LIPS",
+          fileLabel: "frontal-lips",
+          blob: pose.annotatedFrontalLipsGuideBlob,
+        });
+      }
       break;
     case "profile-left":
       if (pose.annotatedProfileJawGuideBlob) {
@@ -120,13 +127,9 @@ export function guideTraceBlobUploadsFromCapturedPose(
       }
       break;
     case "crown-down":
-      if (pose.annotatedCrownPhotoFlatBlob) {
-        uploads.push({
-          assetTypeCode: "GUIDE_TRACE_LOOK_DOWN_CROWN_MIRROR",
-          fileLabel: "crown-photo",
-          blob: pose.annotatedCrownPhotoFlatBlob,
-        });
-      }
+      // Pas de PNG aplati pour la pose `crown-down` — la photo miroir seule
+      // n’apporte aucun repère utile à l’admin ; on conserve uniquement le
+      // JPEG `LOOK_DOWN` (uploadé via le flux scan-asset standard).
       break;
     case "closeup-smile":
       if (pose.annotatedSmileLipsGuideBlob) {
@@ -134,6 +137,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           assetTypeCode: "GUIDE_TRACE_SMILE_LIPS",
           fileLabel: "smile-lips",
           blob: pose.annotatedSmileLipsGuideBlob,
+        });
+      }
+      if (pose.annotatedSmileTeethGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_SMILE_TEETH",
+          fileLabel: "smile-teeth",
+          blob: pose.annotatedSmileTeethGuideBlob,
         });
       }
       break;

@@ -502,7 +502,8 @@ export type AnalysisJobAssetPreviewCode =
   | "EYE_CLOSEUP"
   | "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS"
   | "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR"
-  | "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY";
+  | "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY"
+  | "GUIDE_TRACE_SMILE_LIPS";
 
 export function buildAnalysisJobAssetPreviewUrl(params: {
   userId: string;

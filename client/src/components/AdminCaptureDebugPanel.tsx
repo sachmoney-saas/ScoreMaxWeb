@@ -115,10 +115,6 @@ function isJawUpPoseId(id: PoseId): boolean {
   return id === 'jaw-up';
 }
 
-function isCrownDownPoseId(id: PoseId): boolean {
-  return id === 'crown-down';
-}
-
 function isCloseupSmilePoseId(id: PoseId): boolean {
   return id === 'closeup-smile';
 }
@@ -293,63 +289,6 @@ function CanvasFallbackJawUp({
           className="pointer-events-none absolute left-0 top-0 block max-w-full rounded-md"
         />
       </div>
-    </div>
-  );
-}
-
-/** Repli canvas — sommet du crâne : photo miroir seule (comme le PNG aplati, sans masque). */
-function CanvasFallbackCrownPhoto({
-  payload,
-  language,
-}: {
-  payload: AdminCaptureDebugPayload;
-  language: AppLanguage;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const img = new Image();
-
-    img.onload = () => {
-      if (cancelled) return;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const pr = Math.min(window.devicePixelRatio ?? 1, MAX_MASK_PIXEL_RATIO);
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
-      if (w < 2 || h < 2) return;
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
-      canvas.width = Math.round(w * pr);
-      canvas.height = Math.round(h * pr);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.setTransform(pr, 0, 0, pr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      ctx.save();
-      ctx.translate(w, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, 0, 0, w, h);
-      ctx.restore();
-    };
-
-    img.src = payload.thumbnailUrl;
-
-    return () => {
-      cancelled = true;
-    };
-  }, [payload]);
-
-  return (
-    <div className="flex w-full flex-col gap-2">
-      <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-        {i18n(language, {
-          en: 'Crown — mirrored photo only (fallback)',
-          fr: 'Sommet du crâne — photo miroir seule (repli)',
-        })}
-      </p>
-      <canvas ref={canvasRef} className="mx-auto block max-w-full rounded-md" />
     </div>
   );
 }
@@ -677,7 +616,6 @@ export function AdminCaptureDebugPanel({
 }) {
   const isProfilePose = isProfilePoseId(payload.poseId);
   const isJawUpPose = isJawUpPoseId(payload.poseId);
-  const isCrownPose = isCrownDownPoseId(payload.poseId);
   const isSmilePose = isCloseupSmilePoseId(payload.poseId);
   const isCloseupEyePose = isCloseupEyePoseId(payload.poseId);
   const eyeCloseupContourUrl = payload.annotatedCloseupEyeContoursGuideThumbnailUrl;
@@ -692,24 +630,23 @@ export function AdminCaptureDebugPanel({
   const jawAngleUrl = payload.annotatedJawAngleGuideThumbnailUrl;
   const fcUrl = payload.annotatedFaceShapeContourGuideThumbnailUrl;
   const maskOverlayUrl = payload.annotatedFrontalMaskOverlayFlatThumbnailUrl;
+  const frontalLipsUrl = payload.annotatedFrontalLipsGuideThumbnailUrl;
   const jawUrl = payload.annotatedProfileJawGuideThumbnailUrl;
   const profileNoseUrl = payload.annotatedProfileNoseGuideThumbnailUrl;
   const jawUpUrl = payload.annotatedJawUpLowerArcGuideThumbnailUrl;
-  const crownUrl = payload.annotatedCrownPhotoFlatThumbnailUrl;
   const smileUrl = payload.annotatedSmileLipsGuideThumbnailUrl;
+  const smileTeethUrl = payload.annotatedSmileTeethGuideThumbnailUrl;
 
   const hasAnyFrontalGuidePng = Boolean(
-    ovalUrl || nmUrl || vtUrl || jawAngleUrl || fcUrl || maskOverlayUrl,
+    ovalUrl || nmUrl || vtUrl || jawAngleUrl || fcUrl || maskOverlayUrl || frontalLipsUrl,
   );
   const hasProfileFlat = Boolean(jawUrl || profileNoseUrl);
   const hasJawUpFlat = Boolean(jawUpUrl);
-  const hasCrownFlat = Boolean(crownUrl);
-  const hasSmileFlat = Boolean(smileUrl);
+  const hasSmileFlat = Boolean(smileUrl || smileTeethUrl);
   const hasFlatPng =
     hasAnyFrontalGuidePng ||
     hasProfileFlat ||
     hasJawUpFlat ||
-    hasCrownFlat ||
     hasSmileFlat ||
     hasCloseupEyeFlat;
 
@@ -786,28 +723,33 @@ export function AdminCaptureDebugPanel({
                 fr: 'Télécharger PNG — arc mandibulaire (menton levé)',
               })}
             </a>
-          ) : hasCrownFlat ? (
-            <a
-              href={crownUrl}
-              download={`${payload.poseId}-annotated-crown-photo-flat.png`}
-              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-            >
-              {i18n(language, {
-                en: 'Download PNG — crown (mirrored photo, no mask)',
-                fr: 'Télécharger PNG — sommet du crâne (photo miroir, sans masque)',
-              })}
-            </a>
           ) : hasSmileFlat ? (
-            <a
-              href={smileUrl}
-              download={`${payload.poseId}-annotated-smile-lips-guide.png`}
-              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-            >
-              {i18n(language, {
-                en: 'Download PNG — lip contours (smile)',
-                fr: 'Télécharger PNG — contours lèvres (sourire)',
-              })}
-            </a>
+            <>
+              {smileUrl ? (
+                <a
+                  href={smileUrl}
+                  download={`${payload.poseId}-annotated-smile-lips-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — lip contours (smile)',
+                    fr: 'Télécharger PNG — contours lèvres (sourire)',
+                  })}
+                </a>
+              ) : null}
+              {smileTeethUrl ? (
+                <a
+                  href={smileTeethUrl}
+                  download={`${payload.poseId}-annotated-smile-teeth-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — teeth highlight (smile)',
+                    fr: 'Télécharger PNG — dents en évidence (sourire)',
+                  })}
+                </a>
+              ) : null}
+            </>
           ) : hasCloseupEyeFlat ? (
             <a
               href={eyeCloseupContourUrl}
@@ -893,6 +835,18 @@ export function AdminCaptureDebugPanel({
                   })}
                 </a>
               ) : null}
+              {frontalLipsUrl ? (
+                <a
+                  href={frontalLipsUrl}
+                  download={`${payload.poseId}-annotated-frontal-lips-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — frontal lips (at rest)',
+                    fr: 'Télécharger PNG — lèvres au repos (face)',
+                  })}
+                </a>
+              ) : null}
             </>
           )}
         </div>
@@ -955,39 +909,44 @@ export function AdminCaptureDebugPanel({
                 decoding="async"
               />
             </div>
-          ) : hasCrownFlat ? (
-            <div className="w-full">
-              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                {i18n(language, {
-                  en: 'Crown — flat mirrored photo (no mesh, no guides)',
-                  fr: 'Sommet du crâne — fichier aplati photo miroir (sans masque ni repères)',
-                })}
-              </p>
-              <img
-                src={crownUrl}
-                alt=""
-                width={payload.outputWidth}
-                height={payload.outputHeight}
-                className="mx-auto block h-auto w-full max-w-full rounded-md"
-                decoding="async"
-              />
-            </div>
           ) : hasSmileFlat ? (
-            <div className="w-full">
-              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                {i18n(language, {
-                  en: 'Smile — flat (mesh + light blue lip outlines)',
-                  fr: 'Sourire — aplati (masque + contours lèvres bleu clair)',
-                })}
-              </p>
-              <img
-                src={smileUrl}
-                alt=""
-                width={payload.outputWidth}
-                height={payload.outputHeight}
-                className="mx-auto block h-auto w-full max-w-full rounded-md"
-                decoding="async"
-              />
+            <div className="flex w-full flex-col items-center gap-8">
+              {smileUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Smile — lips (blue fill, darkened mouth + outside)',
+                      fr: 'Sourire — lèvres (remplissage bleu, bouche + extérieur assombris)',
+                    })}
+                  </p>
+                  <img
+                    src={smileUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {smileTeethUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Smile — teeth highlight (everything outside the mouth darkened)',
+                      fr: 'Sourire — dents en évidence (tout l’extérieur de la bouche assombri)',
+                    })}
+                  </p>
+                  <img
+                    src={smileTeethUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : hasCloseupEyeFlat ? (
             <div className="w-full">
@@ -1113,6 +1072,24 @@ export function AdminCaptureDebugPanel({
                   />
                 </div>
               ) : null}
+              {frontalLipsUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Frontal lips — at rest (same layers as smile lips)',
+                      fr: 'Lèvres au repos — face (mêmes calques que sourire)',
+                    })}
+                  </p>
+                  <img
+                    src={frontalLipsUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
             </div>
           )
         ) : needsJpegOnlyCloseup ? (
@@ -1121,8 +1098,6 @@ export function AdminCaptureDebugPanel({
           <CanvasFallbackProfileJaw payload={payload} language={language} />
         ) : isJawUpPose ? (
           <CanvasFallbackJawUp payload={payload} language={language} />
-        ) : isCrownPose ? (
-          <CanvasFallbackCrownPhoto payload={payload} language={language} />
         ) : isSmilePose ? (
           <CanvasFallbackSmileLips payload={payload} language={language} />
         ) : (

@@ -271,6 +271,33 @@ export function WorkerSignatureRadar({
 
 type AxisLabel = { en: string; fr: string };
 
+/**
+ * Palette par quadrant 5×5 :
+ * - `none` (défaut) : teinte neutre métal, opacité dégradée vers le centre
+ *   — comportement historique commun à toutes les matrices.
+ * - `performance` : quadrants « bon / moyen / mauvais » avec couleurs **peu
+ *   saturées** (gris teintés) et **opacité élevée** pour un cadrillage lisible
+ *   sur fond sombre. Haut-droite = teinte verte douce, bas-gauche = teinte
+ *   rougeâtre douce, les deux autres = teinte ambre / terre. La cellule
+ *   sélectionnée (`isUser`) reste **toujours** blanche.
+ */
+type StanceMatrixQuadrantPalette = "none" | "performance";
+
+/** RGB d’un quadrant — teintes peu saturées (grises teintées) ; opacité élevée pour un cadrillage lisible. */
+const STANCE_PERFORMANCE_QUADRANT_RGB = {
+  good: "82, 118, 104",    // mousse dessaturée (vert-gris)
+  warning: "134, 102, 88", // terre / ambre dessaturé
+  bad: "124, 92, 96",      // rose poussiéreux dessaturé
+} as const;
+
+function performanceQuadrantRgb(cx: number, ry: number, cols: number, rows: number): string {
+  const isRight = cx >= Math.floor(cols / 2);
+  const isTop = ry < Math.floor(rows / 2);
+  if (isRight && isTop) return STANCE_PERFORMANCE_QUADRANT_RGB.good;
+  if (!isRight && !isTop) return STANCE_PERFORMANCE_QUADRANT_RGB.bad;
+  return STANCE_PERFORMANCE_QUADRANT_RGB.warning;
+}
+
 export function WorkerStanceMatrix({
   xScore,
   yScore,
@@ -281,6 +308,11 @@ export function WorkerStanceMatrix({
   language,
   ariaLabel,
   resolveCellTargetId,
+  /** Réduit la largeur max (cartes preview dashboard, comme sourcils / masse grasse). */
+  compact = false,
+  /** Palette par quadrant — voir `StanceMatrixQuadrantPalette`. Défaut : `none`. */
+  quadrantPalette = "none",
+  className,
 }: {
   xScore: number | null;
   yScore: number | null;
@@ -292,6 +324,9 @@ export function WorkerStanceMatrix({
   ariaLabel: AxisLabel;
   /** (col 0–9, row 0–9, top row = 0) → id d’ancre sans `#`, ou null pour cellule non cliquable */
   resolveCellTargetId?: (cx: number, ry: number) => string | null;
+  compact?: boolean;
+  quadrantPalette?: StanceMatrixQuadrantPalette;
+  className?: string;
 }) {
   const cols = 10;
   const rows = 10;
@@ -305,11 +340,16 @@ export function WorkerStanceMatrix({
       ? Math.min(rows - 1, Math.max(0, Math.floor(10 - yScore)))
       : null;
 
-  const labelClass =
-    "text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400";
+  const labelClass = compact
+    ? "text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:tracking-[0.16em]"
+    : "text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400";
+
+  const outerWrap = compact
+    ? "mx-auto w-full max-w-[min(100%,12rem)] sm:max-w-[14rem]"
+    : "mx-auto w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]";
 
   return (
-    <div className="mx-auto w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]">
+    <div className={cn(outerWrap, className)}>
       <div className="grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]">
         <div />
         <div className={`text-center ${labelClass}`}>
@@ -338,12 +378,25 @@ export function WorkerStanceMatrix({
                   cx - (cols - 1) / 2,
                   ry - (rows - 1) / 2,
                 );
-                const baseOpacity = Math.max(0.04, 0.18 - distance * 0.019);
                 const tid = resolveCellTargetId?.(cx, ry) ?? null;
+                /**
+                 * - Palette neutre : teinte métal + dégradé radial doux (historique).
+                 * - Palette quadrant : couleurs peu saturées + **opacité forte**
+                 *   (~0,68–0,88) pour un cadrillage net, sans écraser la cellule blanche
+                 *   sélectionnée.
+                 */
+                const cellRgb =
+                  quadrantPalette === "performance"
+                    ? performanceQuadrantRgb(cx, ry, cols, rows)
+                    : "154, 174, 181";
+                const cellOpacity =
+                  quadrantPalette === "performance"
+                    ? Math.max(0.68, 0.88 - distance * 0.025)
+                    : Math.max(0.04, 0.18 - distance * 0.019);
                 const cellStyle = {
                   backgroundColor: isUser
                     ? "#e9f1f4"
-                    : (`rgba(154,174,181,${baseOpacity})` as const),
+                    : (`rgba(${cellRgb}, ${cellOpacity})` as const),
                   boxShadow: isUser
                     ? "0 0 14px rgba(255,255,255,0.45)"
                     : undefined,
