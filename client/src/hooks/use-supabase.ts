@@ -1,11 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { reportClientError } from "@/lib/report-client-error";
 import {
   Profile,
   UpdateProfileRequest,
   OnboardingScanStatus,
 } from "@shared/schema";
 import { useAuth } from "./use-auth";
+import {
+  fetchAdminClientErrors,
+  purgeAdminClientErrorReports,
+  type AdminClientErrorsFilters,
+} from "@/lib/admin-client-errors";
 import {
   deleteAdminAnalysisJob,
   fetchAdminAnalysisFailures,
@@ -226,10 +232,24 @@ export function useOnboardingScanStatus(options?: { enabled?: boolean }) {
       const { data, error } = await supabase.rpc("get_onboarding_scan_status");
 
       if (error) {
+        reportClientError({
+          source: "rpc.get_onboarding_scan_status",
+          message: error.message,
+          errorCode: error.code,
+          errorDetail:
+            typeof error.details === "string"
+              ? error.details
+              : JSON.stringify(error.details ?? null),
+          errorHint: error.hint ?? undefined,
+        });
         throw error;
       }
 
       if (!data || data.length === 0) {
+        reportClientError({
+          source: "rpc.get_onboarding_scan_status.empty",
+          message: "Onboarding scan status is unavailable",
+        });
         throw new Error("Onboarding scan status is unavailable");
       }
 
@@ -395,6 +415,36 @@ async function getAccessToken(): Promise<string> {
   }
 
   return data.session.access_token;
+}
+
+export function useAdminClientErrors(
+  filters: AdminClientErrorsFilters | undefined,
+  options?: { enabled?: boolean },
+) {
+  const { isAdmin } = useAuth();
+
+  return useQuery({
+    queryKey: ["admin-client-errors", filters ?? {}],
+    queryFn: async () => fetchAdminClientErrors(await getAccessToken(), filters!),
+    enabled: isAdmin && !!filters && (options?.enabled ?? true),
+    staleTime: 0,
+    placeholderData: (previousData) => previousData,
+  });
+}
+
+export function usePurgeAdminClientErrorReports() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: { deleteAll: boolean }) =>
+      purgeAdminClientErrorReports({
+        accessToken: await getAccessToken(),
+        deleteAll: params.deleteAll,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-client-errors"] });
+    },
+  });
 }
 
 export function useAdminAnalysisFailures(options?: { enabled?: boolean }) {

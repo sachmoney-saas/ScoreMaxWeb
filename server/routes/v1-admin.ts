@@ -21,6 +21,13 @@ const adminFailuresQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
 });
 
+const adminClientErrorsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  source: z.string().trim().min(1).optional(),
+  search: z.string().trim().min(1).optional(),
+});
+
 const analysisJobParamsSchema = z.object({
   jobId: z.string().uuid(),
 });
@@ -86,6 +93,21 @@ type AssetCountRow = {
   session_id?: string | null;
 };
 
+type ClientErrorReportRow = {
+  id: string;
+  created_at: string;
+  user_id: string | null;
+  source: string;
+  message: string;
+  error_code: string | null;
+  error_detail: string | null;
+  error_hint: string | null;
+  payload: unknown;
+  client_route: string | null;
+  user_agent: string | null;
+  app_version: string | null;
+};
+
 function countByKey<T extends Record<string, unknown>>(rows: T[], key: keyof T): Map<string, number> {
   const counts = new Map<string, number>();
 
@@ -103,6 +125,131 @@ function countByKey<T extends Record<string, unknown>>(rows: T[], key: keyof T):
 
 export function createV1AdminRouter(): Router {
   const router = Router();
+
+  router.get("/admin/client-errors", async (req, res, next) => {
+    try {
+      await requireAdminUser(req.headers.authorization);
+      const query = adminClientErrorsQuerySchema.parse(req.query);
+
+      let rowsQuery = supabaseAdmin
+        .from("client_error_reports")
+        .select(
+          "id, created_at, user_id, source, message, error_code, error_detail, error_hint, payload, client_route, user_agent, app_version",
+          { count: "exact" },
+        )
+        .order("created_at", { ascending: false });
+
+      if (query.source) {
+        rowsQuery = rowsQuery.eq("source", query.source);
+      }
+
+      if (query.search) {
+        const search = query.search.replace(/,/g, " ").trim();
+        rowsQuery = rowsQuery.or(
+          [
+            `message.ilike.%${search}%`,
+            `source.ilike.%${search}%`,
+            `error_code.ilike.%${search}%`,
+            `user_id.ilike.%${search}%`,
+            `client_route.ilike.%${search}%`,
+          ].join(","),
+        );
+      }
+
+      rowsQuery = rowsQuery.range(query.offset, query.offset + query.limit - 1);
+
+      const { data: rowsData, error: rowsError, count } = await rowsQuery;
+      if (rowsError) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to load client error reports",
+          details: rowsError,
+        });
+      }
+
+      const rows = (rowsData ?? []) as ClientErrorReportRow[];
+      const total = count ?? rows.length;
+      const userIds = Array.from(
+        new Set(rows.map((row) => row.user_id).filter((id): id is string => typeof id === "string")),
+      );
+
+      let profilesById = new Map<string, ProfileLookupRow>();
+      if (userIds.length > 0) {
+        const { data: profiles, error: profilesError } = await supabaseAdmin
+          .from("profiles")
+          .select("id, email")
+          .in("id", userIds);
+
+        if (profilesError) {
+          throw new ApiError({
+            code: "INTERNAL_SERVER_ERROR",
+            status: 500,
+            message: "Unable to load profiles for client error reports",
+            details: profilesError,
+          });
+        }
+
+        profilesById = new Map(
+          ((profiles ?? []) as ProfileLookupRow[]).map((profile) => [profile.id, profile]),
+        );
+      }
+
+      const enriched = rows.map((row) => ({
+        ...row,
+        user_email: row.user_id ? (profilesById.get(row.user_id)?.email ?? null) : null,
+      }));
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { rows: enriched, total },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/admin/client-errors", async (req, res, next) => {
+    try {
+      await requireAdminUser(req.headers.authorization);
+      const rawAll = typeof req.query.all === "string" ? req.query.all.toLowerCase() : "";
+      const deleteAll = rawAll === "true" || rawAll === "1";
+
+      const { data, error } = await supabaseAdmin.rpc("scoremax_purge_client_error_reports", {
+        p_delete_all: deleteAll,
+      });
+
+      if (error) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to purge client error reports",
+          details: error,
+        });
+      }
+
+      const deleted =
+        typeof data === "number"
+          ? data
+          : typeof data === "string"
+            ? Number(data)
+            : Number(data ?? 0);
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: {
+          deleted_count: Number.isFinite(deleted) ? deleted : 0,
+          delete_all: deleteAll,
+        },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get("/admin/analysis-failures", async (req, res, next) => {
     try {

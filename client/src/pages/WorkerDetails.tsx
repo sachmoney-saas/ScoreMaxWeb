@@ -284,6 +284,30 @@ export default function WorkerDetails() {
                 assetTypeCode: "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
               })
             : null,
+        jawProfileRightGuideSrc:
+          worker === "jaw" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_PROFILE_RIGHT_JAW",
+              })
+            : null,
+        jawFrontalAngleGuideSrc:
+          worker === "jaw" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
+              })
+            : null,
+        jawProfileLeftGuideSrc:
+          worker === "jaw" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_PROFILE_LEFT_JAW",
+              })
+            : null,
       })}
 
       {entries.length > 0 ? (
@@ -307,6 +331,9 @@ function renderWorkerBody({
   captureGuideMetrics,
   eyeCloseupAssetSrc,
   verticalThirdsAssetSrc,
+  jawProfileRightGuideSrc,
+  jawFrontalAngleGuideSrc,
+  jawProfileLeftGuideSrc,
 }: {
   worker: string;
   outputAggregates: Record<string, unknown>;
@@ -317,6 +344,9 @@ function renderWorkerBody({
   captureGuideMetrics?: GuideTraceMetricsForAnalysis | null;
   eyeCloseupAssetSrc?: string | null;
   verticalThirdsAssetSrc?: string | null;
+  jawProfileRightGuideSrc?: string | null;
+  jawFrontalAngleGuideSrc?: string | null;
+  jawProfileLeftGuideSrc?: string | null;
 }): React.ReactNode {
   switch (worker) {
     case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
@@ -331,7 +361,17 @@ function renderWorkerBody({
         verticalThirdsAssetSrc={verticalThirdsAssetSrc}
       />
     );
-    case "jaw":           return <JawWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} captureGuideMetrics={captureGuideMetrics} />;
+    case "jaw":           return (
+      <JawWorkerView
+        aggregates={outputAggregates}
+        language={language}
+        heroAside={heroAside}
+        captureGuideMetrics={captureGuideMetrics}
+        jawProfileRightGuideSrc={jawProfileRightGuideSrc}
+        jawFrontalAngleGuideSrc={jawFrontalAngleGuideSrc}
+        jawProfileLeftGuideSrc={jawProfileLeftGuideSrc}
+      />
+    );
     case "eye_brows":     return (
       <EyeBrowsWorkerView
         aggregates={outputAggregates}

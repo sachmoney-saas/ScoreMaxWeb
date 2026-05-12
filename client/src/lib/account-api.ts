@@ -3,6 +3,8 @@
  * Ne pas appeler supabase.auth.admin.* depuis le navigateur.
  */
 
+import { reportClientError } from "@/lib/report-client-error";
+
 async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
     const j = (await res.json()) as { error?: { message?: string } };
@@ -26,10 +28,14 @@ export async function deleteMyAccount(accessToken: string): Promise<void> {
     return;
   }
 
-  throw new Error(
-    await parseErrorMessage(
-      res,
-      "Unable to delete account right now. Try again later.",
-    ),
+  const message = await parseErrorMessage(
+    res,
+    "Unable to delete account right now. Try again later.",
   );
+  reportClientError({
+    source: "account.delete.failed",
+    message,
+    payload: { status: res.status },
+  });
+  throw new Error(message);
 }

@@ -193,6 +193,9 @@ function Router() {
         <Route path="/admin/analysis">
           <ProtectedRoute component={AdminPage} />
         </Route>
+        <Route path="/admin/client-errors">
+          <ProtectedRoute component={AdminPage} />
+        </Route>
         <Route path="/admin/analysis-failures">
           <Redirect to="/admin/analysis" />
         </Route>

@@ -6,6 +6,7 @@ import { createV1AccountRouter } from "./routes/v1-account";
 import { createV1AdminRouter } from "./routes/v1-admin";
 import { createV1AnalysesRouter } from "./routes/v1-analyses";
 import { createV1BillingRouter } from "./routes/v1-billing";
+import { createV1ClientErrorsRouter } from "./routes/v1-client-errors";
 import { createV1OnboardingRouter } from "./routes/v1-onboarding";
 import { createDodoWebhookRouter } from "./routes/webhooks-dodo";
 
@@ -21,6 +22,7 @@ export async function registerRoutes(
   app.use("/v1", createV1AdminRouter());
   app.use("/v1", createV1AnalysesRouter());
   app.use("/v1", createV1BillingRouter());
+  app.use("/v1", createV1ClientErrorsRouter());
   app.use("/v1", createV1OnboardingRouter());
 
   // Public, unauthenticated webhook receiver — mounted at the app root

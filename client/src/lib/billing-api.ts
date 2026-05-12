@@ -1,4 +1,5 @@
 import type { Plan, PremiumAccessState } from "@shared/schema";
+import { reportClientError } from "@/lib/report-client-error";
 import { supabase } from "@/lib/supabase";
 
 type ApiEnvelope<T> = {
@@ -44,12 +45,23 @@ async function authedFetch<T>(params: {
     } catch {
       /* ignore */
     }
+    reportClientError({
+      source: "billing.api.http_error",
+      message,
+      payload: { path: params.path, status: res.status },
+    });
     throw new Error(message);
   }
 
   const json = (await res.json()) as ApiEnvelope<T>;
   if (!json.ok || json.data === null || json.data === undefined) {
-    throw new Error(json.error?.message ?? params.fallbackError);
+    const message = json.error?.message ?? params.fallbackError;
+    reportClientError({
+      source: "billing.api.envelope_error",
+      message,
+      payload: { path: params.path },
+    });
+    throw new Error(message);
   }
   return json.data;
 }

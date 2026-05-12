@@ -22,6 +22,10 @@ import {
   WorkerHero,
   workerSectionCardClassName,
 } from "./_shared";
+import {
+  WorkerSignatureRadar,
+  type WorkerSignatureRadarPoint,
+} from "./WorkerVisualizations";
 
 const WORKER_KEY = "chin";
 
@@ -249,6 +253,43 @@ export function ChinWorkerView({
     "width_and_integration.lower_face_integration",
   );
 
+  const radarLabels: Record<string, { en: string; fr: string }> = {
+    "shape_and_contour.chin_contour": { en: "Contour", fr: "Contour" },
+    "projection_and_profile.chin_projection": {
+      en: "Projection",
+      fr: "Projection",
+    },
+    "projection_and_profile.chin_height": { en: "Height", fr: "Hauteur" },
+    "width_and_integration.chin_width": { en: "Width", fr: "Largeur" },
+    "width_and_integration.lower_face_integration": {
+      en: "Lower-face fit",
+      fr: "Intégration bas visage",
+    },
+  };
+
+  const radarSource: { key: string; score: number | null }[] = [
+    { key: "shape_and_contour.chin_contour", score: contour.score },
+    { key: "projection_and_profile.chin_projection", score: projection.score },
+    { key: "projection_and_profile.chin_height", score: height.score },
+    { key: "width_and_integration.chin_width", score: width.score },
+    {
+      key: "width_and_integration.lower_face_integration",
+      score: lowerFaceIntegration.score,
+    },
+  ];
+
+  const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
+    d.score === null
+      ? []
+      : [
+          {
+            label: i18n(language, radarLabels[d.key]),
+            score: d.score,
+            anchorId: workerMetricAnchorId(WORKER_KEY, d.key),
+          },
+        ],
+  );
+
   const chinTaxonomyAnchor = workerSectionAnchorId(WORKER_KEY, "chin-taxonomy");
 
   return (
@@ -276,6 +317,29 @@ export function ChinWorkerView({
           heroAside,
         )}
       />
+
+      {radarData.length >= 3 ? (
+        <Card className={workerSectionCardClassName}>
+          <CardContent className="p-6 sm:p-8">
+            <div className="flex flex-col gap-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400 sm:text-[13px] sm:tracking-[0.2em]">
+                {i18n(language, {
+                  en: "Chin signature",
+                  fr: "Signature mentonnière",
+                })}
+              </p>
+              <WorkerSignatureRadar
+                data={radarData}
+                ariaLabel={i18n(language, {
+                  en: "Chin metrics radar",
+                  fr: "Toile des métriques menton",
+                })}
+                sizePreset="large"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Shape gallery */}
       <Card

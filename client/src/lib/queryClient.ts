@@ -1,7 +1,11 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { AUTH_CONFIG } from "@/config/auth";
+import {
+  reportClientError,
+  shouldSkipClientErrorReportingForUrl,
+} from "@/lib/report-client-error";
 
-async function throwIfResNotOk(res: Response) {
+async function throwIfResNotOk(res: Response, requestUrl: string) {
   if (res.status === 401 || res.status === 403) {
     // Session expired or unauthorized - clear cache and redirect
     if (typeof window !== "undefined") {
@@ -13,6 +17,20 @@ async function throwIfResNotOk(res: Response) {
 
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    if (
+      typeof window !== "undefined" &&
+      res.status !== 404 &&
+      !shouldSkipClientErrorReportingForUrl(requestUrl)
+    ) {
+      reportClientError({
+        source: `api.http.${res.status}`,
+        message: `${res.status}: ${text.slice(0, 2000)}`,
+        payload: {
+          path: requestUrl,
+          status: res.status,
+        },
+      });
+    }
     throw new Error(`${res.status}: ${text}`);
   }
 }
@@ -24,19 +42,34 @@ export async function apiRequest(
   headers?: HeadersInit,
   signal?: AbortSignal,
 ): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: {
-      ...(data ? { "Content-Type": "application/json" } : {}),
-      ...headers,
-    },
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-    signal,
-  });
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        ...(data ? { "Content-Type": "application/json" } : {}),
+        ...headers,
+      },
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include",
+      signal,
+    });
 
-  await throwIfResNotOk(res);
-  return res;
+    await throwIfResNotOk(res, url);
+    return res;
+  } catch (error) {
+    if (
+      typeof window !== "undefined" &&
+      !shouldSkipClientErrorReportingForUrl(url) &&
+      !(error instanceof Error && /^\d{3}: /.test(error.message))
+    ) {
+      reportClientError({
+        source: "api.fetch.failed",
+        message: error instanceof Error ? error.message : String(error),
+        payload: { path: url, method },
+      });
+    }
+    throw error;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
@@ -53,7 +86,7 @@ export const getQueryFn: <T>(options: {
       return null;
     }
 
-    await throwIfResNotOk(res);
+    await throwIfResNotOk(res, queryKey.join("/") as string);
     return await res.json();
   };
 

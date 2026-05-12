@@ -13,6 +13,7 @@ import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
 import { Link, useLocation } from "wouter";
 import {
   AlertTriangle,
+  Bug,
   ShieldCheck,
   Sparkles,
   Users,
@@ -179,6 +180,12 @@ function ModernAppSidebar() {
           label: "Logs analyses",
           icon: AlertTriangle,
           isActive: (path) => path === "/admin/analysis" || path === "/admin/analysis-failures",
+        },
+        {
+          href: "/admin/client-errors",
+          label: "Erreurs client",
+          icon: Bug,
+          isActive: (path) => path === "/admin/client-errors",
         },
         {
           href: "/admin/recommendations",
@@ -654,7 +661,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <SidebarTrigger className="absolute left-4 top-4 z-30 h-8 w-8 rounded-lg border border-white/10 bg-white/10 backdrop-blur-xl hover:bg-white/15 md:hidden" />
           <div
             data-app-scroll-region
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden p-4 md:p-8"
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-2 py-4 md:p-8"
           >
             <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col animate-in fade-in slide-in-from-bottom-4 duration-500 text-foreground">
               {children}

@@ -1401,6 +1401,76 @@ GRANT EXECUTE ON FUNCTION public.ensure_onboarding_scan_session() TO authenticat
 GRANT EXECUTE ON FUNCTION public.get_onboarding_scan_status() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_recent_scan_status(INTEGER) TO authenticated;
 
+-- Client-side error telemetry (inserts via API service role only)
+CREATE TABLE IF NOT EXISTS public.client_error_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  source TEXT NOT NULL,
+  message TEXT NOT NULL,
+  error_code TEXT,
+  error_detail TEXT,
+  error_hint TEXT,
+  payload JSONB DEFAULT '{}'::jsonb NOT NULL,
+  client_route TEXT,
+  user_agent TEXT,
+  app_version TEXT
+);
+
+CREATE INDEX IF NOT EXISTS scoremax_client_error_reports_created_at_idx
+  ON public.client_error_reports (created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_client_error_reports_source_created_idx
+  ON public.client_error_reports (source, created_at DESC);
+CREATE INDEX IF NOT EXISTS scoremax_client_error_reports_user_created_idx
+  ON public.client_error_reports (user_id, created_at DESC);
+
+ALTER TABLE public.client_error_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.scoremax_purge_client_error_reports(p_delete_all boolean DEFAULT false)
+RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  deleted_count bigint;
+BEGIN
+  IF p_delete_all THEN
+    DELETE FROM public.client_error_reports;
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+  END IF;
+
+  DELETE FROM public.client_error_reports
+  WHERE created_at < NOW() - INTERVAL '90 days';
+
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RETURN deleted_count;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.scoremax_purge_client_error_reports(boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.scoremax_purge_client_error_reports(boolean) TO service_role;
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+DO $$
+DECLARE
+  jid bigint;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'cron') THEN
+    SELECT jobid INTO jid FROM cron.job WHERE jobname = 'scoremax_purge_client_error_reports_weekly' LIMIT 1;
+    IF jid IS NOT NULL THEN
+      PERFORM cron.unschedule(jid);
+    END IF;
+    PERFORM cron.schedule(
+      'scoremax_purge_client_error_reports_weekly',
+      '0 4 * * 0',
+      'SELECT public.scoremax_purge_client_error_reports(false)'
+    );
+  END IF;
+END $$;
+
 -- 13) Post-check summary output
 SELECT
   policyname,

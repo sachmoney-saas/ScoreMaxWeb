@@ -1,4 +1,5 @@
 import type { PremiumAccessState } from "@shared/schema";
+import { reportClientError } from "@/lib/report-client-error";
 
 type ApiEnvelope<T> = {
   ok: boolean;
@@ -37,12 +38,23 @@ async function adminFetch<T>(params: {
     } catch {
       /* ignore */
     }
+    reportClientError({
+      source: "admin.subscription.http_error",
+      message,
+      payload: { path: params.path, status: res.status },
+    });
     throw new Error(message);
   }
 
   const json = (await res.json()) as ApiEnvelope<T>;
   if (!json.ok || json.data === null || json.data === undefined) {
-    throw new Error(json.error?.message ?? params.fallbackError);
+    const message = json.error?.message ?? params.fallbackError;
+    reportClientError({
+      source: "admin.subscription.envelope_error",
+      message,
+      payload: { path: params.path },
+    });
+    throw new Error(message);
   }
 
   return json.data;

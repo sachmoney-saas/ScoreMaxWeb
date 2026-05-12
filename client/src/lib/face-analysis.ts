@@ -1,3 +1,4 @@
+import { reportClientError } from "@/lib/report-client-error";
 import { apiRequest } from "@/lib/queryClient";
 import { clientEnv } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
@@ -288,6 +289,11 @@ export async function uploadScanAsset(params: {
     );
   } catch (error) {
     if (isAbortError(error)) {
+      reportClientError({
+        source: "scan_assets.signed_upload_abort",
+        message: faceAnalysisMessage(lang, "uploadTimedOut"),
+        payload: { assetTypeCode: params.assetTypeCode, phase: "signed_url" },
+      });
       throw new Error(faceAnalysisMessage(lang, "uploadTimedOut"));
     }
     throw error;
@@ -301,6 +307,11 @@ export async function uploadScanAsset(params: {
   };
   const uploadData = signedUploadPayload.data;
   if (!uploadData) {
+    reportClientError({
+      source: "scan_assets.signed_upload_empty_payload",
+      message: faceAnalysisMessage(lang, "signedUploadFailed"),
+      payload: { assetTypeCode: params.assetTypeCode },
+    });
     throw new Error(faceAnalysisMessage(lang, "signedUploadFailed"));
   }
 
@@ -316,12 +327,26 @@ export async function uploadScanAsset(params: {
     });
   } catch (error) {
     if (isAbortError(error)) {
+      reportClientError({
+        source: "scan_assets.r2_put_abort",
+        message: faceAnalysisMessage(lang, "uploadTimedOut"),
+        payload: { assetTypeCode: params.assetTypeCode, phase: "r2_put" },
+      });
       throw new Error(faceAnalysisMessage(lang, "uploadTimedOut"));
     }
     throw error;
   }
 
   if (!uploadResponse.ok) {
+    reportClientError({
+      source: "scan_assets.r2_put_failed",
+      message: faceAnalysisMessage(lang, "r2UploadFailed"),
+      payload: {
+        assetTypeCode: params.assetTypeCode,
+        status: uploadResponse.status,
+        statusText: uploadResponse.statusText,
+      },
+    });
     throw new Error(faceAnalysisMessage(lang, "r2UploadFailed"));
   }
 
@@ -341,7 +366,34 @@ export async function uploadScanAsset(params: {
   });
 
   if (insertError) {
-    throw new Error(faceAnalysisMessage(lang, "scanAssetsSaveFailed"));
+    // Browser console: full PostgREST error. Typical: RLS scan_assets_insert_own, unique(session_id+asset_type_code), scan_asset_types inactive/missing.
+    console.warn("[ScoreMax] scan_assets insert failed", {
+      code: insertError.code,
+      message: insertError.message,
+      details: insertError.details,
+      hint: insertError.hint,
+      assetTypeCode: params.assetTypeCode,
+      ...(import.meta.env.DEV ? { sessionId: params.sessionId } : {}),
+    });
+    reportClientError({
+      source: "scan_assets.insert",
+      message: insertError.message || faceAnalysisMessage(lang, "scanAssetsSaveFailed"),
+      errorCode: insertError.code,
+      errorDetail:
+        typeof insertError.details === "string"
+          ? insertError.details
+          : JSON.stringify(insertError.details ?? null),
+      errorHint: insertError.hint ?? undefined,
+      payload: {
+        assetTypeCode: params.assetTypeCode,
+        sessionId: params.sessionId,
+        mimeType: params.file.type,
+        byteSize: params.file.size,
+      },
+    });
+    throw new Error(faceAnalysisMessage(lang, "scanAssetsSaveFailed"), {
+      cause: insertError,
+    });
   }
 }
 
@@ -362,6 +414,17 @@ export async function fetchOnboardingScanAssets(
     .order("created_at", { ascending: false });
 
   if (error) {
+    reportClientError({
+      source: "scan_assets.fetch_session_assets",
+      message: error.message,
+      errorCode: error.code,
+      errorDetail:
+        typeof error.details === "string"
+          ? error.details
+          : JSON.stringify(error.details ?? null),
+      errorHint: error.hint ?? undefined,
+      payload: { sessionId },
+    });
     throw error;
   }
 
@@ -398,6 +461,14 @@ export async function buildFaceAnalysisRequest(params: {
     assets.map(async (asset) => {
       const response = await fetch(buildPublicR2Url(asset.r2_key, lang));
       if (!response.ok) {
+        reportClientError({
+          source: "scan_assets.download_for_analysis",
+          message: faceAnalysisMessage(lang, "downloadAssetFailed", asset.asset_type_code),
+          payload: {
+            assetTypeCode: asset.asset_type_code,
+            status: response.status,
+          },
+        });
         throw new Error(
           faceAnalysisMessage(lang, "downloadAssetFailed", asset.asset_type_code),
         );
@@ -500,10 +571,13 @@ export function buildAnalysisThumbnailUrl(params: {
 
 export type AnalysisJobAssetPreviewCode =
   | "EYE_CLOSEUP"
+  | "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS"
   | "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS"
   | "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR"
   | "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY"
   | "GUIDE_TRACE_SMILE_LIPS"
+  | "GUIDE_TRACE_SMILE_TEETH"
+  | "GUIDE_TRACE_FACE_FRONT_LIPS"
   | "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE"
   | "GUIDE_TRACE_PROFILE_RIGHT_JAW"
   | "GUIDE_TRACE_PROFILE_LEFT_JAW";
@@ -550,6 +624,17 @@ export async function fetchRecentScanStatus(
   });
 
   if (error) {
+    reportClientError({
+      source: "rpc.get_recent_scan_status",
+      message: error.message,
+      errorCode: error.code,
+      errorDetail:
+        typeof error.details === "string"
+          ? error.details
+          : JSON.stringify(error.details ?? null),
+      errorHint: error.hint ?? undefined,
+      payload: { windowMinutes },
+    });
     throw error;
   }
 

@@ -91,6 +91,7 @@ import {
 import { deleteUserAccountAsAdmin } from "@/lib/admin-users-api";
 import { queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
+import AdminClientErrorsPage from "@/pages/AdminClientErrors";
 import { cn } from "@/lib/utils";
 
 type AdminProfile = Profile & {
@@ -245,6 +246,10 @@ export default function AdminPage() {
 
   if (location === "/admin/users") {
     return <UsersManagementPage />;
+  }
+
+  if (location === "/admin/client-errors") {
+    return <AdminClientErrorsPage />;
   }
 
   if (location.startsWith("/admin/analysis")) {

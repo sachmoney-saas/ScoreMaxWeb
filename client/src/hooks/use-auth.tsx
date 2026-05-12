@@ -8,6 +8,7 @@ import {
 } from "react";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { reportClientError } from "@/lib/report-client-error";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -123,6 +124,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (error) {
           console.warn("Profile fetch failed.", error);
+          reportClientError({
+            source: "profiles.fetch",
+            message: error.message,
+            errorCode: error.code,
+            errorDetail:
+              typeof error.details === "string"
+                ? error.details
+                : JSON.stringify(error.details ?? null),
+            errorHint: error.hint ?? undefined,
+          });
           throw error;
         }
 

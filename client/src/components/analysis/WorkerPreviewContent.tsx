@@ -1282,6 +1282,15 @@ function BrowsPreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Smile ------------------------------------- */
 
 function SmilePreview({ aggregates, language }: PreviewProps) {
+  const previewJob = React.useContext(AnalysisJobScanPreviewContext);
+  const smileTeethGuideSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_SMILE_TEETH",
+        })
+      : null;
   const overallNested = getScore(aggregates, "global_score.overall_smile_score");
   const overallFlat = getScore(aggregates, "overall_smile_score");
   const overallLegacy = getScore(aggregates, "overall_smile");
@@ -1338,6 +1347,16 @@ function SmilePreview({ aggregates, language }: PreviewProps) {
           </div>
         </div>
       ) : null}
+      <AnalysisJobAssetPreviewThumb
+        src={smileTeethGuideSrc}
+        alt={i18n(language, {
+          en: "Smile pose scan overlay: teeth guide trace",
+          fr: "Repère sourire — dents (overlay)",
+        })}
+        imgFit="contain"
+        className="mx-auto w-full max-w-[min(100%,22rem)] shrink-0"
+        imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+      />
       <div className="grid grid-cols-3 gap-2">
         <MiniBar
           label={i18n(language, { en: "Integrity", fr: "Intégrité" })}
@@ -1718,9 +1737,16 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
     aggregates,
     "musculature_and_soft_tissue.scm_muscle_definition",
   );
+  const firmness = getScore(
+    aggregates,
+    "musculature_and_soft_tissue.neck_firmness",
+  );
+
+  const showFirmDefinedMatrix =
+    scm.score !== null && firmness.score !== null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className={PREVIEW_HERO}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
@@ -1729,12 +1755,51 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
           <p className="mt-1 text-xs leading-snug text-zinc-300 line-clamp-2">
             {length.argument ??
               i18n(language, {
-                en: "Length, width, shape and SCM.",
-                fr: "Longueur, largeur, forme et SCM.",
+                en: "Length, width, shape, SCM and tissue firmness.",
+                fr: "Longueur, largeur, forme, SCM et fermeté des tissus.",
               })}
           </p>
         </div>
       </div>
+      {showFirmDefinedMatrix ? (
+        <div className="space-y-2">
+          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+            {i18n(language, {
+              en: "SCM × firmness",
+              fr: "SCM × fermeté",
+            })}
+          </p>
+          <div className="w-full min-w-0">
+            <WorkerStanceMatrix
+              xScore={scm.score}
+              yScore={firmness.score}
+              xLeft={{
+                en: "Soft",
+                fr: "Doux",
+              }}
+              xRight={{
+                en: "Defined",
+                fr: "Défini",
+              }}
+              yBottom={{
+                en: "Lax",
+                fr: "Relâché",
+              }}
+              yTop={{
+                en: "Firm",
+                fr: "Ferme",
+              }}
+              language={language}
+              ariaLabel={{
+                en: "Neck composition matrix",
+                fr: "Matrice de composition du cou",
+              }}
+              compact
+              quadrantPalette="performance"
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
         <MiniBar
           label={i18n(language, { en: "Length", fr: "Longueur" })}
@@ -1761,6 +1826,14 @@ function NeckPreview({ aggregates, language }: PreviewProps) {
 
 function LipsPreview({ aggregates, language }: PreviewProps) {
   const previewJob = React.useContext(AnalysisJobScanPreviewContext);
+  const faceFrontLipsGuideSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_LIPS",
+        })
+      : null;
   const smileLipsGuideSrc =
     previewJob !== null
       ? buildAnalysisJobAssetPreviewUrl({
@@ -1789,16 +1862,36 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
           </p>
         </div>
       </div>
-      <AnalysisJobAssetPreviewThumb
-        src={smileLipsGuideSrc}
-        alt={i18n(language, {
-          en: "Smile pose scan overlay: lip contour guide",
-          fr: "Repère lèvres — prise de vue sourire",
-        })}
-        imgFit="contain"
-        className="mx-auto w-full max-w-[min(100%,22rem)] shrink-0"
-        imgClassName="max-h-[13rem] sm:max-h-[15rem]"
-      />
+      {(faceFrontLipsGuideSrc || smileLipsGuideSrc) ? (
+        <div
+          className="mx-auto grid w-full max-w-[min(100%,44rem)] grid-cols-2 gap-2 sm:gap-3"
+          aria-label={i18n(language, {
+            en: "Lip guide traces: front resting face, smile pose",
+            fr: "Repères lèvres : face au repos, prise sourire",
+          })}
+        >
+          <AnalysisJobAssetPreviewThumb
+            src={faceFrontLipsGuideSrc}
+            alt={i18n(language, {
+              en: "Front-face scan overlay: lips at rest guide",
+              fr: "Repère lèvres au repos — prise frontale",
+            })}
+            imgFit="contain"
+            className="min-h-0 w-full shrink-0"
+            imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+          />
+          <AnalysisJobAssetPreviewThumb
+            src={smileLipsGuideSrc}
+            alt={i18n(language, {
+              en: "Smile pose scan overlay: lip contour guide",
+              fr: "Repère lèvres — prise de vue sourire",
+            })}
+            imgFit="contain"
+            className="min-h-0 w-full shrink-0"
+            imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+          />
+        </div>
+      ) : null}
       <div className="grid grid-cols-3 gap-2">
         <MiniBar
           label={i18n(language, { en: "Fullness", fr: "Volume" })}
@@ -1826,7 +1919,12 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
     aggregates,
     "projection_and_profile.chin_projection",
   );
+  const height = getScore(aggregates, "projection_and_profile.chin_height");
   const width = getScore(aggregates, "width_and_integration.chin_width");
+  const lowerFaceIntegration = getScore(
+    aggregates,
+    "width_and_integration.lower_face_integration",
+  );
   const shapeEnum = getEnum(aggregates, "shape_and_contour.chin_shape");
   const shapeDisplay =
     shapeEnum.value && !isUnknownEnumValue(shapeEnum.value)
@@ -1838,9 +1936,40 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
         ) ?? shapeEnum.value
       : null;
 
+  const radarLabels: Record<string, { en: string; fr: string }> = {
+    "shape_and_contour.chin_contour": { en: "Contour", fr: "Contour" },
+    "projection_and_profile.chin_projection": {
+      en: "Projection",
+      fr: "Projection",
+    },
+    "projection_and_profile.chin_height": { en: "Height", fr: "Hauteur" },
+    "width_and_integration.chin_width": { en: "Width", fr: "Largeur" },
+    "width_and_integration.lower_face_integration": {
+      en: "Lower-face fit",
+      fr: "Intégration bas visage",
+    },
+  };
+
+  const radarSource: { key: string; score: number | null }[] = [
+    { key: "shape_and_contour.chin_contour", score: contour.score },
+    { key: "projection_and_profile.chin_projection", score: projection.score },
+    { key: "projection_and_profile.chin_height", score: height.score },
+    { key: "width_and_integration.chin_width", score: width.score },
+    {
+      key: "width_and_integration.lower_face_integration",
+      score: lowerFaceIntegration.score,
+    },
+  ];
+
+  const radarData: WorkerSignatureRadarPoint[] = radarSource.flatMap((d) =>
+    d.score === null
+      ? []
+      : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
+  );
+
   return (
     <div className="space-y-3">
-      <div className={PREVIEW_HERO}>
+      <div className={PREVIEW_HERO_SIGNATURE_RADAR}>
         <div className={PREVIEW_COPY}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
             {i18n(language, { en: "Chin shape", fr: "Forme du menton" })}
@@ -1848,28 +1977,27 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
           <p className="mt-1 font-display text-base font-bold text-white">
             {shapeDisplay ?? "—"}
           </p>
-          <p className="mt-1 text-xs leading-snug text-zinc-400 line-clamp-2">
+          <p className="mt-0.5 text-xs leading-snug text-zinc-400 line-clamp-3">
             {contour.argument ??
+              projection.argument ??
               i18n(language, {
-                en: "Contour, width integration and projection.",
-                fr: "Contour, intégration en largeur et projection.",
+                en: "Contour, projection, width and lower-face integration.",
+                fr: "Contour, projection, largeur et intégration du bas du visage.",
               })}
           </p>
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <MiniBar
-          label={i18n(language, { en: "Contour", fr: "Contour" })}
-          score={contour.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Projection", fr: "Projection" })}
-          score={projection.score}
-        />
-        <MiniBar
-          label={i18n(language, { en: "Width", fr: "Largeur" })}
-          score={width.score}
-        />
+        <div className="flex w-full justify-center px-0 sm:px-1">
+          {radarData.length >= 3 ? (
+            <WorkerSignatureRadar
+              data={radarData}
+              ariaLabel={i18n(language, {
+                en: "Chin signature radar",
+                fr: "Radar de signature menton",
+              })}
+              sizePreset="large"
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -1951,6 +2079,15 @@ function NosePreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Eyes ------------------------------------- */
 
 function EyesPreview({ aggregates, language }: PreviewProps) {
+  const previewJob = React.useContext(AnalysisJobScanPreviewContext);
+  const eyeCloseupContoursSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
+        })
+      : null;
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const overall = getScore(aggregates, "global_score.overall_eye_score");
   const symmetry = getScore(aggregates, "morphology_and_tilt.eye_symmetry");
@@ -2001,6 +2138,16 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
           />
         ) : null}
       </div>
+      <AnalysisJobAssetPreviewThumb
+        src={eyeCloseupContoursSrc}
+        alt={i18n(language, {
+          en: "Eye close-up scan overlay: contour guide trace",
+          fr: "Repère gros plan œil — contours",
+        })}
+        imgFit="contain"
+        className="mx-auto w-full max-w-[min(100%,22rem)] shrink-0"
+        imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+      />
       <div className="grid grid-cols-2 gap-2">
         {tiltDisplay ? (
           <StatChip
