@@ -1,9 +1,5 @@
 import * as React from "react";
-import {
-  Eye as EyeIcon,
-  Loader2,
-  Syringe,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import {
@@ -167,33 +163,6 @@ export function RecommendationsSection({
         "space-y-8 rounded-2xl p-6",
       )}
     >
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-            {i18n(language, {
-              en: "Recommendations",
-              fr: "Recommandations",
-            })}
-          </p>
-          <div className="mt-1 flex items-end justify-between gap-3">
-            <h2 className="font-display text-2xl font-bold tracking-tight text-white">
-              {i18n(language, {
-                en: "Personalised for you",
-                fr: "Personnalisé pour toi",
-              })}
-            </h2>
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/12 px-2 py-0.5 text-emerald-200 ring-1 ring-inset ring-emerald-300/20">
-                <EyeIcon className="h-3 w-3" />
-                {matched.soft.length} {i18n(language, { en: "soft", fr: "soft" })}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-rose-400/12 px-2 py-0.5 text-rose-200 ring-1 ring-inset ring-rose-300/20">
-                <Syringe className="h-3 w-3" />
-                {matched.hard.length} {i18n(language, { en: "hard", fr: "hard" })}
-              </span>
-            </div>
-          </div>
-        </div>
-
         {matched.soft.length > 0 ? (
           <section className="space-y-4">
             <GroupHeader type="soft" count={matched.soft.length} language={language} />

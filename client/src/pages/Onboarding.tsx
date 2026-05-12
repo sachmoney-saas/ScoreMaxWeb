@@ -2,7 +2,6 @@ import * as React from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  BriefcaseBusiness,
   Camera,
   Infinity as InfinityIcon,
   Loader2,
@@ -102,7 +101,7 @@ function OnboardingBeforeAfterComparison({ language }: { language: AppLanguage }
     <div className="space-y-2 sm:space-y-3">
       {/* Hauteur plafonnée par viewport pour garder l'étape lisible sans scroll excessif */}
       <div
-        className="relative isolate aspect-[4/5] w-full max-h-[min(32svh,280px)] overflow-hidden rounded-2xl border border-white/15 bg-black/30 shadow-[0_28px_65px_-52px_rgba(0,0,0,0.45)] sm:aspect-[4/3] sm:max-h-[min(38svh,360px)] md:max-h-[min(44svh,450px)] lg:max-h-[min(50svh,540px)]"
+        className="relative isolate aspect-[4/5] w-full max-h-[min(28svh,220px)] overflow-hidden rounded-2xl border border-white/15 bg-black/30 shadow-[0_28px_65px_-52px_rgba(0,0,0,0.45)] sm:aspect-[4/3] sm:max-h-[min(32svh,300px)] md:max-h-[min(38svh,360px)] lg:max-h-[min(44svh,480px)]"
       >
         {/* Panneau gauche : uniquement l’avant — aucune image droite en dessous */}
         <div
@@ -186,8 +185,8 @@ function OnboardingBeforeAfterComparison({ language }: { language: AppLanguage }
 }
 
 function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) {
-  const currentScore = 6.42;
-  const potentialScore = 7.35;
+  const currentScore = 43.7;
+  const potentialScore = 74.5;
   const chartWidth = 560;
   const chartHeight = 260;
   const plotLeft = 52;
@@ -197,39 +196,43 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
   const plotWidth = chartWidth - plotLeft - plotRight;
   const plotHeight = chartHeight - plotTop - plotBottom;
   const xMin = 0;
-  const xMax = 10;
+  const xMax = 100;
 
   const xToPixel = (x: number) =>
     plotLeft + ((x - xMin) / (xMax - xMin)) * plotWidth;
   const yToPixel = (y: number) => plotTop + (1 - y) * plotHeight;
-  const gaussian = (x: number) => {
-    const peak = Math.exp(-Math.pow(x - 5.05, 2) / (2 * Math.pow(0.86, 2)));
-    const leftTail = 0.085 / (1 + Math.exp((x - 2.35) * 2.1));
-    const rightTail = 0.075 / (1 + Math.exp((7.25 - x) * 1.8));
+  /** Forme de courbe définie sur [0, 10] ; on la réutilise avec x/10 pour une échelle 0–100. */
+  const gaussianShape = (t: number) => {
+    const peak = Math.exp(-Math.pow(t - 5.05, 2) / (2 * Math.pow(0.86, 2)));
+    const leftTail = 0.085 / (1 + Math.exp((t - 2.35) * 2.1));
+    const rightTail = 0.075 / (1 + Math.exp((7.25 - t) * 1.8));
     const shoulder =
-      0.018 * Math.exp(-Math.pow(x - 8.9, 2) / (2 * Math.pow(1.05, 2)));
+      0.018 * Math.exp(-Math.pow(t - 8.9, 2) / (2 * Math.pow(1.05, 2)));
     return Math.min(1, peak + leftTail + rightTail + shoulder);
   };
 
-  const curvePoints = Array.from({ length: 120 }, (_, index) => {
-    const x = xMin + (index / 119) * (xMax - xMin);
-    return `${xToPixel(x).toFixed(2)},${yToPixel(gaussian(x)).toFixed(2)}`;
+  const curvePoints = Array.from({ length: 240 }, (_, index) => {
+    const x = xMin + (index / 239) * (xMax - xMin);
+    const density = gaussianShape((x / (xMax - xMin)) * 10);
+    return `${xToPixel(x).toFixed(2)},${yToPixel(density).toFixed(2)}`;
   }).join(" ");
+
+  const scoreLabel = currentScore.toFixed(1);
 
   const currentX = xToPixel(currentScore);
   const potentialX = xToPixel(potentialScore);
 
   return (
-    <div className={cn(saasGlassInsetClassName, "min-w-0 space-y-3 p-3 sm:p-4")}>
-      <div className={cn(saasGlassInsetClassName, "min-w-0 rounded-xl p-2.5 sm:p-3.5")}>
+    <div className={cn(saasGlassInsetClassName, "min-w-0 space-y-2 p-2.5 sm:space-y-3 sm:p-4")}>
+      <div className={cn(saasGlassInsetClassName, "min-w-0 rounded-xl p-2 sm:p-3.5")}>
           <div className="mx-auto max-w-xl text-center">
-            <h3 className="font-hero text-2xl font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-3xl md:text-4xl">
+            <h3 className="font-hero text-xl font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-3xl md:text-4xl">
               {i18n(language, {
                 en: "Your score isn't fixed",
                 fr: "Ton score n'est pas figé",
               })}
             </h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-zinc-300 sm:mt-2 sm:text-base">
+            <p className="mt-1 text-xs leading-relaxed text-zinc-300 sm:mt-2 sm:text-base">
               {i18n(language, {
                 en: "Small, consistent changes compound over time. Track your progress and watch your score move.",
                 fr: "De petits changements réguliers se cumulent avec le temps. Suis ta progression et regarde ton score évoluer.",
@@ -237,17 +240,17 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
             </p>
           </div>
 
-          <div className="mt-5 flex items-end justify-center gap-5 text-center sm:mt-6 sm:gap-9">
+          <div className="mt-3 flex items-end justify-center gap-4 text-center sm:mt-6 sm:gap-9">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
                 {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
               </p>
-              <p className="mt-2 font-display text-5xl tracking-tight text-zinc-100 sm:text-6xl">
-                {currentScore.toFixed(2)}
+              <p className="mt-1 font-display text-4xl tracking-tight text-zinc-100 sm:mt-2 sm:text-6xl">
+                {scoreLabel}
               </p>
             </div>
             <div
-              className="pb-3 text-4xl font-light text-zinc-200 sm:text-5xl"
+              className="pb-2 text-3xl font-light text-zinc-200 sm:pb-3 sm:text-5xl"
               aria-hidden
             >
               →
@@ -256,17 +259,17 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
                 {i18n(language, { en: "Potential", fr: "Potentiel" })}
               </p>
-              <p className="mt-2 font-display text-5xl tracking-tight text-white sm:text-6xl">
-                {potentialScore.toFixed(2)}
+              <p className="mt-1 font-display text-4xl tracking-tight text-white sm:mt-2 sm:text-6xl">
+                {potentialScore.toFixed(1)}
               </p>
             </div>
           </div>
 
-          <div className="mt-4 flex w-full min-w-0 justify-center sm:mt-5">
-            <div className="w-[90%] max-w-[504px]">
+          <div className="mt-2 flex w-full min-w-0 justify-center sm:mt-5">
+            <div className="w-[90%] max-w-[504px] max-h-[min(24dvh,200px)] sm:max-h-none">
             <svg
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="mx-auto block h-auto w-full max-w-full"
+              className="mx-auto block h-full max-h-[min(24dvh,200px)] w-full max-w-full sm:max-h-none"
               preserveAspectRatio="xMidYMid meet"
               role="img"
               aria-label="Score distribution chart"
@@ -318,9 +321,9 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 strokeOpacity={0.95}
               />
               <rect
-                x={currentX - 56}
+                x={currentX - 62}
                 y={plotTop - 30}
-                width="116"
+                width="124"
                 height="24"
                 rx="12"
                 fill="rgba(39, 39, 42, 0.92)"
@@ -335,7 +338,7 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
                 fill="rgb(244 244 245)"
                 fontWeight="600"
               >
-                6.42 · Top 17.0%
+                {`${scoreLabel} / 100`}
               </text>
               <text
                 x={(currentX + potentialX) / 2 + 4}
@@ -372,16 +375,16 @@ function OnboardingSocialProofShowcase({ language }: { language: AppLanguage }) 
               >
                 {i18n(language, { en: "POPULATION DENSITY", fr: "DENSITE DE POPULATION" })}
               </text>
-              {Array.from({ length: 11 }, (_, index) => (
+              {[0, 20, 40, 60, 80, 100].map((mark) => (
                 <text
-                  key={`tick-${index}`}
-                  x={xToPixel(index)}
+                  key={`xmark-${mark}`}
+                  x={xToPixel(mark)}
                   y={plotTop + plotHeight + 20}
                   textAnchor="middle"
                   fontSize="11"
                   fill="rgb(212 212 216)"
                 >
-                  {index}
+                  {mark}
                 </text>
               ))}
               <text
@@ -417,90 +420,6 @@ const ONBOARDING_POSE_TO_ASSET: Record<PoseId, OnboardingScanAssetCode> = {
 function getOnboardingSteps(language: AppLanguage): OnboardingStep[] {
   const tr = (en: string, fr: string) => i18n(language, { en, fr });
   return [
-  {
-    title: tr("Appearance matters and you already know it", "L'apparence compte et tu le sais déjà"),
-    category: tr("Introduction", "Introduction"),
-    description: "",
-    evidence: [],
-  },
-  {
-    title: tr("Finances: income, hiring and sales", "Finances : revenus, embauche et vente"),
-    category: tr("Finances", "Finances"),
-    description:
-      tr(
-        "The beauty premium translates directly into compensation, career opportunities, and transactional outcomes.",
-        "Le beauty privilege se traduit concrètement dans la rémunération, les opportunités de carrière et les interactions transactionnelles.",
-      ),
-    icon: BriefcaseBusiness,
-    evidence: [
-      {
-        claim: tr("Attractive people earn 10-15% more.", "Les personnes attirantes gagnent 10-15% de plus."),
-        source:
-          "Hamermesh, D. S., and J. E. Biddle. (1994). The American Economic Review.",
-      },
-      {
-        claim: tr("Attractive candidates are perceived as more qualified.", "Les candidats attirants sont perçus comme plus qualifiés."),
-        source:
-          "Puleo, R. (2006). Journal of Undergraduate Psychological Research.",
-      },
-      {
-        claim:
-          tr(
-            "Attractive waiters receive $1,261 more in tips per year. Customers are 55% more likely to buy from attractive salespeople.",
-            "Les serveurs attirants reçoivent $1261 de pourboires en plus par an. Les clients ont 55% plus de chances d'acheter à des vendeurs attirants.",
-          ),
-        source:
-          "Parrett, M. (2015). Journal of Economic Psychology. Reingen, P. H., and Kernan, J. B. (1993). Journal of Consumer Psychology.",
-      },
-    ],
-  },
-  {
-    title: tr("Influence: network, leadership and visibility", "Influence : réseau, leadership et visibilité"),
-    category: tr("Influence", "Influence"),
-    description:
-      tr(
-        "At work and on social media, multiple studies link appearance to status, promotion, and engagement advantages.",
-        "Au travail et sur les réseaux sociaux, plusieurs études associent l'apparence à des avantages de statut, de promotion et d'engagement.",
-      ),
-    icon: Users,
-    evidence: [
-      {
-        claim:
-          tr(
-            "Better networking — Attractive people build denser social networks.",
-            "Meilleur réseautage — Les personnes attirantes construisent des réseaux sociaux plus denses.",
-          ),
-        source:
-          "O'Connor, K. M., and Gladstone, E. (2018). Social Networks.",
-      },
-      {
-        claim:
-          tr(
-            "More leadership — Attractive politicians receive more votes.",
-            "Plus de leadership — Les politiciens attirants obtiennent plus de votes.",
-          ),
-        source: "Jaeger et al. (2021). Social Psychology.",
-      },
-      {
-        claim:
-          tr(
-            "More promotions — Attractive people are more likely to be promoted.",
-            "Plus de promotions — Les personnes attirantes ont plus de chances d'être promues.",
-          ),
-        source:
-          "Morrow, P. C., McElroy, J. C., Stamper, B. G., and Wilson, M. A. (1990). Journal of Management.",
-      },
-      {
-        claim:
-          tr(
-            "More followers — Attractive people get more favorable engagement on social platforms.",
-            "Plus de followers — Les personnes attirantes obtiennent un engagement plus favorable sur les réseaux sociaux.",
-          ),
-        source:
-          "Gladstone, E. C., and O'Connor, K. (2013). Academy of Management Proceedings; Strey, S. (2019). MSc dissertation; Lund University.",
-      },
-    ],
-  },
   {
     title: tr("In dating, visuals drive the first decision", "En rencontres, le visuel domine la première décision"),
     category: tr("Dating", "Rencontres"),
@@ -584,16 +503,16 @@ export default function Onboarding() {
    */
   const [hasStartedRun, setHasStartedRun] = React.useState(false);
 
-  /** Zone scrollable de la page ; sur mobile le scroll peut aussi être porté par `window`. */
+  /** Contenu principal de la carte d’étape (scroll interne ; le pied fixe garde les CTA dans le viewport). */
   const onboardingScrollRootRef = React.useRef<HTMLDivElement>(null);
 
   React.useLayoutEffect(() => {
     const snapScrollToTop = () => {
-      const el = onboardingScrollRootRef.current;
-      el?.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
+      onboardingScrollRootRef.current?.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "auto",
+      });
     };
 
     snapScrollToTop();
@@ -639,10 +558,7 @@ export default function Onboarding() {
     currentStep.category === "Rencontres" || currentStep.category === "Dating";
   const isSocialStep =
     currentStep.category === "Vie sociale" || currentStep.category === "Social life";
-  const isIntroStep = currentStep.category === "Introduction";
   const isLastStep = stepIndex === steps.length - 1;
-  /** Carte + en-tête (logo, segments) centrés dans la hauteur utile — pas les étapes « preuves » longues. */
-  const shouldVerticallyCenterMain = isIntroStep || isLastStep;
   const evidenceGridClassName = cn(
     "grid gap-3 sm:gap-4",
     currentStep.evidence.length <= 1 && "mx-auto max-w-xl grid-cols-1",
@@ -675,6 +591,9 @@ export default function Onboarding() {
     (isUploadingCaptures ||
       isSubmitting ||
       Boolean(onboardingJobId && jobStatusValue !== "failed"));
+
+  const showStepFooterNav = !isAnalysisRunning && !isLastStep;
+  const showLastStepLaunchCta = !isAnalysisRunning && isLastStep;
 
   const processingMessage =
     jobStatusValue === "completed"
@@ -981,7 +900,6 @@ export default function Onboarding() {
 
   const scrollOnboardingToTop = React.useCallback(() => {
     onboardingScrollRootRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, []);
 
   const handleNext = React.useCallback(() => {
@@ -993,10 +911,7 @@ export default function Onboarding() {
   }, [scrollOnboardingToTop, steps.length]);
 
   return (
-    <div
-      ref={onboardingScrollRootRef}
-      className="relative isolate min-h-dvh overflow-x-hidden overflow-y-auto bg-[#9aaeb5]"
-    >
+    <div className="relative isolate flex h-dvh max-h-[100dvh] flex-col overflow-x-hidden overflow-hidden bg-[#9aaeb5]">
       <WaveBackground
         useContainerSize
         className="pointer-events-none z-0 bg-[#9aaeb5]"
@@ -1068,19 +983,14 @@ export default function Onboarding() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] pt-[max(0.75rem,calc(env(safe-area-inset-top,0px)+0.5rem))] sm:px-6 sm:pb-6 sm:pt-6">
-        <div
-          className={cn(
-            "flex w-full flex-1 flex-col",
-            shouldVerticallyCenterMain ? "justify-center py-2 sm:py-3" : "justify-start py-2 sm:py-4",
-          )}
-        >
-        <div className="w-full space-y-2.5 sm:space-y-4">
+      <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:px-6 sm:pb-5 sm:pt-5">
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-2 sm:gap-3">
+        <div className="w-full shrink-0 space-y-2 sm:space-y-2.5">
           <div className="flex justify-center">
             <img
               src="/favicon.png"
               alt="Logo ScoreMax"
-              className="h-10 w-10 rounded-xl border border-white/25 bg-white/10 p-1.5 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.65)]"
+              className="h-9 w-9 rounded-xl border border-white/25 bg-white/10 p-1.5 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.65)] sm:h-10 sm:w-10"
             />
           </div>
 
@@ -1100,7 +1010,9 @@ export default function Onboarding() {
               />
             ))}
           </div>
+        </div>
 
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <AnimatePresence mode="wait">
             <motion.article
               key={`onboarding-step-${stepIndex}`}
@@ -1111,33 +1023,30 @@ export default function Onboarding() {
               className={cn(
                 saasGlassPanelClassName,
                 "text-white shadow-[0_24px_70px_-35px_rgba(0,0,0,0.65)]",
-                isIntroStep
-                  ? "flex flex-col overflow-hidden px-4 py-5 sm:px-6 sm:py-7"
-                  : "p-5 sm:p-8",
+                "flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-6",
                 isLastStep && "mx-auto w-full max-w-[430px]",
               )}
             >
               {isAnalysisRunning ? (
-                <AnalysisProcessingState
-                  message={processingMessage}
-                  minimalChrome
-                  theme="dark"
-                  showElapsedTimer={false}
-                  title={i18n(language, {
-                    en: "Initializing…",
-                    fr: "Initialisation…",
-                  })}
-                />
+                <div className="flex min-h-0 flex-1 flex-col justify-center py-4 sm:py-6">
+                  <AnalysisProcessingState
+                    message={processingMessage}
+                    minimalChrome
+                    theme="dark"
+                    showElapsedTimer={false}
+                    title={i18n(language, {
+                      en: "Initializing…",
+                      fr: "Initialisation…",
+                    })}
+                  />
+                </div>
               ) : (
-                <div
-                  className={`min-w-0 ${
-                    isIntroStep ? "" : "space-y-5"
-                  } ${
-                    isIntroStep
-                      ? "flex flex-col items-center gap-4 overflow-x-hidden text-center sm:gap-5"
-                      : ""
-                  }`}
-                >
+                <>
+                  <div
+                    ref={onboardingScrollRootRef}
+                    className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-gutter:stable]"
+                  >
+                    <div className="min-w-0 space-y-4 sm:space-y-5">
                   {isSocialStep ? (
                     <OnboardingSocialProofShowcase language={language} />
                   ) : (
@@ -1146,63 +1055,25 @@ export default function Onboarding() {
                         className={
                           isDatingStep
                             ? "space-y-2 text-center sm:space-y-3"
-                            : isIntroStep
-                              ? "w-full min-w-0 max-w-full space-y-2 text-center"
-                              : "space-y-3 text-center"
+                            : "space-y-3 text-center"
                         }
                       >
                         <motion.h1
-                          initial={
-                            isIntroStep
-                              ? { opacity: 0, scale: 0.84, y: 20 }
-                              : undefined
-                          }
-                          animate={
-                            isIntroStep
-                              ? { opacity: 1, scale: 1, y: 0 }
-                              : undefined
-                          }
-                          transition={
-                            isIntroStep
-                              ? { duration: 2.9, ease: [0.16, 1, 0.3, 1] }
-                              : undefined
-                          }
                           className={
                             isDatingStep
                               ? "mx-auto max-w-[18ch] text-xl font-hero font-semibold leading-snug tracking-[-0.015em] text-white sm:text-2xl md:text-[2rem]"
-                              : isIntroStep
-                                ? "mx-auto w-full min-w-0 max-w-full px-0.5 text-balance text-center text-[clamp(1.42rem,5.5vw+0.42rem,2.75rem)] font-hero font-semibold leading-[1.08] tracking-[-0.02em] text-white sm:px-1 sm:text-[clamp(1.52rem,3.4vw+0.72rem,2.95rem)] md:text-[clamp(1.6rem,2.6vw+0.85rem,3.2rem)]"
                               : "mx-auto max-w-[min(100%,26ch)] text-2xl font-hero font-semibold leading-[1.08] tracking-[-0.015em] text-white sm:max-w-[28ch] sm:text-[2rem] md:text-[2.125rem]"
                           }
                         >
-                          {isIntroStep ? (
-                            <>
-                              <span className="block break-words">
-                                {i18n(language, { en: "Appearance matters", fr: "L'apparence compte" })}
-                              </span>
-                              <span className="block break-words">
-                                {i18n(language, { en: "and you already know it", fr: "et tu le sais déjà" })}
-                              </span>
-                            </>
-                          ) : (
-                            currentStep.title
-                          )}
+                          {currentStep.title}
                         </motion.h1>
-                        {isIntroStep ? (
-                          <h2 className="mx-auto text-center text-[0.9375rem] font-semibold leading-snug tracking-[0.08em] text-zinc-400 sm:text-lg sm:tracking-[0.09em]">
-                            {i18n(language, {
-                              en: "Finance, Influence, Dating...",
-                              fr: "Finance, Influence, Rencontres...",
-                            })}
-                          </h2>
-                        ) : null}
                         {isDatingStep ? (
                           <OnboardingBeforeAfterComparison language={language} />
-                        ) : !isIntroStep ? (
+                        ) : (
                           <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed text-zinc-300 sm:text-base">
                             {currentStep.description}
                           </p>
-                        ) : null}
+                        )}
                       </div>
                     </>
                   )}
@@ -1217,7 +1088,7 @@ export default function Onboarding() {
                         key={`onboarding-evidence-${index}`}
                         className={cn(
                           saasGlassInsetClassName,
-                          "flex min-h-full flex-col p-4 text-left sm:p-5",
+                          "flex min-h-full flex-col p-3 text-left sm:p-5",
                         )}
                       >
                         <p className="text-sm font-semibold leading-relaxed text-zinc-100 sm:text-base">
@@ -1234,23 +1105,73 @@ export default function Onboarding() {
                 ) : null}
 
                 {isLastStep ? (
-                  <div className="mx-auto w-full max-w-sm">
-                    <div className="flex flex-col text-center">
-                      <p className="mt-3 text-center text-[1.45rem] font-hero font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
+                  <div className="mx-auto w-full max-w-sm text-center">
+                    <p className="text-center text-[1.35rem] font-hero font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
+                      {i18n(language, {
+                        en: "Start your first analysis",
+                        fr: "Lance ta première analyse",
+                      })}
+                    </p>
+                    {isScanStatusError ? (
+                      <p className="mt-2 text-sm text-red-600 sm:mt-3">
                         {i18n(language, {
-                          en: "Start your first analysis",
-                          fr: "Lance ta première analyse",
+                          en: "Unable to load your scan session. Refresh the page and try again.",
+                          fr: "Impossible de charger ta session. Actualise la page et réessaye.",
                         })}
                       </p>
-                      {isScanStatusError ? (
-                        <p className="mt-3 text-sm text-red-600">
-                          {i18n(language, {
-                            en: "Unable to load your scan session. Refresh the page and try again.",
-                            fr: "Impossible de charger ta session. Actualise la page et réessaye.",
-                          })}
-                        </p>
-                      ) : null}
-                      <div className="mt-4 flex justify-center">
+                    ) : null}
+                  </div>
+                ) : null}
+
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 space-y-3 border-t border-white/10 bg-gradient-to-t from-black/15 to-transparent pt-3 sm:space-y-4 sm:pt-4">
+                    {analysisMessage ? (
+                      <div className={cn(saasGlassInsetClassName, "p-3 sm:p-4")}>
+                        <div className="flex items-center justify-center gap-3 text-sm text-zinc-200">
+                          {isSubmitting || isUploadingCaptures ? (
+                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" />
+                          ) : null}
+                          <span>{analysisMessage}</span>
+                        </div>
+                        {isSubmitting || isUploadingCaptures ? (
+                          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                            <div className="h-full w-1/2 animate-pulse rounded-full bg-white/40" />
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {showStepFooterNav ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button
+                          type="button"
+                          onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
+                          disabled={stepIndex === 0 || isSubmitting}
+                          className={cn(
+                            "h-11 sm:h-12",
+                            onboardingBackButtonClassName,
+                          )}
+                        >
+                          {i18n(language, { en: "Back", fr: "Retour" })}
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleNext}
+                          disabled={isSubmitting}
+                          className={cn(
+                            "h-11 text-sm sm:h-12 sm:text-base",
+                            onboardingPrimaryCtaClassName,
+                          )}
+                        >
+                          {i18n(language, { en: "Continue", fr: "Continuer" })}
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {showLastStepLaunchCta ? (
+                      <div className="mx-auto flex w-full max-w-sm justify-center">
                         <button
                           type="button"
                           onClick={() => void openOnboardingCapture()}
@@ -1260,7 +1181,7 @@ export default function Onboarding() {
                             isScanStatusError
                           }
                           className={cn(
-                            "flex w-full max-w-[360px] items-center justify-center gap-3 px-4 py-3.5 text-base transition disabled:pointer-events-none disabled:opacity-55",
+                            "flex w-full max-w-[360px] items-center justify-center gap-3 px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-55 sm:py-3.5",
                             onboardingPrimaryCtaClassName,
                           )}
                         >
@@ -1273,7 +1194,7 @@ export default function Onboarding() {
                               <img
                                 src="/favicon.png"
                                 alt=""
-                                className="h-10 w-10 shrink-0 rounded-lg bg-black object-contain"
+                                className="h-9 w-9 shrink-0 rounded-lg bg-black object-contain sm:h-10 sm:w-10"
                               />
                               <span className="text-sm font-semibold tracking-tight sm:text-base">
                                 {i18n(language, {
@@ -1285,73 +1206,10 @@ export default function Onboarding() {
                           )}
                         </button>
                       </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {isIntroStep ? (
-                  <div className="mx-auto mt-3 w-full max-w-[min(100%,15rem)] shrink-0 sm:mt-5 sm:max-w-sm">
-                    <Button
-                      type="button"
-                      onClick={handleNext}
-                      disabled={isSubmitting}
-                      className={cn(
-                        onboardingPrimaryCtaClassName,
-                        "h-9 w-full rounded-xl px-5 text-sm font-semibold sm:h-11 sm:min-h-[2.75rem] sm:px-8 sm:text-base",
-                      )}
-                    >
-                      {i18n(language, { en: "Continue", fr: "Continuer" })}
-                    </Button>
-                  </div>
-                ) : null}
-
-              </div>
-              )}
-
-              {!isAnalysisRunning ? (
-                isIntroStep || isLastStep ? null : (
-                  <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8">
-                    <Button
-                      type="button"
-                      onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
-                      disabled={stepIndex === 0 || isSubmitting}
-                      className={cn(
-                        "h-11 sm:h-12",
-                        onboardingBackButtonClassName,
-                      )}
-                    >
-                      {i18n(language, { en: "Back", fr: "Retour" })}
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleNext}
-                      disabled={isSubmitting}
-                      className={cn(
-                        "h-11 text-sm sm:h-12 sm:text-base",
-                        onboardingPrimaryCtaClassName,
-                      )}
-                    >
-                      {i18n(language, { en: "Continue", fr: "Continuer" })}
-                    </Button>
-                  </div>
-                )
-              ) : null}
-
-              {!isAnalysisRunning && analysisMessage ? (
-                <div className={cn(saasGlassInsetClassName, "mt-4 p-4")}>
-                  <div className="flex items-center justify-center gap-3 text-sm text-zinc-200">
-                    {isSubmitting || isUploadingCaptures ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
                     ) : null}
-                    <span>{analysisMessage}</span>
                   </div>
-                  {isSubmitting || isUploadingCaptures ? (
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full w-1/2 animate-pulse rounded-full bg-white/40" />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+                </>
+              )}
             </motion.article>
           </AnimatePresence>
         </div>

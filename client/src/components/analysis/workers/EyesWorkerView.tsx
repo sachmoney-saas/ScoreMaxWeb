@@ -18,6 +18,7 @@ import {
   WorkerHero,
   workerSectionCardClassName,
 } from "./_shared";
+import { AnalysisJobAssetPreviewThumb } from "./AnalysisJobAssetPreviewThumb";
 
 const WORKER_KEY = "eyes";
 
@@ -277,9 +278,16 @@ export interface EyesWorkerViewProps {
   aggregates: Record<string, unknown>;
   language: AppLanguage;
   heroAside?: React.ReactNode;
+  /** Repère scan gros plan œil (contours), comme la preview tableau de bord. */
+  eyeCloseupContoursGuideSrc?: string | null;
 }
 
-export function EyesWorkerView({ aggregates, language, heroAside }: EyesWorkerViewProps) {
+export function EyesWorkerView({
+  aggregates,
+  language,
+  heroAside,
+  eyeCloseupContoursGuideSrc,
+}: EyesWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
     (key: string) => formatAggregateDisplayLabel(WORKER_KEY, key, locale),
@@ -348,6 +356,20 @@ export function EyesWorkerView({ aggregates, language, heroAside }: EyesWorkerVi
                 })}
               </h3>
             </div>
+            {eyeCloseupContoursGuideSrc ? (
+              <div className="flex w-full shrink-0 justify-center">
+                <AnalysisJobAssetPreviewThumb
+                  src={eyeCloseupContoursGuideSrc}
+                  alt={i18n(language, {
+                    en: "Eye close-up scan overlay: contour guide trace",
+                    fr: "Repère gros plan œil — contours",
+                  })}
+                  imgFit="contain"
+                  className="w-fit max-w-[min(100%,22rem)] shrink-0"
+                  imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+                />
+              </div>
+            ) : null}
             <IrisSpectrumVertical
               selected={irisEnum.value}
               valueLabel={formatEnumValue(

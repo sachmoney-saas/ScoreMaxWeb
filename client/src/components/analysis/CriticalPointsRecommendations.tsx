@@ -425,22 +425,28 @@ function WorkerOrphansUnderTab({
   return (
     <section
       className={cn(
-        "mt-6 space-y-3 border-t border-white/10 pt-6",
+        "mt-6",
         recommendationsReportHorizontalInsetClassName,
       )}
     >
-      <header className="space-y-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-          {i18n(language, { en: "Also matches you", fr: "Autres pistes" })}
-        </p>
-        <p className="text-xs text-zinc-300">
-          {i18n(language, {
-            en: "Suggestions linked to your profile but not pinned to one measure above.",
-            fr: "Suggestions liées à ton profil, sans lien avec une mesure ci-dessus.",
-          })}
-        </p>
-      </header>
-      <div className="grid w-full gap-4 md:grid-cols-2">
+      <div
+        className={cn(
+          scoreRingMatchMetallicPillClassName,
+          "rounded-xl px-5 py-5 sm:px-8 sm:py-7",
+        )}
+      >
+        <header className="relative z-[1] space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+            {i18n(language, { en: "Also matches you", fr: "Autres pistes" })}
+          </p>
+          <p className="text-sm leading-relaxed text-zinc-800">
+            {i18n(language, {
+              en: "Suggestions linked to your profile but not pinned to one measure above.",
+              fr: "Suggestions liées à ton profil, sans lien avec une mesure ci-dessus.",
+            })}
+          </p>
+        </header>
+        <div className="relative z-[1] mt-6 grid w-full gap-4 md:grid-cols-2">
         {filtered.map((rec: MatchedRecommendation) => (
           <RecommendationCard
             key={rec.id}
@@ -451,6 +457,7 @@ function WorkerOrphansUnderTab({
             action={actionByRec.get(rec.id)}
           />
         ))}
+        </div>
       </div>
     </section>
   );
@@ -599,17 +606,23 @@ function CriticalPointsRecommendationsImpl({
   if (isLoading) {
     return (
       <div className={recommendationsReportShellClassName}>
-        <div
-          className={cn(
-            recommendationsReportHorizontalInsetClassName,
-            "flex items-center justify-center gap-2 py-16 pt-8 text-sm text-zinc-300 sm:pt-10",
-          )}
-        >
-          <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-          {i18n(language, {
-            en: "Loading recommendations…",
-            fr: "Chargement des recommandations…",
-          })}
+        <div className={recommendationsReportHorizontalInsetClassName}>
+          <div className="space-y-8">
+            <RecommendationsTypeFilterBar
+              showSoft={showSoftmaxxing}
+              showHard={showHardmaxxing}
+              onSoftChange={setShowSoftmaxxing}
+              onHardChange={setShowHardmaxxing}
+              language={language}
+            />
+            <div className="flex items-center justify-center gap-2 py-14 text-sm text-zinc-300 sm:py-16">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" />
+              {i18n(language, {
+                en: "Loading recommendations…",
+                fr: "Chargement des recommandations…",
+              })}
+            </div>
+          </div>
         </div>
       </div>
     );

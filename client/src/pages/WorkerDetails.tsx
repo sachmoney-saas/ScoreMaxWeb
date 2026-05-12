@@ -324,6 +324,14 @@ export default function WorkerDetails() {
                 assetTypeCode: "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
               })
             : null,
+        eyeCloseupContoursGuideSrc:
+          worker === "eyes" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
+              })
+            : null,
       })}
 
       {entries.length > 0 ? (
@@ -352,6 +360,7 @@ function renderWorkerBody({
   jawFrontalAngleGuideSrc,
   jawProfileLeftGuideSrc,
   noseFrontNoseMouthGuideSrc,
+  eyeCloseupContoursGuideSrc,
 }: {
   worker: string;
   outputAggregates: Record<string, unknown>;
@@ -367,6 +376,7 @@ function renderWorkerBody({
   jawFrontalAngleGuideSrc?: string | null;
   jawProfileLeftGuideSrc?: string | null;
   noseFrontNoseMouthGuideSrc?: string | null;
+  eyeCloseupContoursGuideSrc?: string | null;
 }): React.ReactNode {
   switch (worker) {
     case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
@@ -401,7 +411,14 @@ function renderWorkerBody({
         eyeCloseupAssetSrc={eyeCloseupAssetSrc}
       />
     );
-    case "eyes":          return <EyesWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
+    case "eyes":          return (
+      <EyesWorkerView
+        aggregates={outputAggregates}
+        language={language}
+        heroAside={heroAside}
+        eyeCloseupContoursGuideSrc={eyeCloseupContoursGuideSrc}
+      />
+    );
     case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "nose":          return (
       <NoseWorkerView
