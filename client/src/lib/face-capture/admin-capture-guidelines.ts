@@ -324,6 +324,107 @@ function normPointToBmpPx(nx: number, ny: number, outW: number, outH: number): {
   return jpegLandmarkPxMapper(outW, outH)(nx, ny);
 }
 
+export type LandmarkBoundingBoxPx = { x: number; y: number; w: number; h: number };
+
+/**
+ * Bounding box (en pixels du composite final) qui englobe la concaténation des
+ * anneaux MediaPipe fournis, élargie par `marginRatio` (∈ [0, 1]) appliqué de
+ * façon relative à la taille de la bbox sur chaque côté, puis serrée dans
+ * `[0, outW] × [0, outH]`. Retourne `null` si moins de 3 landmarks valides
+ * ou si la bbox finale est dégénérée (<16 px de côté).
+ *
+ * Utilisé pour recadrer les PNG aplatis admin sur la zone d’intérêt (lèvres,
+ * yeux, …) — calculé dans le même espace pixel que `drawAdmin*GuideOnCanvas`.
+ */
+export function landmarkRingsBoundingBoxPx(
+  landmarks: LandmarkPoint[],
+  rings: readonly (readonly number[])[],
+  outW: number,
+  outH: number,
+  marginRatio: number,
+): LandmarkBoundingBoxPx | null {
+  let xMin = Infinity;
+  let yMin = Infinity;
+  let xMax = -Infinity;
+  let yMax = -Infinity;
+  let count = 0;
+  for (const ring of rings) {
+    for (const idx of ring) {
+      const lm = landmarks[idx];
+      if (!lm || typeof lm.x !== 'number' || typeof lm.y !== 'number') continue;
+      const px = normPointToBmpPx(lm.x, lm.y, outW, outH);
+      if (px.x < xMin) xMin = px.x;
+      if (px.y < yMin) yMin = px.y;
+      if (px.x > xMax) xMax = px.x;
+      if (px.y > yMax) yMax = px.y;
+      count++;
+    }
+  }
+  if (count < 3 || !Number.isFinite(xMin) || !Number.isFinite(xMax)) return null;
+  const bboxW = xMax - xMin;
+  const bboxH = yMax - yMin;
+  if (bboxW <= 0 || bboxH <= 0) return null;
+  const m = Math.max(0, marginRatio);
+  const mx = bboxW * m;
+  const my = bboxH * m;
+  const x0 = Math.max(0, Math.floor(xMin - mx));
+  const y0 = Math.max(0, Math.floor(yMin - my));
+  const x1 = Math.min(outW, Math.ceil(xMax + mx));
+  const y1 = Math.min(outH, Math.ceil(yMax + my));
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (w < 16 || h < 16) return null;
+  return { x: x0, y: y0, w, h };
+}
+
+/** Bbox des lèvres (anneau extérieur MediaPipe) + marge relative. */
+export function landmarkLipsOuterBoundingBoxPx(
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+  marginRatio: number,
+): LandmarkBoundingBoxPx | null {
+  return landmarkRingsBoundingBoxPx(
+    landmarks,
+    [FACEMESH_LIP_OUTER_ORDERED],
+    outW,
+    outH,
+    marginRatio,
+  );
+}
+
+/** Bbox englobant les deux yeux (anneaux paupières gauche + droit) + marge relative. */
+export function landmarkBothEyesBoundingBoxPx(
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+  marginRatio: number,
+): LandmarkBoundingBoxPx | null {
+  return landmarkRingsBoundingBoxPx(
+    landmarks,
+    [FACEMESH_LEFT_EYE_ORDERED, FACEMESH_RIGHT_EYE_ORDERED],
+    outW,
+    outH,
+    marginRatio,
+  );
+}
+
+/** Bbox du contour ovale visage (`FACEMESH_FACE_OVAL_ORDERED`) + marge relative — recadrage centré sur le visage. */
+export function landmarkFaceOvalBoundingBoxPx(
+  landmarks: LandmarkPoint[],
+  outW: number,
+  outH: number,
+  marginRatio: number,
+): LandmarkBoundingBoxPx | null {
+  return landmarkRingsBoundingBoxPx(
+    landmarks,
+    [FACEMESH_FACE_OVAL_ORDERED],
+    outW,
+    outH,
+    marginRatio,
+  );
+}
+
 export function posesWithColoredGuideLinesOnly(poseId: PoseId): boolean {
   return (
     poseId === 'frontal' ||
@@ -603,12 +704,9 @@ function drawVerticalThirdsMapped(
 const MASK_OVERLAY_WHITE_STROKE_RGBA = 'rgba(255, 255, 255, 0.94)';
 
 /**
- * Calque blanc du PNG `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : contour ovale visage +
- * les **trois segments verticaux** du repère tiers (même géométrie que
- * `drawVerticalThirdsMapped`, sans ticks ni libellés) + **deux horizontales pleines**
- * à la hauteur milieu yeux (`guidelineBothEyesMidYNorm`) et milieu bouche, cordées
- * sur l’ovale (ligne haute = niveau yeux, pas « sous les yeux » comme l’ovale
- * diagnostic bleu). Pas de maillage facettes, pas de pastilles d’extrémité.
+ * Calque blanc 2D (ovale traits + grille verticale / deux horizontales). Conservé pour
+ * éventuels outils ou overlays manuels — l’encodage aplati `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY`
+ * utilise désormais le même maillage WebGL que la capture live (`MaskRenderer`).
  */
 function drawMaskOverlayWhiteGuidesMapped(
   ctx: CanvasRenderingContext2D,
@@ -1246,22 +1344,22 @@ function ringVerticesUnique(indices: readonly number[]): readonly number[] {
  * remplissage bleu — les lèvres conservent leur teinte naturelle, encadrées
  * par deux zones sombres qui les font ressortir.
  *
- *   1. voile sombre **40 %** posé partout SAUF à l’intérieur du contour extérieur
+ *   1. voile noir **100 %** posé partout SAUF à l’intérieur du contour extérieur
  *      des lèvres (= l’extérieur du visage est assombri ; le ring lèvres + la
  *      bouche restent à pleine luminosité après cette passe) ;
- *   2. voile sombre **50 %** posé uniquement à l’intérieur du contour intérieur
+ *   2. voile noir **100 %** posé uniquement à l’intérieur du contour intérieur
  *      des lèvres (= dents / intérieur de la bouche assombris davantage).
  *
  * Au final :
- *   • extérieur visage  →  40 % sombre
+ *   • extérieur visage  →  100 % sombre
  *   • ring lèvres       →  0 %  (teinte d’origine, pas de bleu)
- *   • intérieur bouche  →  50 % sombre
+ *   • intérieur bouche  →  100 % sombre
  *
  * Dégradation : si `outerPoly` (contour extérieur des lèvres) manque, on ne
  * rend rien — un voile uniforme n’apporterait aucune info utile.
  */
-const SMILE_LIPS_OUTER_DARKEN_RGBA = 'rgba(0, 0, 0, 0.4)';
-const SMILE_LIPS_MOUTH_DARKEN_RGBA = 'rgba(0, 0, 0, 0.5)';
+const SMILE_LIPS_OUTER_DARKEN_RGBA = 'rgba(0, 0, 0, 1)';
+const SMILE_LIPS_MOUTH_DARKEN_RGBA = 'rgba(0, 0, 0, 1)';
 
 export function drawAdminSmileLipsGuideOnCanvas(
   ctx: CanvasRenderingContext2D,
@@ -1301,7 +1399,7 @@ export function drawAdminSmileLipsGuideOnCanvas(
   ctx.save();
 
   /**
-   * 1) Passe « extérieur » 40 % : rect + outerPoly en `evenodd` → seul
+   * 1) Passe « extérieur » noir opaque : rect + outerPoly en `evenodd` → seul
    *    l’extérieur du contour des lèvres est assombri (la bouche et le ring
    *    lèvres restent à pleine luminosité après cette passe).
    */
@@ -1312,7 +1410,7 @@ export function drawAdminSmileLipsGuideOnCanvas(
   ctx.fill('evenodd');
 
   /**
-   * 2) Passe « intérieur bouche » 50 % : innerPoly seul → seul l’intérieur des
+   * 2) Passe « intérieur bouche » noir opaque : innerPoly seul → seul l’intérieur des
    *    lèvres (dents) est assombri en plus. Le ring lèvres (entre outer et
    *    inner) reste vierge → 0 % sombre, donc teinte d’origine.
    */
@@ -1327,7 +1425,7 @@ export function drawAdminSmileLipsGuideOnCanvas(
 }
 
 /**
- * Variante « dents » du repère sourire : voile sombre 40 % posé sur tout le cliché
+ * Variante « dents » du repère sourire : voile noir opaque posé sur tout le cliché
  * SAUF l’intérieur de la bouche (anneau intérieur des lèvres). On ne dessine ni
  * remplissage ni contour des lèvres — seule la zone des dents conserve sa teinte
  * naturelle. Si `FACEMESH_LIP_INNER_ORDERED` est indisponible, on n’affiche rien
@@ -1375,22 +1473,21 @@ export function drawAdminSmileTeethGuideOnCanvas(
   ctx.beginPath();
   ctx.rect(0, 0, outW, outH);
   tracePolygon(innerPoly);
-  // Variante « dents » : même 40 % sombre que la passe extérieure de SMILE_LIPS.
+  // Variante « dents » : même voile noir opaque que la passe extérieure de SMILE_LIPS.
   ctx.fillStyle = SMILE_LIPS_OUTER_DARKEN_RGBA;
   ctx.fill('evenodd');
   ctx.restore();
 }
 
 /**
- * Voile sombre extra-fort posé hors des yeux : 80 % d’opacité = ~20 % de la
- * photo visible autour des yeux. Le contraste fait ressortir l’œil sans
- * trait dessiné par-dessus.
+ * Voile noir opaque posé hors des yeux : contraste maximal autour ;
+ * aucun trait dessiné par-dessus.
  */
-const EYE_CLOSEUP_BG_DARKEN_RGBA = 'rgba(0, 0, 0, 0.8)';
+const EYE_CLOSEUP_BG_DARKEN_RGBA = 'rgba(0, 0, 0, 1)';
 
 /**
- * PNG aplati gros plan œil : **plus aucun trait dessiné**. Un voile sombre
- * 80 % est posé sur tout le reste de l’image (technique `evenodd` identique à
+ * PNG aplati gros plan œil : **plus aucun trait dessiné**. Un voile noir
+ * opaque est posé sur tout le reste de l’image (technique `evenodd` identique à
  * `drawAdminSmileLipsGuideOnCanvas`) — l’intérieur des deux anneaux d’œil
  * reste à 100 % d’intensité, et le seul contraste sombre/clair fait ressortir
  * fortement l’œil.

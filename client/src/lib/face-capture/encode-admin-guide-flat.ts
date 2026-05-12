@@ -6,9 +6,9 @@
 // Résolution = celle du bitmap source (ratio pixel 1, pas de sur-échantillonnage).
 // ============================================================
 //
-// Pose de face : 7 PNG (ovale + nez/bouche + tiers verticaux + angle mâchoire +
-//   contour forme du visage + maillage blanc 2D + variante lèvres au repos
-//   réutilisant les calques `GUIDE_TRACE_SMILE_LIPS`).
+// Pose de face : 7 PNG (+ `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : photo + voile + masque 3D Wireframe
+//   recadré ovale) + nez/bouche + tiers verticaux + angle mâchoire + contour forme du visage +
+//   variante lèvres au repos réutilisant les calques `GUIDE_TRACE_SMILE_LIPS`).
 // Pose profil : 2 PNG (mâchoire + silhouette nez côté visible).
 // Pose menton levé : 1 PNG (arc mandibulaire bas sur le cliché ; pas de maillage).
 // Pose sommet du crâne : aucun PNG aplati (la photo miroir seule n’apporte aucun
@@ -20,7 +20,6 @@ import {
   drawAdminCloseupEyeContoursGuideOnCanvas,
   drawAdminFaceShapeContourGuideOnCanvas,
   drawAdminFrontalJawAngleGuidelinesOnCanvas,
-  drawAdminFrontalMaskOverlayGuidesOnCanvas,
   drawAdminJawUpLowerArcGuideOnCanvas,
   drawAdminNoseMouthWidthGuidelinesOnCanvas,
   drawAdminOrientationGuidelinesOnCanvas,
@@ -29,7 +28,11 @@ import {
   drawAdminSmileLipsGuideOnCanvas,
   drawAdminSmileTeethGuideOnCanvas,
   drawAdminVerticalThirdsGuidelinesOnCanvas,
+  landmarkBothEyesBoundingBoxPx,
+  landmarkFaceOvalBoundingBoxPx,
+  landmarkLipsOuterBoundingBoxPx,
   mirrorLandmarksNormalizedX,
+  type LandmarkBoundingBoxPx,
 } from './admin-capture-guidelines';
 import { DEBUG_CAPTURE_WHITE_FACE_MESH } from './capture-render-debug';
 import { MaskRenderer } from './MaskRenderer';
@@ -41,6 +44,26 @@ type GuideDrawer = (
   ow: number,
   oh: number,
 ) => void;
+
+/**
+ * Calcule (sur les landmarks miroir = ceux utilisés pour dessiner) la bbox du
+ * recadrage final. Retourner `null` désactive le crop et conserve le composite
+ * pleine taille — utile en dégradation (landmarks manquants, bbox dégénérée).
+ */
+type GuideCropper = (
+  lmFlat: LandmarkPoint[],
+  outW: number,
+  outH: number,
+) => LandmarkBoundingBoxPx | null;
+
+/**
+ * Marge relative (proportion de la bbox feature) appliquée de chaque côté lors
+ * du recadrage des 4 PNG admin centrés sur une zone d’intérêt (lèvres au repos,
+ * lèvres au sourire, dents, gros plan œil). 0.35 = +35 % sur chaque côté ⇒ la
+ * feature occupe ≈ 60 % de l’image finale, le reste donne le contexte (peau /
+ * voile noir).
+ */
+const GUIDE_TRACE_FEATURE_CROP_MARGIN = 0.35;
 
 export type AdminFlattenedGuideEncoding =
   | {
@@ -59,7 +82,7 @@ export type AdminFlattenedGuideEncoding =
       /**
        * Variante « lèvres au repos » sur la pose de face : mêmes calques que
        * `GUIDE_TRACE_SMILE_LIPS` (remplissage bleu intérieur lèvres + voile
-       * sombre 40 % partout sauf le ring lèvres). `null` si
+       * noir opaque partout sauf le ring lèvres). `null` si
        * `FACEMESH_LIP_OUTER_ORDERED` indispo.
        */
       lipsFlat: Blob | null;
@@ -77,7 +100,7 @@ export type AdminFlattenedGuideEncoding =
       variant: 'smileLips';
       smileLipsFlat: Blob;
       /**
-       * Variante « dents » : photo + voile sombre 40 % sur tout sauf l’intérieur
+       * Variante « dents » : photo + voile noir opaque sur tout sauf l’intérieur
        * de la bouche. `null` si `FACEMESH_LIP_INNER_ORDERED` indispo.
        */
       smileTeethFlat: Blob | null;
@@ -157,6 +180,12 @@ async function renderSingleFlatGuidePng(
    * traits bleus sans assombrir les guides eux-mêmes. 0/omis → composite intact.
    */
   darkenBackgroundOpacity = 0,
+  /**
+   * Si fourni et que la bbox calculée est valide, le PNG retourné est recadré
+   * sur cette zone (lèvres, yeux, …) plutôt qu’en pleine taille. Si la bbox
+   * est `null` (landmarks manquants), on retombe sur le composite intégral.
+   */
+  cropper?: GuideCropper,
 ): Promise<Blob | null> {
   const w = bitmap.width;
   const h = bitmap.height;
@@ -232,6 +261,17 @@ async function renderSingleFlatGuidePng(
     }
     cx.drawImage(guide, 0, 0, w, h);
 
+    const bbox = cropper ? cropper(lmFlat, w, h) : null;
+    if (bbox) {
+      const cropped = document.createElement('canvas');
+      cropped.width = bbox.w;
+      cropped.height = bbox.h;
+      const ccx = cropped.getContext('2d');
+      if (!ccx) return null;
+      ccx.drawImage(composite, bbox.x, bbox.y, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
+      return await canvasToPng(cropped);
+    }
+
     return await canvasToPng(composite);
   } finally {
     maskRenderer?.dispose();
@@ -241,15 +281,17 @@ async function renderSingleFlatGuidePng(
 
 /**
  * PNG `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : cliché selfie (miroir) → voile sombre
- * → traits blancs 2D (contour ovale + axe médian type tiers verticaux + deux horizontales
- * pleines à hauteur yeux / bouche, sans texte ni maillage facettes).
+ * sur la photo puis **masque 3D** identique au live (`MaskRenderer` : ovale épais +
+ * wireframe facettes / contours discrets sur le cliché aplati JPEG). Sans grille 2D
+ * (axe médian, horizontales). Recadré sur la bbox ovale MediaPipe avec marge
+ * `{@link GUIDE_TRACE_FEATURE_CROP_MARGIN}` quand elle est exploitable ; sinon cliché plein cadre.
  */
 async function renderFrontalMaskOverlayFlatPng(
   bitmap: ImageBitmap,
   landmarks: LandmarkPoint[],
   videoW: number,
   videoH: number,
-  /** Opacité ∈ [0,1] du voile noir posé sur la photo avant les traits blancs. */
+  /** Opacité ∈ [0,1] du voile noir entre la photo et le maillage WebGL. */
   darkenBackgroundOpacity: number,
 ): Promise<Blob | null> {
   const w = bitmap.width;
@@ -258,30 +300,70 @@ async function renderFrontalMaskOverlayFlatPng(
 
   const lmFlat = mirrorLandmarksNormalizedX(landmarks);
 
-  const composite = document.createElement('canvas');
-  composite.width = w;
-  composite.height = h;
-  const cx = composite.getContext('2d');
-  if (!cx) return null;
+  const { remove, photo, mask } = mountScratchStack(w, h);
+  photo.style.width = `${w}px`;
+  photo.style.height = `${h}px`;
+  photo.width = w;
+  photo.height = h;
+  mask.style.width = `${w}px`;
+  mask.style.height = `${h}px`;
 
-  cx.setTransform(1, 0, 0, 1, 0, 0);
-  cx.translate(w, 0);
-  cx.scale(-1, 1);
-  cx.drawImage(bitmap, 0, 0, w, h);
-  cx.setTransform(1, 0, 0, 1, 0, 0);
+  let maskRenderer: MaskRenderer | null = null;
+  try {
+    const pctx = photo.getContext('2d');
+    if (!pctx) return null;
+    pctx.setTransform(1, 0, 0, 1, 0, 0);
+    pctx.translate(w, 0);
+    pctx.scale(-1, 1);
+    pctx.drawImage(bitmap, 0, 0, w, h);
+    pctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
-  if (alpha > 0) {
-    const prevAlpha = cx.globalAlpha;
-    cx.globalAlpha = alpha;
-    cx.fillStyle = '#000000';
-    cx.fillRect(0, 0, w, h);
-    cx.globalAlpha = prevAlpha;
+    void mask.offsetHeight;
+    maskRenderer = new MaskRenderer();
+    maskRenderer.init(mask, {
+      skipResizeObserver: true,
+      preserveDrawingBuffer: true,
+      overlayPixelRatio: 1,
+    });
+    maskRenderer.setAlignmentQuality(1);
+    maskRenderer.render(lmFlat, videoW, videoH, 0, 0, {
+      staticCssSize: { w, h },
+      landmarkFrame: 'jpegBitmap',
+    });
+
+    const composite = document.createElement('canvas');
+    composite.width = w;
+    composite.height = h;
+    const cx = composite.getContext('2d');
+    if (!cx) return null;
+    cx.drawImage(photo, 0, 0, w, h);
+
+    const alpha = Math.min(1, Math.max(0, darkenBackgroundOpacity));
+    if (alpha > 0) {
+      const prevAlpha = cx.globalAlpha;
+      cx.globalAlpha = alpha;
+      cx.fillStyle = '#000000';
+      cx.fillRect(0, 0, w, h);
+      cx.globalAlpha = prevAlpha;
+    }
+    cx.drawImage(mask, 0, 0, w, h);
+
+    const bbox = landmarkFaceOvalBoundingBoxPx(lmFlat, w, h, GUIDE_TRACE_FEATURE_CROP_MARGIN);
+    if (bbox) {
+      const cropped = document.createElement('canvas');
+      cropped.width = bbox.w;
+      cropped.height = bbox.h;
+      const ccx = cropped.getContext('2d');
+      if (!ccx) return null;
+      ccx.drawImage(composite, bbox.x, bbox.y, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
+      return await canvasToPng(cropped);
+    }
+
+    return await canvasToPng(composite);
+  } finally {
+    maskRenderer?.dispose();
+    remove();
   }
-
-  drawAdminFrontalMaskOverlayGuidesOnCanvas(cx, lmFlat, w, h);
-
-  return await canvasToPng(composite);
 }
 
 function isProfilePoseId(id: PoseId): id is 'profile-left' | 'profile-right' {
@@ -310,7 +392,9 @@ function isCloseupHairlinePoseId(id: PoseId): id is 'closeup-hairline' {
  * 1 pour gros plan œil (contours des deux yeux). La pose `crown-down` (sommet du
  * crâne) ne produit plus de PNG aplati : la photo miroir seule n’apportait aucun
  * repère utile à l’admin.
- * Hors `DEBUG_CAPTURE_WHITE_FACE_MESH`, pas de masque blanc Wireframe sur ces composites.
+ * Hors `DEBUG_CAPTURE_WHITE_FACE_MESH`, pas de Wireframe plein cadre sur les autres composites
+ * frontal (traits bleu/blanc uniquement). Exception : `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` =
+ * cliché recadré ovale avec maillage WebGL systématique (comme le live).
  */
 export async function encodeAdminGuideFlattenedPair(opts: {
   photoBlob: Blob;
@@ -337,6 +421,9 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         opts.sourceVideoHeight,
         (ctx, lm, ow, oh) => drawAdminCloseupEyeContoursGuideOnCanvas(ctx, lm, ow, oh),
         false,
+        0,
+        (lm, ow, oh) =>
+          landmarkBothEyesBoundingBoxPx(lm, ow, oh, GUIDE_TRACE_FEATURE_CROP_MARGIN),
       );
       if (!eyeContoursFlat) return null;
       return { variant: 'closeupEye', eyeContoursFlat };
@@ -397,6 +484,8 @@ export async function encodeAdminGuideFlattenedPair(opts: {
     }
 
     if (isCloseupSmilePoseId(opts.poseId)) {
+      const lipsCropper: GuideCropper = (lm, ow, oh) =>
+        landmarkLipsOuterBoundingBoxPx(lm, ow, oh, GUIDE_TRACE_FEATURE_CROP_MARGIN);
       const smileLipsFlat = await renderSingleFlatGuidePng(
         bitmap,
         opts.landmarks,
@@ -404,6 +493,8 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         opts.sourceVideoHeight,
         (ctx, lm, ow, oh) => drawAdminSmileLipsGuideOnCanvas(ctx, lm, ow, oh),
         false,
+        0,
+        lipsCropper,
       );
       if (!smileLipsFlat) return null;
       const smileTeethFlat = await renderSingleFlatGuidePng(
@@ -413,6 +504,8 @@ export async function encodeAdminGuideFlattenedPair(opts: {
         opts.sourceVideoHeight,
         (ctx, lm, ow, oh) => drawAdminSmileTeethGuideOnCanvas(ctx, lm, ow, oh),
         false,
+        0,
+        lipsCropper,
       ).catch(() => null);
       return { variant: 'smileLips', smileLipsFlat, smileTeethFlat };
     }
@@ -472,7 +565,8 @@ export async function encodeAdminGuideFlattenedPair(opts: {
     /**
      * Variante « lèvres » au repos : on réutilise exactement le calque de
      * `GUIDE_TRACE_SMILE_LIPS` (qui gère lui-même le voile sombre + le ring
-     * lèvres) — d’où `darkenBackgroundOpacity = 0` ici.
+     * lèvres) — d’où `darkenBackgroundOpacity = 0` ici. Recadré sur la bbox
+     * des lèvres pour cibler la zone d’intérêt, comme `SMILE_LIPS` / `SMILE_TEETH`.
      */
     const lipsFlat = await renderSingleFlatGuidePng(
       bitmap,
@@ -481,6 +575,9 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       opts.sourceVideoHeight,
       (ctx, lm, ow, oh) => drawAdminSmileLipsGuideOnCanvas(ctx, lm, ow, oh),
       false,
+      0,
+      (lm, ow, oh) =>
+        landmarkLipsOuterBoundingBoxPx(lm, ow, oh, GUIDE_TRACE_FEATURE_CROP_MARGIN),
     ).catch(() => null);
 
     if (

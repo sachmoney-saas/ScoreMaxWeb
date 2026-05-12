@@ -119,10 +119,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from("profiles")
           .select("*")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
         if (error) {
           console.warn("Profile fetch failed.", error);
+          throw error;
+        }
+
+        if (data === null) {
+          // JWT encore valide côté client mais plus de ligne (ex. utilisateur supprimé côté serveur).
+          await supabase.auth.signOut();
+          queryClient.clear();
           return null;
         }
 

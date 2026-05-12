@@ -58,8 +58,8 @@ export interface CapturedPose {
   annotatedFaceShapeContourGuideBlob?: Blob;
   annotatedFaceShapeContourGuideThumbnailUrl?: string;
   /**
-   * PNG aplati cliché frontal selfie + voile sombre + grille blanche 2D (ovale,
-   * axe médian, horizontales yeux/bouche). Vignette d’analyse côté sidebar.
+   * PNG aplati cliché frontal selfie + voile sombre puis masque 3D Wireframe
+   * (aligné capture live), image recadrée sur la tête. Vignette d’analyse côté sidebar.
    */
   annotatedFrontalMaskOverlayFlatBlob?: Blob;
   annotatedFrontalMaskOverlayFlatThumbnailUrl?: string;
@@ -83,7 +83,7 @@ export interface CapturedPose {
   annotatedSmileLipsGuideBlob?: Blob;
   annotatedSmileLipsGuideThumbnailUrl?: string;
   /**
-   * PNG aplati sourire (variante dents) : cliché + voile sombre 40 % partout
+   * PNG aplati sourire (variante dents) : cliché + voile noir opaque partout
    * sauf l’intérieur de la bouche. Pas de tracé ni de remplissage des lèvres.
    */
   annotatedSmileTeethGuideBlob?: Blob;

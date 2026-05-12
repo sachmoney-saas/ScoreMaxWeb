@@ -293,15 +293,16 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
   "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
   /**
-   * Cliché frontal selfie avec voile sombre 40 % sous le maillage facial blanc
-   * (sans guides bleus). Utilisé comme vignette d’analyse — préféré à
-   * `FACE_FRONT` pour la sidebar dès qu’il est disponible.
+   * Cliché frontal selfie : voile sombre 40 % sur la photo puis masque facial
+   * 3D (Wireframe + ovale comme en capture live), sans grille 2D ; image
+   * recadrée sur l’ovale MediaPipe avec marge. Vignette d’analyse — préférée à
+   * `FACE_FRONT` pour la sidebar dès qu’elle est disponible.
    */
   "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
   /**
    * Variante « lèvres » prise sur la pose de face (mêmes calques que
    * `GUIDE_TRACE_SMILE_LIPS` : remplissage bleu intérieur lèvres + voile
-   * sombre 40 % partout sauf le ring lèvres). Complète le repère sourire
+   * noir opaque partout sauf le ring lèvres). Complète le repère sourire
    * pour analyser les lèvres au repos.
    */
   "GUIDE_TRACE_FACE_FRONT_LIPS",
@@ -312,7 +313,7 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_LOOK_UP_JAW_ARC",
   "GUIDE_TRACE_SMILE_LIPS",
   /**
-   * Variante « dents » du repère sourire : photo + voile sombre 40 % partout
+   * Variante « dents » du repère sourire : photo + voile noir opaque partout
    * SAUF l’intérieur de la bouche (pas de remplissage ni contour des lèvres),
    * pour faire ressortir la teinte naturelle des dents.
    */
