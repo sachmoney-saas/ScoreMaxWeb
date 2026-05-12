@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link } from "wouter";
 import { FloatingHeader } from "@/components/layout/FloatingHeader";
 import { i18n, useAppLanguage } from "@/lib/i18n";
@@ -38,6 +38,21 @@ export function LegalPageShell({
 }) {
   const language = useAppLanguage();
   const otherPages = legalCrossLinks.filter((item) => item.id !== current);
+
+  useEffect(() => {
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "robots");
+      document.head.appendChild(meta);
+    }
+    const previous = meta.getAttribute("content");
+    meta.setAttribute("content", "noindex, follow");
+    return () => {
+      if (previous) meta.setAttribute("content", previous);
+      else meta.setAttribute("content", "index, follow");
+    };
+  }, []);
 
   return (
     <div className={legalPageBgClass}>

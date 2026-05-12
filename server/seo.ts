@@ -22,16 +22,15 @@ function escapeXml(unsafe: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Routes indexables uniquement (évite doubles avec les redirections SPA). */
+/** Pages listées dans le sitemap (URLs publiques qu’on souhaite faire découvrir). */
 const SITEMAP_ENTRIES: readonly {
   path: string;
   changefreq: "weekly" | "monthly" | "yearly";
   priority: number;
 }[] = [
   { path: "/", changefreq: "weekly", priority: 1 },
-  { path: "/legal-notice", changefreq: "yearly", priority: 0.35 },
-  { path: "/terms", changefreq: "yearly", priority: 0.45 },
-  { path: "/privacy", changefreq: "yearly", priority: 0.45 },
+  { path: "/login", changefreq: "monthly", priority: 0.6 },
+  { path: "/register", changefreq: "monthly", priority: 0.6 },
 ];
 
 /**
@@ -43,12 +42,12 @@ export function registerSeoRoutes(app: Express): void {
     const origin = publicSiteOrigin();
     const body = [
       "# https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+      "# Légales (hors sitemap) : même URL publique, meta noindex dans le HTML.",
+      "#   Mentions légales: /legal-notice  •  CGU: /terms  •  Confidentialité: /privacy",
       "User-agent: *",
       "Allow: /",
       "Disallow: /app",
       "Disallow: /admin",
-      "Disallow: /login",
-      "Disallow: /register",
       "Disallow: /onboarding",
       "Disallow: /settings",
       "Disallow: /billing",
