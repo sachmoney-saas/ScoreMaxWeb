@@ -34,6 +34,82 @@ import { videoNormToElementPx } from './MaskRenderer';
 export const CAPTURE_GUIDE_ACCENT_STROKE_RGBA = 'rgba(125, 211, 252, 0.94)';
 export const CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA = 'rgba(186, 230, 253, 0.95)';
 
+/** Lisibilité « toile » : halo sombre + trait clair opaque (même esprit que les radars signature). */
+const CAPTURE_GUIDE_JAW_TRACE_OUTLINE_RGBA = 'rgba(8, 12, 18, 0.78)';
+const CAPTURE_GUIDE_JAW_TRACE_MAIN_HEX = '#cfdde2';
+
+function strokePathRadarLikeJaw(
+  ctx: CanvasRenderingContext2D,
+  minDimPx: number,
+  buildPath: () => void,
+): void {
+  const outlineW = Math.max(5, minDimPx * 0.0085);
+  const innerW = Math.max(2.6, minDimPx * 0.004);
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  buildPath();
+  ctx.strokeStyle = CAPTURE_GUIDE_JAW_TRACE_OUTLINE_RGBA;
+  ctx.lineWidth = outlineW;
+  ctx.stroke();
+  buildPath();
+  ctx.strokeStyle = CAPTURE_GUIDE_JAW_TRACE_MAIN_HEX;
+  ctx.lineWidth = innerW;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Polyligne ouverte : lissage quadratique léger (suit mieux la mandibule que des segments droits). */
+function buildOpenPolylinePath(
+  ctx: CanvasRenderingContext2D,
+  pts: { x: number; y: number }[],
+  opts: { smooth?: boolean },
+): void {
+  const smooth = opts.smooth === true;
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  if (!smooth || pts.length < 3) {
+    ctx.moveTo(pts[0]!.x, pts[0]!.y);
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(pts[i]!.x, pts[i]!.y);
+    }
+    return;
+  }
+  ctx.moveTo(pts[0]!.x, pts[0]!.y);
+  for (let i = 1; i < pts.length - 2; i++) {
+    const p = pts[i]!;
+    const pn = pts[i + 1]!;
+    ctx.quadraticCurveTo(p.x, p.y, (p.x + pn.x) / 2, (p.y + pn.y) / 2);
+  }
+  ctx.quadraticCurveTo(
+    pts[pts.length - 2]!.x,
+    pts[pts.length - 2]!.y,
+    pts[pts.length - 1]!.x,
+    pts[pts.length - 1]!.y,
+  );
+}
+
+function drawJawTraceEndpointsMapped(
+  ctx: CanvasRenderingContext2D,
+  pts: { x: number; y: number }[],
+  minDimPx: number,
+): void {
+  const r = Math.max(2.25, minDimPx * 0.0035);
+  ctx.save();
+  const outerR = r + Math.max(1.1, minDimPx * 0.0018);
+  for (const p of pts) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, outerR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 14, 20, 0.62)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#eaf2f6';
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 /**
  * Largeur bouche / largeur nez, même définition géométrique que les traits horizontaux
  * narinaire (98↔327) et commissures (61↔291) — portées |Δx| en coordonnées normalisées.
@@ -956,7 +1032,6 @@ function drawFrontalJawAngleMapped(
   const PR = toPx(geo.jawR.x, geo.jawR.y);
   const V = toPx(geo.apex.x, geo.apex.y);
 
-  const lineW = Math.max(2, minDimPx * 0.0035);
   const uLx = PL.x - V.x;
   const uLy = PL.y - V.y;
   const uRx = PR.x - V.x;
@@ -975,24 +1050,19 @@ function drawFrontalJawAngleMapped(
   while (delta > Math.PI) delta -= 2 * Math.PI;
   const anticlockwise = delta < 0;
 
-  ctx.save();
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
-  ctx.lineWidth = lineW;
-  ctx.beginPath();
-  ctx.moveTo(PL.x, PL.y);
-  ctx.lineTo(V.x, V.y);
-  ctx.lineTo(PR.x, PR.y);
-  ctx.stroke();
+  strokePathRadarLikeJaw(ctx, minDimPx, () => {
+    ctx.beginPath();
+    ctx.moveTo(PL.x, PL.y);
+    ctx.lineTo(V.x, V.y);
+    ctx.lineTo(PR.x, PR.y);
+  });
 
-  ctx.beginPath();
-  ctx.arc(V.x, V.y, rArcClamped, aL, aR, anticlockwise);
-  ctx.stroke();
-  ctx.restore();
+  strokePathRadarLikeJaw(ctx, minDimPx, () => {
+    ctx.beginPath();
+    ctx.arc(V.x, V.y, rArcClamped, aL, aR, anticlockwise);
+  });
 
-  drawEndpointsAccent(ctx, PL.x, PL.y, V.x, V.y);
-  drawEndpointsAccent(ctx, PR.x, PR.y, V.x, V.y);
+  drawJawTraceEndpointsMapped(ctx, [PL, PR, V], minDimPx);
 
   const label = `${Math.round(geo.angleDeg)}°`;
   const fontPx = Math.max(13, minDimPx * 0.038);
@@ -1035,30 +1105,13 @@ function drawProfileJawMapped(
   }
   if (pts.length < 2) return;
 
-  ctx.save();
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
-  ctx.lineWidth = Math.max(2.75, minDimPx * 0.004);
-  ctx.beginPath();
-  ctx.moveTo(pts[0]!.x, pts[0]!.y);
-  for (let i = 1; i < pts.length; i++) {
-    ctx.lineTo(pts[i]!.x, pts[i]!.y);
-  }
-  ctx.stroke();
-  ctx.restore();
+  strokePathRadarLikeJaw(ctx, minDimPx, () =>
+    buildOpenPolylinePath(ctx, pts, { smooth: pts.length >= 4 }),
+  );
 
-  const endpointR = Math.max(2.5, minDimPx * 0.004);
   const startPt = pts[0]!;
   const endPt = pts[pts.length - 1]!;
-  ctx.save();
-  ctx.fillStyle = CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA;
-  for (const p of [startPt, endPt]) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, endpointR, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+  drawJawTraceEndpointsMapped(ctx, [startPt, endPt], minDimPx);
 }
 
 function drawProfileNoseMapped(
@@ -1128,30 +1181,13 @@ function drawJawUpLowerArcMapped(
   }
   if (pts.length < 2) return;
 
-  ctx.save();
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = CAPTURE_GUIDE_ACCENT_STROKE_RGBA;
-  ctx.lineWidth = Math.max(2.75, minDimPx * 0.004);
-  ctx.beginPath();
-  ctx.moveTo(pts[0]!.x, pts[0]!.y);
-  for (let i = 1; i < pts.length; i++) {
-    ctx.lineTo(pts[i]!.x, pts[i]!.y);
-  }
-  ctx.stroke();
-  ctx.restore();
+  strokePathRadarLikeJaw(ctx, minDimPx, () =>
+    buildOpenPolylinePath(ctx, pts, { smooth: false }),
+  );
 
-  const endpointR = Math.max(2.5, minDimPx * 0.004);
   const startPt = pts[0]!;
   const endPt = pts[pts.length - 1]!;
-  ctx.save();
-  ctx.fillStyle = CAPTURE_GUIDE_ACCENT_ENDPOINT_RGBA;
-  for (const p of [startPt, endPt]) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, endpointR, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+  drawJawTraceEndpointsMapped(ctx, [startPt, endPt], minDimPx);
 }
 
 function drawFaceShapeContourMapped(

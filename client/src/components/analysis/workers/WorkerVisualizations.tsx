@@ -25,28 +25,36 @@ export type WorkerSignatureRadarPoint = {
   anchorId?: string;
 };
 
+function radarLabelLines(label: string): string[] {
+  const parts = label
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  return parts.length > 0 ? parts : [label];
+}
+
 const WORKER_RADAR_PRESETS = {
   default: {
-    viewPadX: 64,
-    viewPadY: 56,
+    viewPadX: 66,
+    viewPadY: 58,
     size: 400,
-    maxRadius: 144,
-    labelOffset: 34,
-    fontSize: 11,
-    dotR: 3.4,
-    polygonStroke: 1.6,
+    maxRadius: 142,
+    labelOffset: 36,
+    fontSize: 12,
+    dotR: 3.85,
+    polygonStroke: 1.65,
     maxWClass: "max-w-[420px]",
   },
   large: {
-    viewPadX: 72,
-    viewPadY: 64,
-    size: 460,
-    maxRadius: 168,
-    labelOffset: 40,
-    fontSize: 13,
-    dotR: 4,
-    polygonStroke: 1.8,
-    maxWClass: "max-w-[min(100%,520px)]",
+    viewPadX: 82,
+    viewPadY: 72,
+    size: 480,
+    maxRadius: 174,
+    labelOffset: 48,
+    fontSize: 16,
+    dotR: 5,
+    polygonStroke: 2,
+    maxWClass: "max-w-[min(100%,560px)]",
   },
 } as const;
 
@@ -200,35 +208,56 @@ export function WorkerSignatureRadar({
         const lp = labelPolar(i);
         const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
         const scoreTxt = d.score.toFixed(d.score % 1 === 0 ? 0 : 1);
-        const scoreFont = Math.max(9, fontSize - 2.25);
+        const scoreFont = Math.max(11.25, fontSize - 2.1);
+        const scoreOutlineW = Math.max(1, scoreFont * 0.068);
         const labelLift = fontSize * 0.52;
         const scoreDrop = fontSize * 0.72;
+        const lines = radarLabelLines(d.label);
+        const lineHeight = fontSize * 1.12;
+        const multilineExtra = lines.length > 1 ? (lines.length - 1) * lineHeight : 0;
+        const labelStartY = lp.y - labelLift - multilineExtra / 2;
+        const scoreY = lp.y + scoreDrop + multilineExtra / 2;
         const labels = (
           <>
             <text
               x={lp.x}
-              y={lp.y - labelLift}
+              y={labelStartY}
               textAnchor={lp.anchor}
-              dominantBaseline="middle"
+              dominantBaseline="hanging"
               fontSize={fontSize}
               fontWeight="600"
               fill={paint.labelFill}
               letterSpacing="0.04em"
             >
-              {d.label}
+              {lines.map((line, li) => (
+                <tspan key={`${i}-L${li}`} x={lp.x} dy={li === 0 ? 0 : lineHeight}>
+                  {line}
+                </tspan>
+              ))}
             </text>
             <text
               x={lp.x}
-              y={lp.y + scoreDrop}
+              y={scoreY}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize={scoreFont}
-              fontWeight="700"
-              fill={paint.previewScoreFill}
               letterSpacing="0.03em"
             >
-              {scoreTxt}
-              <tspan fill={paint.previewMutedFill} fontWeight="600">
+              <tspan
+                fontWeight="700"
+                fill={paint.previewScoreFill}
+                stroke="rgba(15,23,42,0.78)"
+                strokeWidth={scoreOutlineW}
+                paintOrder="stroke fill"
+              >
+                {scoreTxt}
+              </tspan>
+              <tspan
+                fill={paint.previewMutedFill}
+                fontWeight="600"
+                stroke="none"
+                strokeWidth="0"
+              >
                 {" "}
                 /{scale}
               </tspan>

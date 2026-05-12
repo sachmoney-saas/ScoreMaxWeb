@@ -253,6 +253,119 @@ function isAbortError(error: unknown): boolean {
   return false;
 }
 
+/** Erreurs PostgREST / réseau souvent transitoires entre R2 et la persistance. */
+function isRetriableScanAssetPersistError(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  const code = error.code ?? "";
+  const msg = (error.message ?? "").toLowerCase();
+  if (code === "57014") return true;
+  if (code === "40001" || code === "40P01") return true;
+  if (code === "08006" || code === "08003") return true;
+  if (msg.includes("timeout")) return true;
+  if (msg.includes("fetch")) return true;
+  if (msg.includes("network")) return true;
+  if (msg.includes("econnreset")) return true;
+  if (msg.includes("etimedout")) return true;
+  return false;
+}
+
+async function sleepMs(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Remplace l’entrée locale `scan_assets` pour ce couple `(session_id, asset_type_code)`.
+ *
+ * **Pourquoi delete + insert (et pas `upsert` PostgREST) :** sur la prod vérifiée
+ * via MCP, la contrainte unique est `UNIQUE (session_id, asset_type_code, r2_key)`.
+ * Chaque upload reçoit un **nouveau** `r2_key` → un simple `upsert` sur `(session,type)`
+ * n’est pas un `ON CONFLICT` valide et ne dédoublonne pas les réessais. On supprime
+ * d’abord toutes les lignes pour ce slot, puis on insère la nouvelle (idempotent,
+ * compatible RLS DELETE/INSERT utilisateur).
+ */
+async function persistScanAssetRow(params: {
+  lang: AppLanguage;
+  row: {
+    session_id: string;
+    user_id: string;
+    asset_type_code: string;
+    r2_bucket: string;
+    r2_key: string;
+    mime_type: string;
+    byte_size: number;
+    upload_status: "uploaded";
+    captured_at: string;
+    capture_metadata: Record<string, unknown>;
+  };
+  assetTypeCode: string;
+  sessionId: string;
+  mimeType: string;
+  byteSize: number;
+}): Promise<void> {
+  const { lang, row, assetTypeCode, sessionId, mimeType, byteSize } = params;
+  const maxAttempts = 3;
+  let lastError: { code?: string; message?: string; details?: unknown; hint?: string } | null =
+    null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { error: deleteError } = await supabase
+      .from("scan_assets")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("asset_type_code", assetTypeCode);
+
+    if (deleteError) {
+      lastError = deleteError;
+      if (!isRetriableScanAssetPersistError(deleteError) || attempt === maxAttempts - 1) break;
+      await sleepMs(400 * 2 ** attempt);
+      continue;
+    }
+
+    const { error: insertError } = await supabase.from("scan_assets").insert(row);
+    if (!insertError) return;
+
+    lastError = insertError;
+    if (!isRetriableScanAssetPersistError(insertError) || attempt === maxAttempts - 1) break;
+    await sleepMs(400 * 2 ** attempt);
+  }
+
+  if (!lastError) {
+    throw new Error(faceAnalysisMessage(lang, "scanAssetsSaveFailed"));
+  }
+
+  console.warn("[ScoreMax] scan_assets persist (delete + insert) failed", {
+    code: lastError.code,
+    message: lastError.message,
+    details: lastError.details,
+    hint: lastError.hint,
+    assetTypeCode,
+    ...(import.meta.env.DEV ? { sessionId } : {}),
+  });
+  reportClientError({
+    source: "scan_assets.persist_replace",
+    message: lastError.message || faceAnalysisMessage(lang, "scanAssetsSaveFailed"),
+    errorCode: lastError.code,
+    errorDetail:
+      typeof lastError.details === "string"
+        ? lastError.details
+        : JSON.stringify(lastError.details ?? null),
+    errorHint: lastError.hint ?? undefined,
+    payload: {
+      assetTypeCode,
+      sessionId,
+      mimeType,
+      byteSize,
+    },
+  });
+  throw new Error(faceAnalysisMessage(lang, "scanAssetsSaveFailed"), {
+    cause: lastError,
+  });
+}
+
 export async function uploadScanAsset(params: {
   userId: string;
   sessionId: string;
@@ -350,7 +463,14 @@ export async function uploadScanAsset(params: {
     throw new Error(faceAnalysisMessage(lang, "r2UploadFailed"));
   }
 
-  const { error: insertError } = await supabase.from("scan_assets").insert({
+  const captureMetadata: Record<string, unknown> =
+    params.captureMetadata &&
+    typeof params.captureMetadata === "object" &&
+    Object.keys(params.captureMetadata).length > 0
+      ? (params.captureMetadata as Record<string, unknown>)
+      : {};
+
+  const row = {
     session_id: params.sessionId,
     user_id: params.userId,
     asset_type_code: params.assetTypeCode,
@@ -358,43 +478,19 @@ export async function uploadScanAsset(params: {
     r2_key: uploadData.key,
     mime_type: params.file.type,
     byte_size: params.file.size,
-    upload_status: "uploaded",
+    upload_status: "uploaded" as const,
     captured_at: new Date().toISOString(),
-    ...(params.captureMetadata && Object.keys(params.captureMetadata).length > 0
-      ? { capture_metadata: params.captureMetadata }
-      : {}),
-  });
+    capture_metadata: captureMetadata,
+  };
 
-  if (insertError) {
-    // Browser console: full PostgREST error. Typical: RLS scan_assets_insert_own, unique(session_id+asset_type_code), scan_asset_types inactive/missing.
-    console.warn("[ScoreMax] scan_assets insert failed", {
-      code: insertError.code,
-      message: insertError.message,
-      details: insertError.details,
-      hint: insertError.hint,
-      assetTypeCode: params.assetTypeCode,
-      ...(import.meta.env.DEV ? { sessionId: params.sessionId } : {}),
-    });
-    reportClientError({
-      source: "scan_assets.insert",
-      message: insertError.message || faceAnalysisMessage(lang, "scanAssetsSaveFailed"),
-      errorCode: insertError.code,
-      errorDetail:
-        typeof insertError.details === "string"
-          ? insertError.details
-          : JSON.stringify(insertError.details ?? null),
-      errorHint: insertError.hint ?? undefined,
-      payload: {
-        assetTypeCode: params.assetTypeCode,
-        sessionId: params.sessionId,
-        mimeType: params.file.type,
-        byteSize: params.file.size,
-      },
-    });
-    throw new Error(faceAnalysisMessage(lang, "scanAssetsSaveFailed"), {
-      cause: insertError,
-    });
-  }
+  await persistScanAssetRow({
+    lang,
+    row,
+    assetTypeCode: params.assetTypeCode,
+    sessionId: params.sessionId,
+    mimeType: params.file.type,
+    byteSize: params.file.size,
+  });
 }
 
 export async function fetchOnboardingScanAssets(
@@ -578,9 +674,11 @@ export type AnalysisJobAssetPreviewCode =
   | "GUIDE_TRACE_SMILE_LIPS"
   | "GUIDE_TRACE_SMILE_TEETH"
   | "GUIDE_TRACE_FACE_FRONT_LIPS"
+  | "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH"
   | "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE"
-  | "GUIDE_TRACE_PROFILE_RIGHT_JAW"
-  | "GUIDE_TRACE_PROFILE_LEFT_JAW";
+  | "GUIDE_TRACE_FACE_FRONT_OVAL"
+  | "GUIDE_TRACE_PROFILE_LEFT_JAW"
+  | "GUIDE_TRACE_LOOK_UP_JAW_ARC";
 
 export function buildAnalysisJobAssetPreviewUrl(params: {
   userId: string;
@@ -669,6 +767,8 @@ export type SubscriberStandardQuotaWire = {
   can_launch_standard_now: boolean;
   next_available_at: string | null;
   has_standard_in_flight: boolean;
+  requires_active_subscription_to_launch: boolean;
+  has_prior_completed_analysis: boolean;
 };
 
 export async function fetchSubscriberStandardQuota(
@@ -683,6 +783,37 @@ export async function fetchSubscriberStandardQuota(
   const json = (await response.json()) as {
     data: SubscriberStandardQuotaWire;
   };
+
+  return json.data;
+}
+
+export type ResetScanSessionAssetsResult = {
+  deleted_asset_count: number;
+  deleted_storage_object_count: number;
+  failed_storage_object_count: number;
+};
+
+/** Supprime les photos déjà enregistrées pour la session (sans toucher aux lignes liées à un job). */
+export async function resetScanSessionAssets(params: {
+  accessToken: string;
+  sessionId: string;
+}): Promise<ResetScanSessionAssetsResult> {
+  const response = await apiRequest(
+    "POST",
+    `/v1/analyses/scan-sessions/${params.sessionId}/reset-assets`,
+    undefined,
+    { Authorization: `Bearer ${params.accessToken}` },
+  );
+  const json = (await response.json()) as {
+    data: ResetScanSessionAssetsResult;
+  };
+
+  if (json.data.failed_storage_object_count > 0 && import.meta.env.DEV) {
+    console.warn(
+      "[ScoreMax] reset-scan-session : certains objets R2 n'ont pas pu être supprimés",
+      json.data.failed_storage_object_count,
+    );
+  }
 
   return json.data;
 }

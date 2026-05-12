@@ -29,6 +29,7 @@ import {
 } from "@/hooks/use-supabase";
 import {
   getScanAssetLabels,
+  resetScanSessionAssets,
   uploadScanAsset,
 } from "@/lib/face-analysis";
 import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
@@ -36,6 +37,7 @@ import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
 import type { PoseId } from "@/lib/face-capture/types";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 import {
   analysisBackNavButtonClassName,
   analysisHeroGlassClassName,
@@ -95,6 +97,7 @@ export default function NewAnalysis() {
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUploadingAll, setIsUploadingAll] = useState(false);
+  const [isRetakingCaptures, setIsRetakingCaptures] = useState(false);
 
   const createSessionMutation = useCreateManualAnalysisSession();
   const launchMutation = useLaunchManualAnalysis();
@@ -182,9 +185,54 @@ export default function NewAnalysis() {
       setCapturedPoses(poses);
       setShowCameraCapture(false);
       setShowCapturedPreview(true);
+      setErrorMessage(null);
     },
     [],
   );
+
+  async function handleRetakeFromPreview() {
+    setErrorMessage(null);
+    /**
+     * Le reset serveur doit rester disponible même si le lancement est bloqué
+     * par le quota hebdo (sinon anciens blobs / lignes orphan restent après « Refaire »).
+     */
+    if (!user?.id || !sessionId || !hasPremiumAccess) {
+      setCapturedPoses([]);
+      setShowCapturedPreview(false);
+      setShowCameraCapture(true);
+      return;
+    }
+
+    setIsRetakingCaptures(true);
+    try {
+      const {
+        data: { session: authSession },
+      } = await supabase.auth.getSession();
+      const accessToken = authSession?.access_token;
+      if (!accessToken) {
+        throw new Error(
+          i18n(language, {
+            en: "Supabase session not found",
+            fr: "Session Supabase introuvable",
+          }),
+        );
+      }
+
+      await resetScanSessionAssets({ accessToken, sessionId });
+
+      await queryClient.invalidateQueries({
+        queryKey: ["manual-analysis-session-status", user.id, sessionId],
+      });
+
+      setCapturedPoses([]);
+      setShowCapturedPreview(false);
+      setShowCameraCapture(true);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, language));
+    } finally {
+      setIsRetakingCaptures(false);
+    }
+  }
 
   /**
    * Upload all captured poses to R2, then launch the analysis.
@@ -600,12 +648,14 @@ export default function NewAnalysis() {
             <Button
               variant="outline"
               className="flex-1 rounded-full border-white/20 text-zinc-300 hover:text-zinc-50"
-              onClick={() => {
-                setShowCapturedPreview(false);
-                setShowCameraCapture(true);
-              }}
+              disabled={isRetakingCaptures || isUploadingAll}
+              onClick={() => void handleRetakeFromPreview()}
             >
-              <Camera className="mr-2 h-4 w-4" />
+              {isRetakingCaptures ? (
+                <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <Camera className="mr-2 h-4 w-4" />
+              )}
               {i18n(language, { en: "Retake", fr: "Refaire" })}
             </Button>
             <Button

@@ -102,11 +102,18 @@ export default {
           "45%": { opacity: "1" },
           "100%": { transform: "translateX(220%)", opacity: "0.35" },
         },
+        /** Bande lumineuse traversant le bouton (CTA freemium sidebar). */
+        "sidebar-unlock-shimmer": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(420%)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "brand-loader-shimmer": "brand-loader-shimmer 2.2s ease-in-out infinite",
+        "sidebar-unlock-shimmer":
+          "sidebar-unlock-shimmer 2.65s ease-in-out infinite",
       },
     },
   },

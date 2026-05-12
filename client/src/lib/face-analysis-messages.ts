@@ -48,8 +48,8 @@ export function faceAnalysisMessage(
       });
     case "scanAssetsSaveFailed":
       return i18n(lang, {
-        en: "Could not save scan metadata.",
-        fr: "Impossible d’enregistrer les métadonnées du scan.",
+        en: "Could not save scan metadata. Try again in a moment; if it persists, check your connection.",
+        fr: "Impossible d’enregistrer les métadonnées du scan. Réessaie dans quelques secondes ; si ça persiste, vérifie ta connexion.",
       });
     case "noScanAssets":
       return i18n(lang, {

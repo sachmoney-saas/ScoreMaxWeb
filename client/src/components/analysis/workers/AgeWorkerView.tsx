@@ -39,7 +39,7 @@ type AgeNeotenyAnchorId =
  * Age extractor — supports several legacy keys
  * ------------------------------------------------------------------------- */
 
-function extractAge(aggregates: Record<string, unknown>): number | null {
+export function extractAge(aggregates: Record<string, unknown>): number | null {
   for (const key of [
     "age_analysis.best_estimated_age",
     "age_analysis.best_estimated_age.score",
@@ -55,7 +55,7 @@ function extractAge(aggregates: Record<string, unknown>): number | null {
   return null;
 }
 
-function extractAgeArgument(
+export function extractAgeArgument(
   aggregates: Record<string, unknown>,
 ): string | null {
   return (
@@ -67,98 +67,175 @@ function extractAgeArgument(
 }
 
 /* ----------------------------------------------------------------------------
- * Maturity timeline — horizontal axis from teen to mature with the user marker
+ * Frise de maturité — axe 13 → 70 ans
  *
- * Milestones at 13 / 18 / 25 / 35 / 50, tinted gradient from juvenile → mature.
+ * • 13–20 : beige (« Enfantin », libellé sous la frise)
+ * • 20–30 : bleu clair ScoreMax (libellé « Âge d'or » au-dessus de la frise)
+ * • 30–40 : transition bleu clair → gris (sans texte)
+ * • 40–70 : gris (« Maturité » sous la frise)
  * ------------------------------------------------------------------------- */
 
-const MATURITY_MIN = 10;
-const MATURITY_MAX = 60;
-const MATURITY_MILESTONES = [
-  { age: 13, en: "Teen", fr: "Ado" },
-  { age: 18, en: "Young adult", fr: "Jeune adulte" },
-  { age: 25, en: "Adult", fr: "Adulte" },
-  { age: 35, en: "Mature", fr: "Mature" },
-  { age: 50, en: "Senior", fr: "Senior" },
+const MATURITY_AXIS_MIN = 13;
+const MATURITY_AXIS_MAX = 70;
+
+/** Années par bande (somme = AXIS_MAX − AXIS_MIN). */
+const MATURITY_ZONE_YEAR_SPANS = [7, 10, 10, 30] as const; // 13→20, 20→30, 30→40, 40→70
+
+const MATURITY_SPAN_YEARS = MATURITY_ZONE_YEAR_SPANS.reduce(
+  (sum, y) => sum + y,
+  0,
+);
+
+/** Part du bandeau occupée par la zone « âge d'or » (indices d’âge 20–30). */
+const GOLDEN_BAND_LEFT_PCT =
+  (MATURITY_ZONE_YEAR_SPANS[0] / MATURITY_SPAN_YEARS) * 100;
+const GOLDEN_BAND_WIDTH_PCT =
+  (MATURITY_ZONE_YEAR_SPANS[1] / MATURITY_SPAN_YEARS) * 100;
+
+type MaturityZoneDef = {
+  years: number;
+  gradient: string;
+  /** Texte sous la frise (optionnel). */
+  footerLabel?: { en: string; fr: string };
+};
+
+const MATURITY_ZONES: readonly MaturityZoneDef[] = [
+  {
+    years: MATURITY_ZONE_YEAR_SPANS[0],
+    gradient:
+      "linear-gradient(180deg, #faf7f0 0%, #f1e8db 42%, #e7dcc8 100%)",
+    footerLabel: { en: "Childlike", fr: "Enfantin" },
+  },
+  {
+    years: MATURITY_ZONE_YEAR_SPANS[1],
+    gradient:
+      "linear-gradient(180deg, #f3f8ff 0%, #dfefff 42%, #cbe6fb 74%, #b8dcf6 100%)",
+  },
+  {
+    years: MATURITY_ZONE_YEAR_SPANS[2],
+    gradient:
+      "linear-gradient(90deg, #b8dcf6 0%, #a0c8eb 22%, #86a8c9 46%, #768595 72%, #6f7c8a 100%)",
+  },
+  {
+    years: MATURITY_ZONE_YEAR_SPANS[3],
+    gradient:
+      "linear-gradient(90deg, #6f7c8a 0%, #5d656e 46%, #474c54 100%)",
+    footerLabel: { en: "Maturity", fr: "Maturité" },
+  },
 ];
 
-function MaturityTimeline({
+function ageOnMaturityAxis(age: number): number {
+  return Math.max(
+    MATURITY_AXIS_MIN,
+    Math.min(MATURITY_AXIS_MAX, age),
+  );
+}
+
+/** Position du curseur (0–100 %) sur tout l’axe 13→70 ans. */
+function maturityAxisPercent(age: number): number {
+  const a = ageOnMaturityAxis(age);
+  const span = MATURITY_AXIS_MAX - MATURITY_AXIS_MIN;
+  return ((a - MATURITY_AXIS_MIN) / span) * 100;
+}
+
+export function MaturityTimeline({
   age,
   language,
 }: {
   age: number;
   language: AppLanguage;
 }) {
-  const clamped = Math.max(MATURITY_MIN, Math.min(MATURITY_MAX, age));
-  const pct = ((clamped - MATURITY_MIN) / (MATURITY_MAX - MATURITY_MIN)) * 100;
+  const pct = maturityAxisPercent(age);
+  const rounded = Math.round(ageOnMaturityAxis(age));
+
+  const zoneGridCols = MATURITY_ZONE_YEAR_SPANS.join("fr ") + "fr";
 
   return (
     <div className="space-y-3">
-      <div className="relative">
-        {/* Gradient track */}
-        <div className="relative h-12 w-full overflow-hidden rounded-xl border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className="relative pt-11">
+        <div className="mb-1.5 w-full">
           <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(90deg, #f6e0c7 0%, #e8c8a3 18%, #c8b09a 38%, #9aaeb5 60%, #6f7d86 80%, #3d4a52 100%)",
-            }}
-          />
-          {/* Milestone tick marks */}
-          {MATURITY_MILESTONES.map((m) => {
-            const mPct =
-              ((m.age - MATURITY_MIN) / (MATURITY_MAX - MATURITY_MIN)) * 100;
-            return (
-              <div
-                key={m.age}
-                className="absolute top-0 h-full w-px bg-black/30"
-                style={{ left: `${mPct}%` }}
-              />
-            );
-          })}
-          {/* User marker */}
-          <div
-            className="pointer-events-none absolute top-0 h-full w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_2px_rgba(0,0,0,0.6)]"
-            style={{ left: `${pct}%` }}
-          />
-          {/* User age callout */}
-          <div
-            className="pointer-events-none absolute -top-2 -translate-x-1/2 -translate-y-full rounded-full border border-white/20 bg-zinc-950/85 px-2.5 py-1 text-[11px] font-bold text-white shadow-lg backdrop-blur"
-            style={{ left: `${pct}%` }}
+            className="relative mx-auto w-full max-w-full"
+            style={{ minHeight: "1.125rem" }}
           >
-            {Math.round(clamped)}
-            <span className="ml-1 text-[9px] font-semibold text-zinc-400">
-              {i18n(language, { en: "yrs", fr: "ans" })}
-            </span>
+            <p
+              className="pointer-events-none absolute top-0 whitespace-nowrap text-center text-[10px] font-semibold uppercase leading-none tracking-[0.14em] text-zinc-300"
+              style={{
+                left: `${GOLDEN_BAND_LEFT_PCT}%`,
+                width: `${GOLDEN_BAND_WIDTH_PCT}%`,
+              }}
+            >
+              {i18n(language, { en: "Golden age", fr: "Âge d'or" })}
+            </p>
           </div>
         </div>
 
-        {/* Milestone labels */}
-        <div className="relative mt-2 h-6">
-          {MATURITY_MILESTONES.map((m) => {
-            const mPct =
-              ((m.age - MATURITY_MIN) / (MATURITY_MAX - MATURITY_MIN)) * 100;
-            return (
+        <div className="relative h-[3.65rem] w-full overflow-hidden rounded-xl border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <div className="flex h-full w-full">
+            {MATURITY_ZONES.map((zone, idx) => (
               <div
-                key={`label-${m.age}`}
-                className="absolute -translate-x-1/2 text-center"
-                style={{ left: `${mPct}%` }}
-              >
-                <p className="text-[9px] font-bold tabular-nums text-zinc-500">
-                  {m.age}
+                key={idx}
+                className="relative shrink-0 shadow-[inset_0_-1px_0_rgba(0,0,0,0.06)]"
+                style={{
+                  flexGrow: zone.years,
+                  flexBasis: 0,
+                  minWidth: 0,
+                  background: zone.gradient,
+                }}
+              />
+            ))}
+          </div>
+          <div
+            className="pointer-events-none absolute top-0 z-[2] h-full w-[4px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_3px_rgba(0,0,0,0.5)]"
+            style={{ left: `${pct}%` }}
+          />
+          <div
+            className="pointer-events-none absolute -top-1 z-[3] flex -translate-x-1/2 -translate-y-full flex-col items-center"
+            style={{ left: `${pct}%` }}
+          >
+            <div className="rounded-full border border-white/40 bg-zinc-950/92 px-2.5 py-1 shadow-lg backdrop-blur">
+              <span className="text-[13px] font-bold tabular-nums leading-none text-white">
+                {rounded}
+              </span>
+              <span className="ml-1 align-middle text-[9px] font-semibold uppercase tracking-[0.08em] text-zinc-400">
+                {i18n(language, { en: "yrs", fr: "ans" })}
+              </span>
+            </div>
+            <div className="-mt-px h-2 w-[3px] rounded-b-[2px] bg-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.35)]" />
+          </div>
+        </div>
+
+        <div
+          className="mt-3 grid gap-2 text-center"
+          style={{ gridTemplateColumns: zoneGridCols }}
+        >
+          {MATURITY_ZONES.map((zone, idx) => (
+            <div key={`lab-${idx}`} className="min-w-0 px-1">
+              {zone.footerLabel ? (
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+                  {i18n(language, zone.footerLabel)}
                 </p>
-                <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                  {i18n(language, { en: m.en, fr: m.fr })}
-                </p>
-              </div>
-            );
-          })}
+              ) : (
+                <span className="block min-h-[0.875rem]" aria-hidden />
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-        <span>{i18n(language, { en: "Juvenile", fr: "Juvénile" })}</span>
-        <span>{i18n(language, { en: "Mature", fr: "Mature" })}</span>
+      <div className="flex items-center justify-between text-[10px] font-semibold tabular-nums tracking-[0.12em] text-zinc-300">
+        <span>
+          {MATURITY_AXIS_MIN}
+          <span className="ml-0.5 font-medium normal-case">
+            {i18n(language, { en: " yrs", fr: " ans" })}
+          </span>
+        </span>
+        <span>
+          70+
+          <span className="ml-0.5 font-medium normal-case">
+            {i18n(language, { en: " yrs", fr: " ans" })}
+          </span>
+        </span>
       </div>
     </div>
   );

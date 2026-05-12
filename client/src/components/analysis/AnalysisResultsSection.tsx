@@ -49,9 +49,10 @@ import {
   scoreRingMatchMetallicPillClassName,
   softmaxxingTakeawayRankPillClassName,
 } from "@/components/analysis/workers/_shared";
+import { MaturityTimeline } from "@/components/analysis/workers/AgeWorkerView";
 import { cn } from "@/lib/utils";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
-import { getScoreRank, SCORE_TIERS } from "@/lib/global-score-tiers";
+import { getScoreRank, GLOBAL_TIER_SEGMENTS, SCORE_TIERS } from "@/lib/global-score-tiers";
 import {
   buildAnalysisViewHref,
   parseAnalysisTabFromSearch,
@@ -305,11 +306,11 @@ function AgeResultCard({
               </span>
             </h2>
             {argument ? (
-              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-zinc-300 line-clamp-2">
+              <p className="mx-auto mt-4 w-full max-w-lg text-left text-xs leading-relaxed tracking-normal text-zinc-300 [text-wrap:pretty] whitespace-pre-wrap break-words">
                 {argument}
               </p>
             ) : (
-              <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-zinc-400">
+              <p className="mx-auto mt-4 max-w-lg text-xs leading-relaxed text-zinc-400">
                 {i18n(language, {
                   en: "Reading of your apparent age based on detected visual markers.",
                   fr: "Lecture de ton âge apparent basée sur les marqueurs visuels détectés.",
@@ -318,6 +319,18 @@ function AgeResultCard({
             )}
           </div>
         </div>
+
+        {estimatedAge !== null ? (
+          <div className="mx-auto w-full max-w-xl px-0.5">
+            <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+              {i18n(language, {
+                en: "Maturity spectrum",
+                fr: "Spectre maturité",
+              })}
+            </p>
+            <MaturityTimeline age={estimatedAge} language={language} />
+          </div>
+        ) : null}
 
         {epidermal !== null || lipPlumpness !== null || lowerSoftness !== null ? (
           <div className="grid grid-cols-3 gap-3 border-t border-white/10 pt-3">
@@ -463,51 +476,140 @@ function GlobalTierRelativeCopy({
   );
 }
 
+function tierLadderCursorPercent(score0to100: number, rankIndex: number): number {
+  const n = SCORE_TIERS.length;
+  const seg = GLOBAL_TIER_SEGMENTS[rankIndex];
+  if (!seg) return 0;
+  const { lower, upper } = seg;
+  const span = Math.max(1e-6, upper - lower);
+  const clamped = Math.max(lower, Math.min(upper, score0to100));
+  const t = (clamped - lower) / span;
+  return ((rankIndex + Math.max(0, Math.min(1, t))) / n) * 100;
+}
+
+/** Indice `SCORE_TIERS` du palier étiquetté « PSL 6 » ; à partir de là : un seul jalon « ~ 3 mois ». */
+const PSL_SIMPLE_HORIZON_TIER_INDEX = 6;
+
+type TrajectoryMilestone = { label: string; tierIndex: number };
+
+/**
+ * Repères UX (projection indicative, aucune promesse médicale) sur les passages de paliers
+ * pour une barre découpée en colonnes égales.
+ */
+function tierTrajectoryMilestones(
+  activeIndex: number,
+  language: AppLanguage,
+): TrajectoryMilestone[] {
+  const n = SCORE_TIERS.length;
+  const lastIdx = n - 1;
+
+  if (activeIndex >= lastIdx) {
+    return [];
+  }
+
+  /** Centre horizontal d’une colonne palier (repère au milieu du segment). */
+  const columnCenterPct = (columnIndex: number): number => {
+    const ci = Math.max(0, Math.min(lastIdx, columnIndex));
+    return ((ci + 0.5) / n) * 100;
+  };
+
+  const nextColumn = activeIndex + 1;
+  const nextCenter = columnCenterPct(nextColumn);
+
+  if (activeIndex >= PSL_SIMPLE_HORIZON_TIER_INDEX) {
+    return [
+      {
+        label: i18n(language, { en: "~ 3 mois", fr: "~ 3 mois" }),
+        tierIndex: nextColumn,
+      },
+    ];
+  }
+
+  const milestones: TrajectoryMilestone[] = [
+    {
+      label: i18n(language, { en: "~ 1 mois", fr: "~ 1 mois" }),
+      tierIndex: nextColumn,
+    },
+  ];
+
+  const targetColumn = Math.min(activeIndex + 3, lastIdx);
+  const farCenter = columnCenterPct(targetColumn);
+
+  if (targetColumn > nextColumn && farCenter > nextCenter + 4) {
+    milestones.push({
+      label: i18n(language, { en: "~ 6 mois", fr: "~ 6 mois" }),
+      tierIndex: targetColumn,
+    });
+  }
+
+  return milestones;
+}
+
 function TierLadder({
   activeIndex,
   pslLabel,
   language,
+  score0to100,
 }: {
   activeIndex: number;
   pslLabel: string;
   language: AppLanguage;
+  score0to100: number;
 }) {
   const lastIdx = SCORE_TIERS.length - 1;
+  const cursorLeftPct = tierLadderCursorPercent(score0to100, activeIndex);
+  const trajectoryMilestones = tierTrajectoryMilestones(activeIndex, language);
+  const milestoneLabelByTier = new Map(
+    trajectoryMilestones.map((m) => [m.tierIndex, m.label]),
+  );
 
   return (
     <div className="space-y-2">
-      <div
-        className="flex items-center gap-1"
-        role="img"
-        aria-label="Tier ladder"
-      >
-        {SCORE_TIERS.map((_, i) => {
-          const isActive = i === activeIndex;
-          const isPast = i < activeIndex;
-          const isNext = !isActive && !isPast && i === activeIndex + 1;
-          return (
-            <div key={i} className="flex flex-1 items-center gap-1">
-              <div
-                className={cn(
-                  "relative h-1.5 flex-1 overflow-hidden rounded-full transition",
-                  isActive &&
-                    "bg-gradient-to-b from-white/90 to-zinc-400/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_0_0_1px_rgba(255,255,255,0.12),0_2px_8px_rgba(0,0,0,0.35)]",
-                  isPast && "bg-white/40",
-                  isNext &&
-                    "bg-white/[0.14] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]",
-                  !isActive && !isPast && !isNext && "bg-white/10",
-                )}
-              >
-                {isNext ? (
-                  <span
-                    className="pointer-events-none absolute inset-y-0 left-0 w-[min(90%,4rem)] min-w-[1.25rem] rounded-full bg-gradient-to-r from-transparent via-white/55 to-transparent motion-safe:animate-brand-loader-shimmer motion-reduce:opacity-70"
-                    aria-hidden
-                  />
-                ) : null}
+      <div className="relative pb-px">
+        <div className="relative">
+          <div
+            className="flex items-center gap-1"
+            role="img"
+            aria-label={i18n(language, {
+              en: `Tier ladder, score ${score0to100.toFixed(1)} out of 100`,
+              fr: `Échelle de paliers, score ${score0to100.toFixed(1)} sur 100`,
+            })}
+          >
+          {SCORE_TIERS.map((_, i) => {
+            const isActive = i === activeIndex;
+            const isPast = i < activeIndex;
+            const isNext = !isActive && !isPast && i === activeIndex + 1;
+            return (
+              <div key={i} className="flex flex-1 items-center gap-1">
+                <div
+                  className={cn(
+                    "relative h-1.5 flex-1 overflow-hidden rounded-full transition",
+                    isActive &&
+                      "bg-gradient-to-b from-white/90 to-zinc-400/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_0_0_1px_rgba(255,255,255,0.12),0_2px_8px_rgba(0,0,0,0.35)]",
+                    isPast && "bg-white/40",
+                    isNext &&
+                      "bg-white/[0.14] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]",
+                    !isActive && !isPast && !isNext && "bg-white/10",
+                  )}
+                >
+                  {isNext ? (
+                    <span
+                      className="pointer-events-none absolute inset-y-0 left-0 w-[min(90%,4rem)] min-w-[1.25rem] rounded-full bg-gradient-to-r from-transparent via-white/55 to-transparent motion-safe:animate-brand-loader-shimmer motion-reduce:opacity-70"
+                      aria-hidden
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        <div className="pointer-events-none absolute inset-0 z-10" aria-hidden>
+          <div
+            className="absolute top-1/2 h-7 w-[1.5px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-b from-white via-white to-white/25 shadow-[0_0_16px_rgba(255,255,255,0.45),0_0_0_0.5px_rgba(255,255,255,0.85)] motion-reduce:h-6 motion-reduce:shadow-[0_0_10px_rgba(255,255,255,0.3)] sm:h-8"
+            style={{ left: `${cursorLeftPct}%` }}
+          />
+        </div>
+        </div>
       </div>
 
       <div
@@ -524,13 +626,20 @@ function TierLadder({
               </span>
             ) : null;
 
+          const milestoneLabel = milestoneLabelByTier.get(i);
+          const milestoneNode = milestoneLabel ? (
+            <span className="text-center font-sans text-[9px] font-semibold uppercase leading-snug tracking-wide text-white sm:text-[10px]">
+              {milestoneLabel}
+            </span>
+          ) : null;
+
+          const rowClassName =
+            "flex min-h-[2.25rem] min-w-0 flex-row flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 px-0.5 text-center";
+
           if (i === 0) {
             return (
-              <div
-                key={i}
-                className="flex min-h-[2.25rem] min-w-0 flex-col items-center justify-center gap-1 px-0.5"
-              >
-                <span className="text-[9px] font-semibold uppercase leading-tight tracking-[0.08em] text-zinc-500 sm:text-[10px]">
+              <div key={i} className={rowClassName}>
+                <span className="text-[9px] font-semibold uppercase leading-tight tracking-[0.08em] text-white sm:text-[10px]">
                   {i18n(language, {
                     en: "Lowest Tier",
                     fr: "Palier minimal",
@@ -543,12 +652,10 @@ function TierLadder({
 
           if (i === lastIdx) {
             return (
-              <div
-                key={i}
-                className="flex min-h-[2.25rem] min-w-0 flex-col items-center justify-center gap-1 px-0.5"
-              >
+              <div key={i} className={rowClassName}>
                 {pslNode}
-                <span className="text-[9px] font-semibold uppercase leading-tight tracking-[0.08em] text-zinc-500 sm:text-[10px]">
+                {milestoneNode}
+                <span className="text-[9px] font-semibold uppercase leading-tight tracking-[0.08em] text-white sm:text-[10px]">
                   {i18n(language, {
                     en: "Highest Tier",
                     fr: "Palier maximal",
@@ -559,10 +666,8 @@ function TierLadder({
           }
 
           return (
-            <div
-              key={i}
-              className="flex min-h-[2.25rem] min-w-0 flex-col items-center justify-center px-0.5"
-            >
+            <div key={i} className={rowClassName}>
+              {milestoneNode}
               {pslNode}
             </div>
           );
@@ -827,15 +932,15 @@ function GlobalScoreCard({
       <CardContent className="relative space-y-5 p-6 sm:p-8">
         <div
           className={cn(
-            "flex flex-col gap-8",
+            "grid grid-cols-1 gap-8",
             hasTakeaways &&
-              "lg:grid lg:grid-cols-[minmax(0,38%)_minmax(0,1fr)] lg:items-stretch lg:gap-8 xl:grid-cols-[minmax(0,34%)_minmax(0,1fr)] xl:gap-10",
+              "lg:grid-cols-[minmax(0,38%)_minmax(0,1fr)] lg:items-stretch xl:grid-cols-[minmax(0,34%)_minmax(0,1fr)] xl:gap-10",
           )}
         >
           <div
             className={cn(
-              "flex min-w-0 flex-col items-center text-center",
-              hasTakeaways && "lg:pt-0.5",
+              "order-1 flex min-w-0 flex-col items-center text-center lg:order-none",
+              hasTakeaways && "lg:col-span-1 lg:col-start-1 lg:row-start-1 lg:pt-0.5",
             )}
           >
             <div className="flex w-full flex-col items-center">
@@ -898,7 +1003,11 @@ function GlobalScoreCard({
           </div>
 
           {hasTakeaways ? (
-            <div className="flex min-h-0 min-w-0 flex-col justify-center border-t border-white/10 pt-8 lg:h-full lg:border-t-0 lg:border-l lg:border-white/10 lg:pl-6 xl:pl-8 lg:pt-2">
+            <div
+              className={cn(
+                "order-3 flex min-h-0 min-w-0 flex-col justify-center border-t border-white/10 pt-8 lg:order-none lg:col-start-2 lg:row-start-1 lg:h-full lg:border-t-0 lg:border-l lg:border-white/10 lg:pl-6 lg:pt-2 xl:pl-8",
+              )}
+            >
               <div className="flex w-full flex-col gap-5 sm:flex-row sm:items-start sm:justify-center sm:gap-4 lg:mt-1 lg:gap-5">
                 <TakeawayList
                   tone="positive"
@@ -925,14 +1034,21 @@ function GlobalScoreCard({
               </div>
             </div>
           ) : null}
-        </div>
 
-        <div className="space-y-2 border-t border-white/10 pt-4">
-          <TierLadder
-            activeIndex={rank.index}
-            pslLabel={rank.pslLabel}
-            language={language}
-          />
+          <div
+            className={cn(
+              "order-2 space-y-2 border-t border-white/10 pt-4 lg:order-none lg:col-start-1",
+              hasTakeaways &&
+                "lg:col-span-2 lg:row-start-2 lg:border-t lg:border-white/10",
+            )}
+          >
+            <TierLadder
+              activeIndex={rank.index}
+              pslLabel={rank.pslLabel}
+              language={language}
+              score0to100={score.score}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>

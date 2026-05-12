@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { registerSeoRoutes } from "./seo";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import {
@@ -65,6 +66,7 @@ app.use(
 
 (async () => {
   await registerRoutes(httpServer, app);
+  registerSeoRoutes(app);
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const apiError = mapUnknownError(err);

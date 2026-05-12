@@ -284,12 +284,20 @@ export default function WorkerDetails() {
                 assetTypeCode: "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
               })
             : null,
-        jawProfileRightGuideSrc:
+        faceFrontShapeContourAssetSrc:
+          worker === "symmetry_shape" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
+              })
+            : null,
+        jawFrontOvalGuideSrc:
           worker === "jaw" && analysis && assetPreviewUserId
             ? buildAnalysisJobAssetPreviewUrl({
                 jobId: analysis.job.id,
                 userId: assetPreviewUserId,
-                assetTypeCode: "GUIDE_TRACE_PROFILE_RIGHT_JAW",
+                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_OVAL",
               })
             : null,
         jawFrontalAngleGuideSrc:
@@ -306,6 +314,14 @@ export default function WorkerDetails() {
                 jobId: analysis.job.id,
                 userId: assetPreviewUserId,
                 assetTypeCode: "GUIDE_TRACE_PROFILE_LEFT_JAW",
+              })
+            : null,
+        noseFrontNoseMouthGuideSrc:
+          worker === "nose" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
               })
             : null,
       })}
@@ -331,9 +347,11 @@ function renderWorkerBody({
   captureGuideMetrics,
   eyeCloseupAssetSrc,
   verticalThirdsAssetSrc,
-  jawProfileRightGuideSrc,
+  faceFrontShapeContourAssetSrc,
+  jawFrontOvalGuideSrc,
   jawFrontalAngleGuideSrc,
   jawProfileLeftGuideSrc,
+  noseFrontNoseMouthGuideSrc,
 }: {
   worker: string;
   outputAggregates: Record<string, unknown>;
@@ -344,9 +362,11 @@ function renderWorkerBody({
   captureGuideMetrics?: GuideTraceMetricsForAnalysis | null;
   eyeCloseupAssetSrc?: string | null;
   verticalThirdsAssetSrc?: string | null;
-  jawProfileRightGuideSrc?: string | null;
+  faceFrontShapeContourAssetSrc?: string | null;
+  jawFrontOvalGuideSrc?: string | null;
   jawFrontalAngleGuideSrc?: string | null;
   jawProfileLeftGuideSrc?: string | null;
+  noseFrontNoseMouthGuideSrc?: string | null;
 }): React.ReactNode {
   switch (worker) {
     case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
@@ -359,6 +379,7 @@ function renderWorkerBody({
         language={language}
         heroAside={heroAside}
         verticalThirdsAssetSrc={verticalThirdsAssetSrc}
+        faceFrontShapeContourAssetSrc={faceFrontShapeContourAssetSrc}
       />
     );
     case "jaw":           return (
@@ -367,7 +388,7 @@ function renderWorkerBody({
         language={language}
         heroAside={heroAside}
         captureGuideMetrics={captureGuideMetrics}
-        jawProfileRightGuideSrc={jawProfileRightGuideSrc}
+        jawFrontOvalGuideSrc={jawFrontOvalGuideSrc}
         jawFrontalAngleGuideSrc={jawFrontalAngleGuideSrc}
         jawProfileLeftGuideSrc={jawProfileLeftGuideSrc}
       />
@@ -382,7 +403,15 @@ function renderWorkerBody({
     );
     case "eyes":          return <EyesWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
-    case "nose":          return <NoseWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} captureGuideMetrics={captureGuideMetrics} />;
+    case "nose":          return (
+      <NoseWorkerView
+        aggregates={outputAggregates}
+        language={language}
+        heroAside={heroAside}
+        captureGuideMetrics={captureGuideMetrics}
+        noseFrontNoseMouthGuideSrc={noseFrontNoseMouthGuideSrc}
+      />
+    );
     case "chin":          return <ChinWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "cheeks":        return <CheeksWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
     case "smile":         return <SmileWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;

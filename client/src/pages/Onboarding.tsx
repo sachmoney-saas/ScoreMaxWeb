@@ -48,6 +48,7 @@ import {
 } from "@/hooks/use-supabase";
 import {
   getScanAssetLabels,
+  resetScanSessionAssets,
   uploadScanAsset,
 } from "@/lib/face-analysis";
 import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
@@ -570,6 +571,10 @@ export default function Onboarding() {
   const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
   const [onboardingJobId, setOnboardingJobId] = React.useState<string | null>(null);
   const [isUploadingCaptures, setIsUploadingCaptures] = React.useState(false);
+  const [isRetakingCaptures, setIsRetakingCaptures] = React.useState(false);
+  const [capturePreviewError, setCapturePreviewError] = React.useState<string | null>(
+    null,
+  );
   /**
    * Une fois l'utilisateur a démarré un run depuis cette session de la page
    * (upload + POST /onboarding/complete), on le garde sur la page tant
@@ -732,10 +737,61 @@ export default function Onboarding() {
   }, [jobStatus.data?.job, jobStatusValue, language]);
 
   const handleCapturedComplete = React.useCallback((poses: CapturedPose[]) => {
+    setCapturePreviewError(null);
     setCapturedPoses(poses);
     setShowCameraCapture(false);
     setShowCapturedPreview(true);
   }, []);
+
+  const handleRetakeCapturesFromPreview = React.useCallback(async () => {
+    setAnalysisMessage(null);
+    setCapturePreviewError(null);
+    if (!user?.id || !onboardingSessionId) {
+      setCapturedPoses([]);
+      setShowCapturedPreview(false);
+      setShowCameraCapture(true);
+      return;
+    }
+
+    setIsRetakingCaptures(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error(
+          i18n(language, {
+            en: "Supabase session not found",
+            fr: "Session Supabase introuvable",
+          }),
+        );
+      }
+
+      await resetScanSessionAssets({
+        accessToken,
+        sessionId: onboardingSessionId,
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: ["onboarding-scan-status", user.id],
+      });
+
+      setCapturedPoses([]);
+      setShowCapturedPreview(false);
+      setShowCameraCapture(true);
+    } catch (error) {
+      console.error("Unable to reset scan session assets:", error);
+      setCapturePreviewError(
+        error instanceof Error
+          ? error.message
+          : i18n(language, {
+              en: "Unable to discard previous uploads. Try again.",
+              fr: "Impossible d'effacer les envois précédents. Réessaye.",
+            }),
+      );
+    } finally {
+      setIsRetakingCaptures(false);
+    }
+  }, [language, onboardingSessionId, queryClient, user?.id]);
 
   const uploadAndCompleteOnboarding = React.useCallback(async () => {
     if (!user?.id || !onboardingSessionId || capturedPoses.length === 0) {
@@ -1327,6 +1383,10 @@ export default function Onboarding() {
             </DialogDescription>
           </DialogHeader>
 
+          {capturePreviewError ? (
+            <p className="text-sm font-medium text-red-300">{capturePreviewError}</p>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {capturedPoses.map((pose) => {
               const code = ONBOARDING_POSE_TO_ASSET[pose.poseId];
@@ -1350,12 +1410,14 @@ export default function Onboarding() {
             <Button
               variant="outline"
               className="flex-1 rounded-sm border-white/25 bg-black/20 text-sm font-semibold text-zinc-200 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-white/10 hover:text-zinc-50"
-              onClick={() => {
-                setShowCapturedPreview(false);
-                setShowCameraCapture(true);
-              }}
+              disabled={isRetakingCaptures || isUploadingCaptures}
+              onClick={() => void handleRetakeCapturesFromPreview()}
             >
-              <Camera className="mr-2 h-4 w-4" />
+              {isRetakingCaptures ? (
+                <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <Camera className="mr-2 h-4 w-4" />
+              )}
               {i18n(language, { en: "Retake", fr: "Refaire" })}
             </Button>
             <Button

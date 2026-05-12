@@ -7,7 +7,10 @@ import {
   useSubscriberStandardAnalysisQuota,
 } from "@/hooks/use-supabase";
 import { analysisHistoryGlobalScoreSummary } from "@/lib/analysis-history-global-summary";
-import { buildAnalysisThumbnailUrl } from "@/lib/face-analysis";
+import {
+  buildAnalysisThumbnailUrl,
+  type SubscriberStandardQuotaWire,
+} from "@/lib/face-analysis";
 import { AuthenticatedThumbnail } from "@/components/analysis/AuthenticatedThumbnail";
 import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
 import { Link, useLocation } from "wouter";
@@ -25,9 +28,10 @@ import {
   MessageCircle,
   MoreHorizontal,
   Plus,
+  Lock,
   Trash2,
   ClipboardList,
-  CalendarClock,
+  Clock,
 } from "lucide-react";
 import {
   Sidebar,
@@ -71,8 +75,11 @@ import {
   analysisElapsedAnchorEpochMs,
   formatAnalysisElapsedLabel,
 } from "@/components/analysis/AnalysisProcessingState";
-import { useAppLanguage, i18n } from "@/lib/i18n";
-import { formatSubscriberStandardQuotaSidebarLine } from "@/lib/subscriber-standard-analysis-copy";
+import { useAppLanguage, i18n, type AppLanguage } from "@/lib/i18n";
+import {
+  formatSubscriberCooldownCountdownLine,
+  subscriberStandardCooldownParts,
+} from "@/lib/subscriber-standard-analysis-copy";
 
 type SidebarNavItem = {
   href: string;
@@ -121,6 +128,257 @@ function SidebarAnalysisRunningElapsed({ createdAtIso }: { createdAtIso: string 
   );
 }
 
+const NEW_ANALYSIS_CTA_CLASS =
+  "flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.09] px-3 text-sm font-semibold text-zinc-100 transition hover:border-white/25 hover:bg-white/[0.14]";
+
+const NEW_ANALYSIS_LOCKED_PREMIUM_CLASS = cn(
+  NEW_ANALYSIS_CTA_CLASS,
+  "pointer-events-none min-h-11 flex-col gap-0.5 border-white/10 bg-white/[0.055] py-1.5 opacity-90 !text-zinc-400 hover:!border-white/10 hover:!bg-white/[0.055]",
+);
+
+const NEW_ANALYSIS_BLOCKED_CLASS =
+  "pointer-events-none flex w-full min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.05] px-2 py-1.5 text-center text-zinc-400";
+
+const NEW_ANALYSIS_QUOTA_LOADING_CLASS =
+  "pointer-events-none flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-zinc-400";
+
+function SidebarWeeklyAnalysisCooldownFace({
+  language,
+  nextAvailableAt,
+  onMayHaveUnlocked,
+}: {
+  language: AppLanguage;
+  nextAvailableAt: string;
+  onMayHaveUnlocked: () => void;
+}) {
+  const [tick, setTick] = React.useState(0);
+  const unlockRefetchDoneRef = React.useRef(false);
+
+  React.useEffect(() => {
+    unlockRefetchDoneRef.current = false;
+  }, [nextAvailableAt]);
+
+  React.useEffect(() => {
+    const id = window.setInterval(() => setTick((previous) => previous + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const deadlineMs = React.useMemo(() => Date.parse(nextAvailableAt), [nextAvailableAt]);
+  const parts = subscriberStandardCooldownParts(nextAvailableAt, Date.now());
+  const line = formatSubscriberCooldownCountdownLine(language, parts);
+
+  React.useEffect(() => {
+    if (!Number.isFinite(deadlineMs)) return;
+    if (deadlineMs > Date.now()) return;
+    if (unlockRefetchDoneRef.current) return;
+    unlockRefetchDoneRef.current = true;
+    onMayHaveUnlocked();
+  }, [deadlineMs, onMayHaveUnlocked, tick]);
+
+  return (
+    <div className={NEW_ANALYSIS_BLOCKED_CLASS} aria-live="polite" aria-atomic="true">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold leading-tight text-zinc-300">
+        <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-500" aria-hidden />
+        {i18n(language, {
+          en: "Next analysis",
+          fr: "Prochaine analyse",
+        })}
+      </div>
+      <span className="tabular-nums text-[12px] font-semibold leading-tight tracking-tight text-zinc-100">
+        {line}
+      </span>
+    </div>
+  );
+}
+
+function SidebarNewAnalysisPrimarySlot({
+  language,
+  closeMobileSidebar,
+  userId,
+  isAdmin,
+  subscriberQuota,
+  subscriberQuotaLoading,
+  refetchSubscriberQuota,
+}: {
+  language: AppLanguage;
+  closeMobileSidebar: () => void;
+  userId: string | undefined;
+  isAdmin: boolean;
+  subscriberQuota: SubscriberStandardQuotaWire | undefined;
+  subscriberQuotaLoading: boolean;
+  refetchSubscriberQuota: () => void;
+}) {
+  const gatedByWeeklyQuotaUi = Boolean(userId) && !isAdmin;
+
+  const onCooldownEnd = React.useCallback(() => {
+    void refetchSubscriberQuota();
+  }, [refetchSubscriberQuota]);
+
+  if (!gatedByWeeklyQuotaUi) {
+    return (
+      <Link
+        href="/app/new-analysis"
+        className={NEW_ANALYSIS_CTA_CLASS}
+        onClick={closeMobileSidebar}
+      >
+        <Plus className="mr-2 h-4 w-4" />
+        {i18n(language, {
+          en: "New analysis",
+          fr: "Nouvelle analyse",
+        })}
+      </Link>
+    );
+  }
+
+  if (subscriberQuotaLoading || subscriberQuota == null) {
+    return (
+      <div className={NEW_ANALYSIS_QUOTA_LOADING_CLASS} aria-busy="true">
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-500" aria-hidden />
+        <span className="text-[12px] font-medium text-zinc-400">
+          {i18n(language, {
+            en: "Checking quota…",
+            fr: "Vérification du quota…",
+          })}
+        </span>
+      </div>
+    );
+  }
+
+  const q = subscriberQuota;
+
+  if (q.requires_active_subscription_to_launch) {
+    if (q.has_standard_in_flight) {
+      return (
+        <div className={NEW_ANALYSIS_BLOCKED_CLASS}>
+          <div className="flex items-center gap-2 text-[12px] font-semibold leading-tight text-zinc-300">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" aria-hidden />
+            {i18n(language, {
+              en: "Analysis running",
+              fr: "Analyse en cours",
+            })}
+          </div>
+          <span className="text-[10px] leading-snug text-zinc-500">
+            {i18n(language, {
+              en: "Up to once per week",
+              fr: "Au plus une fois par semaine",
+            })}
+          </span>
+        </div>
+      );
+    }
+
+    if (q.next_available_at) {
+      return (
+        <SidebarWeeklyAnalysisCooldownFace
+          language={language}
+          nextAvailableAt={q.next_available_at}
+          onMayHaveUnlocked={onCooldownEnd}
+        />
+      );
+    }
+
+    if (!q.has_prior_completed_analysis) {
+      return (
+        <Link
+          href="/app/new-analysis"
+          className={NEW_ANALYSIS_CTA_CLASS}
+          onClick={closeMobileSidebar}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          {i18n(language, {
+            en: "New analysis",
+            fr: "Nouvelle analyse",
+          })}
+        </Link>
+      );
+    }
+
+    return (
+      <div
+        className={NEW_ANALYSIS_LOCKED_PREMIUM_CLASS}
+        aria-disabled="true"
+        aria-label={i18n(language, {
+          en: "New analysis — subscription required",
+          fr: "Nouvelle analyse — abonnement requis",
+        })}
+      >
+        <div className="flex items-center gap-2">
+          <Lock className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+          <span>
+            {i18n(language, {
+              en: "New analysis",
+              fr: "Nouvelle analyse",
+            })}
+          </span>
+        </div>
+        <span className="max-w-[14rem] text-center text-[10px] font-medium leading-snug text-zinc-500">
+          {i18n(language, {
+            en: "Subscribe to unlock after this wait",
+            fr: "Abonnez-vous pour lancer après ce délai",
+          })}
+        </span>
+      </div>
+    );
+  }
+
+  if (q.can_launch_standard_now) {
+    return (
+      <Link
+        href="/app/new-analysis"
+        className={NEW_ANALYSIS_CTA_CLASS}
+        onClick={closeMobileSidebar}
+      >
+        <Plus className="mr-2 h-4 w-4" />
+        {i18n(language, {
+          en: "New analysis",
+          fr: "Nouvelle analyse",
+        })}
+      </Link>
+    );
+  }
+
+  if (q.has_standard_in_flight) {
+    return (
+      <div className={NEW_ANALYSIS_BLOCKED_CLASS}>
+        <div className="flex items-center gap-2 text-[12px] font-semibold leading-tight text-zinc-300">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" aria-hidden />
+          {i18n(language, {
+            en: "Analysis running",
+            fr: "Analyse en cours",
+          })}
+        </div>
+        <span className="text-[10px] leading-snug text-zinc-500">
+          {i18n(language, {
+            en: "1 per week maximum",
+            fr: "1 par semaine maximum",
+          })}
+        </span>
+      </div>
+    );
+  }
+
+  if (q.next_available_at) {
+    return (
+      <SidebarWeeklyAnalysisCooldownFace
+        language={language}
+        nextAvailableAt={q.next_available_at}
+        onMayHaveUnlocked={onCooldownEnd}
+      />
+    );
+  }
+
+  return (
+    <div className={NEW_ANALYSIS_BLOCKED_CLASS}>
+      <span className="text-[12px] font-medium text-zinc-400">
+        {i18n(language, {
+          en: "Next analysis soon",
+          fr: "Prochaine analyse bientôt",
+        })}
+      </span>
+    </div>
+  );
+}
+
 /** Matches ScoreRing default arc — frosted highlight + slate depth (Tailwind arbitrary layers). */
 const SIDEBAR_SURFACE_CLASS =
   "bg-[radial-gradient(ellipse_110%_70%_at_0%_-10%,rgba(248,250,252,0.24)_0%,transparent_52%),radial-gradient(circle_at_88%_108%,rgba(148,163,184,0.18)_0%,transparent_46%),linear-gradient(152deg,rgba(11,17,24,0.97)_0%,rgba(17,26,34,0.94)_42%,rgba(26,36,50,0.92)_100%)]";
@@ -128,10 +386,14 @@ const SIDEBAR_SURFACE_CLASS =
 function ModernAppSidebar() {
   const [location] = useLocation();
   const language = useAppLanguage();
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, hasPremiumAccess, signOut } = useAuth();
   const { data: analysisHistory = [], isLoading: isHistoryLoading } =
     useAnalysisHistory({ enabled: !!user?.id });
-  const { data: subscriberQuota } = useSubscriberStandardAnalysisQuota();
+  const {
+    data: subscriberQuota,
+    isLoading: subscriberQuotaLoading,
+    refetch: refetchSubscriberQuotaQuery,
+  } = useSubscriberStandardAnalysisQuota();
   const deleteAnalysisMutation = useDeleteAnalysisJob();
   const { state, isMobile, toggleSidebar, setOpenMobile } = useSidebar();
 
@@ -140,11 +402,6 @@ function ModernAppSidebar() {
   }, [isMobile, setOpenMobile]);
 
   const isCollapsed = state === "collapsed" && !isMobile;
-
-  const subscriberQuotaSidebarLine =
-    subscriberQuota != null
-      ? formatSubscriberStandardQuotaSidebarLine(language, subscriberQuota)
-      : null;
 
   const lastCompletedAnalysisTierLabel = React.useMemo(() => {
     const completed = analysisHistory
@@ -352,11 +609,20 @@ function ModernAppSidebar() {
                 <SidebarMenuItem className="w-full">
                   <SidebarMenuButton
                     asChild
-                    isActive={location === "/app/protocol"}
-                    tooltip={i18n(language, {
-                      en: "My protocol",
-                      fr: "Mon protocole",
-                    })}
+                    isActive={
+                      hasPremiumAccess
+                        ? location === "/app/protocol"
+                        : location === "/billing"
+                    }
+                    tooltip={i18n(
+                      language,
+                      hasPremiumAccess
+                        ? { en: "My protocol", fr: "Mon protocole" }
+                        : {
+                            en: "Unlock my protocol",
+                            fr: "Débloquer mon protocole",
+                          },
+                    )}
                     className={cn(
                       scoreRingMatchMetallicPillClassName,
                       "h-11 w-full rounded-xl px-3 !text-zinc-950",
@@ -367,19 +633,44 @@ function ModernAppSidebar() {
                       "active:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
                       "data-[active=true]:!text-zinc-950 data-[active=true]:!brightness-[0.99] data-[active=true]:translate-y-px",
                       "data-[active=true]:!bg-[linear-gradient(to_top_right,#475569_0%,#cbd5e1_22%,#ffffff_48%,#e8eef5_72%,#64748b_100%)]",
+                      !hasPremiumAccess && "relative overflow-hidden",
                     )}
                   >
                     <Link
-                      href="/app/protocol"
-                      className="relative z-10 flex w-full items-center justify-center gap-2.5 text-center select-none !text-zinc-950"
+                      href={hasPremiumAccess ? "/app/protocol" : "/billing"}
+                      className={cn(
+                        "relative z-10 flex w-full items-center justify-center gap-2.5 text-center select-none !text-zinc-950",
+                        !hasPremiumAccess && "overflow-hidden rounded-[10px]",
+                      )}
                       onClick={closeMobileSidebar}
                     >
-                      <ClipboardList className="h-4 w-4 shrink-0 !text-zinc-900" />
-                      <span className="font-semibold text-zinc-950">
-                        {i18n(language, {
-                          en: "My protocol",
-                          fr: "Mon protocole",
-                        })}
+                      {!hasPremiumAccess ? (
+                        <span
+                          className="pointer-events-none absolute inset-0 z-[1] overflow-hidden rounded-[10px]"
+                          aria-hidden
+                        >
+                          <span
+                            className="absolute -top-px -bottom-px left-0 w-[42%] max-w-[11rem] animate-sidebar-unlock-shimmer will-change-transform bg-[linear-gradient(100deg,transparent_6%,rgba(255,255,255,0.12)_28%,rgba(255,255,255,0.62)_50%,rgba(255,255,255,0.14)_72%,transparent_94%)] opacity-95 mix-blend-overlay motion-reduce:animate-none"
+                          />
+                        </span>
+                      ) : null}
+                      <span className="relative z-[2] flex items-center justify-center gap-2.5">
+                        {hasPremiumAccess ? (
+                          <ClipboardList className="h-4 w-4 shrink-0 !text-zinc-900" />
+                        ) : (
+                          <Lock className="h-4 w-4 shrink-0 !text-zinc-900" />
+                        )}
+                        <span className="font-semibold text-zinc-950">
+                          {i18n(
+                            language,
+                            hasPremiumAccess
+                              ? { en: "My protocol", fr: "Mon protocole" }
+                              : {
+                                  en: "Unlock my protocol",
+                                  fr: "Débloquer mon protocole",
+                                },
+                          )}
+                        </span>
                       </span>
                     </Link>
                   </SidebarMenuButton>
@@ -402,27 +693,16 @@ function ModernAppSidebar() {
             })}
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <div className="mb-3 space-y-1.5">
-              <Link
-                href="/app/new-analysis"
-                className="flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.09] px-3 text-sm font-semibold text-zinc-100 transition hover:border-white/25 hover:bg-white/[0.14]"
-                onClick={closeMobileSidebar}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {i18n(language, {
-                  en: "New analysis",
-                  fr: "Nouvelle analyse",
-                })}
-              </Link>
-              {subscriberQuotaSidebarLine ? (
-                <p className="flex items-start gap-1.5 px-1 text-[11px] leading-snug text-zinc-400">
-                  <CalendarClock
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500"
-                    aria-hidden
-                  />
-                  <span>{subscriberQuotaSidebarLine}</span>
-                </p>
-              ) : null}
+            <div className="mb-3">
+              <SidebarNewAnalysisPrimarySlot
+                language={language}
+                closeMobileSidebar={closeMobileSidebar}
+                userId={user?.id}
+                isAdmin={isAdmin}
+                subscriberQuota={subscriberQuota}
+                subscriberQuotaLoading={subscriberQuotaLoading}
+                refetchSubscriberQuota={() => void refetchSubscriberQuotaQuery()}
+              />
             </div>
             <SidebarMenu className="space-y-1.5">
               {isHistoryLoading ? (
@@ -536,6 +816,7 @@ function ModernAppSidebar() {
                         )}
                       </div>
                     </Link>
+                    {isAdmin ? (
                     <AlertDialog>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -579,6 +860,7 @@ function ModernAppSidebar() {
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
+                    ) : null}
                   </div>
                   </SidebarMenuItem>
                 );

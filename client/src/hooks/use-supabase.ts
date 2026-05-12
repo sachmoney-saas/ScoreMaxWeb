@@ -598,13 +598,9 @@ export function useLaunchManualAnalysis() {
 }
 
 export function useSubscriberStandardAnalysisQuota(options?: { enabled?: boolean }) {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
 
-  const enabled =
-    Boolean(user?.id) &&
-    profile?.is_subscriber === true &&
-    !isAdmin &&
-    (options?.enabled ?? true);
+  const enabled = Boolean(user?.id) && !isAdmin && (options?.enabled ?? true);
 
   return useQuery({
     queryKey: ["subscriber-standard-quota", user?.id],
@@ -613,10 +609,17 @@ export function useSubscriberStandardAnalysisQuota(options?: { enabled?: boolean
     staleTime: 30_000,
     refetchInterval: (query) => {
       const row = query.state.data;
-      if (!row?.weekly_limit_applies || row.can_launch_standard_now) {
+      if (!row) return false;
+      if (row.requires_active_subscription_to_launch) {
+        if (row.next_available_at || row.has_standard_in_flight) {
+          return 20_000;
+        }
         return false;
       }
-      return 60_000;
+      if (!row.weekly_limit_applies || row.can_launch_standard_now) {
+        return false;
+      }
+      return row.has_standard_in_flight ? 45_000 : 20_000;
     },
   });
 }

@@ -1,4 +1,5 @@
 import { ApiError } from "./errors";
+import { refreshScanSessionProgress } from "./analysis-orchestration";
 import { deleteR2Objects, getDefaultR2Bucket } from "./r2-storage";
 import { supabaseAdmin } from "./supabase-admin";
 
@@ -378,6 +379,206 @@ export async function deleteAnalysisJobAndAssets(params: {
             "Analysis was deleted, but some storage objects could not be removed.",
         }
       : {}),
+  };
+}
+
+const RESET_SCAN_SESSION_ALLOWED_STATUSES = new Set([
+  "collecting",
+  "ready",
+  "failed",
+  "abandoned",
+]);
+
+export type ScanSessionRowForAssetReset = {
+  id: string;
+  user_id: string;
+  source: string;
+  status: string;
+};
+
+/**
+ * Supprime les lignes `scan_assets` de la session qui ne sont pas référencées
+ * par `analysis_job_assets` (ré-uploads / retakes), puis les objets R2 associés.
+ * Les assets encore liés à un job restent intacts (contrainte RESTRICT).
+ *
+ * Si `session` est fourni (déjà filtrée `user_id` + même `sessionId`), évite une 2ᵉ lecture.
+ */
+export async function resetUnreferencedScanSessionAssets(params: {
+  sessionId: string;
+  userId: string;
+  session?: ScanSessionRowForAssetReset;
+}): Promise<{
+  deleted_asset_count: number;
+  deleted_storage_object_count: number;
+  failed_storage_object_count: number;
+}> {
+  let session: ScanSessionRowForAssetReset;
+
+  if (params.session) {
+    if (params.session.id !== params.sessionId) {
+      throw new ApiError({
+        code: "VALIDATION_ERROR",
+        status: 400,
+        message: "Session id mismatch",
+      });
+    }
+    if (params.session.user_id !== params.userId) {
+      throw new ApiError({
+        code: "VALIDATION_ERROR",
+        status: 403,
+        message: "Scan session access denied",
+      });
+    }
+    session = params.session;
+  } else {
+    const { data: fetched, error: sessionError } = await supabaseAdmin
+      .from("scan_sessions")
+      .select("id, user_id, source, status")
+      .eq("id", params.sessionId)
+      .eq("user_id", params.userId)
+      .maybeSingle();
+
+    if (sessionError || !fetched) {
+      throw new ApiError({
+        code: "VALIDATION_ERROR",
+        status: 404,
+        message: "Scan session not found",
+        details: sessionError,
+      });
+    }
+
+    session = fetched as ScanSessionRowForAssetReset;
+  }
+
+  const source = session.source as string;
+  if (source !== "onboarding" && source !== "manual_rescan") {
+    throw new ApiError({
+      code: "VALIDATION_ERROR",
+      status: 400,
+      message: "This scan session cannot be reset",
+    });
+  }
+
+  const status = session.status as string;
+
+  if (!RESET_SCAN_SESSION_ALLOWED_STATUSES.has(status)) {
+    if (status === "processing") {
+      throw new ApiError({
+        code: "VALIDATION_ERROR",
+        status: 409,
+        message: "Cannot reset assets while the scan session is processing",
+      });
+    }
+    if (status === "completed") {
+      throw new ApiError({
+        code: "VALIDATION_ERROR",
+        status: 409,
+        message: "Cannot reset a completed scan session",
+      });
+    }
+    throw new ApiError({
+      code: "VALIDATION_ERROR",
+      status: 409,
+      message: "This scan session cannot be reset in its current state",
+    });
+  }
+
+  const { data: sessionAssets, error: assetsError } = await supabaseAdmin
+    .from("scan_assets")
+    .select("id, r2_bucket, r2_key")
+    .eq("session_id", params.sessionId)
+    .eq("user_id", params.userId);
+
+  if (assetsError) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to load scan assets",
+      details: assetsError,
+    });
+  }
+
+  const assets = (sessionAssets ?? []) as Pick<
+    ScanAssetCleanupRow,
+    "id" | "r2_bucket" | "r2_key"
+  >[];
+
+  if (assets.length === 0) {
+    await refreshScanSessionProgress(params.sessionId);
+    return {
+      deleted_asset_count: 0,
+      deleted_storage_object_count: 0,
+      failed_storage_object_count: 0,
+    };
+  }
+
+  const assetIds = assets.map((row) => row.id);
+  const { data: refRows, error: refsError } = await supabaseAdmin
+    .from("analysis_job_assets")
+    .select("scan_asset_id")
+    .in("scan_asset_id", assetIds)
+    .eq("user_id", params.userId);
+
+  if (refsError) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to check analysis job asset references",
+      details: refsError,
+    });
+  }
+
+  const referencedIds = new Set(
+    (refRows ?? [])
+      .map((row) => row.scan_asset_id as string | null)
+      .filter((id): id is string => typeof id === "string"),
+  );
+
+  const unreferenced = assets.filter((row) => !referencedIds.has(row.id));
+
+  if (unreferenced.length === 0) {
+    await refreshScanSessionProgress(params.sessionId);
+    return {
+      deleted_asset_count: 0,
+      deleted_storage_object_count: 0,
+      failed_storage_object_count: 0,
+    };
+  }
+
+  const storageRemoval = await removeStorageObjects(
+    unreferenced
+      .filter((row) => typeof row.r2_key === "string" && row.r2_key.trim() !== "")
+      .map((row) => ({
+        scanAssetId: row.id,
+        bucket: getStorageBucket(row),
+        path: row.r2_key as string,
+      })),
+  );
+
+  const removedAssetIds = Array.from(storageRemoval.removedAssetIds);
+  if (removedAssetIds.length > 0) {
+    const { error: deleteScanAssetsError } = await supabaseAdmin
+      .from("scan_assets")
+      .delete()
+      .in("id", removedAssetIds)
+      .eq("user_id", params.userId);
+
+    if (deleteScanAssetsError) {
+      throw new ApiError({
+        code: "INTERNAL_SERVER_ERROR",
+        status: 500,
+        message: "Unable to delete scan asset metadata",
+        details: deleteScanAssetsError,
+      });
+    }
+  }
+
+  await refreshScanSessionProgress(params.sessionId);
+
+  return {
+    deleted_asset_count: removedAssetIds.length,
+    deleted_storage_object_count: storageRemoval.removedObjectCount,
+    failed_storage_object_count: storageRemoval.failedObjectCount,
   };
 }
 

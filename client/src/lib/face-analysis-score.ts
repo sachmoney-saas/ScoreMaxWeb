@@ -430,9 +430,9 @@ export function skinRadarAxisPaint(highlight: SkinRadarAxisHighlight): {
       };
     default:
       return {
-        labelFill: "#aab2bd",
-        previewScoreFill: "#e9f1f4",
-        previewMutedFill: "#6b7280",
+        labelFill: "#c4cbd6",
+        previewScoreFill: "#f8fafc",
+        previewMutedFill: "#94a3b8",
         dotFill: "#ffffff",
         dotStroke: "#9aaeb5",
       };

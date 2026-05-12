@@ -9,24 +9,105 @@ export type SubscriberStandardQuotaWire = {
   weekly_limit_applies: boolean;
   can_launch_standard_now: boolean;
   next_available_at: string | null;
+  /** Pour l’UI : travaux en cours (standard seulement si abonné ; freemium ou standard sinon). */
   has_standard_in_flight: boolean;
+  /**
+   * Comptes sans abonnement actif : l’analyse « complète » côté app reste réservée aux abonnés
+   * (`requirePremiumAccess` sur la session manuelle), mais on expose le même délai 7 j / UI cooldown.
+   */
+  requires_active_subscription_to_launch: boolean;
+  /** False uniquement avant la toute première analyse freemium/standard terminée. */
+  has_prior_completed_analysis: boolean;
 };
 
 /**
- * Quota hebdo : uniquement pour les comptes avec abonnement actif (`is_subscriber`).
- * Les admins ne sont pas plafonnés. Les analyses `freemium` (onboarding) ne comptent pas.
+ * Quota hebdo sliding 7 j :
+ * — Abonnés : seulement les jobs `tier = standard` (les freemium ne consomment pas le quota).
+ * — Non-abonnés (non admin) : dernière analyse `freemium` ou `standard` terminée pour l’affichage cooldown.
+ *
+ * Les admins ne sont pas plafonnés côté lancement standard.
  */
 export async function getSubscriberStandardAnalysisQuota(
   userId: string,
 ): Promise<SubscriberStandardQuotaWire> {
   const access = await getPremiumAccessState(userId);
 
-  if (!access.is_subscriber || access.is_admin) {
+  if (access.is_admin) {
     return {
       weekly_limit_applies: false,
       can_launch_standard_now: true,
       next_available_at: null,
       has_standard_in_flight: false,
+      requires_active_subscription_to_launch: false,
+      has_prior_completed_analysis: false,
+    };
+  }
+
+  if (!access.is_subscriber) {
+    const { data: inflightRows, error: nsInflightError } = await supabaseAdmin
+      .from("analysis_jobs")
+      .select("id")
+      .eq("user_id", userId)
+      .in("tier", ["freemium", "standard"])
+      .in("status", ["queued", "running"])
+      .limit(1);
+
+    if (nsInflightError) {
+      throw new ApiError({
+        code: "INTERNAL_SERVER_ERROR",
+        status: 500,
+        message: "Unable to check in-flight analyses (non-subscriber quota)",
+        details: nsInflightError,
+      });
+    }
+
+    const hasTieredInflight = (inflightRows?.length ?? 0) > 0;
+
+    const { data: lastTieredCompleted, error: nsLastErr } = await supabaseAdmin
+      .from("analysis_jobs")
+      .select("completed_at")
+      .eq("user_id", userId)
+      .in("tier", ["freemium", "standard"])
+      .eq("status", "completed")
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (nsLastErr) {
+      throw new ApiError({
+        code: "INTERNAL_SERVER_ERROR",
+        status: 500,
+        message: "Unable to load last completed tiered analysis (non-subscriber)",
+        details: nsLastErr,
+      });
+    }
+
+    const hasPriorCompleted = Boolean(lastTieredCompleted?.completed_at);
+    const completedMsTiered = lastTieredCompleted?.completed_at
+      ? new Date(lastTieredCompleted.completed_at as string).getTime()
+      : null;
+    const cooldownEndsAtTiered =
+      completedMsTiered !== null && Number.isFinite(completedMsTiered)
+        ? completedMsTiered + SUBSCRIBER_STANDARD_ANALYSIS_COOLDOWN_MS
+        : null;
+
+    const now = Date.now();
+    let nextAvailableAt: string | null = null;
+
+    if (!hasTieredInflight && cooldownEndsAtTiered !== null && now < cooldownEndsAtTiered) {
+      nextAvailableAt = new Date(cooldownEndsAtTiered).toISOString();
+    }
+
+    const pollWindow = Boolean(nextAvailableAt) || hasTieredInflight;
+
+    return {
+      weekly_limit_applies: pollWindow,
+      can_launch_standard_now: false,
+      next_available_at: nextAvailableAt,
+      has_standard_in_flight: hasTieredInflight,
+      requires_active_subscription_to_launch: true,
+      has_prior_completed_analysis: hasPriorCompleted,
     };
   }
 
@@ -94,6 +175,8 @@ export async function getSubscriberStandardAnalysisQuota(
     can_launch_standard_now: canLaunch,
     next_available_at: nextAvailableAt,
     has_standard_in_flight: hasStandardInFlight,
+    requires_active_subscription_to_launch: false,
+    has_prior_completed_analysis: Boolean(lastCompleted?.completed_at),
   };
 }
 

@@ -54,7 +54,7 @@ export interface JawWorkerViewProps {
    * Vignettes repères mâchoire (même grille que la preview tableau de bord) —
    * `GET /v1/analyses/:jobId/asset` pour chaque code guide-trace.
    */
-  jawProfileRightGuideSrc?: string | null;
+  jawFrontOvalGuideSrc?: string | null;
   jawFrontalAngleGuideSrc?: string | null;
   jawProfileLeftGuideSrc?: string | null;
 }
@@ -64,7 +64,7 @@ export function JawWorkerView({
   language,
   heroAside,
   captureGuideMetrics,
-  jawProfileRightGuideSrc,
+  jawFrontOvalGuideSrc,
   jawFrontalAngleGuideSrc,
   jawProfileLeftGuideSrc,
 }: JawWorkerViewProps) {
@@ -171,44 +171,47 @@ export function JawWorkerView({
 
   return (
     <div className="space-y-4">
-      {(jawProfileRightGuideSrc ||
+      {(jawFrontOvalGuideSrc ||
         jawFrontalAngleGuideSrc ||
         jawProfileLeftGuideSrc) ? (
         <div
-          className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-end gap-1.5 sm:gap-2"
+          className="grid w-full max-w-xl grid-cols-1 items-start justify-items-stretch gap-3 sm:grid-cols-3 sm:justify-items-center sm:gap-2"
           aria-label={i18n(language, {
-            en: "Jaw guide traces: right profile, frontal angle, left profile",
-            fr: "Repères mâchoire : profil droit, angle frontal, profil gauche",
+            en: "Jaw guide traces: frontal oval, frontal jaw angle, left profile",
+            fr: "Repères mâchoire : ovale frontal, angle frontal, profil gauche",
           })}
         >
           <AnalysisJobAssetPreviewThumb
-            src={jawProfileRightGuideSrc}
+            bare
+            src={jawFrontOvalGuideSrc}
             alt={i18n(language, {
-              en: "Scan overlay: right profile jaw guide",
-              fr: "Repère mâchoire — profil droit",
+              en: "Scan overlay: frontal face oval guide",
+              fr: "Repère ovale du visage — face",
             })}
-            className="min-h-0 w-full max-h-[8.5rem] sm:max-h-[9.5rem]"
-            imgClassName="max-h-[8.5rem] sm:max-h-[9.5rem]"
+            className="mx-auto w-full max-w-md overflow-hidden rounded-[10px] border border-zinc-500/30 leading-none sm:mx-0 sm:max-w-full sm:leading-none"
+            imgClassName="max-h-[min(70vw,20rem)] w-auto max-w-full object-contain sm:max-h-[11rem]"
             imgFit="contain"
           />
           <AnalysisJobAssetPreviewThumb
+            bare
             src={jawFrontalAngleGuideSrc}
             alt={i18n(language, {
               en: "Scan overlay: frontal jaw angle guide",
               fr: "Repère angle mâchoire — face",
             })}
-            className="min-h-0 w-full max-h-[10rem] sm:max-h-[11rem]"
-            imgClassName="max-h-[10rem] sm:max-h-[11rem]"
+            className="mx-auto w-full max-w-md overflow-hidden rounded-[10px] border border-zinc-500/30 leading-none sm:mx-0 sm:max-w-full sm:leading-none"
+            imgClassName="max-h-[min(70vw,20rem)] w-auto max-w-full object-contain sm:max-h-[11rem]"
             imgFit="contain"
           />
           <AnalysisJobAssetPreviewThumb
+            bare
             src={jawProfileLeftGuideSrc}
             alt={i18n(language, {
               en: "Scan overlay: left profile jaw guide",
               fr: "Repère mâchoire — profil gauche",
             })}
-            className="min-h-0 w-full max-h-[8.5rem] sm:max-h-[9.5rem]"
-            imgClassName="max-h-[8.5rem] sm:max-h-[9.5rem]"
+            className="mx-auto w-full max-w-md overflow-hidden rounded-[10px] border border-zinc-500/30 leading-none sm:mx-0 sm:max-w-full sm:leading-none"
+            imgClassName="max-h-[min(70vw,20rem)] w-auto max-w-full object-contain sm:max-h-[11rem]"
             imgFit="contain"
           />
         </div>

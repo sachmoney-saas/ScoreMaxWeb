@@ -823,8 +823,8 @@ export default function Landing() {
                 </Link>
                 <p className="max-w-[min(100%,22rem)] text-center text-balance font-sans text-[13px] font-medium leading-snug tracking-tight text-foreground/55 sm:max-w-md sm:text-sm">
                   {i18n(language, {
-                    en: "Built for people who take self-improvement seriously—not noise, not trends.",
-                    fr: "Pensé pour celles et ceux qui prennent leur progression au sérieux—pas pour le superficiel ni les modes.",
+                    en: "Built for people who take self-improvement seriously.",
+                    fr: "Pensé pour celles et ceux qui prennent leur progression au sérieux.",
                   })}
                 </p>
               </motion.div>
@@ -1095,8 +1095,8 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-white/10 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.12),transparent_36%),radial-gradient(circle_at_18%_78%,rgba(185,204,209,0.11),transparent_42%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.26)_100%)] py-12">
-        <div className="w-full lg:max-w-[75%] mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="mx-auto w-full max-w-5xl px-4 lg:max-w-[75%]">
+          <div className="flex flex-col items-center gap-6 md:flex-row md:justify-between">
             <div className="flex items-center gap-2">
               <div className="bg-primary/10 p-1.5 rounded-lg">
                 <img
@@ -1141,13 +1141,25 @@ export default function Landing() {
               </Link>
             </nav>
 
-            <p className="text-sm text-muted-foreground">
+            <p className="text-center text-sm text-muted-foreground md:text-right">
               {i18n(language, {
                 en: "© 2026 ScoreMax. All rights reserved.",
                 fr: "© 2026 ScoreMax. Tous droits réservés.",
               })}
             </p>
           </div>
+
+          <p
+            role="note"
+            className="mx-auto mt-8 max-w-3xl text-center text-[0.6875rem] leading-relaxed text-zinc-500 sm:text-xs"
+          >
+            {i18n(language, {
+              en:
+                "Medical disclaimer: ScoreMax may display automated suggestions described as recommendations. These are educational and general-wellness information only, based on algorithmic outputs; they do not constitute personalised medical, surgical, orthodontic, dermatological, or psychological advice, diagnosis, or treatment, and cannot replace consultation with a qualified licensed healthcare professional.",
+              fr:
+                "Avertissement : ScoreMax peut afficher des suggestions présentées comme des recommandations. Celles-ci relèvent d’une information générale et d’un contenu éducatif fondé sur des résultats produits automatiquement par le Service ; elles ne constituent pas un conseil médical, chirurgical, orthodontique, dermatologique ou psychologique personnalisé, ni un diagnostic ni un traitement, et ne se substituent en aucun cas à une consultation auprès d’un professionnel de santé dûment habilité.",
+            })}
+          </p>
         </div>
       </footer>
     </div>

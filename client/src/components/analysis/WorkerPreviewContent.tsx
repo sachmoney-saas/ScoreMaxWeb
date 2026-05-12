@@ -38,6 +38,11 @@ import {
   hasAnyScore,
 } from "./workers/_shared";
 import { AnalysisJobAssetPreviewThumb } from "./workers/AnalysisJobAssetPreviewThumb";
+import {
+  extractAge,
+  extractAgeArgument,
+  MaturityTimeline,
+} from "./workers/AgeWorkerView";
 
 export const AnalysisJobScanPreviewContext = React.createContext<{
   jobId: string;
@@ -72,6 +77,14 @@ const PREVIEW_HERO = "flex w-full flex-col items-center gap-3 text-center";
 const PREVIEW_HERO_SIGNATURE_RADAR =
   "flex w-full flex-col items-center gap-3 text-center sm:gap-4";
 const PREVIEW_COPY = "w-full max-w-md text-balance";
+
+/**
+ * Cadre fixe pour vignettes scan face (ratio h×w puis sm),
+ * référence : preview Symétrie (contour morphologique).
+ */
+const PREVIEW_SYM_SCAN_FRAME_CLASS =
+  "h-48 w-40 shrink-0 sm:h-52 sm:w-44";
+const PREVIEW_SYM_SCAN_IMG_CLASSNAME = "object-cover";
 
 export type MiniRingHighlight = "default" | "strength" | "weakness";
 
@@ -712,6 +725,8 @@ function PreviewSignatureRadar({
         const lp = labelPolar(i);
         const scoreTxt = d.score.toFixed(d.score % 1 === 0 ? 0 : 1);
         const paint = skinRadarAxisPaint(highlights[i] ?? "neutral");
+        const scoreFontPx = 15.5;
+        const scoreOutlineW = Math.max(1, scoreFontPx * 0.068);
         return (
           <React.Fragment key={`label-${i}`}>
             <text
@@ -731,12 +746,24 @@ function PreviewSignatureRadar({
               y={lp.y + 14}
               textAnchor={lp.anchor}
               dominantBaseline="middle"
-              fontSize="13.5"
-              fontWeight="700"
-              fill={paint.previewScoreFill}
+              fontSize={scoreFontPx}
+              letterSpacing="0.03em"
             >
-              {scoreTxt}
-              <tspan fill={paint.previewMutedFill} fontWeight="600">
+              <tspan
+                fontWeight="700"
+                fill={paint.previewScoreFill}
+                stroke="rgba(15,23,42,0.78)"
+                strokeWidth={scoreOutlineW}
+                paintOrder="stroke fill"
+              >
+                {scoreTxt}
+              </tspan>
+              <tspan
+                fill={paint.previewMutedFill}
+                fontWeight="600"
+                stroke="none"
+                strokeWidth="0"
+              >
                 {" "}
                 /10
               </tspan>
@@ -1022,8 +1049,8 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
             en: "Front-face scan overlay: face shape contour guide",
             fr: "Repère contour de la forme du visage (prise frontale)",
           })}
-          className="h-48 w-40 shrink-0 sm:h-52 sm:w-44"
-          imgClassName="object-cover"
+          className={PREVIEW_SYM_SCAN_FRAME_CLASS}
+          imgClassName={PREVIEW_SYM_SCAN_IMG_CLASSNAME}
         />
       </div>
     </div>
@@ -1042,12 +1069,12 @@ function JawPreview({ aggregates, language }: PreviewProps) {
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
         })
       : null;
-  const profileRightSrc =
+  const frontalOvalSrc =
     previewJob !== null
       ? buildAnalysisJobAssetPreviewUrl({
           jobId: previewJob.jobId,
           userId: previewJob.userId,
-          assetTypeCode: "GUIDE_TRACE_PROFILE_RIGHT_JAW",
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_OVAL",
         })
       : null;
   const profileLeftSrc =
@@ -1119,6 +1146,12 @@ function JawPreview({ aggregates, language }: PreviewProps) {
       : [{ label: i18n(language, radarLabels[d.key]), score: d.score }],
   );
 
+  const jawGuideThumbFrameClass =
+    "mx-auto max-w-[min(100vw-3rem,21rem)] items-center justify-center sm:mx-0 sm:max-w-44";
+
+  const jawGuideThumbImgClass =
+    "max-h-[min(56vh,24rem)] w-auto max-w-full sm:max-h-52 sm:max-w-44";
+
   return (
     <div className="space-y-3">
       <div className={PREVIEW_HERO_SIGNATURE_RADAR}>
@@ -1150,23 +1183,23 @@ function JawPreview({ aggregates, language }: PreviewProps) {
             />
           ) : null}
         </div>
-        {(profileRightSrc || jawAngleSrc || profileLeftSrc) ? (
+        {(frontalOvalSrc || jawAngleSrc || profileLeftSrc) ? (
           <div
-            className="grid w-full max-w-xl grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-end gap-1.5 sm:gap-2"
+            className="grid w-full max-w-xl grid-cols-1 items-start justify-items-center gap-3 sm:grid-cols-3 sm:gap-2"
             aria-label={i18n(language, {
-              en: "Jaw guide traces: right profile, frontal angle, left profile",
-              fr: "Repères mâchoire : profil droit, angle frontal, profil gauche",
+              en: "Jaw guide traces: frontal oval, frontal jaw angle, left profile",
+              fr: "Repères mâchoire : ovale frontal, angle frontal, profil gauche",
             })}
           >
             <AnalysisJobAssetPreviewThumb
-              src={profileRightSrc}
+              src={frontalOvalSrc}
               alt={i18n(language, {
-                en: "Scan overlay: right profile jaw guide",
-                fr: "Repère mâchoire — profil droit",
+                en: "Scan overlay: frontal face oval guide",
+                fr: "Repère ovale du visage — face",
               })}
-              className="min-h-0 w-full max-h-[8.5rem] sm:max-h-[9.5rem]"
-              imgClassName="max-h-[8.5rem] sm:max-h-[9.5rem]"
+              className={jawGuideThumbFrameClass}
               imgFit="contain"
+              imgClassName={jawGuideThumbImgClass}
             />
             <AnalysisJobAssetPreviewThumb
               src={jawAngleSrc}
@@ -1174,9 +1207,9 @@ function JawPreview({ aggregates, language }: PreviewProps) {
                 en: "Scan overlay: frontal jaw angle guide",
                 fr: "Repère angle mâchoire — face",
               })}
-              className="min-h-0 w-full max-h-[10rem] sm:max-h-[11rem]"
-              imgClassName="max-h-[10rem] sm:max-h-[11rem]"
+              className={jawGuideThumbFrameClass}
               imgFit="contain"
+              imgClassName={jawGuideThumbImgClass}
             />
             <AnalysisJobAssetPreviewThumb
               src={profileLeftSrc}
@@ -1184,9 +1217,9 @@ function JawPreview({ aggregates, language }: PreviewProps) {
                 en: "Scan overlay: left profile jaw guide",
                 fr: "Repère mâchoire — profil gauche",
               })}
-              className="min-h-0 w-full max-h-[8.5rem] sm:max-h-[9.5rem]"
-              imgClassName="max-h-[8.5rem] sm:max-h-[9.5rem]"
+              className={jawGuideThumbFrameClass}
               imgFit="contain"
+              imgClassName={jawGuideThumbImgClass}
             />
           </div>
         ) : null}
@@ -1347,16 +1380,18 @@ function SmilePreview({ aggregates, language }: PreviewProps) {
           </div>
         </div>
       ) : null}
-      <AnalysisJobAssetPreviewThumb
-        src={smileTeethGuideSrc}
-        alt={i18n(language, {
-          en: "Smile pose scan overlay: teeth guide trace",
-          fr: "Repère sourire — dents (overlay)",
-        })}
-        imgFit="contain"
-        className="mx-auto w-full max-w-[min(100%,22rem)] shrink-0"
-        imgClassName="max-h-[13rem] sm:max-h-[15rem]"
-      />
+      <div className="flex w-full shrink-0 justify-center">
+        <AnalysisJobAssetPreviewThumb
+          src={smileTeethGuideSrc}
+          alt={i18n(language, {
+            en: "Smile pose scan overlay: teeth guide trace",
+            fr: "Repère sourire — dents (overlay)",
+          })}
+          imgFit="contain"
+          className="w-fit max-w-[min(100%,22rem)] shrink-0"
+          imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+        />
+      </div>
       <div className="grid grid-cols-3 gap-2">
         <MiniBar
           label={i18n(language, { en: "Integrity", fr: "Intégrité" })}
@@ -1870,26 +1905,30 @@ function LipsPreview({ aggregates, language }: PreviewProps) {
             fr: "Repères lèvres : face au repos, prise sourire",
           })}
         >
-          <AnalysisJobAssetPreviewThumb
-            src={faceFrontLipsGuideSrc}
-            alt={i18n(language, {
-              en: "Front-face scan overlay: lips at rest guide",
-              fr: "Repère lèvres au repos — prise frontale",
-            })}
-            imgFit="contain"
-            className="min-h-0 w-full shrink-0"
-            imgClassName="max-h-[13rem] sm:max-h-[15rem]"
-          />
-          <AnalysisJobAssetPreviewThumb
-            src={smileLipsGuideSrc}
-            alt={i18n(language, {
-              en: "Smile pose scan overlay: lip contour guide",
-              fr: "Repère lèvres — prise de vue sourire",
-            })}
-            imgFit="contain"
-            className="min-h-0 w-full shrink-0"
-            imgClassName="max-h-[13rem] sm:max-h-[15rem]"
-          />
+          <div className="flex justify-center">
+            <AnalysisJobAssetPreviewThumb
+              src={faceFrontLipsGuideSrc}
+              alt={i18n(language, {
+                en: "Front-face scan overlay: lips at rest guide",
+                fr: "Repère lèvres au repos — prise frontale",
+              })}
+              imgFit="contain"
+              className="w-fit max-w-full shrink-0"
+              imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+            />
+          </div>
+          <div className="flex justify-center">
+            <AnalysisJobAssetPreviewThumb
+              src={smileLipsGuideSrc}
+              alt={i18n(language, {
+                en: "Smile pose scan overlay: lip contour guide",
+                fr: "Repère lèvres — prise de vue sourire",
+              })}
+              imgFit="contain"
+              className="w-fit max-w-full shrink-0"
+              imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+            />
+          </div>
         </div>
       ) : null}
       <div className="grid grid-cols-3 gap-2">
@@ -1946,7 +1985,7 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
     "width_and_integration.chin_width": { en: "Width", fr: "Largeur" },
     "width_and_integration.lower_face_integration": {
       en: "Lower-face fit",
-      fr: "Intégration bas visage",
+      fr: "Intégration\nbas visage",
     },
   };
 
@@ -2006,6 +2045,15 @@ function ChinPreview({ aggregates, language }: PreviewProps) {
 /* ----------------------------------- Nose ------------------------------------- */
 
 function NosePreview({ aggregates, language }: PreviewProps) {
+  const previewJob = React.useContext(AnalysisJobScanPreviewContext);
+  const noseMouthGuideSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
+        })
+      : null;
   const symmetry = getScore(
     aggregates,
     "frontal_symmetry_and_width.nose_symmetry",
@@ -2044,6 +2092,17 @@ function NosePreview({ aggregates, language }: PreviewProps) {
               })}
           </p>
         </div>
+      </div>
+      <div className="flex w-full shrink-0 justify-center">
+        <AnalysisJobAssetPreviewThumb
+          src={noseMouthGuideSrc}
+          alt={i18n(language, {
+            en: "Scan overlay: frontal nose and mouth guide trace",
+            fr: "Repère scan face — nez et bouche",
+          })}
+          className="h-[15rem] w-48 shrink-0 sm:h-52 sm:w-44"
+          imgClassName={PREVIEW_SYM_SCAN_IMG_CLASSNAME}
+        />
       </div>
       {hasAny ? (
         <div className="grid grid-cols-2 gap-2">
@@ -2138,16 +2197,18 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
           />
         ) : null}
       </div>
-      <AnalysisJobAssetPreviewThumb
-        src={eyeCloseupContoursSrc}
-        alt={i18n(language, {
-          en: "Eye close-up scan overlay: contour guide trace",
-          fr: "Repère gros plan œil — contours",
-        })}
-        imgFit="contain"
-        className="mx-auto w-full max-w-[min(100%,22rem)] shrink-0"
-        imgClassName="max-h-[13rem] sm:max-h-[15rem]"
-      />
+      <div className="flex w-full shrink-0 justify-center">
+        <AnalysisJobAssetPreviewThumb
+          src={eyeCloseupContoursSrc}
+          alt={i18n(language, {
+            en: "Eye close-up scan overlay: contour guide trace",
+            fr: "Repère gros plan œil — contours",
+          })}
+          imgFit="contain"
+          className="w-fit max-w-[min(100%,22rem)] shrink-0"
+          imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+        />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         {tiltDisplay ? (
           <StatChip
@@ -2168,6 +2229,54 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
           score={lashes.score}
         />
       </div>
+    </div>
+  );
+}
+
+/* ----------------------------------- Age ------------------------------------- */
+
+function AgePreview({ aggregates, language }: PreviewProps) {
+  const age = extractAge(aggregates);
+  const argument = extractAgeArgument(aggregates);
+
+  return (
+    <div className="flex w-full flex-col items-stretch gap-4">
+      <div className={`${PREVIEW_HERO} px-1`}>
+        <div className="w-full max-w-none px-1 text-center text-balance">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+            {i18n(language, { en: "Apparent age", fr: "Âge apparent" })}
+          </p>
+          <p className="mt-1 font-display text-2xl font-bold tabular-nums text-white">
+            {age !== null ? Math.round(age) : "—"}
+            <span className="ml-1.5 text-lg font-semibold text-zinc-400">
+              {i18n(language, { en: "yrs", fr: "ans" })}
+            </span>
+          </p>
+          {argument ? (
+            <p className="mt-3 w-full max-w-none text-left text-xs leading-relaxed tracking-normal text-zinc-300 [text-wrap:pretty] whitespace-pre-wrap break-words">
+              {argument}
+            </p>
+          ) : (
+            <p className="mt-3 text-left text-xs leading-relaxed text-zinc-400">
+              {i18n(language, {
+                en: "Estimated from your portrait — lighting and angle can skew the reading.",
+                fr: "Estimé depuis ton portrait — lumière et angle peuvent biaiser la lecture.",
+              })}
+            </p>
+          )}
+        </div>
+      </div>
+      {age !== null ? (
+        <div className="w-full shrink-0 px-0.5 pb-1">
+          <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+            {i18n(language, {
+              en: "Maturity spectrum",
+              fr: "Spectre maturité",
+            })}
+          </p>
+          <MaturityTimeline age={age} language={language} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2315,6 +2424,8 @@ export function WorkerPreviewContent({
       return <NosePreview aggregates={aggregates} language={language} />;
     case "eyes":
       return <EyesPreview aggregates={aggregates} language={language} />;
+    case "age":
+      return <AgePreview aggregates={aggregates} language={language} />;
     default:
       return (
         <GenericPreview

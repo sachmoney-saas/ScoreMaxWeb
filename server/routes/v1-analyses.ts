@@ -12,7 +12,10 @@ import {
   type OnboardingScanAssetCode,
   type SignedUploadScanAssetCode,
 } from "@shared/schema";
-import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
+import {
+  deleteAnalysisJobAndAssets,
+  resetUnreferencedScanSessionAssets,
+} from "../lib/analysis-cleanup";
 import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-jobs";
 import { ApiError } from "../lib/errors";
 import { validateBody, validateQuery } from "../lib/validate";
@@ -26,7 +29,7 @@ import {
   requiredAssetCodes,
   type ScanSessionRow,
 } from "../lib/analysis-orchestration";
-import { requireUserId } from "../lib/auth";
+import { requireAdminUser, requireUserId } from "../lib/auth";
 import { hasPremiumAccess, requirePremiumAccess } from "../lib/subscriptions";
 import {
   assertSubscriberStandardAnalysisAllowed,
@@ -42,6 +45,7 @@ import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 import {
   assertCallerCanAccessAnalysisJob,
   assertCallerIsSubjectUserOrAdmin,
+  loadAnalysisJobOwner,
 } from "../lib/analysis-user-access";
 
 const analysesMetadataSchema = z.object({
@@ -66,9 +70,12 @@ const analysisJobAssetQuerySchema = z.object({
     "GUIDE_TRACE_SMILE_LIPS",
     "GUIDE_TRACE_SMILE_TEETH",
     "GUIDE_TRACE_FACE_FRONT_LIPS",
+    "GUIDE_TRACE_FACE_FRONT_NOSE_MOUTH",
     "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
+    "GUIDE_TRACE_FACE_FRONT_OVAL",
     "GUIDE_TRACE_PROFILE_RIGHT_JAW",
     "GUIDE_TRACE_PROFILE_LEFT_JAW",
+    "GUIDE_TRACE_LOOK_UP_JAW_ARC",
   ]),
 });
 
@@ -76,7 +83,8 @@ const analysisJobParamsSchema = z.object({
   jobId: z.string().uuid(),
 });
 
-const manualSessionParamsSchema = z.object({
+/** Params `:sessionId` pour tout parcours lié à une séance scan (manuel, reset, launch, etc.). */
+const scanSessionRouteParamsSchema = z.object({
   sessionId: z.string().uuid(),
 });
 
@@ -298,11 +306,63 @@ export function createV1AnalysesRouter(): Router {
     }
   });
 
+  /**
+   * Vide les `scan_assets` orphelins d’une session (non liés à un job d’analyse),
+   * supprime les objets R2 correspondants, puis rafraîchit la progression.
+   * Utilisé lors d’un « Refaire » avant nouveau lot d’uploads.
+   */
+  router.post("/analyses/scan-sessions/:sessionId/reset-assets", async (req, res, next) => {
+    try {
+      const params = scanSessionRouteParamsSchema.parse(req.params);
+      const userId = await requireUserId(req.headers.authorization);
+
+      const { data: sessionRow, error: sessionError } = await supabaseAdmin
+        .from("scan_sessions")
+        .select("id, user_id, source, status")
+        .eq("id", params.sessionId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (sessionError || !sessionRow) {
+        throw new ApiError({
+          code: "VALIDATION_ERROR",
+          status: 404,
+          message: "Scan session not found",
+          details: sessionError,
+        });
+      }
+
+      if (sessionRow.source === "manual_rescan") {
+        await requirePremiumAccess(userId);
+      }
+
+      const summary = await resetUnreferencedScanSessionAssets({
+        sessionId: params.sessionId,
+        userId,
+        session: {
+          id: sessionRow.id,
+          user_id: sessionRow.user_id,
+          source: sessionRow.source as string,
+          status: sessionRow.status as string,
+        },
+      });
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: summary,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/analyses/manual-session/:sessionId/status", async (req, res, next) => {
     try {
       const userId = await requireUserId(req.headers.authorization);
       await requirePremiumAccess(userId);
-      const params = manualSessionParamsSchema.parse(req.params);
+      const params = scanSessionRouteParamsSchema.parse(req.params);
       const status = await getManualSessionStatus({
         sessionId: params.sessionId,
         userId,
@@ -325,7 +385,7 @@ export function createV1AnalysesRouter(): Router {
     async (req, res, next) => {
       try {
         const userId = await requireUserId(req.headers.authorization);
-        const params = manualSessionParamsSchema.parse(req.params);
+        const params = scanSessionRouteParamsSchema.parse(req.params);
         const { lang } = req.body as { lang?: string };
         assertSupportedAnalysisLang(lang);
 
@@ -897,11 +957,16 @@ export function createV1AnalysesRouter(): Router {
         const params = analysisJobParamsSchema.parse(req.params);
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
-        const ownerId = await assertCallerCanAccessAnalysisJob(
-          req.headers.authorization,
-          params.jobId,
-          userId,
-        );
+        await requireAdminUser(req.headers.authorization);
+
+        const ownerId = await loadAnalysisJobOwner(params.jobId);
+        if (userId !== ownerId) {
+          throw new ApiError({
+            code: "VALIDATION_ERROR",
+            status: 400,
+            message: "userId does not match this analysis owner",
+          });
+        }
 
         const deleted = await deleteAnalysisJobAndAssets({
           jobId: params.jobId,

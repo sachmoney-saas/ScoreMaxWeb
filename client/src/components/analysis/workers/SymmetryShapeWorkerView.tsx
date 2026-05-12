@@ -257,7 +257,7 @@ function SymmetryMirror({
 }
 
 /* ----------------------------------------------------------------------------
- * Proportions — repère tiers (asset scan) + actions vers les métriques tiers / cinquièmes.
+ * Proportions — repères scan tiers verticaux (gauche) + contour morphologique (droite).
  * ------------------------------------------------------------------------- */
 
 function ProportionsCanvas({
@@ -267,6 +267,7 @@ function ProportionsCanvas({
   thirdsMetricId,
   fifthsMetricId,
   verticalThirdsAssetSrc,
+  faceFrontShapeContourAssetSrc,
 }: {
   thirdsScore: number | null;
   fifthsScore: number | null;
@@ -274,6 +275,7 @@ function ProportionsCanvas({
   thirdsMetricId: string;
   fifthsMetricId: string;
   verticalThirdsAssetSrc?: string | null;
+  faceFrontShapeContourAssetSrc?: string | null;
 }) {
   const thirdsBand = thirdsScore !== null ? bandFromScore(thirdsScore) : null;
   const fifthsBand = fifthsScore !== null ? bandFromScore(fifthsScore) : null;
@@ -290,17 +292,44 @@ function ProportionsCanvas({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-center pb-1 pt-0.5">
-        <AnalysisJobAssetPreviewThumb
-          src={verticalThirdsAssetSrc}
-          alt={i18n(language, {
-            en: "Front-face scan overlay: vertical-thirds guide lines",
-            fr: "Repère tiers verticaux sur ton visage (prise frontale)",
+      {(verticalThirdsAssetSrc ?? faceFrontShapeContourAssetSrc) ? (
+        <div
+          className="flex flex-wrap items-start justify-center gap-2 pb-1 pt-0.5 sm:gap-4"
+          aria-label={i18n(language, {
+            en: "Face scan guides: vertical thirds and shape contour",
+            fr: "Repères scan : tiers verticaux et contour morphologique",
           })}
-          className="mx-auto h-52 w-full max-w-[220px]"
-          imgClassName="object-contain"
-        />
-      </div>
+        >
+          {verticalThirdsAssetSrc ? (
+            <div className="flex shrink-0 justify-center">
+              <AnalysisJobAssetPreviewThumb
+                src={verticalThirdsAssetSrc}
+                alt={i18n(language, {
+                  en: "Front-face scan overlay: vertical-thirds guide lines",
+                  fr: "Repère tiers verticaux sur ton visage (prise frontale)",
+                })}
+                imgFit="contain"
+                className="w-fit max-w-[min(100%,220px)] shrink-0"
+                imgClassName="max-h-52"
+              />
+            </div>
+          ) : null}
+          {faceFrontShapeContourAssetSrc ? (
+            <div className="flex shrink-0 justify-center">
+              <AnalysisJobAssetPreviewThumb
+                src={faceFrontShapeContourAssetSrc}
+                alt={i18n(language, {
+                  en: "Front-face scan overlay: face shape contour guide",
+                  fr: "Repère contour de la forme du visage (prise frontale)",
+                })}
+                imgFit="contain"
+                className="w-fit max-w-[min(100%,220px)] shrink-0"
+                imgClassName="max-h-52"
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex items-center justify-center gap-5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
         <button
           type="button"
@@ -338,6 +367,7 @@ export interface SymmetryShapeWorkerViewProps {
   language: AppLanguage;
   heroAside?: React.ReactNode;
   verticalThirdsAssetSrc?: string | null;
+  faceFrontShapeContourAssetSrc?: string | null;
 }
 
 export function SymmetryShapeWorkerView({
@@ -345,6 +375,7 @@ export function SymmetryShapeWorkerView({
   language,
   heroAside,
   verticalThirdsAssetSrc,
+  faceFrontShapeContourAssetSrc,
 }: SymmetryShapeWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -502,6 +533,21 @@ export function SymmetryShapeWorkerView({
               </p>
             ) : null}
           </div>
+
+          {faceFrontShapeContourAssetSrc ? (
+            <div className="flex justify-center">
+              <AnalysisJobAssetPreviewThumb
+                src={faceFrontShapeContourAssetSrc}
+                alt={i18n(language, {
+                  en: "Front-face scan overlay: face shape contour guide",
+                  fr: "Repère contour de la forme du visage (prise frontale)",
+                })}
+                imgFit="contain"
+                className="mx-auto w-fit max-w-[min(100%,20rem)] shrink-0 sm:max-w-[22rem]"
+                imgClassName="max-h-[14rem] sm:max-h-[17rem]"
+              />
+            </div>
+          ) : null}
 
           <FaceShapeGallery
             selected={shapeKey}
@@ -696,6 +742,7 @@ export function SymmetryShapeWorkerView({
                 "proportions.horizontal_fifths_balance",
               )}
               verticalThirdsAssetSrc={verticalThirdsAssetSrc}
+              faceFrontShapeContourAssetSrc={faceFrontShapeContourAssetSrc}
             />
           </div>
         </CardContent>

@@ -28,8 +28,36 @@ import {
   WorkerStanceMatrix,
   type WorkerSignatureRadarPoint,
 } from "./WorkerVisualizations";
+import { AnalysisJobAssetPreviewThumb } from "./AnalysisJobAssetPreviewThumb";
 
 const WORKER_KEY = "nose";
+
+function mouthToNoseWidthRatioFromGuideMetrics(
+  metrics: GuideTraceMetricsForAnalysis | null | undefined,
+): number | null {
+  const v = metrics?.[CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO];
+  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) return null;
+  return v;
+}
+
+function noseMouthProportionInterpretation(
+  language: AppLanguage,
+  ratio: number,
+): string {
+  const locale = language === "fr" ? "fr-FR" : "en-US";
+  const multiplier = ratio.toLocaleString(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const nosePctOfMouth = (100 / ratio).toLocaleString(locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  return i18n(language, {
+    en: `Based on frontal scan landmarks, your mouth is ${multiplier}× wider than your nose — so your nose width represents about ${nosePctOfMouth}% of your mouth width.`,
+    fr: `Aux repères du scan frontal, ta bouche est ${multiplier} fois plus large que ton nez ; la largeur de ton nez représente donc environ ${nosePctOfMouth} % de celle de ta bouche.`,
+  });
+}
 
 /* ----------------------------------------------------------------------------
  * Main view
@@ -40,6 +68,8 @@ export interface NoseWorkerViewProps {
   language: AppLanguage;
   heroAside?: React.ReactNode;
   captureGuideMetrics?: GuideTraceMetricsForAnalysis | null;
+  /** Repère face nez/bouche (même source que la preview tableau de bord). */
+  noseFrontNoseMouthGuideSrc?: string | null;
 }
 
 export function NoseWorkerView({
@@ -47,6 +77,7 @@ export function NoseWorkerView({
   language,
   heroAside,
   captureGuideMetrics,
+  noseFrontNoseMouthGuideSrc,
 }: NoseWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -194,29 +225,10 @@ export function NoseWorkerView({
     return sectionTip;
   };
 
-  const mouthOverNose = captureGuideMetrics?.[CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO];
+  const mouthOverNose = mouthToNoseWidthRatioFromGuideMetrics(captureGuideMetrics);
 
   return (
     <div className="space-y-4">
-      {mouthOverNose !== undefined && Number.isFinite(mouthOverNose) ? (
-        <p className="text-[11px] leading-snug text-zinc-500" role="note">
-          <span className="font-semibold uppercase tracking-[0.12em] text-zinc-500">
-            {i18n(language, { en: "Capture geometry", fr: "Géométrie capture" })}
-          </span>
-          <span className="ml-1.5 font-mono text-zinc-400">
-            {i18n(language, {
-              en: `mouth width / nose width ${mouthOverNose.toLocaleString(language === "fr" ? "fr-FR" : "en-US", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 4,
-              })}`,
-              fr: `largeur bouche / largeur nez ${mouthOverNose.toLocaleString("fr-FR", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 4,
-              })}`,
-            })}
-          </span>
-        </p>
-      ) : null}
       <WorkerHero
         eyebrow={i18n(language, { en: "Nose architecture", fr: "Architecture du nez" })}
         title={i18n(language, {
@@ -248,6 +260,48 @@ export function NoseWorkerView({
           heroAside,
         )}
       />
+
+      {Boolean(noseFrontNoseMouthGuideSrc) || mouthOverNose !== null ? (
+        <div
+          className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5"
+          aria-label={i18n(language, {
+            en: "Frontal nose and mouth proportions from scan guides",
+            fr: "Proportions nez–bouche depuis les repères du scan frontal",
+          })}
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+            {noseFrontNoseMouthGuideSrc ? (
+              <div className="flex w-full shrink-0 justify-center sm:w-auto sm:justify-start">
+                <AnalysisJobAssetPreviewThumb
+                  bare
+                  src={noseFrontNoseMouthGuideSrc}
+                  alt={i18n(language, {
+                    en: "Scan overlay: frontal nose and mouth guide trace",
+                    fr: "Repère scan face — nez et bouche",
+                  })}
+                  className="max-w-full overflow-hidden rounded-[10px] border border-zinc-500/30 leading-none sm:max-w-[min(100%,280px)]"
+                  imgClassName="max-h-[min(62vw,15rem)] w-auto max-w-full object-contain sm:max-h-[12.5rem]"
+                  imgFit="contain"
+                />
+              </div>
+            ) : null}
+            <div className="min-w-0 flex-1">
+              {mouthOverNose !== null ? (
+                <p className="text-sm leading-relaxed text-zinc-300">
+                  {noseMouthProportionInterpretation(language, mouthOverNose)}
+                </p>
+              ) : noseFrontNoseMouthGuideSrc ? (
+                <p className="text-sm leading-relaxed text-zinc-500">
+                  {i18n(language, {
+                    en: "Guide trace from your frontal pose — proportional readout unavailable for this capture.",
+                    fr: "Repère issu de ta prise frontale — lecture proportionnelle indisponible pour cette capture.",
+                  })}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Signature nasale — radar */}
       {radarData.length >= 3 ? (
