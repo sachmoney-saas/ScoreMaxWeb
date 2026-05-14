@@ -7,6 +7,10 @@ import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
 const INITIALIZATION_STEPS_TICKER_MS = 5000;
 
+/** Temps affiché pour passer linéairement de 0 % à 99 % (l’analyse reste affichée à 99 % ensuite). */
+const ANALYSIS_PROGRESS_RAMP_MS = 150 * 1000; // 2 min 30
+const ANALYSIS_PROGRESS_CAP_PERCENT = 99;
+
 /** Entre deux messages du ticker analyse in-app (~2 min avec ~27 lignes). */
 const ANALYSIS_STEPS_RANDOM_MS_MIN = 5000;
 const ANALYSIS_STEPS_RANDOM_MS_MAX = 10_000;
@@ -266,8 +270,9 @@ type AnalysisProcessingStateProps = {
    */
   elapsedAnchorEpochMs?: number | null;
   /**
-   * Masque le décompte (ex. onboarding avant la vue app : upload + file).
-   * Le chrono peut reprendre in-app avec `elapsedAnchorEpochMs`.
+   * Affiche la progression en % (0–99 sur ~2 min 30), basée sur le temps écoulé
+   * depuis `elapsedAnchorEpochMs` ou depuis le premier rendu.
+   * À false : pas de pourcentage (ex. phase « Initialisation »).
    */
   showElapsedTimer?: boolean;
   /** Remplace le titre sous le loader (« Analyse en cours » par défaut). */
@@ -280,19 +285,18 @@ type AnalysisProcessingStateProps = {
   analysisStepTicker?: boolean;
 };
 
-/** Format « 42 s » / « 3 min 12 s » pour sidebar et écran d’analyse. */
-export function formatAnalysisElapsedLabel(totalSeconds: number, lang: AppLanguage): string {
-  if (totalSeconds < 60) {
-    return i18n(lang, {
-      fr: `${totalSeconds} s`,
-      en: `${totalSeconds} s`,
-    });
-  }
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
+/** Pourcentage 0–99 : 0 % à t=0, 99 % à t=2 min 30 (puis plafonné jusqu’à la fin du job). */
+export function analysisProgressPercentFromElapsedMs(elapsedMs: number): number {
+  if (elapsedMs <= 0) return 0;
+  const raw = Math.floor((elapsedMs / ANALYSIS_PROGRESS_RAMP_MS) * ANALYSIS_PROGRESS_CAP_PERCENT);
+  return Math.min(ANALYSIS_PROGRESS_CAP_PERCENT, raw);
+}
+
+export function formatAnalysisProgressPercent(percent: number, lang: AppLanguage): string {
+  const p = Math.max(0, Math.min(ANALYSIS_PROGRESS_CAP_PERCENT, Math.floor(percent)));
   return i18n(lang, {
-    fr: `${minutes} min ${seconds} s`,
-    en: `${minutes} min ${seconds} s`,
+    fr: `${p}\u00a0%`,
+    en: `${p}%`,
   });
 }
 
@@ -330,13 +334,16 @@ export function AnalysisProcessingState({
   const hasAnchor =
     typeof elapsedAnchorEpochMs === "number" && Number.isFinite(elapsedAnchorEpochMs);
 
-  const elapsedSeconds = React.useMemo(() => {
+  const elapsedMs = React.useMemo(() => {
     if (!showElapsedTimer) return 0;
     if (hasAnchor) {
-      return Math.max(0, Math.floor((Date.now() - elapsedAnchorEpochMs) / 1000));
+      return Math.max(0, Date.now() - elapsedAnchorEpochMs);
     }
-    return tick;
+    return tick * 1000;
   }, [elapsedAnchorEpochMs, hasAnchor, showElapsedTimer, tick]);
+
+  const progressPercent = analysisProgressPercentFromElapsedMs(elapsedMs);
+  const progressLabel = formatAnalysisProgressPercent(progressPercent, language);
 
   const titleLabel =
     titleOverride?.trim() ||
@@ -345,10 +352,9 @@ export function AnalysisProcessingState({
       en: "Analysis in progress",
     });
 
-  const elapsedLabel = formatAnalysisElapsedLabel(elapsedSeconds, language);
   const detailHint = message?.trim();
   const ariaLabel = showElapsedTimer
-    ? [titleLabel, detailHint, elapsedLabel].filter(Boolean).join(" — ")
+    ? [titleLabel, detailHint, progressLabel].filter(Boolean).join(" — ")
     : [titleLabel, detailHint].filter(Boolean).join(" — ");
 
   const loaderSize = backdrop ? "lg" : minimalChrome ? "md" : "lg";
@@ -405,7 +411,7 @@ export function AnalysisProcessingState({
             aria-live="polite"
             aria-atomic="true"
           >
-            {elapsedLabel}
+            {progressLabel}
           </p>
         ) : null}
 

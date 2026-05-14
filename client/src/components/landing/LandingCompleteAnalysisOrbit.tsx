@@ -13,7 +13,7 @@ const MOCK_LEANNESS = 7.45;
 const MOCK_SHARPNESS = 7.65;
 
 const floatCardClassName =
-  "rounded-2xl border border-white/[0.26] bg-[rgba(10,16,22,0.62)] px-2.5 py-3 shadow-[0_22px_56px_-18px_rgba(0,0,0,0.88)] backdrop-blur-[14px] sm:rounded-[1.35rem] sm:px-3 sm:py-3.5";
+  "rounded-2xl border border-white/[0.26] bg-[rgba(10,16,22,0.62)] px-4 py-4 shadow-[0_22px_56px_-18px_rgba(0,0,0,0.88)] backdrop-blur-[14px] sm:rounded-[1.35rem] sm:px-5 sm:py-5";
 
 function buildRadarData(language: AppLanguage): WorkerSignatureRadarPoint[] {
   return [
@@ -35,46 +35,47 @@ function CompleteAnalysisColoringCard({ language }: { language: AppLanguage }) {
   ];
 
   return (
-    <div className="w-full min-w-[9.5rem] max-w-[12.5rem]">
-      <div className="grid grid-cols-4 gap-x-2 gap-y-2 rounded-xl border border-white/14 bg-white/[0.04] p-2 sm:p-2.5">
+    <div className="w-full min-w-0 max-w-[20rem]">
+      <div className="grid grid-cols-4 gap-x-2.5 gap-y-3 rounded-xl border border-white/14 bg-white/[0.04] p-3 sm:gap-x-3 sm:p-3.5">
         {swatches.map((s) => (
-          <div key={s.zone} className="flex flex-col items-center gap-1.5">
-            <span className="w-full truncate text-center text-[8px] font-semibold uppercase leading-tight tracking-[0.08em] text-zinc-400 sm:text-[9px]">
+          <div key={s.zone} className="flex min-w-0 flex-col items-center gap-2">
+            <span className="w-full text-center text-[11px] font-semibold uppercase leading-snug tracking-[0.06em] text-zinc-300 sm:text-xs sm:leading-tight">
               {s.zone}
             </span>
             <div
-              className="h-8 w-full min-w-0 rounded-lg border border-white/12 shadow-inner sm:h-9"
+              className="h-10 w-full min-w-0 rounded-lg border border-white/12 shadow-inner sm:h-11"
               style={{ backgroundColor: s.hex }}
             />
           </div>
         ))}
       </div>
-      <p className="mt-2 text-center text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-500 sm:text-[10px]">
+      <p className="mt-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400 sm:text-xs">
         {i18n(language, { en: "Contrast · medium", fr: "Contraste · moyen" })}
       </p>
     </div>
   );
 }
 
-type OrbitPaneProps = {
-  className: string;
+type FloatPaneProps = {
+  className?: string;
   delay: number;
   reduceMotion: boolean | null;
   children: React.ReactNode;
 };
 
-function OrbitPane({ className, delay, reduceMotion, children }: OrbitPaneProps) {
+/** Panneau décoratif — flux normal (grille), pas en absolute au-dessus du portrait. */
+function FloatPane({ className, delay, reduceMotion, children }: FloatPaneProps) {
   return (
     <motion.div
-      className={cn("absolute z-[15] will-change-transform", className)}
+      className={cn("will-change-transform", className)}
       initial={false}
       animate={
         reduceMotion
           ? { y: 0, x: 0, rotate: 0 }
           : {
-              y: [0, -9, 0, 6, 0],
-              x: [0, 5, 0, -4, 0],
-              rotate: [-0.45, 0.5, -0.25, 0.35, -0.45],
+              y: [0, -6, 0, 4, 0],
+              x: [0, 3, 0, -2, 0],
+              rotate: [-0.35, 0.4, -0.2, 0.3, -0.35],
             }
       }
       transition={
@@ -93,9 +94,12 @@ function OrbitPane({ className, delay, reduceMotion, children }: OrbitPaneProps)
   );
 }
 
+const cardTitleClass =
+  "mt-1 text-center text-xs font-semibold uppercase tracking-[0.14em] text-zinc-300 sm:text-sm sm:tracking-[0.13em]";
+
 /**
- * Graphes façon « in-app » (matrice + toile + colorimétrie) qui flottent autour du portrait central
- * de la section « Complete facial analysis » (model1.png) — pas sur la hero du haut.
+ * Graphes décoratifs (matrice + toile + colorimétrie) autour du portrait model1 —
+ * à partir de `lg`, grille 3 colonnes : cartes dans les marges, jamais au-dessus du visage.
  */
 export function LandingCompleteAnalysisOrbit({
   language,
@@ -107,77 +111,103 @@ export function LandingCompleteAnalysisOrbit({
   const reduceMotion = useReducedMotion();
   const radarData = React.useMemo(() => buildRadarData(language), [language]);
 
+  const radarCard = (
+    <div className={cn(floatCardClassName, "w-full min-w-0 max-w-[min(100%,32rem)]")}>
+      <div className="-mx-1 w-[calc(100%+0.5rem)] max-w-none">
+        <WorkerSignatureRadar
+          data={radarData}
+          ariaLabel={i18n(language, {
+            en: "Illustrative analysis signature",
+            fr: "Signature d'analyse illustrative",
+          })}
+          sizePreset="xlarge"
+          className="max-w-none"
+        />
+      </div>
+      <p className={cardTitleClass}>
+        {i18n(language, { en: "Web", fr: "Toile" })}
+      </p>
+    </div>
+  );
+
+  const matrixCard = (
+    <div
+      className={cn(floatCardClassName, "flex w-full min-w-0 max-w-[min(100%,32rem)] flex-col items-center")}
+    >
+      <BodyfatCompositionMatrixVisual
+        leanness={MOCK_LEANNESS}
+        sharpness={MOCK_SHARPNESS}
+        language={language}
+        compact={false}
+        size="hero"
+      />
+      <p className={cn(cardTitleClass, "mt-3")}>
+        {i18n(language, { en: "Composition", fr: "Composition" })}
+      </p>
+    </div>
+  );
+
+  const coloringCard = (
+    <div
+      className={cn(
+        floatCardClassName,
+        "flex w-full min-w-0 max-w-[min(100%,22rem)] flex-col items-center sm:max-w-[24rem]",
+      )}
+    >
+      <CompleteAnalysisColoringCard language={language} />
+      <p className={cn(cardTitleClass, "mt-2")}>
+        {i18n(language, { en: "Coloring", fr: "Colorimétrie" })}
+      </p>
+    </div>
+  );
+
   return (
-    <div className="relative isolate mx-auto w-full max-w-[min(100%,62rem)]">
+    <div className="relative isolate mx-auto w-full max-w-[min(100%,110rem)] px-2 sm:px-4">
       <div
-        aria-hidden
         className={cn(
-          "pointer-events-none absolute hidden sm:block",
-          "inset-y-[4%]",
-          "-left-[4%] -right-[4%] md:-left-[6%] md:-right-[6%] lg:-left-[8%] lg:-right-[8%]",
+          "flex flex-col items-stretch",
+          /* Centre un peu plus large que les côtés pour garder le portrait lisible sans écraser les schémas. */
+          "lg:grid lg:grid-cols-[1.05fr_1.45fr_1.05fr] lg:items-start lg:justify-center",
+          "lg:gap-x-4 xl:grid-cols-[1.1fr_1.3fr_1.1fr] xl:gap-x-7 2xl:gap-x-12",
         )}
       >
-        {/* Toile — haut gauche */}
-        <OrbitPane
-          className="left-0 top-[8%] w-[clamp(13.5rem,min(38vw,22rem),22rem)] md:left-[1%] md:top-[10%]"
-          delay={0}
-          reduceMotion={reduceMotion}
+        <div
+          aria-hidden
+          className="hidden min-w-0 flex-col items-end gap-8 pt-2 lg:flex xl:gap-10 xl:pt-4"
         >
-          <div className={floatCardClassName}>
-            <div className="-mx-0.5 w-[calc(100%+0.25rem)] max-w-none">
-              <WorkerSignatureRadar
-                data={radarData}
-                ariaLabel={i18n(language, {
-                  en: "Illustrative analysis signature",
-                  fr: "Signature d'analyse illustrative",
-                })}
-                sizePreset="large"
-                className="max-w-none"
-              />
-            </div>
-            <p className="mt-0.5 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:text-[10px]">
-              {i18n(language, { en: "Web", fr: "Toile" })}
-            </p>
-          </div>
-        </OrbitPane>
+          <FloatPane
+            delay={0}
+            reduceMotion={reduceMotion}
+            className="w-full max-w-[min(100%,32rem)]"
+          >
+            {radarCard}
+          </FloatPane>
+          <FloatPane
+            delay={2.2}
+            reduceMotion={reduceMotion}
+            className="w-full max-w-[min(100%,24rem)]"
+          >
+            {coloringCard}
+          </FloatPane>
+        </div>
 
-        {/* Matrice composition — haut droite */}
-        <OrbitPane
-          className="right-0 top-[7%] w-[clamp(13rem,min(34vw,20rem),20rem)] md:right-[1%] md:top-[9%]"
-          delay={1.1}
-          reduceMotion={reduceMotion}
-        >
-          <div className={cn(floatCardClassName, "flex flex-col items-center")}>
-            <div className="origin-center scale-[1.06] md:scale-[1.22]">
-              <BodyfatCompositionMatrixVisual
-                leanness={MOCK_LEANNESS}
-                sharpness={MOCK_SHARPNESS}
-                language={language}
-                compact={false}
-              />
-            </div>
-            <p className="mt-2 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:text-[10px]">
-              {i18n(language, { en: "Composition", fr: "Composition" })}
-            </p>
-          </div>
-        </OrbitPane>
+        <div className="relative z-10 order-first w-full min-w-0 max-w-[min(100%,64rem)] justify-self-center lg:order-none">
+          {children}
+        </div>
 
-        {/* Colorimétrie — bas côté portait (épaule) */}
-        <OrbitPane
-          className="bottom-[6%] left-0 md:bottom-[8%] md:left-[4%]"
-          delay={2.2}
-          reduceMotion={reduceMotion}
+        <div
+          aria-hidden
+          className="hidden min-w-0 flex-col items-start gap-6 pt-2 lg:flex xl:pt-4"
         >
-          <div className={cn(floatCardClassName, "flex flex-col items-center")}>
-            <CompleteAnalysisColoringCard language={language} />
-            <p className="mt-1 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:text-[10px]">
-              {i18n(language, { en: "Coloring", fr: "Colorimétrie" })}
-            </p>
-          </div>
-        </OrbitPane>
+          <FloatPane
+            delay={1.1}
+            reduceMotion={reduceMotion}
+            className="w-full max-w-[min(100%,32rem)]"
+          >
+            {matrixCard}
+          </FloatPane>
+        </div>
       </div>
-
-      <div className="relative z-20">{children}</div>
     </div>
   );
 }

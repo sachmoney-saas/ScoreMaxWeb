@@ -1287,11 +1287,11 @@ export function AnalysisResultsSection({
   );
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-3">
       <Tabs
         value={mainTab}
         onValueChange={onMainTabChange}
-        className="space-y-5"
+        className="space-y-2.5 sm:space-y-3"
       >
         <div className="flex w-full justify-center">
           <TabsList

@@ -49,6 +49,17 @@ import { AnalysisTopNavTabs } from "@/components/analysis/AnalysisTopNavTabs";
 import { ArrowLeft, Braces, Copy } from "lucide-react";
 import { parseAdminImpersonationUserId } from "@/lib/analysis-view-href";
 
+/** Conserve `?asUser=` et autres paramètres (ex. `tab=`) sur les liens Retour / navigation. */
+function analysisOverviewHref(jobId: string, search: string): string {
+  const q =
+    search && search.startsWith("?")
+      ? search
+      : search
+        ? `?${search}`
+        : "";
+  return `/app/analyses/${jobId}${q}`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -101,12 +112,22 @@ function WorkerDetailsSkeleton() {
 
 export default function WorkerDetails() {
   const params = useParams<{ jobId: string; worker: string }>();
+  const search = useSearch();
   const worker = params.worker ? decodeURIComponent(params.worker) : "";
   const language = useAppLanguage();
   const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const [adminPayloadOpen, setAdminPayloadOpen] = React.useState(false);
-  const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId);
+  const impersonatedUserId = parseAdminImpersonationUserId(search, isAdmin);
+  const { data: analysis, isLoading, isError } = useAnalysisDetail(params.jobId, {
+    subjectUserId: impersonatedUserId,
+  });
+
+  const backToAnalysisHref = React.useMemo(
+    () =>
+      params.jobId ? analysisOverviewHref(params.jobId, search) : "/app",
+    [params.jobId, search],
+  );
 
   /* Le layout app scroll dans [data-app-scroll-region], pas sur window — on remonte au clic preview. */
   React.useLayoutEffect(() => {
@@ -183,7 +204,7 @@ export default function WorkerDetails() {
     return (
       <div className="space-y-5">
         <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
-          <Link href={params.jobId ? `/app/analyses/${params.jobId}` : "/app"}>
+          <Link href={backToAnalysisHref}>
             <ArrowLeft className="h-4 w-4 shrink-0" />
             Retour à l'analyse
           </Link>
@@ -206,7 +227,7 @@ export default function WorkerDetails() {
       <AnalysisTopNavTabs jobId={analysis.job.id} active="overview" />
 
       <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
-        <Link href={`/app/analyses/${analysis.job.id}`}>
+        <Link href={analysisOverviewHref(analysis.job.id, search)}>
           <ArrowLeft className="h-4 w-4 shrink-0" />
           Retour à l'analyse
         </Link>

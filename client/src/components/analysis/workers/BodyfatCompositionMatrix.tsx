@@ -152,12 +152,15 @@ export function BodyfatCompositionMatrixVisual({
   sharpness,
   language,
   compact = false,
+  /** `prominent` = preview large ; `hero` = landing (grille + libellés très lisibles). */
+  size = "default",
   resolveCellTargetId,
 }: {
   leanness: number | null;
   sharpness: number | null;
   language: AppLanguage;
   compact?: boolean;
+  size?: "default" | "prominent" | "hero";
   resolveCellTargetId?: (cx: number, ry: number) => string | null;
 }) {
   const cols = 10;
@@ -172,18 +175,34 @@ export function BodyfatCompositionMatrixVisual({
       ? Math.min(rows - 1, Math.max(0, Math.floor(10 - sharpness)))
       : null;
 
-  const wrapMax =
-    "mx-auto w-full max-w-[min(100%,12rem)] sm:max-w-[14rem]";
-  const gridShell = compact
-    ? "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]"
-    : "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]";
-  const labelClass = compact
-    ? "text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:tracking-[0.16em]"
-    : "text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400";
-  const pad = compact ? "p-2" : "p-2";
-  const cellGap = compact ? "gap-0.5" : "gap-0.5";
-  const cellRound = compact ? "rounded-[3px] sm:rounded-sm" : "rounded-[3px] sm:rounded-sm";
-  const ringUser = compact ? "ring-2 ring-white/85" : "ring-2 ring-white/80";
+  const isHero = size === "hero";
+  const isProminent = size === "prominent" || isHero;
+
+  const wrapMax = isHero
+    ? "mx-auto w-full max-w-[min(100%,22rem)] sm:max-w-[26rem] lg:max-w-[min(100%,30rem)]"
+    : isProminent
+      ? "mx-auto w-full max-w-[min(100%,15rem)] sm:max-w-[18rem]"
+      : "mx-auto w-full max-w-[min(100%,12rem)] sm:max-w-[14rem]";
+  const gridShell = isHero
+    ? "grid grid-cols-[28px_1fr_28px] grid-rows-[28px_1fr_28px] items-center gap-1 sm:grid-cols-[36px_1fr_36px] sm:grid-rows-[36px_1fr_36px] sm:gap-1.5 lg:grid-cols-[44px_1fr_44px] lg:grid-rows-[44px_1fr_44px]"
+    : isProminent
+      ? "grid grid-cols-[24px_1fr_24px] grid-rows-[24px_1fr_24px] items-center gap-0.5 sm:grid-cols-[32px_1fr_32px] sm:grid-rows-[32px_1fr_32px] sm:gap-1"
+      : "grid grid-cols-[22px_1fr_22px] grid-rows-[22px_1fr_22px] items-center gap-0.5 sm:grid-cols-[26px_1fr_26px] sm:grid-rows-[26px_1fr_26px]";
+  const labelClass = cn(
+    compact && !isHero
+      ? "text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 sm:tracking-[0.16em]"
+      : "text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400",
+    isProminent && !isHero && "sm:text-[11px] sm:tracking-[0.18em]",
+    isHero &&
+      "text-xs font-semibold uppercase tracking-[0.15em] text-zinc-300 sm:text-[13px] sm:tracking-[0.17em] lg:text-sm lg:tracking-[0.16em]",
+  );
+  const pad = compact && !isHero ? "p-2" : isHero ? "p-2.5 sm:p-3" : "p-2";
+  const cellGap =
+    isHero ? "gap-1 sm:gap-1.5" : compact ? "gap-0.5" : "gap-0.5";
+  const cellRound =
+    isHero ? "rounded-sm sm:rounded-md" : compact ? "rounded-[3px] sm:rounded-sm" : "rounded-[3px] sm:rounded-sm";
+  const ringUser =
+    isHero ? "ring-2 ring-white/90" : compact ? "ring-2 ring-white/85" : "ring-2 ring-white/80";
 
   return (
     <div className={wrapMax}>
@@ -210,7 +229,13 @@ export function BodyfatCompositionMatrixVisual({
             fr: "Matrice de composition",
           })}
         >
-          <div className={`grid h-full w-full grid-cols-10 grid-rows-10 ${cellGap}`}>
+          <div
+            className={cn(
+              "grid h-full w-full grid-cols-10 grid-rows-10",
+              cellGap,
+              isProminent && !isHero && "sm:gap-1",
+            )}
+          >
             {Array.from({ length: rows }).map((_, ry) =>
               Array.from({ length: cols }).map((_, cx) => {
                 const isUser = xIdx === cx && yIdx === ry;
@@ -224,9 +249,11 @@ export function BodyfatCompositionMatrixVisual({
                   ? "#e9f1f4"
                   : (`rgba(154,174,181,${baseOpacity})` as string);
                 const shadow = isUser
-                  ? compact
-                    ? "0 0 16px rgba(255,255,255,0.5)"
-                    : "0 0 18px rgba(255,255,255,0.55)"
+                  ? isHero
+                    ? "0 0 22px rgba(255,255,255,0.6)"
+                    : compact
+                      ? "0 0 16px rgba(255,255,255,0.5)"
+                      : "0 0 18px rgba(255,255,255,0.55)"
                   : undefined;
                 const cellClass = cn(
                   cellRound,

@@ -56,6 +56,18 @@ const WORKER_RADAR_PRESETS = {
     polygonStroke: 2,
     maxWClass: "max-w-[min(100%,560px)]",
   },
+  /** Landing / hero : schéma lisible sur grand écran. */
+  xlarge: {
+    viewPadX: 100,
+    viewPadY: 92,
+    size: 600,
+    maxRadius: 210,
+    labelOffset: 56,
+    fontSize: 18,
+    dotR: 5.8,
+    polygonStroke: 2.15,
+    maxWClass: "max-w-[min(100%,680px)]",
+  },
 } as const;
 
 export function WorkerSignatureRadar({
@@ -70,7 +82,7 @@ export function WorkerSignatureRadar({
   className?: string;
   /** Score max attendu (10 par défaut sur ScoreMax). */
   scale?: number;
-  /** `large` : même échelle que le radar peau (toile et libellés plus lisibles). */
+  /** `large` / `xlarge` : toile plus lisible (landing = `xlarge`). */
   sizePreset?: keyof typeof WORKER_RADAR_PRESETS;
 }) {
   const {

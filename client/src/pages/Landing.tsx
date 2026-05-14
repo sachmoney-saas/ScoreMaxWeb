@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { WaveBackground } from "@/components/background/WaveBackground";
 import { LandingCompleteAnalysisOrbit } from "@/components/landing/LandingCompleteAnalysisOrbit";
 import { FloatingHeader } from "@/components/layout/FloatingHeader";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
@@ -486,8 +485,8 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
     };
   }, [updateFit, language]);
 
-  const currentScore = 6.42;
-  const potentialScore = 7.35;
+  const currentScore = 43.7;
+  const potentialScore = 74.5;
   const chartWidth = 620;
   const chartHeight = 280;
   const plotLeft = 48;
@@ -497,24 +496,28 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
   const plotWidth = chartWidth - plotLeft - plotRight;
   const plotHeight = chartHeight - plotTop - plotBottom;
   const xMin = 0;
-  const xMax = 10;
+  const xMax = 100;
 
   const xToPixel = (x: number) =>
     plotLeft + ((x - xMin) / (xMax - xMin)) * plotWidth;
   const yToPixel = (y: number) => plotTop + (1 - y) * plotHeight;
-  const gaussian = (x: number) => {
-    const peak = Math.exp(-Math.pow(x - 5.05, 2) / (2 * Math.pow(0.86, 2)));
-    // Keep realistic non-zero tails on both sides.
-    const leftTail = 0.085 / (1 + Math.exp((x - 2.35) * 2.1));
-    const rightTail = 0.075 / (1 + Math.exp((7.25 - x) * 1.8));
-    const shoulder = 0.018 * Math.exp(-Math.pow(x - 8.9, 2) / (2 * Math.pow(1.05, 2)));
+  /** Même forme que l’onboarding : courbe sur [0,10] rééchantillonnée sur 0–100. */
+  const gaussianShape = (t: number) => {
+    const peak = Math.exp(-Math.pow(t - 5.05, 2) / (2 * Math.pow(0.86, 2)));
+    const leftTail = 0.085 / (1 + Math.exp((t - 2.35) * 2.1));
+    const rightTail = 0.075 / (1 + Math.exp((7.25 - t) * 1.8));
+    const shoulder =
+      0.018 * Math.exp(-Math.pow(t - 8.9, 2) / (2 * Math.pow(1.05, 2)));
     return Math.min(1, peak + leftTail + rightTail + shoulder);
   };
 
-  const curvePoints = Array.from({ length: 120 }, (_, index) => {
-    const x = xMin + (index / 119) * (xMax - xMin);
-    return `${xToPixel(x).toFixed(2)},${yToPixel(gaussian(x)).toFixed(2)}`;
+  const curvePoints = Array.from({ length: 240 }, (_, index) => {
+    const x = xMin + (index / 239) * (xMax - xMin);
+    const density = gaussianShape((x / (xMax - xMin)) * 10);
+    return `${xToPixel(x).toFixed(2)},${yToPixel(density).toFixed(2)}`;
   }).join(" ");
+
+  const scoreLabel = currentScore.toFixed(1);
 
   const currentX = xToPixel(currentScore);
   const potentialX = xToPixel(potentialScore);
@@ -566,7 +569,7 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
                     {i18n(language, { en: "Today", fr: "Aujourd'hui" })}
                   </p>
                   <p className="mt-2 font-display text-[clamp(2.25rem,11vw,3.75rem)] leading-none tracking-tight text-zinc-500 md:mt-4 md:text-7xl">
-                    {currentScore.toFixed(2)}
+                    {currentScore.toFixed(1)}
                   </p>
                 </div>
                 <div className="shrink-0 pb-2 text-4xl text-zinc-600 md:pb-4 md:text-6xl">
@@ -577,7 +580,7 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
                     {i18n(language, { en: "Potential", fr: "Potentiel" })}
                   </p>
                   <p className="mt-2 font-display text-[clamp(2.25rem,11vw,3.75rem)] leading-none tracking-tight text-white md:mt-4 md:text-7xl">
-                    {potentialScore.toFixed(2)}
+                    {potentialScore.toFixed(1)}
                   </p>
                 </div>
               </div>
@@ -632,14 +635,15 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
                 x2={potentialX}
                 y2={plotTop + plotHeight}
                 stroke="#9cc5a9"
-                strokeWidth="1.6"
-                strokeDasharray="5 5"
+                strokeWidth="2.25"
+                strokeDasharray="7 5"
+                strokeOpacity={0.95}
               />
 
               <rect
-                x={currentX - 56}
+                x={currentX - 62}
                 y={plotTop - 30}
-                width="116"
+                width="124"
                 height="26"
                 rx="13"
                 fill="#2f3b2d"
@@ -653,14 +657,14 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
                 fill="#c0d0b3"
                 fontWeight="600"
               >
-                6.42 · Top 17.0%
+                {`${scoreLabel} / 100`}
               </text>
 
               <text
                 x={(currentX + potentialX) / 2 + 6}
                 y={plotTop + plotHeight - 2}
                 transform={`rotate(-90 ${(currentX + potentialX) / 2 + 6} ${plotTop + plotHeight - 2})`}
-                fontSize="20"
+                fontSize="14"
                 fill="#a6c0ab"
                 fontWeight="500"
                 letterSpacing="0.06em"
@@ -694,16 +698,16 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
                 {i18n(language, { en: "POPULATION DENSITY", fr: "DENSITE DE POPULATION" })}
               </text>
 
-              {Array.from({ length: 11 }, (_, index) => (
+              {[0, 20, 40, 60, 80, 100].map((mark) => (
                 <text
-                  key={`tick-${index}`}
-                  x={xToPixel(index)}
+                  key={`xmark-${mark}`}
+                  x={xToPixel(mark)}
                   y={plotTop + plotHeight + 22}
                   textAnchor="middle"
                   fontSize="11"
                   fill="#8f9caf"
                 >
-                  {index}
+                  {mark}
                 </text>
               ))}
 
@@ -716,7 +720,10 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
                 letterSpacing="0.15em"
                 fontWeight="600"
               >
-                {i18n(language, { en: "OVERALL SCORE", fr: "SCORE GLOBAL" })}
+                {i18n(language, {
+                  en: "OVERALL SCORE (0–100)",
+                  fr: "SCORE GLOBAL (0–100)",
+                })}
               </text>
                 </svg>
               </div>
@@ -890,7 +897,7 @@ export default function Landing() {
           position="absolute"
           className="pointer-events-none z-0 !h-full !min-h-full !w-full"
         />
-        <div className="relative z-10 mx-auto flex w-full flex-col px-1 sm:px-2 md:min-h-0 md:flex-1 lg:max-w-[75%]">
+        <div className="relative z-10 mx-auto flex w-full max-w-[min(100%,112rem)] flex-col px-3 sm:px-4 md:min-h-0 md:flex-1 lg:px-6">
           <motion.div
             variants={containerVariants}
             initial="hidden"
@@ -900,14 +907,14 @@ export default function Landing() {
           >
             <motion.h2
               variants={itemVariants}
-              className="shrink-0 font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
+              className="relative z-30 shrink-0 font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
             >
               Your Complete Facial Analysis
             </motion.h2>
 
             <motion.div
               variants={itemVariants}
-              className="flex w-full max-w-none flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
+              className="relative z-0 flex w-full max-w-[min(100%,88rem)] flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
             >
               <LandingCompleteAnalysisOrbit language={language}>
                 <img
@@ -917,7 +924,7 @@ export default function Landing() {
                     fr: "Modèle d'analyse complète du visage",
                   })}
                   loading="lazy"
-                  className="mx-auto block h-auto w-full max-w-2xl object-contain object-bottom select-none lg:max-w-4xl md:h-full md:max-h-full"
+                  className="mx-auto block h-auto w-full max-w-full object-contain object-bottom select-none max-h-[min(88vh,920px)]"
                 />
               </LandingCompleteAnalysisOrbit>
             </motion.div>
@@ -1059,72 +1066,6 @@ export default function Landing() {
               variants={itemVariants}
               className="mx-auto h-px w-8 bg-white/20"
             />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Final CTA Section */}
-      <section className="bg-[radial-gradient(circle_at_50%_30%,rgba(170,188,208,0.2),transparent_42%),linear-gradient(180deg,rgba(216,223,232,0.98)_0%,rgba(202,211,223,0.96)_100%)] px-4 py-24 md:py-32">
-        <div className="mx-auto w-full max-w-5xl text-center">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.22 }}
-            className="space-y-8"
-          >
-            <motion.h2
-              variants={itemVariants}
-              className="mx-auto max-w-4xl font-hero text-4xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-[#141822] md:text-7xl"
-            >
-              {language === "fr" ? (
-                <>
-                  Ta transformation commence par{" "}
-                  <span className="underline decoration-[#141822] decoration-2 underline-offset-[0.15em]">
-                    une première analyse
-                  </span>
-                </>
-              ) : (
-                <>
-                  Your transformation starts with a{" "}
-                  <span className="underline decoration-[#141822] decoration-2 underline-offset-[0.15em]">
-                    first analysis
-                  </span>
-                </>
-              )}
-            </motion.h2>
-
-            <motion.p
-              variants={itemVariants}
-              className="mx-auto max-w-3xl text-lg leading-relaxed text-[#5f6c7e] md:text-3xl"
-            >
-              {i18n(language, {
-                en: "450,000+ people have already started their journey. The only question left is - will you?",
-                fr: "450 000+ personnes ont déjà commencé leur parcours. La seule question restante : et toi ?",
-              })}
-            </motion.p>
-
-            <motion.div variants={itemVariants} className="pt-2">
-              <Link href="/register">
-                <Button className="h-14 min-h-14 rounded-sm bg-[#0f1219] px-10 text-base font-semibold text-white shadow-[0_28px_65px_-35px_rgba(0,0,0,0.65)] hover:bg-black md:h-[3.75rem] md:min-h-[3.75rem] md:text-lg">
-                  {i18n(language, {
-                    en: "Begin Your First Analysis",
-                    fr: "Commence ta première analyse",
-                  })}
-                  <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
-                </Button>
-              </Link>
-            </motion.div>
-
-            <motion.p
-              variants={itemVariants}
-              className="text-base leading-relaxed text-[#8d98a8] md:text-xl"
-            >
-              {i18n(language, {
-                en: "Your future self will thank you.",
-                fr: "Ton futur toi te remerciera.",
-              })}
-            </motion.p>
           </motion.div>
         </div>
       </section>

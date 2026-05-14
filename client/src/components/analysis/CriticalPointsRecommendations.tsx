@@ -597,7 +597,7 @@ function CriticalPointsRecommendationsImpl({
     return (
       <div className={recommendationsReportShellClassName}>
         <div className={recommendationsReportHorizontalInsetClassName}>
-          <div className="space-y-8">
+          <div className="space-y-4">
             <RecommendationsTypeFilterBar
               showSoft={showSoftmaxxing}
               showHard={showHardmaxxing}
@@ -701,9 +701,9 @@ function CriticalPointsRecommendationsImpl({
   /* ------------------------------------------------------------------------ */
 
   return (
-    <div className="relative flex flex-col gap-6 sm:gap-8">
+    <div className="relative flex flex-col gap-4 sm:gap-5">
       {visibleWorkerGroups.length > 0 ? (
-        <div className="space-y-5">
+        <div className="space-y-2 sm:space-y-2.5">
           <RecommendationsTypeFilterBar
             showSoft={showSoftmaxxing}
             showHard={showHardmaxxing}
@@ -714,7 +714,7 @@ function CriticalPointsRecommendationsImpl({
           <Tabs
             defaultValue={visibleWorkerGroups[0]?.worker}
             key={`${analysisJobId}:${visibleWorkerGroups.map((g) => g.worker).join("|")}`}
-            className="space-y-5"
+            className="space-y-2 sm:space-y-2.5"
           >
           <div className="flex w-full justify-center">
             <TabsList

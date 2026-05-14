@@ -73,7 +73,8 @@ import { scoreRingMatchMetallicPillClassName } from "@/components/analysis/worke
 import { BrandLoader } from "@/components/ui/brand-loader";
 import {
   analysisElapsedAnchorEpochMs,
-  formatAnalysisElapsedLabel,
+  analysisProgressPercentFromElapsedMs,
+  formatAnalysisProgressPercent,
 } from "@/components/analysis/AnalysisProcessingState";
 import { useAppLanguage, i18n, type AppLanguage } from "@/lib/i18n";
 import {
@@ -97,7 +98,7 @@ function formatAnalysisHistoryDate(value: string): string {
   }).format(new Date(value));
 }
 
-/** Durée depuis `created_at` du job (sidebar : à droite de « Analyse en cours »). */
+/** Progression en % (0–99 sur ~2 min 30) depuis `created_at` du job. */
 function SidebarAnalysisRunningElapsed({ createdAtIso }: { createdAtIso: string }) {
   const language = useAppLanguage();
   const anchorMs = React.useMemo(
@@ -110,12 +111,14 @@ function SidebarAnalysisRunningElapsed({ createdAtIso }: { createdAtIso: string 
     return () => window.clearInterval(id);
   }, []);
 
-  const elapsedSeconds = React.useMemo(() => {
+  const elapsedMs = React.useMemo(() => {
     if (anchorMs != null) {
-      return Math.max(0, Math.floor((Date.now() - anchorMs) / 1000));
+      return Math.max(0, Date.now() - anchorMs);
     }
-    return tick;
+    return tick * 1000;
   }, [anchorMs, tick]);
+
+  const percent = analysisProgressPercentFromElapsedMs(elapsedMs);
 
   return (
     <span
@@ -123,7 +126,7 @@ function SidebarAnalysisRunningElapsed({ createdAtIso }: { createdAtIso: string 
       aria-live="polite"
       aria-atomic="true"
     >
-      {formatAnalysisElapsedLabel(elapsedSeconds, language)}
+      {formatAnalysisProgressPercent(percent, language)}
     </span>
   );
 }
