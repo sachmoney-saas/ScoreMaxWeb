@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { isSignedUploadScanAssetCode } from "@shared/schema";
+import { oneshotAspectRatioSchema, oneshotModelVariantSchema } from "@shared/oneshot-image";
 import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
 import { summarizeStoredAnalysisRequestPayloadForAdmin } from "../lib/analysis-admin-snapshot";
 import { parseGuideTraceMetricsFromStoredRequestPayload } from "../lib/analysis-orchestration";
@@ -45,6 +46,21 @@ const adminJobAssetQuerySchema = z.object({
     { message: "Invalid asset type code" },
   ),
 });
+
+const adminAiImagePromptKeyParamsSchema = z.object({
+  key: z.string().min(1),
+});
+
+const adminAiImagePromptPatchSchema = z
+  .object({
+    prompt: z.string().min(1).max(3000).optional(),
+    model_variant: oneshotModelVariantSchema.optional(),
+    aspect_ratio: oneshotAspectRatioSchema.optional(),
+    safety_filters: z.boolean().optional(),
+    is_active: z.boolean().optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
 const userIdParamsSchema = z.object({
   userId: z.string().uuid(),
@@ -784,6 +800,89 @@ export function createV1AdminRouter(): Router {
         ok: true,
         httpStatus: 200,
         data: deleted,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/ai-image-prompts", async (_req, res, next) => {
+    try {
+      await requireAdminUser(_req.headers.authorization);
+      const { data, error } = await supabaseAdmin
+        .from("scoremax_ai_image_prompts")
+        .select(
+          "key, description, prompt, model, model_variant, aspect_ratio, safety_filters, is_active, updated_by, created_at, updated_at",
+        )
+        .order("key", { ascending: true });
+
+      if (error) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to load AI image prompts",
+          details: error,
+        });
+      }
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { prompts: data ?? [] },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/admin/ai-image-prompts/:key", async (req, res, next) => {
+    try {
+      const admin = await requireAdminUser(req.headers.authorization);
+      const { key } = adminAiImagePromptKeyParamsSchema.parse(req.params);
+      const body = adminAiImagePromptPatchSchema.parse(req.body ?? {});
+
+      const patch: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+        updated_by: admin.id,
+      };
+      if (body.prompt !== undefined) patch.prompt = body.prompt;
+      if (body.model_variant !== undefined) patch.model_variant = body.model_variant;
+      if (body.aspect_ratio !== undefined) patch.aspect_ratio = body.aspect_ratio;
+      if (body.safety_filters !== undefined) patch.safety_filters = body.safety_filters;
+      if (body.is_active !== undefined) patch.is_active = body.is_active;
+
+      const { data, error } = await supabaseAdmin
+        .from("scoremax_ai_image_prompts")
+        .update(patch)
+        .eq("key", key)
+        .select(
+          "key, description, prompt, model, model_variant, aspect_ratio, safety_filters, is_active, updated_by, created_at, updated_at",
+        )
+        .maybeSingle();
+
+      if (error) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to update AI image prompt",
+          details: error,
+        });
+      }
+
+      if (!data) {
+        throw new ApiError({
+          code: "VALIDATION_ERROR",
+          status: 404,
+          message: "Prompt key not found",
+        });
+      }
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { prompt: data },
         error: null,
       });
     } catch (error) {

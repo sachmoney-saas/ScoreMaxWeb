@@ -1,32 +1,16 @@
 import { Router } from "express";
 import { optionalAnalysisLangBodySchema } from "@shared/oneshot";
-import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-jobs";
 import { ApiError } from "../lib/errors";
 import { validateBody } from "../lib/validate";
 import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
+import { refreshScanSessionProgress, type ScanSessionRow } from "../lib/analysis-orchestration";
 import {
-  assertFreemiumQuotaAvailable,
-  buildPayload,
-  createAnalysisJob,
-  loadActiveFreemiumJobForUser,
-  loadRequiredAssets,
-  refreshScanSessionProgress,
-  type ScanSessionRow,
-} from "../lib/analysis-orchestration";
+  getLatestPotentialImageForUser,
+  triggerOnboardingPotentialImage,
+} from "../lib/onboarding-potential-image";
 import { requireUserId } from "../lib/auth";
 import { supabaseAdmin } from "../lib/supabase-admin";
 
-/**
- * Marque l'utilisateur comme "onboardé" dès qu'un job d'analyse a été créé /
- * réutilisé depuis la séance d'onboarding. On ne peut PAS attendre la
- * complétion du worker ScanFace : si l'API tombe, si le process est tué, ou
- * si l'utilisateur recharge la page pendant le run, on enverrait sinon
- * l'utilisateur revoir l'intro (perte d'état React local + flag profil
- * encore false). L'acte « j'ai capturé mes photos + j'ai cliqué lancer »
- * est l'événement qui clôt l'onboarding, indépendamment du résultat.
- *
- * Idempotent : un UPDATE sur un profil déjà flaggé ne change rien.
- */
 async function markOnboardingCompleted(userId: string): Promise<void> {
   const { error } = await supabaseAdmin
     .from("profiles")
@@ -38,6 +22,28 @@ async function markOnboardingCompleted(userId: string): Promise<void> {
       code: "INTERNAL_SERVER_ERROR",
       status: 500,
       message: "Unable to mark onboarding as completed",
+      details: error,
+    });
+  }
+}
+
+async function markScanSessionReady(sessionId: string, userId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from("scan_sessions")
+    .update({
+      status: "ready",
+      ready_at: now,
+      updated_at: now,
+    })
+    .eq("id", sessionId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to mark scan session as ready",
       details: error,
     });
   }
@@ -65,7 +71,6 @@ async function loadReadyOnboardingSession(userId: string): Promise<ScanSessionRo
 
   let session = data as ScanSessionRow | null;
   if (!session) {
-    // Fallback: some users may only have a manual_rescan session while finishing onboarding.
     const { data: fallbackSession, error: fallbackError } = await supabaseAdmin
       .from("scan_sessions")
       .select("id, user_id, source, status, required_asset_count, completed_asset_count")
@@ -136,80 +141,23 @@ export function createV1OnboardingRouter(): Router {
         assertSupportedAnalysisLang(lang);
 
         const userId = await requireUserId(req.headers.authorization);
-
-        // Freemium quota: each account is entitled to a single non-failed
-        // freemium analysis. If one already exists (any session), reuse it
-        // instead of creating a duplicate. This also covers the case of users
-        // who started a fresh onboarding session after abandoning a previous
-        // one whose analysis already ran.
-        const existingFreemium = await loadActiveFreemiumJobForUser(userId);
-        if (existingFreemium) {
-          if (existingFreemium.status === "queued") {
-            dispatchAnalysisJob(existingFreemium.id);
-          }
-
-          // Un job freemium existe déjà → l'utilisateur a forcément déjà
-          // franchi la capture. On garantit que le flag profil reflète
-          // cet état même si un précédent run a échoué et n'a jamais flippé
-          // le flag (ancien comportement de markSessionCompleted).
-          await markOnboardingCompleted(userId);
-
-          res.status(200).json({
-            ok: true,
-            httpStatus: 200,
-            data: {
-              job: {
-                id: existingFreemium.id,
-                status: existingFreemium.status,
-              },
-            },
-            error: null,
-          });
-          return;
-        }
-
         const session = await loadReadyOnboardingSession(userId);
-        // Defence in depth: the DB partial unique index also enforces this,
-        // but checking up-front yields a clean 409 instead of a 23505 surprise.
-        await assertFreemiumQuotaAvailable(userId);
 
-        const assets = await loadRequiredAssets({ userId, sessionId: session.id });
-        const payload = await buildPayload({
-          userId,
-          sessionId: session.id,
-          assets,
-          source: "onboarding",
-          tier: "freemium",
-          ...(lang !== undefined ? { lang } : {}),
-        });
-        const jobId = await createAnalysisJob({
-          userId,
-          sessionId: session.id,
-          payload,
-          triggerSource: "onboarding_auto",
-          tier: "freemium",
-        });
-        await persistAnalysisJobAssets({
-          jobId,
-          userId,
-          sessionId: session.id,
-          payload,
-        });
-
-        // Onboarding terminé du point de vue produit dès que le job est
-        // persisté. Le succès / échec du worker ScanFace ne doit JAMAIS
-        // renvoyer l'utilisateur sur la page d'intro.
+        await markScanSessionReady(session.id, userId);
         await markOnboardingCompleted(userId);
 
-        dispatchAnalysisJob(jobId);
+        const generationId = await triggerOnboardingPotentialImage({
+          userId,
+          sessionId: session.id,
+        });
 
-        res.status(202).json({
+        res.status(200).json({
           ok: true,
-          httpStatus: 202,
+          httpStatus: 200,
           data: {
-            job: {
-              id: jobId,
-              status: "queued",
+            generation: {
+              id: generationId,
+              status: "pending",
             },
           },
           error: null,
@@ -219,6 +167,22 @@ export function createV1OnboardingRouter(): Router {
       }
     },
   );
+
+  router.get("/onboarding/potential-image", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const payload = await getLatestPotentialImageForUser(userId);
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { potential_image: payload },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get("/onboarding/analysis/:jobId", async (req, res, next) => {
     try {

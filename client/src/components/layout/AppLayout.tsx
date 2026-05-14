@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  Wand2,
   LogOut,
   Loader2,
   ChevronRight,
@@ -496,6 +497,12 @@ function ModernAppSidebar() {
           label: "Recommandations",
           icon: Sparkles,
           isActive: (path) => path.startsWith("/admin/recommendations"),
+        },
+        {
+          href: "/admin/ai-prompts",
+          label: "Prompts IA",
+          icon: Wand2,
+          isActive: (path) => path.startsWith("/admin/ai-prompts"),
         },
       ]
     : [];

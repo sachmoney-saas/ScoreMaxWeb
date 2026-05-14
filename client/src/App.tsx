@@ -19,6 +19,7 @@ import WorkerDetails from "@/pages/WorkerDetails";
 import AgeDetails from "@/pages/AgeDetails";
 import AdminPage from "@/pages/Admin";
 import AdminAnalysisJobDetailPage from "@/pages/AdminAnalysisJobDetail";
+import AdminAiPromptsPage from "@/pages/AdminAiPrompts";
 import {
   AdminRecommendationsOverview,
   AdminRecommendationsWorker,
@@ -207,6 +208,9 @@ function Router() {
         </Route>
         <Route path="/admin/recommendations/:worker">
           <ProtectedRoute component={AdminRecommendationsWorker} />
+        </Route>
+        <Route path="/admin/ai-prompts">
+          <ProtectedRoute component={AdminAiPromptsPage} />
         </Route>
 
         {/* Fallback */}

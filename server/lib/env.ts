@@ -81,3 +81,16 @@ export function getR2Env(): {
     bucket: requireEnv("R2_BUCKET"),
   };
 }
+
+/** OneShot API (nano-banana image jobs) — server-side only. */
+export function getOneShotEnv(): {
+  apiKey: string;
+  baseUrl: string;
+  timeoutMs: number;
+} {
+  return {
+    apiKey: requireEnv("ONESHOT_API_KEY"),
+    baseUrl: readEnv("ONESHOT_API_BASE_URL") ?? "https://api.oneshotapi.com",
+    timeoutMs: parseTimeoutMs(readEnv("ONESHOT_API_TIMEOUT_MS")),
+  };
+}

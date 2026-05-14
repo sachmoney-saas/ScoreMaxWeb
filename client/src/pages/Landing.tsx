@@ -914,7 +914,7 @@ export default function Landing() {
 
             <motion.div
               variants={itemVariants}
-              className="relative z-0 flex w-full max-w-[min(100%,88rem)] flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
+              className="relative z-0 flex w-full max-w-[min(100%,96rem)] flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
             >
               <LandingCompleteAnalysisOrbit language={language}>
                 <img
@@ -924,7 +924,7 @@ export default function Landing() {
                     fr: "Modèle d'analyse complète du visage",
                   })}
                   loading="lazy"
-                  className="mx-auto block h-auto w-full max-w-full object-contain object-bottom select-none max-h-[min(88vh,920px)]"
+                  className="mx-auto block h-auto w-full max-w-full object-contain object-bottom select-none max-h-[min(93vh,1080px)]"
                 />
               </LandingCompleteAnalysisOrbit>
             </motion.div>

@@ -36,6 +36,9 @@ function CompleteAnalysisColoringCard({ language }: { language: AppLanguage }) {
 
   return (
     <div className="w-full min-w-0 max-w-[20rem]">
+      <p className={cn(cardTitleClass, "mb-2.5 !mt-0 sm:mb-3")}>
+        {i18n(language, { en: "Coloring", fr: "Colorimétrie" })}
+      </p>
       <div className="grid grid-cols-4 gap-x-2.5 gap-y-3 rounded-xl border border-white/14 bg-white/[0.04] p-3 sm:gap-x-3 sm:p-3.5">
         {swatches.map((s) => (
           <div key={s.zone} className="flex min-w-0 flex-col items-center gap-2">
@@ -49,9 +52,6 @@ function CompleteAnalysisColoringCard({ language }: { language: AppLanguage }) {
           </div>
         ))}
       </div>
-      <p className="mt-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-400 sm:text-xs">
-        {i18n(language, { en: "Contrast · medium", fr: "Contraste · moyen" })}
-      </p>
     </div>
   );
 }
@@ -112,7 +112,12 @@ export function LandingCompleteAnalysisOrbit({
   const radarData = React.useMemo(() => buildRadarData(language), [language]);
 
   const radarCard = (
-    <div className={cn(floatCardClassName, "w-full min-w-0 max-w-[min(100%,32rem)]")}>
+    <div
+      className={cn(
+        floatCardClassName,
+        "w-full min-w-0 max-w-[min(100%,32rem)] py-2 sm:py-2.5",
+      )}
+    >
       <div className="-mx-1 w-[calc(100%+0.5rem)] max-w-none">
         <WorkerSignatureRadar
           data={radarData}
@@ -124,9 +129,6 @@ export function LandingCompleteAnalysisOrbit({
           className="max-w-none"
         />
       </div>
-      <p className={cardTitleClass}>
-        {i18n(language, { en: "Web", fr: "Toile" })}
-      </p>
     </div>
   );
 
@@ -155,9 +157,6 @@ export function LandingCompleteAnalysisOrbit({
       )}
     >
       <CompleteAnalysisColoringCard language={language} />
-      <p className={cn(cardTitleClass, "mt-2")}>
-        {i18n(language, { en: "Coloring", fr: "Colorimétrie" })}
-      </p>
     </div>
   );
 
@@ -166,9 +165,9 @@ export function LandingCompleteAnalysisOrbit({
       <div
         className={cn(
           "flex flex-col items-stretch",
-          /* Centre un peu plus large que les côtés pour garder le portrait lisible sans écraser les schémas. */
-          "lg:grid lg:grid-cols-[1.05fr_1.45fr_1.05fr] lg:items-start lg:justify-center",
-          "lg:gap-x-4 xl:grid-cols-[1.1fr_1.3fr_1.1fr] xl:gap-x-7 2xl:gap-x-12",
+          /* Centre plus large : portrait hero lisible sans écraser les schémas latéraux. */
+          "lg:grid lg:grid-cols-[0.92fr_1.82fr_0.92fr] lg:items-start lg:justify-center",
+          "lg:gap-x-4 xl:grid-cols-[0.88fr_1.92fr_0.88fr] xl:gap-x-7 2xl:gap-x-12",
         )}
       >
         <div
@@ -191,7 +190,7 @@ export function LandingCompleteAnalysisOrbit({
           </FloatPane>
         </div>
 
-        <div className="relative z-10 order-first w-full min-w-0 max-w-[min(100%,64rem)] justify-self-center lg:order-none">
+        <div className="relative z-10 order-first w-full min-w-0 max-w-[min(100%,78rem)] justify-self-center lg:order-none lg:self-end">
           {children}
         </div>
 

@@ -56,6 +56,35 @@ export async function downloadR2Object(params: {
   return new Blob([await response.Body.transformToByteArray()]);
 }
 
+export async function uploadR2Object(params: {
+  bucket?: string;
+  key: string;
+  body: Buffer | Uint8Array;
+  contentType: string;
+}): Promise<void> {
+  const command = new PutObjectCommand({
+    Bucket: params.bucket ?? r2Env.bucket,
+    Key: params.key,
+    Body: params.body,
+    ContentType: params.contentType,
+  });
+  await r2Client.send(command);
+}
+
+export function getR2SignedDownloadUrl(params: {
+  bucket?: string;
+  key: string;
+  expiresInSeconds?: number;
+}): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: params.bucket ?? r2Env.bucket,
+    Key: params.key,
+  });
+  return getSignedUrl(r2Client, command, {
+    expiresIn: params.expiresInSeconds ?? 300,
+  });
+}
+
 export async function deleteR2Objects(params: {
   bucket?: string;
   keys: string[];

@@ -4,6 +4,7 @@ import { isPlan } from "@shared/schema";
 import { ApiError } from "../errors";
 import { supabaseAdmin } from "../supabase-admin";
 import { logger } from "../logger";
+import { maybeKickoffPaidAnalysisForUser } from "../post-payment-analysis";
 import { DODO_METADATA_USER_ID_KEY } from "./checkout";
 
 type DodoSubscriptionStatus = DodoSubscription["status"];
@@ -160,7 +161,7 @@ async function upsertSubscriptionRow(params: {
   subscription: DodoSubscription;
   existing: DbSubscriptionRow | null;
   plan: Plan | null;
-}): Promise<{ id: string; isFirstInsert: boolean }> {
+}): Promise<{ id: string; isFirstInsert: boolean; dbStatus: SubscriptionStatus }> {
   const { subscription, userId, existing, plan } = params;
 
   const dbStatus = mapDodoStatusToDbStatus(
@@ -201,7 +202,7 @@ async function upsertSubscriptionRow(params: {
       });
     }
 
-    return { id: existing.id, isFirstInsert: false };
+    return { id: existing.id, isFirstInsert: false, dbStatus };
   }
 
   const { data, error } = await supabaseAdmin
@@ -219,7 +220,7 @@ async function upsertSubscriptionRow(params: {
     });
   }
 
-  return { id: data.id as string, isFirstInsert: true };
+  return { id: data.id as string, isFirstInsert: true, dbStatus };
 }
 
 async function insertSubscriptionEvent(params: {
@@ -290,7 +291,7 @@ export async function applyDodoSubscriptionEvent(params: {
   );
   const plan = extractPlan(subscription);
 
-  const { id, isFirstInsert } = await upsertSubscriptionRow({
+  const { id, isFirstInsert, dbStatus } = await upsertSubscriptionRow({
     userId,
     subscription,
     existing,
@@ -307,6 +308,19 @@ export async function applyDodoSubscriptionEvent(params: {
       dodo_status: subscription.status,
     },
   });
+
+  if (
+    eventType === "subscription.active" &&
+    isFirstInsert &&
+    dbStatus === "active"
+  ) {
+    void maybeKickoffPaidAnalysisForUser(userId).catch((err) => {
+      logger.error(
+        { err, userId },
+        "post-payment: failed to kick off analysis after first subscription activation",
+      );
+    });
+  }
 
   return { userId, subscriptionRowId: id };
 }

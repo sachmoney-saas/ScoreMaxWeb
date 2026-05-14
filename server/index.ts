@@ -8,6 +8,7 @@ import {
   reconcileAnalysisJobsTick,
   startAnalysisJobsWatchdog,
 } from "./lib/analysis-jobs";
+import { recoverPendingPotentialImageGenerations } from "./lib/onboarding-potential-image";
 import { logger } from "./lib/logger";
 import { serverEnv } from "./lib/env";
 import { mapUnknownError } from "./lib/errors";
@@ -109,6 +110,7 @@ app.use(
     setTimeout(() => {
       void (async () => {
         await recoverAnalysisJobsOnStartup({ dispatchQueuedJobs: true });
+        await recoverPendingPotentialImageGenerations();
         // Premier passage immédiat puis cycle périodique pour rattraper les
         // jobs orphelins (process tué pendant un await, etc.).
         await reconcileAnalysisJobsTick();
