@@ -12,16 +12,16 @@ export type OnboardingGateStatus =
  * Onboardé = `profiles.has_completed_onboarding === true`.
  *
  * Côté serveur (`POST /v1/onboarding/complete`), ce flag est positionné
- * **dès que le job d'analyse est créé / réutilisé**, pas à la complétion
- * du worker ScanFace. Le rationnel :
+ * **dès que les photos onboarding sont complètes et que le teaser potentiel
+ * est lancé côté backend**. La vraie analyse ScoreMax reste derrière le
+ * paywall et démarre après paiement.
  *
- * - Un échec d'analyse (timeout ScanFace, schéma invalide, slot manquant,
- *   crash du process pendant le run, redéploiement Railway, etc.) ne doit
- *   jamais renvoyer l'utilisateur sur la page marketing : il a déjà fait
- *   tout son boulot (capture des 8 photos + clic « Lancer »).
- * - Un refresh navigateur pendant l'analyse ne doit pas non plus le
- *   piéger sur l'écran 0 : la state React locale (`onboardingJobId`,
- *   `stepIndex`) est perdue, mais le flag DB persiste.
+ * - Un échec de teaser potentiel (timeout OneShot, crash process, redéploiement
+ *   Railway, etc.) ne doit jamais renvoyer l'utilisateur sur la page marketing :
+ *   il a déjà fait tout son boulot (capture des 8 photos + clic « Lancer »).
+ * - Un refresh navigateur pendant la génération du teaser ne doit pas non plus
+ *   le piéger sur l'écran 0 : la state React locale (`stepIndex`) est perdue,
+ *   mais le flag DB persiste.
  *
  * On ne fait plus de double-check via `useLatestFaceAnalysis` : c'était
  * une défense contre les drifts admin (suppressions manuelles de jobs)

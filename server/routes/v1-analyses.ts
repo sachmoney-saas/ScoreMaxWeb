@@ -30,7 +30,7 @@ import {
   type ScanSessionRow,
 } from "../lib/analysis-orchestration";
 import { requireAdminUser, requireUserId } from "../lib/auth";
-import { hasPremiumAccess, requirePremiumAccess } from "../lib/subscriptions";
+import { requirePremiumAccess } from "../lib/subscriptions";
 import {
   assertSubscriberStandardAnalysisAllowed,
   getSubscriberStandardAnalysisQuota,
@@ -44,7 +44,7 @@ import { supabaseAdmin } from "../lib/supabase-admin";
 import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 import {
   assertCallerCanAccessAnalysisJob,
-  assertCallerIsSubjectUserOrAdmin,
+  assertCallerHasPremiumOrAdminForSubject,
   loadAnalysisJobOwner,
 } from "../lib/analysis-user-access";
 
@@ -455,6 +455,7 @@ export function createV1AnalysesRouter(): Router {
   router.get("/analyses/jobs/:jobId", async (req, res, next) => {
     try {
       const userId = await requireUserId(req.headers.authorization);
+      await requirePremiumAccess(userId);
       const params = analysisJobParamsSchema.parse(req.params);
       const { data: job, error } = await supabaseAdmin
         .from("analysis_jobs")
@@ -511,16 +512,20 @@ export function createV1AnalysesRouter(): Router {
 
         const { userId, sessionId, source } = metadata.data;
 
-        // Subscription clamp: only premium users (active sub OR admin) can
-        // request standard runs. Non-premium callers are forced to freemium
-        // (1 run per worker). Premium callers can opt into freemium by
+        await assertCallerHasPremiumOrAdminForSubject(
+          req.headers.authorization,
+          userId,
+        );
+        await requirePremiumAccess(userId);
+
+        // Hard paywall: this legacy launch endpoint is still auth-bound and
+        // premium-only. Premium callers can opt into a single-run payload by
         // sending `runs: 1` on every worker.
-        const isPremium = await hasPremiumAccess(userId);
         const allRequestedSingleRun = payload.analyses.every(
           (analysis) => analysis.runs === 1,
         );
         const tier: AnalysisTier =
-          !isPremium || allRequestedSingleRun ? "freemium" : "standard";
+          allRequestedSingleRun ? "freemium" : "standard";
 
         // Always normalize `runs` to the resolved tier so the upstream call,
         // the persisted payload and the DB row are mutually consistent.
@@ -584,7 +589,10 @@ export function createV1AnalysesRouter(): Router {
       try {
         const { userId } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
 
-        await assertCallerIsSubjectUserOrAdmin(req.headers.authorization, userId);
+        await assertCallerHasPremiumOrAdminForSubject(
+          req.headers.authorization,
+          userId,
+        );
 
         const { data: jobs, error: jobsError } = await supabaseAdmin
           .from("analysis_jobs")
@@ -686,6 +694,10 @@ export function createV1AnalysesRouter(): Router {
           params.jobId,
           userId,
         );
+        await assertCallerHasPremiumOrAdminForSubject(
+          req.headers.authorization,
+          ownerId,
+        );
 
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
@@ -750,6 +762,10 @@ export function createV1AnalysesRouter(): Router {
           req.headers.authorization,
           params.jobId,
           userId,
+        );
+        await assertCallerHasPremiumOrAdminForSubject(
+          req.headers.authorization,
+          ownerId,
         );
 
         const { data: job, error: jobError } = await supabaseAdmin
@@ -874,6 +890,10 @@ export function createV1AnalysesRouter(): Router {
           params.jobId,
           userId,
         );
+        await assertCallerHasPremiumOrAdminForSubject(
+          req.headers.authorization,
+          ownerId,
+        );
 
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
@@ -995,7 +1015,10 @@ export function createV1AnalysesRouter(): Router {
           typeof latestAnalysisQuerySchema
         >;
 
-        await assertCallerIsSubjectUserOrAdmin(req.headers.authorization, userId);
+        await assertCallerHasPremiumOrAdminForSubject(
+          req.headers.authorization,
+          userId,
+        );
 
         const { data: latestJob, error: latestJobError } = await supabaseAdmin
           .from("analysis_jobs")

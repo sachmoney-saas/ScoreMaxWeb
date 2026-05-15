@@ -9,6 +9,7 @@ import {
   triggerOnboardingPotentialImage,
 } from "../lib/onboarding-potential-image";
 import { requireUserId } from "../lib/auth";
+import { logger } from "../lib/logger";
 import { supabaseAdmin } from "../lib/supabase-admin";
 
 async function markOnboardingCompleted(userId: string): Promise<void> {
@@ -129,6 +130,41 @@ async function loadReadyOnboardingSession(userId: string): Promise<ScanSessionRo
   return refreshed;
 }
 
+async function hasCompletedOnboarding(userId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("has_completed_onboarding")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return false;
+  }
+
+  return data.has_completed_onboarding === true;
+}
+
+async function ensurePotentialImageForCompletedOnboarding(userId: string) {
+  if (!(await hasCompletedOnboarding(userId))) {
+    return null;
+  }
+
+  try {
+    const session = await loadReadyOnboardingSession(userId);
+    await triggerOnboardingPotentialImage({
+      userId,
+      sessionId: session.id,
+    });
+    return getLatestPotentialImageForUser(userId);
+  } catch (error) {
+    logger.warn(
+      { err: error, userId },
+      "Unable to auto-start onboarding potential image",
+    );
+    return null;
+  }
+}
+
 export function createV1OnboardingRouter(): Router {
   const router = Router();
 
@@ -171,7 +207,9 @@ export function createV1OnboardingRouter(): Router {
   router.get("/onboarding/potential-image", async (req, res, next) => {
     try {
       const userId = await requireUserId(req.headers.authorization);
-      const payload = await getLatestPotentialImageForUser(userId);
+      const payload =
+        (await getLatestPotentialImageForUser(userId)) ??
+        (await ensurePotentialImageForCompletedOnboarding(userId));
 
       res.status(200).json({
         ok: true,

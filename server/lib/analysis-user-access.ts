@@ -1,5 +1,6 @@
 import { requireAdminUser, requireUserId } from "./auth";
 import { ApiError } from "./errors";
+import { requirePremiumAccess } from "./subscriptions";
 import { supabaseAdmin } from "./supabase-admin";
 
 export async function loadAnalysisJobOwner(jobId: string): Promise<string> {
@@ -30,6 +31,23 @@ export async function assertCallerIsSubjectUserOrAdmin(
   if (callerId === subjectUserId) {
     return;
   }
+  await requireAdminUser(authorizationHeader);
+}
+
+/**
+ * Paywall serveur pour les surfaces d'analyse : le propriétaire doit être
+ * premium, tandis qu'un admin peut consulter en support / back-office.
+ */
+export async function assertCallerHasPremiumOrAdminForSubject(
+  authorizationHeader: string | undefined,
+  subjectUserId: string,
+): Promise<void> {
+  const callerId = await requireUserId(authorizationHeader);
+  if (callerId === subjectUserId) {
+    await requirePremiumAccess(callerId);
+    return;
+  }
+
   await requireAdminUser(authorizationHeader);
 }
 

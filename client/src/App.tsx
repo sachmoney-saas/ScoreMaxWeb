@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
+import { useOnboardingPotentialImage } from "@/hooks/use-onboarding-potential-image";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { WaveBackground } from "@/components/background/WaveBackground";
@@ -37,6 +38,7 @@ import Confidentialite from "@/pages/Confidentialite";
 import { AUTH_CONFIG } from "@/config/auth";
 import { LanguageProvider } from "@/lib/i18n";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { isOnboardingPotentialTeaserActive } from "@/lib/onboarding-flow-storage";
 
 function FullScreenLoader() {
   return (
@@ -128,6 +130,15 @@ function BillingRoute() {
 function OnboardingRoute() {
   const { status } = useOnboardingGate();
   const { user, hasPremiumAccess, isAdmin, isLoading: authLoading } = useAuth();
+  const shouldCheckPotentialTeaser =
+    !!user && status === "ok" && !hasPremiumAccess && !isAdmin;
+  const persistedPotentialTeaser = isOnboardingPotentialTeaserActive();
+  const {
+    data: potentialImage,
+    isLoading: isPotentialImageLoading,
+  } = useOnboardingPotentialImage({
+    enabled: shouldCheckPotentialTeaser,
+  });
 
   if (status === "loading" || authLoading) {
     return <FullScreenLoader />;
@@ -142,6 +153,18 @@ function OnboardingRoute() {
   }
 
   if (status === "ok" && !hasPremiumAccess && !isAdmin) {
+    if (persistedPotentialTeaser || potentialImage) {
+      return (
+        <ErrorBoundary>
+          <Onboarding initialStep={1} />
+        </ErrorBoundary>
+      );
+    }
+
+    if (isPotentialImageLoading) {
+      return <FullScreenLoader />;
+    }
+
     return <Redirect to="/billing" />;
   }
 

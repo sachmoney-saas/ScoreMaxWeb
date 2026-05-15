@@ -273,6 +273,7 @@ export async function triggerOnboardingPotentialImage(params: {
     .select("id")
     .eq("user_id", params.userId)
     .eq("status", "pending")
+    .not("oneshot_job_id", "is", null)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -454,7 +455,7 @@ export async function getLatestPotentialImageForUser(userId: string): Promise<Po
   const { data, error } = await supabaseAdmin
     .from("scoremax_ai_image_generations")
     .select(
-      "id, status, r2_bucket, r2_key, error_code, error_message, created_at, source_scan_asset_id",
+      "id, status, r2_bucket, r2_key, error_code, error_message, created_at, source_scan_asset_id, oneshot_job_id",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
@@ -474,11 +475,25 @@ export async function getLatestPotentialImageForUser(userId: string): Promise<Po
     error_message: string | null;
     created_at: string;
     source_scan_asset_id: string | null;
+    oneshot_job_id: string | null;
   };
 
   const status = row.status as PotentialImagePayload["status"];
   if (status !== "pending" && status !== "completed" && status !== "failed") {
     return null;
+  }
+
+  if (status === "pending" && !row.oneshot_job_id) {
+    await markGenerationFailed({
+      generationId: row.id,
+      code: "ONESHOT_JOB_MISSING",
+      message: "Pending OneShot generation has no job id",
+    });
+    return null;
+  }
+
+  if (status === "pending" && row.oneshot_job_id) {
+    dispatchPotentialImagePolling(row.id);
   }
 
   let signedUrl: string | null = null;

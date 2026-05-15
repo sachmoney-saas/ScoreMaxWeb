@@ -36,7 +36,7 @@ import {
 import { FaceCaptureView } from "@/components/FaceCaptureView";
 import { WaveBackground } from "@/components/background/WaveBackground";
 import { PotentialPreviewCard } from "@/components/onboarding/PotentialPreviewCard";
-import { OnboardingGlassLoader } from "@/components/onboarding/OnboardingGlassLoader";
+import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
 import { useOnboardingScanStatus } from "@/hooks/use-supabase";
@@ -62,6 +62,11 @@ import {
 } from "@/lib/auth-page-shell-styles";
 import { onboardingPrimaryCtaClassName } from "@/lib/cta-button-styles";
 import { i18n, useAppLanguage } from "@/lib/i18n";
+import {
+  clearOnboardingFlowState,
+  readOnboardingFlowState,
+  writeOnboardingFlowState,
+} from "@/lib/onboarding-flow-storage";
 
 const ONBOARDING_POSE_TO_ASSET: Record<PoseId, OnboardingScanAssetCode> = {
   frontal: "FACE_FRONT",
@@ -76,13 +81,53 @@ const ONBOARDING_POSE_TO_ASSET: Record<PoseId, OnboardingScanAssetCode> = {
 
 const ONBOARDING_TOTAL_STEPS = 2;
 
-export default function Onboarding() {
+const ONBOARDING_SCAN_UPLOAD_STEPS = [
+  {
+    en: "Uploading your photos…",
+    fr: "Envoi de tes photos…",
+  },
+  {
+    en: "Securing your data…",
+    fr: "Sécurisation de tes données…",
+  },
+  {
+    en: "Building your face map…",
+    fr: "Cartographie de ton visage…",
+  },
+] as const;
+
+const ONBOARDING_SCAN_SESSION_STEPS = [
+  {
+    en: "Loading your session…",
+    fr: "Chargement de ta session…",
+  },
+  {
+    en: "Syncing your progress…",
+    fr: "Synchronisation de ta progression…",
+  },
+  {
+    en: "Almost ready…",
+    fr: "Presque prêt…",
+  },
+] as const;
+
+type OnboardingProps = {
+  initialStep?: number;
+};
+
+export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const language = useAppLanguage();
   const scanAssetLabels = getScanAssetLabels(language);
   const [, setLocation] = useLocation();
   const { user, hasPremiumAccess, isAdmin } = useAuth();
   const { status: gateStatus } = useOnboardingGate();
-  const [stepIndex, setStepIndex] = React.useState(0);
+  const [stepIndex, setStepIndex] = React.useState(() => {
+    if (initialStep !== undefined) {
+      return Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, initialStep));
+    }
+    const persisted = readOnboardingFlowState();
+    return persisted?.step && persisted.step >= 1 ? 1 : 0;
+  });
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
   const [showCameraCapture, setShowCameraCapture] = React.useState(false);
@@ -100,7 +145,9 @@ export default function Onboarding() {
    * la redirection automatique du gate (le serveur a déjà flippé
    * `has_completed_onboarding=true`).
    */
-  const [hasStartedRun, setHasStartedRun] = React.useState(false);
+  const [hasStartedRun, setHasStartedRun] = React.useState(
+    () => stepIndex >= 1,
+  );
 
   const isPotentialStep = stepIndex === 1;
 
@@ -287,6 +334,7 @@ export default function Onboarding() {
         );
       }
 
+      writeOnboardingFlowState({ step: 1 });
       setHasStartedRun(true);
       await queryClient.invalidateQueries({
         queryKey: ["onboarding-potential-image", user.id],
@@ -324,6 +372,7 @@ export default function Onboarding() {
        * est déjà true côté serveur depuis POST /onboarding/complete — pas de
        * contournement via le cache client.
        */
+      clearOnboardingFlowState();
       setLocation("/billing");
     } finally {
       setIsUnlocking(false);
@@ -505,19 +554,16 @@ export default function Onboarding() {
                 ) : isOnboardingStep0Blocking ? (
                   <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
                     <div className="mx-auto w-full max-w-sm">
-                      <OnboardingGlassLoader
-                        message={i18n(
-                          language,
+                      <OnboardingMultistepGlassLoader
+                        language={language}
+                        steps={
                           isUploadingCaptures
-                            ? {
-                                en: "Uploading your scan…",
-                                fr: "Envoi de ton scan…",
-                              }
-                            : {
-                                en: "Loading your session…",
-                                fr: "Chargement de ta session…",
-                              },
-                        )}
+                            ? ONBOARDING_SCAN_UPLOAD_STEPS
+                            : ONBOARDING_SCAN_SESSION_STEPS
+                        }
+                        cycleResetKey={
+                          isUploadingCaptures ? "upload" : "session"
+                        }
                       />
                     </div>
                   </div>

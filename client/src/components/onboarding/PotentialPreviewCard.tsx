@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import type { OnboardingPotentialImage } from "@/hooks/use-onboarding-potential-image";
-import { OnboardingGlassLoader } from "@/components/onboarding/OnboardingGlassLoader";
+import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
 import { OnboardingPotentialAnalysisMock } from "@/components/onboarding/OnboardingPotentialAnalysisMock";
 import {
   getScoreRank,
@@ -20,6 +20,72 @@ type Props = {
 
 /** Score global fictif (0–100) pour positionner le curseur comme sur la fiche analyse. */
 const POTENTIAL_SCORE_TEASER_GLOBAL = 87;
+
+const POTENTIAL_MULTISTEP_STEPS = [
+  {
+    en: "Reading your scan…",
+    fr: "Lecture de ton scan…",
+  },
+  {
+    en: "Generating your potential…",
+    fr: "Génération de ton potentiel…",
+  },
+  {
+    en: "Finalizing the preview…",
+    fr: "Finalisation de l’aperçu…",
+  },
+] as const;
+
+type DecodedImageState = "idle" | "loading" | "ready" | "error";
+
+function useDecodedImage(src: string | null): DecodedImageState {
+  const [state, setState] = React.useState<DecodedImageState>(
+    src ? "loading" : "idle",
+  );
+
+  React.useEffect(() => {
+    if (!src) {
+      setState("idle");
+      return;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.decoding = "async";
+
+    const markReady = () => {
+      const maybeDecode = typeof img.decode === "function" ? img.decode() : null;
+      void Promise.resolve(maybeDecode)
+        .catch(() => undefined)
+        .then(() => {
+          if (!cancelled) {
+            setState("ready");
+          }
+        });
+    };
+
+    setState("loading");
+    img.onload = markReady;
+    img.onerror = () => {
+      if (!cancelled) {
+        setState("error");
+      }
+    };
+    img.src = src;
+
+    if (img.complete && img.naturalWidth > 0) {
+      markReady();
+    }
+
+    return () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [src]);
+
+  return state;
+}
 
 function tierLadderCursorPercent(score0to100: number, rankIndex: number): number {
   const n = SCORE_TIERS.length;
@@ -132,59 +198,28 @@ export function PotentialPreviewCard({
   const signedUrl = potentialImage?.signed_url ?? null;
   const leftSrc = potentialImage?.mask_overlay_signed_url ?? null;
 
-  const [leftDecoded, setLeftDecoded] = React.useState(false);
-  const [rightDecoded, setRightDecoded] = React.useState(false);
-
-  React.useEffect(() => {
-    setLeftDecoded(false);
-  }, [leftSrc]);
-
-  React.useEffect(() => {
-    setRightDecoded(false);
-  }, [signedUrl]);
-
   const status = potentialImage?.status ?? "pending";
   const isReady = status === "completed" && !!signedUrl;
   const isFailed = status === "failed";
   const rightSrc = isReady && signedUrl ? signedUrl : null;
-
-  const blockingMessage = i18n(language, {
-    en: "Generating your potential…",
-    fr: "Génération de ton potentiel…",
-  });
+  const leftDecoded = useDecodedImage(leftSrc);
+  const rightDecoded = useDecodedImage(rightSrc);
 
   const showBlockingLoader =
     !isFailed &&
-    ((isLoading && potentialImage == null) ||
-      (!!leftSrc && !leftDecoded) ||
-      (!!rightSrc && !rightDecoded));
+    (isLoading ||
+      !isReady ||
+      (!!leftSrc && leftDecoded !== "ready" && leftDecoded !== "error") ||
+      (!!rightSrc && rightDecoded !== "ready" && rightDecoded !== "error"));
 
   if (showBlockingLoader) {
     return (
       <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-1 py-2 sm:px-2 sm:py-4">
-        <OnboardingGlassLoader message={blockingMessage} />
-        {leftSrc ? (
-          <img
-            src={leftSrc}
-            alt=""
-            decoding="async"
-            aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
-            onLoad={() => setLeftDecoded(true)}
-            onError={() => setLeftDecoded(true)}
-          />
-        ) : null}
-        {rightSrc ? (
-          <img
-            src={rightSrc}
-            alt=""
-            decoding="async"
-            aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-px w-px opacity-0"
-            onLoad={() => setRightDecoded(true)}
-            onError={() => setRightDecoded(true)}
-          />
-        ) : null}
+        <OnboardingMultistepGlassLoader
+          language={language}
+          steps={POTENTIAL_MULTISTEP_STEPS}
+          cycleResetKey="potential"
+        />
       </div>
     );
   }
@@ -265,7 +300,10 @@ export function PotentialPreviewCard({
               <div className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.12),transparent_55%),linear-gradient(180deg,rgba(20,28,40,0.55),rgba(10,16,22,0.75))] p-3">
                 <Loader2 className="h-6 w-6 shrink-0 animate-spin text-white/80" />
                 <p className="text-center text-[11px] font-medium leading-snug text-white/85 sm:text-xs">
-                  {blockingMessage}
+                  {i18n(language, {
+                    en: "Generating your potential…",
+                    fr: "Génération de ton potentiel…",
+                  })}
                 </p>
               </div>
             )}
