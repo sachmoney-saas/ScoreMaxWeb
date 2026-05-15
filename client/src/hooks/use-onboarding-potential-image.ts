@@ -7,6 +7,8 @@ export type OnboardingPotentialImage = {
   id: string;
   status: "pending" | "completed" | "failed";
   signed_url: string | null;
+  /** `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` si dispo, sinon `FACE_FRONT`. */
+  mask_overlay_signed_url: string | null;
   error_code: string | null;
   error_message: string | null;
   created_at: string;

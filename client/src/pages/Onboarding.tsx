@@ -36,6 +36,7 @@ import {
 import { FaceCaptureView } from "@/components/FaceCaptureView";
 import { WaveBackground } from "@/components/background/WaveBackground";
 import { PotentialPreviewCard } from "@/components/onboarding/PotentialPreviewCard";
+import { OnboardingGlassLoader } from "@/components/onboarding/OnboardingGlassLoader";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
 import { useOnboardingScanStatus } from "@/hooks/use-supabase";
@@ -79,7 +80,7 @@ export default function Onboarding() {
   const language = useAppLanguage();
   const scanAssetLabels = getScanAssetLabels(language);
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, hasPremiumAccess, isAdmin } = useAuth();
   const { status: gateStatus } = useOnboardingGate();
   const [stepIndex, setStepIndex] = React.useState(0);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
@@ -116,20 +117,35 @@ export default function Onboarding() {
       return;
     }
 
+    if (gateStatus === "ok" && (hasPremiumAccess || isAdmin)) {
+      setLocation(AUTH_CONFIG.REDIRECT_PATH);
+      return;
+    }
+
     if (hasStartedRun) {
       return;
     }
 
-    if (gateStatus === "ok") {
-      setLocation(AUTH_CONFIG.REDIRECT_PATH);
+    if (gateStatus === "ok" && !hasPremiumAccess && !isAdmin) {
+      setLocation("/billing");
     }
-  }, [gateStatus, hasStartedRun, setLocation, user]);
+  }, [
+    gateStatus,
+    hasPremiumAccess,
+    hasStartedRun,
+    isAdmin,
+    setLocation,
+    user,
+  ]);
 
   const {
     data: scanStatus,
     isLoading: isScanStatusLoading,
     isError: isScanStatusError,
   } = useOnboardingScanStatus({ enabled: !isPotentialStep && !!user?.id });
+
+  const isOnboardingStep0Blocking =
+    !isPotentialStep && (isScanStatusLoading || isUploadingCaptures);
 
   const onboardingSessionId = scanStatus?.session_id;
 
@@ -302,16 +318,16 @@ export default function Onboarding() {
       return;
     }
     setIsUnlocking(true);
-    /**
-     * Met à jour le cache profil pour passer le gate (sinon /billing
-     * redirige vers /onboarding). Le flag est déjà à true côté serveur
-     * depuis POST /onboarding/complete.
-     */
-    queryClient.setQueryData(["profile", user.id], (old: unknown) => {
-      if (!old || typeof old !== "object") return old;
-      return { ...(old as Record<string, unknown>), has_completed_onboarding: true };
-    });
-    setLocation("/billing");
+    try {
+      /**
+       * Paywall : pas d’accès à l’app sans abonnement. `has_completed_onboarding`
+       * est déjà true côté serveur depuis POST /onboarding/complete — pas de
+       * contournement via le cache client.
+       */
+      setLocation("/billing");
+    } finally {
+      setIsUnlocking(false);
+    }
   }, [setLocation, user?.id]);
 
   const handleLogout = React.useCallback(async () => {
@@ -479,14 +495,31 @@ export default function Onboarding() {
                 )}
               >
                 {isPotentialStep ? (
-                  <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-1 py-2 sm:px-2 sm:py-4">
+                  <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-1 py-2 pb-[max(6.75rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))] sm:px-2 sm:py-4 sm:pb-28">
                     <PotentialPreviewCard
                       language={language}
                       potentialImage={potentialImage ?? null}
                       isLoading={isPotentialImageLoading}
-                      onUnlock={handleUnlock}
-                      isUnlocking={isUnlocking}
                     />
+                  </div>
+                ) : isOnboardingStep0Blocking ? (
+                  <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
+                    <div className="mx-auto w-full max-w-sm">
+                      <OnboardingGlassLoader
+                        message={i18n(
+                          language,
+                          isUploadingCaptures
+                            ? {
+                                en: "Uploading your scan…",
+                                fr: "Envoi de ton scan…",
+                              }
+                            : {
+                                en: "Loading your session…",
+                                fr: "Chargement de ta session…",
+                              },
+                        )}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
@@ -499,27 +532,6 @@ export default function Onboarding() {
                           )}
                         >
                           <p className="text-sm text-red-200">{uploadError}</p>
-                        </div>
-                      ) : null}
-                      {isUploadingCaptures ? (
-                        <div
-                          className={cn(
-                            saasGlassInsetClassName,
-                            "w-full p-3 text-left sm:p-4",
-                          )}
-                        >
-                          <div className="flex items-center justify-center gap-3 text-sm text-zinc-200">
-                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-zinc-400" />
-                            <span>
-                              {i18n(language, {
-                                en: "Uploading your scan…",
-                                fr: "Envoi de ton scan…",
-                              })}
-                            </span>
-                          </div>
-                          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-                            <div className="h-full w-1/2 animate-pulse rounded-full bg-white/40" />
-                          </div>
                         </div>
                       ) : null}
                       <p className="font-hero text-[1.35rem] font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
@@ -547,35 +559,24 @@ export default function Onboarding() {
                           type="button"
                           onClick={() => void openOnboardingCapture()}
                           disabled={
-                            isScanStatusLoading ||
-                            !onboardingSessionId ||
-                            isScanStatusError ||
-                            isUploadingCaptures
+                            !onboardingSessionId || isScanStatusError
                           }
                           className={cn(
                             "flex w-full items-center justify-center gap-3 px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-55 sm:py-3.5",
                             onboardingPrimaryCtaClassName,
                           )}
                         >
-                          {isScanStatusLoading ? (
-                            <span className="flex w-full items-center justify-center py-1">
-                              <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
-                            </span>
-                          ) : (
-                            <>
-                              <img
-                                src="/favicon.png"
-                                alt=""
-                                className="h-9 w-9 shrink-0 rounded-lg bg-black object-contain sm:h-10 sm:w-10"
-                              />
-                              <span className="text-sm font-semibold tracking-tight sm:text-base">
-                                {i18n(language, {
-                                  en: "Launch analysis",
-                                  fr: "Lancer l'analyse",
-                                })}
-                              </span>
-                            </>
-                          )}
+                          <img
+                            src="/favicon.png"
+                            alt=""
+                            className="h-9 w-9 shrink-0 rounded-lg bg-black object-contain sm:h-10 sm:w-10"
+                          />
+                          <span className="text-sm font-semibold tracking-tight sm:text-base">
+                            {i18n(language, {
+                              en: "Launch analysis",
+                              fr: "Lancer l'analyse",
+                            })}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -675,6 +676,41 @@ export default function Onboarding() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {isPotentialStep ? (
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[rgba(14,20,26,0.55)] backdrop-blur-md pointer-events-none"
+          role="region"
+          aria-label={i18n(language, {
+            en: "Unlock full analysis",
+            fr: "Débloquer l'analyse complète",
+          })}
+        >
+          <div className="mx-auto flex w-full max-w-[min(100%,28rem)] justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 sm:max-w-3xl sm:px-6 sm:pb-5">
+            <div className="w-full max-w-[460px]">
+              <button
+                type="button"
+                onClick={() => void handleUnlock()}
+                disabled={isUnlocking}
+                className={cn(
+                  "pointer-events-auto flex w-full items-center justify-center px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-60 sm:py-3.5",
+                  onboardingPrimaryCtaClassName,
+                )}
+              >
+                {isUnlocking ? (
+                  <Loader2 className="mr-2 h-5 w-5 shrink-0 animate-spin" aria-hidden />
+                ) : null}
+                <span className="text-sm font-semibold tracking-tight sm:text-base">
+                  {i18n(language, {
+                    en: "Unlock my full analysis",
+                    fr: "Débloquer mon analyse complète",
+                  })}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -378,15 +378,84 @@ export type PotentialImagePayload = {
   id: string;
   status: "pending" | "completed" | "failed";
   signed_url: string | null;
+  /** Repère face + masque 3D (`GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY`), sinon photo `FACE_FRONT`. */
+  mask_overlay_signed_url: string | null;
   error_code: string | null;
   error_message: string | null;
   created_at: string;
 };
 
+async function loadLatestScanAssetSignedUrl(params: {
+  userId: string;
+  sessionId: string;
+  assetTypeCode: string;
+}): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("scan_assets")
+    .select("r2_bucket, r2_key")
+    .eq("user_id", params.userId)
+    .eq("session_id", params.sessionId)
+    .eq("asset_type_code", params.assetTypeCode)
+    .in("upload_status", ["uploaded", "validated"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.r2_key) {
+    return null;
+  }
+
+  const row = data as { r2_bucket: string | null; r2_key: string };
+  return getR2SignedDownloadUrl({
+    bucket: row.r2_bucket ?? undefined,
+    key: row.r2_key,
+    expiresInSeconds: 300,
+  });
+}
+
+async function resolveMaskOverlaySignedUrl(params: {
+  userId: string;
+  sourceScanAssetId: string | null;
+}): Promise<string | null> {
+  if (!params.sourceScanAssetId) {
+    return null;
+  }
+
+  const { data: src, error: srcErr } = await supabaseAdmin
+    .from("scan_assets")
+    .select("session_id")
+    .eq("id", params.sourceScanAssetId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (srcErr || !src?.session_id) {
+    return null;
+  }
+
+  const sessionId = src.session_id as string;
+
+  const mask = await loadLatestScanAssetSignedUrl({
+    userId: params.userId,
+    sessionId,
+    assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
+  });
+  if (mask) {
+    return mask;
+  }
+
+  return loadLatestScanAssetSignedUrl({
+    userId: params.userId,
+    sessionId,
+    assetTypeCode: "FACE_FRONT",
+  });
+}
+
 export async function getLatestPotentialImageForUser(userId: string): Promise<PotentialImagePayload | null> {
   const { data, error } = await supabaseAdmin
     .from("scoremax_ai_image_generations")
-    .select("id, status, r2_bucket, r2_key, error_code, error_message, created_at")
+    .select(
+      "id, status, r2_bucket, r2_key, error_code, error_message, created_at, source_scan_asset_id",
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -404,6 +473,7 @@ export async function getLatestPotentialImageForUser(userId: string): Promise<Po
     error_code: string | null;
     error_message: string | null;
     created_at: string;
+    source_scan_asset_id: string | null;
   };
 
   const status = row.status as PotentialImagePayload["status"];
@@ -420,10 +490,16 @@ export async function getLatestPotentialImageForUser(userId: string): Promise<Po
     });
   }
 
+  const maskOverlaySignedUrl = await resolveMaskOverlaySignedUrl({
+    userId,
+    sourceScanAssetId: row.source_scan_asset_id,
+  });
+
   return {
     id: row.id,
     status,
     signed_url: signedUrl,
+    mask_overlay_signed_url: maskOverlaySignedUrl,
     error_code: row.error_code,
     error_message: row.error_message,
     created_at: row.created_at,
