@@ -22,7 +22,6 @@ import {
   PLAN_DISPLAY,
   SUBSCRIPTION_PLANS,
   type Plan,
-  isPlan,
 } from "@shared/schema";
 
 const billingPanelClassName =
@@ -141,9 +140,7 @@ export default function Billing() {
 
   const isSubscriber = Boolean(state?.is_subscriber);
   const isAdmin = Boolean(state?.is_admin);
-  const reason = state?.active_subscription?.granted_reason ?? null;
-  const subscriberPlan: Plan | null =
-    typeof reason === "string" && isPlan(reason) ? reason : null;
+  const subscriberPlan: Plan | null = state?.active_subscription?.plan ?? null;
 
   const planDisplayByLang = useMemo(() => {
     return SUBSCRIPTION_PLANS.map((pid) => {

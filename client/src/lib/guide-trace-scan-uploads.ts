@@ -70,6 +70,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           blob: pose.annotatedFaceShapeContourGuideBlob,
         });
       }
+      if (pose.annotatedFrontalCheeksGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_CHEEKS",
+          fileLabel: "cheeks",
+          blob: pose.annotatedFrontalCheeksGuideBlob,
+        });
+      }
       if (pose.annotatedFrontalMaskOverlayFlatBlob) {
         uploads.push({
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
@@ -153,6 +160,13 @@ export function guideTraceBlobUploadsFromCapturedPose(
           assetTypeCode: "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
           fileLabel: "eye-contours",
           blob: pose.annotatedCloseupEyeContoursGuideBlob,
+        });
+      }
+      if (pose.annotatedCloseupEyeCanthalTiltGuideBlob) {
+        uploads.push({
+          assetTypeCode: "GUIDE_TRACE_EYE_CANTHAL_TILT",
+          fileLabel: "eye-canthal-tilt",
+          blob: pose.annotatedCloseupEyeCanthalTiltGuideBlob,
         });
       }
       break;

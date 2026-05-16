@@ -619,16 +619,20 @@ export function AdminCaptureDebugPanel({
   const isSmilePose = isCloseupSmilePoseId(payload.poseId);
   const isCloseupEyePose = isCloseupEyePoseId(payload.poseId);
   const eyeCloseupContourUrl = payload.annotatedCloseupEyeContoursGuideThumbnailUrl;
-  const hasCloseupEyeFlat = Boolean(isCloseupEyePose && eyeCloseupContourUrl);
+  const eyeCloseupCanthalTiltUrl = payload.annotatedCloseupEyeCanthalTiltGuideThumbnailUrl;
+  const hasCloseupEyeFlat = Boolean(
+    isCloseupEyePose && (eyeCloseupContourUrl || eyeCloseupCanthalTiltUrl),
+  );
   const needsJpegOnlyCloseup =
     isCloseupHairlinePoseId(payload.poseId) ||
-    (isCloseupEyePose && !eyeCloseupContourUrl);
+    (isCloseupEyePose && !eyeCloseupContourUrl && !eyeCloseupCanthalTiltUrl);
 
   const ovalUrl = payload.annotatedOvalGuideThumbnailUrl;
   const nmUrl = payload.annotatedNoseMouthGuideThumbnailUrl;
   const vtUrl = payload.annotatedVerticalThirdsGuideThumbnailUrl;
   const jawAngleUrl = payload.annotatedJawAngleGuideThumbnailUrl;
   const fcUrl = payload.annotatedFaceShapeContourGuideThumbnailUrl;
+  const cheeksUrl = payload.annotatedFrontalCheeksGuideThumbnailUrl;
   const maskOverlayUrl = payload.annotatedFrontalMaskOverlayFlatThumbnailUrl;
   const frontalLipsUrl = payload.annotatedFrontalLipsGuideThumbnailUrl;
   const jawUrl = payload.annotatedProfileJawGuideThumbnailUrl;
@@ -638,7 +642,14 @@ export function AdminCaptureDebugPanel({
   const smileTeethUrl = payload.annotatedSmileTeethGuideThumbnailUrl;
 
   const hasAnyFrontalGuidePng = Boolean(
-    ovalUrl || nmUrl || vtUrl || jawAngleUrl || fcUrl || maskOverlayUrl || frontalLipsUrl,
+    ovalUrl ||
+    nmUrl ||
+    vtUrl ||
+    jawAngleUrl ||
+    fcUrl ||
+    cheeksUrl ||
+    maskOverlayUrl ||
+    frontalLipsUrl,
   );
   const hasProfileFlat = Boolean(jawUrl || profileNoseUrl);
   const hasJawUpFlat = Boolean(jawUpUrl);
@@ -751,16 +762,32 @@ export function AdminCaptureDebugPanel({
               ) : null}
             </>
           ) : hasCloseupEyeFlat ? (
-            <a
-              href={eyeCloseupContourUrl}
-              download={`${payload.poseId}-annotated-eye-contours-guide.png`}
-              className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-            >
-              {i18n(language, {
-                en: 'Download PNG — eye contours (close-up)',
-                fr: 'Télécharger PNG — contours œil (gros plan)',
-              })}
-            </a>
+            <>
+              {eyeCloseupContourUrl ? (
+                <a
+                  href={eyeCloseupContourUrl}
+                  download={`${payload.poseId}-annotated-eye-contours-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: "Download PNG — eye contours (close-up)",
+                    fr: "Télécharger PNG — contours œil (gros plan)",
+                  })}
+                </a>
+              ) : null}
+              {eyeCloseupCanthalTiltUrl ? (
+                <a
+                  href={eyeCloseupCanthalTiltUrl}
+                  download={`${payload.poseId}-annotated-eye-canthal-tilt-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: "Download PNG — canthal tilt (close-up)",
+                    fr: "Télécharger PNG — canthal tilt (gros plan)",
+                  })}
+                </a>
+              ) : null}
+            </>
           ) : (
             <>
               {ovalUrl ? (
@@ -820,6 +847,18 @@ export function AdminCaptureDebugPanel({
                   {i18n(language, {
                     en: 'Download PNG — face shape contour',
                     fr: 'Télécharger PNG — contour forme du visage',
+                  })}
+                </a>
+              ) : null}
+              {cheeksUrl ? (
+                <a
+                  href={cheeksUrl}
+                  download={`${payload.poseId}-annotated-cheeks-guide.png`}
+                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
+                >
+                  {i18n(language, {
+                    en: 'Download PNG — cheeks (bilateral)',
+                    fr: 'Télécharger PNG — joues (bilatéral)',
                   })}
                 </a>
               ) : null}
@@ -949,21 +988,43 @@ export function AdminCaptureDebugPanel({
               ) : null}
             </div>
           ) : hasCloseupEyeFlat ? (
-            <div className="w-full">
-              <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                {i18n(language, {
-                  en: 'Eye close-up — flat (light blue eye contours)',
-                  fr: 'Gros plan œil — aplati (contours paupières bleus)',
-                })}
-              </p>
-              <img
-                src={eyeCloseupContourUrl}
-                alt=""
-                width={payload.outputWidth}
-                height={payload.outputHeight}
-                className="mx-auto block h-auto w-full max-w-full rounded-md"
-                decoding="async"
-              />
+            <div className="flex w-full flex-col items-center gap-8">
+              {eyeCloseupContourUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: "Eye close-up — flat (masked eye regions)",
+                      fr: "Gros plan œil — aplati (zones paupières masquées)",
+                    })}
+                  </p>
+                  <img
+                    src={eyeCloseupContourUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {eyeCloseupCanthalTiltUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: "Eye close-up — canthal tilt (medial→lateral axis per eye)",
+                      fr: "Gros plan œil — canthal tilt (axe interne→externe par œil)",
+                    })}
+                  </p>
+                  <img
+                    src={eyeCloseupCanthalTiltUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="flex flex-col items-center gap-8">
@@ -1046,6 +1107,24 @@ export function AdminCaptureDebugPanel({
                   </p>
                   <img
                     src={fcUrl}
+                    alt=""
+                    width={payload.outputWidth}
+                    height={payload.outputHeight}
+                    className="mx-auto block h-auto w-full max-w-full rounded-md"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
+              {cheeksUrl ? (
+                <div className="w-full">
+                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
+                    {i18n(language, {
+                      en: 'Cheeks — flat (left + right polygons)',
+                      fr: 'Joues — fichier aplati (polygones gauche + droite)',
+                    })}
+                  </p>
+                  <img
+                    src={cheeksUrl}
                     alt=""
                     width={payload.outputWidth}
                     height={payload.outputHeight}

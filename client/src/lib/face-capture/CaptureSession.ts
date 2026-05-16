@@ -57,6 +57,9 @@ export interface CapturedPose {
   /** PNG aplati cliché + contour bleu fermé ovale visage (« forme du visage », hors analyse). */
   annotatedFaceShapeContourGuideBlob?: Blob;
   annotatedFaceShapeContourGuideThumbnailUrl?: string;
+  /** PNG aplati cliché frontal + polygones joues gauche/droite (hors analyse). */
+  annotatedFrontalCheeksGuideBlob?: Blob;
+  annotatedFrontalCheeksGuideThumbnailUrl?: string;
   /**
    * PNG aplati cliché frontal selfie + voile sombre puis masque 3D Wireframe
    * (aligné capture live), image recadrée sur la tête. Vignette d’analyse côté sidebar.
@@ -87,12 +90,19 @@ export interface CapturedPose {
   /** PNG aplati gros plan yeux : zones paupière conservées, hors masque transparent (pas de traits 2D). */
   annotatedCloseupEyeContoursGuideBlob?: Blob;
   annotatedCloseupEyeContoursGuideThumbnailUrl?: string;
+  /** PNG aplati gros plan yeux : lignes canthus médial → latéral par œil (canthal tilt). */
+  annotatedCloseupEyeCanthalTiltGuideBlob?: Blob;
+  annotatedCloseupEyeCanthalTiltGuideThumbnailUrl?: string;
   /** Largeur bouche / largeur nez (indices 61↔291 vs 98↔327), même calcul que sur le PNG nez–bouche. */
   mouthToNoseWidthRatio?: number;
   /** Largeur chord bouche ovale / largeur chord ligne haute (≤ 1 si petit trait = bouche). */
   ovalMouthOverUpperLineWidthRatio?: number;
   /** Angle au sommet du repère V mâchoire (degrés), même calcul que sur le PNG angle mâchoire. */
   frontalJawAngleDeg?: number;
+  /** Repères MediaPipe figés au déclenchement (RAM — hero onboarding 3D). */
+  landmarks?: LandmarkPoint[];
+  landmarkFrameWidth?: number;
+  landmarkFrameHeight?: number;
 }
 
 export interface AdminCaptureDebugPayload {
@@ -109,6 +119,7 @@ export interface AdminCaptureDebugPayload {
   annotatedVerticalThirdsGuideThumbnailUrl?: string;
   annotatedJawAngleGuideThumbnailUrl?: string;
   annotatedFaceShapeContourGuideThumbnailUrl?: string;
+  annotatedFrontalCheeksGuideThumbnailUrl?: string;
   annotatedFrontalMaskOverlayFlatThumbnailUrl?: string;
   annotatedFrontalLipsGuideThumbnailUrl?: string;
   annotatedProfileJawGuideThumbnailUrl?: string;
@@ -117,6 +128,7 @@ export interface AdminCaptureDebugPayload {
   annotatedSmileLipsGuideThumbnailUrl?: string;
   annotatedSmileTeethGuideThumbnailUrl?: string;
   annotatedCloseupEyeContoursGuideThumbnailUrl?: string;
+  annotatedCloseupEyeCanthalTiltGuideThumbnailUrl?: string;
 }
 
 export type CaptureSessionEvent =
@@ -1260,6 +1272,8 @@ export class CaptureSession {
     let annotatedJawAngleGuideThumbnailUrl: string | undefined;
     let annotatedFaceShapeContourGuideBlob: Blob | undefined;
     let annotatedFaceShapeContourGuideThumbnailUrl: string | undefined;
+    let annotatedFrontalCheeksGuideBlob: Blob | undefined;
+    let annotatedFrontalCheeksGuideThumbnailUrl: string | undefined;
     let annotatedFrontalMaskOverlayFlatBlob: Blob | undefined;
     let annotatedFrontalMaskOverlayFlatThumbnailUrl: string | undefined;
     let annotatedFrontalLipsGuideBlob: Blob | undefined;
@@ -1276,6 +1290,8 @@ export class CaptureSession {
     let annotatedSmileTeethGuideThumbnailUrl: string | undefined;
     let annotatedCloseupEyeContoursGuideBlob: Blob | undefined;
     let annotatedCloseupEyeContoursGuideThumbnailUrl: string | undefined;
+    let annotatedCloseupEyeCanthalTiltGuideBlob: Blob | undefined;
+    let annotatedCloseupEyeCanthalTiltGuideThumbnailUrl: string | undefined;
 
     if (shouldEncodeFlattenedGuides) {
       try {
@@ -1310,6 +1326,10 @@ export class CaptureSession {
             annotatedFaceShapeContourGuideThumbnailUrl = URL.createObjectURL(
               flattened.faceShapeContourFlat,
             );
+          }
+          if (flattened.cheeksFlat) {
+            annotatedFrontalCheeksGuideBlob = flattened.cheeksFlat;
+            annotatedFrontalCheeksGuideThumbnailUrl = URL.createObjectURL(flattened.cheeksFlat);
           }
           if (flattened.maskOverlayFlat) {
             annotatedFrontalMaskOverlayFlatBlob = flattened.maskOverlayFlat;
@@ -1347,6 +1367,12 @@ export class CaptureSession {
           annotatedCloseupEyeContoursGuideThumbnailUrl = URL.createObjectURL(
             flattened.eyeContoursFlat,
           );
+          if (flattened.eyeCanthalTiltFlat) {
+            annotatedCloseupEyeCanthalTiltGuideBlob = flattened.eyeCanthalTiltFlat;
+            annotatedCloseupEyeCanthalTiltGuideThumbnailUrl = URL.createObjectURL(
+              flattened.eyeCanthalTiltFlat,
+            );
+          }
         }
       } finally {
         this.captureFinalizeEncodeBusy = false;
@@ -1392,6 +1418,12 @@ export class CaptureSession {
         ? {
             annotatedFaceShapeContourGuideBlob,
             annotatedFaceShapeContourGuideThumbnailUrl,
+          }
+        : {}),
+      ...(annotatedFrontalCheeksGuideBlob && annotatedFrontalCheeksGuideThumbnailUrl
+        ? {
+            annotatedFrontalCheeksGuideBlob,
+            annotatedFrontalCheeksGuideThumbnailUrl,
           }
         : {}),
       ...(annotatedFrontalMaskOverlayFlatBlob && annotatedFrontalMaskOverlayFlatThumbnailUrl
@@ -1443,11 +1475,30 @@ export class CaptureSession {
             annotatedCloseupEyeContoursGuideThumbnailUrl,
           }
         : {}),
+      ...(annotatedCloseupEyeCanthalTiltGuideBlob &&
+      annotatedCloseupEyeCanthalTiltGuideThumbnailUrl
+        ? {
+            annotatedCloseupEyeCanthalTiltGuideBlob,
+            annotatedCloseupEyeCanthalTiltGuideThumbnailUrl,
+          }
+        : {}),
       ...(mouthToNoseWidthRatio !== undefined ? { mouthToNoseWidthRatio } : {}),
       ...(ovalMouthOverUpperLineWidthRatio !== undefined
         ? { ovalMouthOverUpperLineWidthRatio }
         : {}),
       ...(frontalJawAngleDeg !== undefined ? { frontalJawAngleDeg } : {}),
+      ...(lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD
+        ? {
+            landmarks: lmSnap.map((p) => ({
+              x: p.x,
+              y: p.y,
+              z: p.z ?? 0,
+              visibility: p.visibility,
+            })),
+            landmarkFrameWidth: jpegDims.outW,
+            landmarkFrameHeight: jpegDims.outH,
+          }
+        : {}),
     };
     this.capturedPoses.push(captured);
 
@@ -1484,6 +1535,7 @@ export class CaptureSession {
           annotatedVerticalThirdsGuideThumbnailUrl,
           annotatedJawAngleGuideThumbnailUrl,
           annotatedFaceShapeContourGuideThumbnailUrl,
+          annotatedFrontalCheeksGuideThumbnailUrl,
           annotatedFrontalMaskOverlayFlatThumbnailUrl,
           annotatedFrontalLipsGuideThumbnailUrl,
           annotatedProfileJawGuideThumbnailUrl,
@@ -1492,6 +1544,7 @@ export class CaptureSession {
           annotatedSmileLipsGuideThumbnailUrl,
           annotatedSmileTeethGuideThumbnailUrl,
           annotatedCloseupEyeContoursGuideThumbnailUrl,
+          annotatedCloseupEyeCanthalTiltGuideThumbnailUrl,
         },
       });
       return;

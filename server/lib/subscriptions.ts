@@ -1,8 +1,11 @@
 import type {
+  ActiveSubscriptionSummary,
+  Plan,
   PremiumAccessState,
   SubscriptionEventType,
   SubscriptionSource,
 } from "@shared/schema";
+import { isPlan } from "@shared/schema";
 import { ApiError } from "./errors";
 import { supabaseAdmin } from "./supabase-admin";
 
@@ -18,8 +21,35 @@ type ActiveSubscriptionRow = {
   current_period_start: string | null;
   current_period_end: string | null;
   granted_reason: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
 };
+
+function extractPlanFromSubscription(row: ActiveSubscriptionRow): Plan | null {
+  const fromMetadata = row.metadata?.plan;
+  if (typeof fromMetadata === "string" && isPlan(fromMetadata)) {
+    return fromMetadata;
+  }
+  if (row.granted_reason && isPlan(row.granted_reason)) {
+    return row.granted_reason;
+  }
+  return null;
+}
+
+function toActiveSubscriptionSummary(
+  row: ActiveSubscriptionRow,
+): ActiveSubscriptionSummary {
+  return {
+    id: row.id,
+    status: row.status,
+    source: row.source,
+    current_period_start: row.current_period_start,
+    current_period_end: row.current_period_end,
+    granted_reason: row.granted_reason,
+    plan: extractPlanFromSubscription(row),
+    created_at: row.created_at,
+  };
+}
 
 async function loadProfileAccess(userId: string): Promise<ProfileAccessRow> {
   const { data, error } = await supabaseAdmin
@@ -54,7 +84,7 @@ async function loadActiveSubscriptionRow(
   const { data, error } = await supabaseAdmin
     .from("user_subscriptions")
     .select(
-      "id, status, source, current_period_start, current_period_end, granted_reason, created_at",
+      "id, status, source, current_period_start, current_period_end, granted_reason, metadata, created_at",
     )
     .eq("user_id", userId)
     .eq("status", "active")
@@ -111,7 +141,10 @@ export async function getPremiumAccessState(
     has_premium_access: isAdmin || isSubscriber,
     is_subscriber: isSubscriber,
     is_admin: isAdmin,
-    active_subscription: isSubscriber ? subscription : null,
+    active_subscription:
+      isSubscriber && subscription
+        ? toActiveSubscriptionSummary(subscription)
+        : null,
   };
 }
 

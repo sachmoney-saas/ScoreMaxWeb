@@ -268,6 +268,7 @@ function ProportionsCanvas({
   fifthsMetricId,
   verticalThirdsAssetSrc,
   faceFrontShapeContourAssetSrc,
+  faceFrontCheeksAssetSrc,
 }: {
   thirdsScore: number | null;
   fifthsScore: number | null;
@@ -276,6 +277,7 @@ function ProportionsCanvas({
   fifthsMetricId: string;
   verticalThirdsAssetSrc?: string | null;
   faceFrontShapeContourAssetSrc?: string | null;
+  faceFrontCheeksAssetSrc?: string | null;
 }) {
   const thirdsBand = thirdsScore !== null ? bandFromScore(thirdsScore) : null;
   const fifthsBand = fifthsScore !== null ? bandFromScore(fifthsScore) : null;
@@ -292,12 +294,14 @@ function ProportionsCanvas({
 
   return (
     <div className="space-y-3">
-      {(verticalThirdsAssetSrc ?? faceFrontShapeContourAssetSrc) ? (
+      {(verticalThirdsAssetSrc ??
+        faceFrontShapeContourAssetSrc ??
+        faceFrontCheeksAssetSrc) ? (
         <div
           className="flex flex-wrap items-start justify-center gap-2 pb-1 pt-0.5 sm:gap-4"
           aria-label={i18n(language, {
-            en: "Face scan guides: vertical thirds and shape contour",
-            fr: "Repères scan : tiers verticaux et contour morphologique",
+            en: "Face scan guides: vertical thirds, shape contour, cheeks",
+            fr: "Repères scan : tiers verticaux, contour morphologique, joues",
           })}
         >
           {verticalThirdsAssetSrc ? (
@@ -321,6 +325,20 @@ function ProportionsCanvas({
                 alt={i18n(language, {
                   en: "Front-face scan overlay: face shape contour guide",
                   fr: "Repère contour de la forme du visage (prise frontale)",
+                })}
+                imgFit="contain"
+                className="w-fit max-w-[min(100%,220px)] shrink-0"
+                imgClassName="max-h-52"
+              />
+            </div>
+          ) : null}
+          {faceFrontCheeksAssetSrc ? (
+            <div className="flex shrink-0 justify-center">
+              <AnalysisJobAssetPreviewThumb
+                src={faceFrontCheeksAssetSrc}
+                alt={i18n(language, {
+                  en: "Front-face scan overlay: cheek zones guide (bilateral)",
+                  fr: "Repère zones joues (prise frontale, bilatéral)",
                 })}
                 imgFit="contain"
                 className="w-fit max-w-[min(100%,220px)] shrink-0"
@@ -368,6 +386,7 @@ export interface SymmetryShapeWorkerViewProps {
   heroAside?: React.ReactNode;
   verticalThirdsAssetSrc?: string | null;
   faceFrontShapeContourAssetSrc?: string | null;
+  faceFrontCheeksAssetSrc?: string | null;
 }
 
 export function SymmetryShapeWorkerView({
@@ -376,6 +395,7 @@ export function SymmetryShapeWorkerView({
   heroAside,
   verticalThirdsAssetSrc,
   faceFrontShapeContourAssetSrc,
+  faceFrontCheeksAssetSrc,
 }: SymmetryShapeWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -743,6 +763,7 @@ export function SymmetryShapeWorkerView({
               )}
               verticalThirdsAssetSrc={verticalThirdsAssetSrc}
               faceFrontShapeContourAssetSrc={faceFrontShapeContourAssetSrc}
+              faceFrontCheeksAssetSrc={faceFrontCheeksAssetSrc}
             />
           </div>
         </CardContent>

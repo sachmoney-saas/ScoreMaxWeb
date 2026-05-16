@@ -280,6 +280,8 @@ export interface EyesWorkerViewProps {
   heroAside?: React.ReactNode;
   /** Repère scan gros plan œil (contours), comme la preview tableau de bord. */
   eyeCloseupContoursGuideSrc?: string | null;
+  /** Repère canthal tilt (segment médial→latéral par œil). */
+  eyeCloseupCanthalTiltGuideSrc?: string | null;
 }
 
 export function EyesWorkerView({
@@ -287,6 +289,7 @@ export function EyesWorkerView({
   language,
   heroAside,
   eyeCloseupContoursGuideSrc,
+  eyeCloseupCanthalTiltGuideSrc,
 }: EyesWorkerViewProps) {
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const formatLabel = React.useCallback(
@@ -356,18 +359,32 @@ export function EyesWorkerView({
                 })}
               </h3>
             </div>
-            {eyeCloseupContoursGuideSrc ? (
-              <div className="flex w-full shrink-0 justify-center">
-                <AnalysisJobAssetPreviewThumb
-                  src={eyeCloseupContoursGuideSrc}
-                  alt={i18n(language, {
-                    en: "Eye close-up scan overlay: contour guide trace",
-                    fr: "Repère gros plan œil — contours",
-                  })}
-                  imgFit="contain"
-                  className="w-fit max-w-[min(100%,22rem)] shrink-0"
-                  imgClassName="max-h-[13rem] sm:max-h-[15rem]"
-                />
+            {eyeCloseupContoursGuideSrc || eyeCloseupCanthalTiltGuideSrc ? (
+              <div className="flex w-full shrink-0 flex-col items-center gap-4 sm:flex-row sm:flex-wrap sm:justify-center">
+                {eyeCloseupContoursGuideSrc ? (
+                  <AnalysisJobAssetPreviewThumb
+                    src={eyeCloseupContoursGuideSrc}
+                    alt={i18n(language, {
+                      en: "Eye close-up scan overlay: contour guide trace",
+                      fr: "Repère gros plan œil — contours",
+                    })}
+                    imgFit="contain"
+                    className="w-fit max-w-[min(100%,22rem)] shrink-0"
+                    imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+                  />
+                ) : null}
+                {eyeCloseupCanthalTiltGuideSrc ? (
+                  <AnalysisJobAssetPreviewThumb
+                    src={eyeCloseupCanthalTiltGuideSrc}
+                    alt={i18n(language, {
+                      en: "Eye close-up: canthal tilt guide (medial→lateral per eye)",
+                      fr: "Repère gros plan œil — canthal tilt",
+                    })}
+                    imgFit="contain"
+                    className="w-fit max-w-[min(100%,22rem)] shrink-0"
+                    imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+                  />
+                ) : null}
               </div>
             ) : null}
             <IrisSpectrumVertical

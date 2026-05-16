@@ -22,6 +22,15 @@ export const FACEMESH_RIGHT_EYE_ORDERED: number[] = [
 ];
 
 /**
+ * Canthus médial (vers le nez) et latéral (vers la tempe) par œil — segment droit
+ * palpebral pour le repère « canthal tilt » (un segment par œil).
+ */
+export const FACEMESH_RIGHT_EYE_CANTHUS_MEDIAL = 133;
+export const FACEMESH_RIGHT_EYE_CANTHUS_LATERAL = 33;
+export const FACEMESH_LEFT_EYE_CANTHUS_MEDIAL = 362;
+export const FACEMESH_LEFT_EYE_CANTHUS_LATERAL = 263;
+
+/**
  * Sillons / base du nez (une boucle : aile → columelle → aile), arêtes du graphe `FACEMESH_NOSE`.
  */
 export const FACEMESH_NOSE_BOTTOM_ORDERED: number[] = [

@@ -409,7 +409,9 @@ VALUES
   ('GUIDE_TRACE_SMILE_LIPS', 'Repère sourire : lèvres', FALSE, 109, TRUE),
   ('GUIDE_TRACE_SMILE_TEETH', 'Repère sourire : dents (overlay)', FALSE, 114, TRUE),
   ('GUIDE_TRACE_FACE_FRONT_LIPS', 'Repère face : lèvres au repos', FALSE, 115, TRUE),
-  ('GUIDE_TRACE_EYE_CLOSEUP_CONTOURS', 'Repère gros plan œil : contours', FALSE, 111, TRUE)
+  ('GUIDE_TRACE_EYE_CLOSEUP_CONTOURS', 'Repère gros plan œil : contours', FALSE, 111, TRUE),
+  ('GUIDE_TRACE_EYE_CANTHAL_TILT', 'Repère gros plan œil : canthal tilt (axe interne→externe par œil)', FALSE, 116, TRUE),
+  ('GUIDE_TRACE_FACE_FRONT_CHEEKS', 'Repère frontal : zones joues (bilatéral)', FALSE, 117, TRUE)
 ON CONFLICT (code) DO UPDATE
 SET
   label_fr = EXCLUDED.label_fr,

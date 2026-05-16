@@ -66,10 +66,12 @@ export async function createSubscriptionCheckoutSession(
   const plan = assertPlan(input.plan);
   const productId = env.productIds[plan];
 
+  const appOrigin = env.appBaseUrl.replace(/\/+$/, "");
   const session = await client.checkoutSessions.create({
     product_cart: [{ product_id: productId, quantity: 1 }],
     customer: buildCustomerRequest(input),
-    return_url: `${env.appBaseUrl}/billing/success`,
+    return_url: `${appOrigin}/billing/success`,
+    cancel_url: `${appOrigin}/billing`,
     metadata: {
       [DODO_METADATA_USER_ID_KEY]: input.userId,
       plan,

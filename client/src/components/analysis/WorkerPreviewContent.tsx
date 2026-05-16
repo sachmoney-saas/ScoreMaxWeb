@@ -1012,6 +1012,14 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
         })
       : null;
+  const faceCheeksGuideSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_CHEEKS",
+        })
+      : null;
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const overallNested = getScore(
     aggregates,
@@ -1056,10 +1064,10 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
           </p>
         </div>
         <AnalysisJobAssetPreviewThumb
-          src={faceShapeContourGuideSrc}
+          src={faceCheeksGuideSrc ?? faceShapeContourGuideSrc}
           alt={i18n(language, {
-            en: "Front-face scan overlay: face shape contour guide",
-            fr: "Repère contour de la forme du visage (prise frontale)",
+            en: "Front-face scan overlay: cheek zones guide (bilateral)",
+            fr: "Repère zones joues (prise frontale, bilatéral)",
           })}
           className={PREVIEW_SYM_SCAN_FRAME_CLASS}
           imgClassName={PREVIEW_SYM_SCAN_IMG_CLASSNAME}
@@ -2159,6 +2167,14 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
           assetTypeCode: "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
         })
       : null;
+  const eyeCloseupCanthalTiltSrc =
+    previewJob !== null
+      ? buildAnalysisJobAssetPreviewUrl({
+          jobId: previewJob.jobId,
+          userId: previewJob.userId,
+          assetTypeCode: "GUIDE_TRACE_EYE_CANTHAL_TILT",
+        })
+      : null;
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const overall = getScore(aggregates, "global_score.overall_eye_score");
   const symmetry = getScore(aggregates, "morphology_and_tilt.eye_symmetry");
@@ -2209,12 +2225,22 @@ function EyesPreview({ aggregates, language }: PreviewProps) {
           />
         ) : null}
       </div>
-      <div className="flex w-full shrink-0 justify-center">
+      <div className="flex w-full shrink-0 flex-col items-center gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
         <AnalysisJobAssetPreviewThumb
           src={eyeCloseupContoursSrc}
           alt={i18n(language, {
             en: "Eye close-up scan overlay: contour guide trace",
             fr: "Repère gros plan œil — contours",
+          })}
+          imgFit="contain"
+          className="w-fit max-w-[min(100%,22rem)] shrink-0"
+          imgClassName="max-h-[13rem] sm:max-h-[15rem]"
+        />
+        <AnalysisJobAssetPreviewThumb
+          src={eyeCloseupCanthalTiltSrc}
+          alt={i18n(language, {
+            en: "Eye close-up: canthal tilt guide trace",
+            fr: "Repère gros plan œil — canthal tilt",
           })}
           imgFit="contain"
           className="w-fit max-w-[min(100%,22rem)] shrink-0"

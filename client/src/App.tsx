@@ -32,6 +32,7 @@ import ProtocolRecommendations from "@/pages/ProtocolRecommendations";
 import Settings from "@/pages/Settings";
 import SupportClient from "@/pages/SupportClient";
 import Billing from "@/pages/Billing";
+import BillingSuccess from "@/pages/BillingSuccess";
 import MentionsLegales from "@/pages/MentionsLegales";
 import CGU from "@/pages/CGU";
 import Confidentialite from "@/pages/Confidentialite";
@@ -82,7 +83,7 @@ function ProtectedRoute({
   );
 }
 
-function BillingRoute() {
+function BillingLayout({ children }: { children: React.ReactNode }) {
   const { status } = useOnboardingGate();
   const { user, hasPremiumAccess, isAdmin, isLoading: authLoading } = useAuth();
 
@@ -111,7 +112,7 @@ function BillingRoute() {
           />
           <div className={authPageOverlayClassName} aria-hidden />
           <div className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-8">
-            <Billing />
+            {children}
           </div>
         </div>
       </ErrorBoundary>
@@ -120,9 +121,7 @@ function BillingRoute() {
 
   return (
     <AppLayout>
-      <ErrorBoundary>
-        <Billing />
-      </ErrorBoundary>
+      <ErrorBoundary>{children}</ErrorBoundary>
     </AppLayout>
   );
 }
@@ -266,7 +265,14 @@ function Router() {
         </Route>
 
         <Route path="/billing">
-          <BillingRoute />
+          <BillingLayout>
+            <Billing />
+          </BillingLayout>
+        </Route>
+        <Route path="/billing/success">
+          <BillingLayout>
+            <BillingSuccess />
+          </BillingLayout>
         </Route>
 
         {/* Admin Route */}

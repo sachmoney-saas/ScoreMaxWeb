@@ -313,6 +313,14 @@ export default function WorkerDetails() {
                 assetTypeCode: "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
               })
             : null,
+        faceFrontCheeksAssetSrc:
+          worker === "symmetry_shape" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_CHEEKS",
+              })
+            : null,
         jawFrontOvalGuideSrc:
           worker === "jaw" && analysis && assetPreviewUserId
             ? buildAnalysisJobAssetPreviewUrl({
@@ -345,6 +353,14 @@ export default function WorkerDetails() {
                 assetTypeCode: "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
               })
             : null,
+        eyeCloseupCanthalTiltGuideSrc:
+          worker === "eyes" && analysis && assetPreviewUserId
+            ? buildAnalysisJobAssetPreviewUrl({
+                jobId: analysis.job.id,
+                userId: assetPreviewUserId,
+                assetTypeCode: "GUIDE_TRACE_EYE_CANTHAL_TILT",
+              })
+            : null,
       })}
 
       {entries.length > 0 ? (
@@ -369,10 +385,12 @@ function renderWorkerBody({
   eyeCloseupAssetSrc,
   verticalThirdsAssetSrc,
   faceFrontShapeContourAssetSrc,
+  faceFrontCheeksAssetSrc,
   jawFrontOvalGuideSrc,
   jawFrontalAngleGuideSrc,
   jawProfileLeftGuideSrc,
   eyeCloseupContoursGuideSrc,
+  eyeCloseupCanthalTiltGuideSrc,
 }: {
   worker: string;
   outputAggregates: Record<string, unknown>;
@@ -384,10 +402,12 @@ function renderWorkerBody({
   eyeCloseupAssetSrc?: string | null;
   verticalThirdsAssetSrc?: string | null;
   faceFrontShapeContourAssetSrc?: string | null;
+  faceFrontCheeksAssetSrc?: string | null;
   jawFrontOvalGuideSrc?: string | null;
   jawFrontalAngleGuideSrc?: string | null;
   jawProfileLeftGuideSrc?: string | null;
   eyeCloseupContoursGuideSrc?: string | null;
+  eyeCloseupCanthalTiltGuideSrc?: string | null;
 }): React.ReactNode {
   switch (worker) {
     case "age":           return <AgeWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;
@@ -401,6 +421,7 @@ function renderWorkerBody({
         heroAside={heroAside}
         verticalThirdsAssetSrc={verticalThirdsAssetSrc}
         faceFrontShapeContourAssetSrc={faceFrontShapeContourAssetSrc}
+        faceFrontCheeksAssetSrc={faceFrontCheeksAssetSrc}
       />
     );
     case "jaw":           return (
@@ -428,6 +449,7 @@ function renderWorkerBody({
         language={language}
         heroAside={heroAside}
         eyeCloseupContoursGuideSrc={eyeCloseupContoursGuideSrc}
+        eyeCloseupCanthalTiltGuideSrc={eyeCloseupCanthalTiltGuideSrc}
       />
     );
     case "lips":          return <LipsWorkerView aggregates={outputAggregates} language={language} heroAside={heroAside} />;

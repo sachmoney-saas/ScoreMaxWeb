@@ -208,6 +208,8 @@ export type ActiveSubscriptionSummary = {
   current_period_start: string | null;
   current_period_end: string | null;
   granted_reason: string | null;
+  /** Checkout plan slug when known (Dodo metadata.plan or legacy granted_reason). */
+  plan: Plan | null;
   created_at: string;
 };
 
@@ -292,6 +294,8 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
   "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
   "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
+  /** Frontal : deux polygones fermés (joue gauche + joue droite du sujet). */
+  "GUIDE_TRACE_FACE_FRONT_CHEEKS",
   /**
    * Cliché frontal selfie : voile sombre 40 % sur la photo puis masque facial
    * 3D (Wireframe + ovale comme en capture live), sans grille 2D ; image
@@ -319,6 +323,11 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_SMILE_TEETH",
   /** Gros plan yeux : cliché recadré ; **zones paupière** conservées, reste transparent. */
   "GUIDE_TRACE_EYE_CLOSEUP_CONTOURS",
+  /**
+   * Gros plan yeux : même recadrage ; segment droit **canthus médial → latéral**
+   * par œil (repère « canthal tilt »).
+   */
+  "GUIDE_TRACE_EYE_CANTHAL_TILT",
 ] as const;
 
 export type GuideTraceScanAssetCode =

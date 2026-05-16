@@ -19,10 +19,11 @@ export async function createCustomerPortalSession(params: {
   const env = getDodoEnv();
   const client = getDodoClient();
 
+  const appOrigin = env.appBaseUrl.replace(/\/+$/, "");
   const session = await client.customers.customerPortal.create(
     params.dodoCustomerId,
     {
-      return_url: `${env.appBaseUrl}/billing`,
+      return_url: `${appOrigin}/billing`,
     },
   );
 

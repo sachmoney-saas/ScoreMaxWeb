@@ -36,6 +36,7 @@ import {
 import { FaceCaptureView } from "@/components/FaceCaptureView";
 import { WaveBackground } from "@/components/background/WaveBackground";
 import { PotentialPreviewCard } from "@/components/onboarding/PotentialPreviewCard";
+import { OnboardingScanCompleteScreen } from "@/components/onboarding/OnboardingScanCompleteScreen";
 import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
 import { useAuth } from "@/hooks/use-auth";
 import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
@@ -48,6 +49,7 @@ import {
 } from "@/lib/face-analysis";
 import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
+import { ONBOARDING_HERO_MIN_LANDMARKS } from "@/lib/face-capture/build-face-mesh-3d";
 import type { PoseId } from "@/lib/face-capture/types";
 import { deleteMyAccount } from "@/lib/account-api";
 import { supabase } from "@/lib/supabase";
@@ -132,6 +134,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
   const [showCameraCapture, setShowCameraCapture] = React.useState(false);
   const [capturedPoses, setCapturedPoses] = React.useState<CapturedPose[]>([]);
+  const [showScanCompleteHero, setShowScanCompleteHero] = React.useState(false);
   const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
   const [isUploadingCaptures, setIsUploadingCaptures] = React.useState(false);
   const [isRetakingCaptures, setIsRetakingCaptures] = React.useState(false);
@@ -203,61 +206,93 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     enabled: isPotentialStep && !!user?.id,
   });
 
-  const handleCapturedComplete = React.useCallback((poses: CapturedPose[]) => {
-    setCapturePreviewError(null);
-    setCapturedPoses(poses);
-    setShowCameraCapture(false);
-    setShowCapturedPreview(true);
-  }, []);
+  const restartOnboardingCapture = React.useCallback(
+    async (errorMessage?: string) => {
+      if (errorMessage) {
+        setCapturePreviewError(errorMessage);
+      }
+      setShowScanCompleteHero(false);
+      setShowCapturedPreview(false);
+
+      if (!user?.id || !onboardingSessionId) {
+        setCapturedPoses([]);
+        setShowCameraCapture(true);
+        return;
+      }
+
+      setIsRetakingCaptures(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) {
+          throw new Error(
+            i18n(language, {
+              en: "Supabase session not found",
+              fr: "Session Supabase introuvable",
+            }),
+          );
+        }
+
+        await resetScanSessionAssets({
+          accessToken,
+          sessionId: onboardingSessionId,
+        });
+
+        await queryClient.invalidateQueries({
+          queryKey: ["onboarding-scan-status", user.id],
+        });
+
+        setCapturedPoses([]);
+        setShowCameraCapture(true);
+      } catch (error) {
+        console.error("Unable to reset scan session assets:", error);
+        setCapturePreviewError(
+          error instanceof Error
+            ? error.message
+            : i18n(language, {
+                en: "Unable to discard previous uploads. Try again.",
+                fr: "Impossible d'effacer les envois précédents. Réessaye.",
+              }),
+        );
+      } finally {
+        setIsRetakingCaptures(false);
+      }
+    },
+    [language, onboardingSessionId, user?.id],
+  );
+
+  const handleCapturedComplete = React.useCallback(
+    async (poses: CapturedPose[]) => {
+      setCapturePreviewError(null);
+      const frontal = poses.find((p) => p.poseId === "frontal");
+      const landmarksOk =
+        (frontal?.landmarks?.length ?? 0) >= ONBOARDING_HERO_MIN_LANDMARKS;
+
+      if (!landmarksOk) {
+        console.error(
+          "[onboarding] frontal landmarks missing after capture — forcing retake",
+        );
+        setShowCameraCapture(false);
+        await restartOnboardingCapture(
+          i18n(language, {
+            en: "Face mapping data was incomplete. Please run the capture again.",
+            fr: "Les données de cartographie du visage sont incomplètes. Relance la capture.",
+          }),
+        );
+        return;
+      }
+
+      setCapturedPoses(poses);
+      setShowCameraCapture(false);
+      setShowScanCompleteHero(true);
+    },
+    [language, restartOnboardingCapture],
+  );
 
   const handleRetakeCapturesFromPreview = React.useCallback(async () => {
     setCapturePreviewError(null);
-    if (!user?.id || !onboardingSessionId) {
-      setCapturedPoses([]);
-      setShowCapturedPreview(false);
-      setShowCameraCapture(true);
-      return;
-    }
-
-    setIsRetakingCaptures(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) {
-        throw new Error(
-          i18n(language, {
-            en: "Supabase session not found",
-            fr: "Session Supabase introuvable",
-          }),
-        );
-      }
-
-      await resetScanSessionAssets({
-        accessToken,
-        sessionId: onboardingSessionId,
-      });
-
-      await queryClient.invalidateQueries({
-        queryKey: ["onboarding-scan-status", user.id],
-      });
-
-      setCapturedPoses([]);
-      setShowCapturedPreview(false);
-      setShowCameraCapture(true);
-    } catch (error) {
-      console.error("Unable to reset scan session assets:", error);
-      setCapturePreviewError(
-        error instanceof Error
-          ? error.message
-          : i18n(language, {
-              en: "Unable to discard previous uploads. Try again.",
-              fr: "Impossible d'effacer les envois précédents. Réessaye.",
-            }),
-      );
-    } finally {
-      setIsRetakingCaptures(false);
-    }
-  }, [language, onboardingSessionId, user?.id]);
+    await restartOnboardingCapture();
+  }, [restartOnboardingCapture]);
 
   const uploadAndCompleteOnboarding = React.useCallback(async () => {
     if (!user?.id || !onboardingSessionId || capturedPoses.length === 0) {
@@ -354,6 +389,26 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       setIsUploadingCaptures(false);
     }
   }, [capturedPoses, language, onboardingSessionId, user?.id]);
+
+  const frontalCapturePose = React.useMemo(
+    () => capturedPoses.find((p) => p.poseId === "frontal"),
+    [capturedPoses],
+  );
+
+  const eyeCapturePose = React.useMemo(
+    () => capturedPoses.find((p) => p.poseId === "closeup-eye"),
+    [capturedPoses],
+  );
+
+  const handleScanCompleteContinue = React.useCallback(() => {
+    setShowScanCompleteHero(false);
+    void uploadAndCompleteOnboarding();
+  }, [uploadAndCompleteOnboarding]);
+
+  const handleScanCompleteReviewPoses = React.useCallback(() => {
+    setShowScanCompleteHero(false);
+    setShowCapturedPreview(true);
+  }, []);
 
   const openOnboardingCapture = React.useCallback(() => {
     if (!onboardingSessionId || isScanStatusLoading) return;
@@ -580,6 +635,16 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                           <p className="text-sm text-red-200">{uploadError}</p>
                         </div>
                       ) : null}
+                      {capturePreviewError ? (
+                        <div
+                          className={cn(
+                            saasGlassInsetClassName,
+                            "w-full p-3 text-left sm:p-4",
+                          )}
+                        >
+                          <p className="text-sm text-red-200">{capturePreviewError}</p>
+                        </div>
+                      ) : null}
                       <p className="font-hero text-[1.35rem] font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
                         {i18n(language, {
                           en: "Start your first analysis",
@@ -641,6 +706,19 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
           onCancel={() => setShowCameraCapture(false)}
         />
       ) : null}
+
+      <AnimatePresence>
+        {showScanCompleteHero && frontalCapturePose?.landmarks ? (
+          <OnboardingScanCompleteScreen
+            language={language}
+            frontalLandmarks={frontalCapturePose.landmarks}
+            eyeLandmarks={eyeCapturePose?.landmarks}
+            onContinue={handleScanCompleteContinue}
+            onReviewPoses={handleScanCompleteReviewPoses}
+            isContinuing={isUploadingCaptures}
+          />
+        ) : null}
+      </AnimatePresence>
 
       <Dialog open={showCapturedPreview} onOpenChange={setShowCapturedPreview}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/15 bg-[linear-gradient(135deg,rgba(10,16,22,0.98)_0%,rgba(18,27,35,0.96)_55%,rgba(255,255,255,0.06)_100%)] text-zinc-50 shadow-[0_35px_110px_-70px_rgba(0,0,0,0.95)] sm:rounded-[2rem]">

@@ -6,7 +6,7 @@
 // Résolution = celle du bitmap source (ratio pixel 1, pas de sur-échantillonnage).
 // ============================================================
 //
-// Pose de face : 7 PNG (+ `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : photo + voile + masque 3D Wireframe
+// Pose de face : 8 PNG (+ `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : photo + voile + masque 3D Wireframe
 //   recadré ovale) + nez/bouche + tiers verticaux + angle mâchoire + contour forme du visage +
 //   variante lèvres au repos réutilisant les calques `GUIDE_TRACE_SMILE_LIPS`).
 // Pose profil : 2 PNG (mâchoire + silhouette nez côté visible).
@@ -14,12 +14,15 @@
 // Pose sommet du crâne : aucun PNG aplati (la photo miroir seule n’apporte aucun
 // repère utile à l’admin — économise un encodage et un upload par capture).
 // Pose sourire : 1 PNG (photo + contours lèvres bleu clair, sans masque blanc hors debug).
-// Poses œil / front (hairline) : pas de PNG aplati admin hormis gros plan œil (contours).
+// Poses œil / front (hairline) : pas de PNG aplati admin hormis gros plan œil
+// (contours + canthal tilt) ; hairline sans aplati.
 
 import {
   applyTransparentCutoutCloseupEyesToContext,
   applyTransparentCutoutSmileLipsToContext,
   applyTransparentCutoutSmileTeethToContext,
+  drawAdminCheeksGuideOnCanvas,
+  drawAdminCloseupEyeCanthalTiltGuideOnCanvas,
   drawAdminCloseupEyeContoursGuideOnCanvas,
   drawAdminFaceShapeContourGuideOnCanvas,
   drawAdminFrontalJawAngleGuidelinesOnCanvas,
@@ -78,6 +81,8 @@ export type AdminFlattenedGuideEncoding =
       verticalThirdsFlat: Blob | null;
       jawAngleFlat: Blob | null;
       faceShapeContourFlat: Blob | null;
+      /** Deux polygones joues (bilatéral) sur cliché frontal + voile. */
+      cheeksFlat: Blob | null;
       /**
        * Cliché frontal + voile sombre + grille blanche 2D (ovale + axe médian
        * et horizontales yeux/bouche). Vignette d’analyse (sidebar) — `null` si
@@ -110,6 +115,8 @@ export type AdminFlattenedGuideEncoding =
   | {
       variant: 'closeupEye';
       eyeContoursFlat: Blob;
+      /** Segment médial→latéral par œil (canthal tilt) sur cliché recadré + voile léger. */
+      eyeCanthalTiltFlat: Blob | null;
     };
 
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob | null> {
@@ -406,7 +413,7 @@ function isCloseupHairlinePoseId(id: PoseId): id is 'closeup-hairline' {
 /**
  * PNG aplatis admin : 5 variantes pour la face de face ; 2 par profil (mâchoire + nez visible)
  * ; 1 pour menton levé ; 1 pour sourire (lèvres + variante dents) ;
- * 1 pour gros plan œil (contours des deux yeux). La pose `crown-down` (sommet du
+ * 1 pour gros plan œil (contours des deux yeux + **lignes canthal tilt**). La pose `crown-down` (sommet du
  * crâne) ne produit plus de PNG aplati : la photo miroir seule n’apportait aucun
  * repère utile à l’admin.
  * Hors `DEBUG_CAPTURE_WHITE_FACE_MESH`, pas de Wireframe plein cadre sur les autres composites
@@ -443,8 +450,19 @@ export async function encodeAdminGuideFlattenedPair(opts: {
           landmarkBothEyesBoundingBoxPx(lm, ow, oh, GUIDE_TRACE_FEATURE_CROP_MARGIN),
         'eye-closeup',
       );
+      const eyeCanthalTiltFlat = await renderSingleFlatGuidePng(
+        bitmap,
+        opts.landmarks,
+        opts.sourceVideoWidth,
+        opts.sourceVideoHeight,
+        (ctx, lm, ow, oh) => drawAdminCloseupEyeCanthalTiltGuideOnCanvas(ctx, lm, ow, oh),
+        false,
+        0.4,
+        (lm, ow, oh) =>
+          landmarkBothEyesBoundingBoxPx(lm, ow, oh, GUIDE_TRACE_FEATURE_CROP_MARGIN),
+      );
       if (!eyeContoursFlat) return null;
-      return { variant: 'closeupEye', eyeContoursFlat };
+      return { variant: 'closeupEye', eyeContoursFlat, eyeCanthalTiltFlat };
     }
 
     /**
@@ -575,6 +593,15 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       false,
       GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
+    const cheeksFlat = await renderSingleFlatGuidePng(
+      bitmap,
+      opts.landmarks,
+      opts.sourceVideoWidth,
+      opts.sourceVideoHeight,
+      drawAdminCheeksGuideOnCanvas,
+      false,
+      GUIDE_TRACE_BG_DARKEN_OPACITY,
+    ).catch(() => null);
     const maskOverlayFlat = await renderFrontalMaskOverlayFlatPng(
       bitmap,
       opts.landmarks,
@@ -605,6 +632,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       !verticalThirdsFlat &&
       !jawAngleFlat &&
       !faceShapeContourFlat &&
+      !cheeksFlat &&
       !maskOverlayFlat &&
       !lipsFlat
     )
@@ -616,6 +644,7 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       verticalThirdsFlat,
       jawAngleFlat,
       faceShapeContourFlat,
+      cheeksFlat,
       maskOverlayFlat,
       lipsFlat,
     };
