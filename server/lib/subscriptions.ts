@@ -25,6 +25,18 @@ type ActiveSubscriptionRow = {
   created_at: string;
 };
 
+/** True when Dodo marked a cancel-at-period-end while our row stays `active`. */
+function isScheduledCancellation(metadata: Record<string, unknown>): boolean {
+  if (metadata.cancel_at_next_billing_date === true) {
+    return true;
+  }
+  // After `subscription.cancelled`, we keep DB `active` until `subscription.expired`.
+  if (metadata.dodo_status === "cancelled") {
+    return metadata.cancel_at_next_billing_date !== false;
+  }
+  return false;
+}
+
 function extractPlanFromSubscription(row: ActiveSubscriptionRow): Plan | null {
   const fromMetadata = row.metadata?.plan;
   if (typeof fromMetadata === "string" && isPlan(fromMetadata)) {
@@ -48,6 +60,7 @@ function toActiveSubscriptionSummary(
     granted_reason: row.granted_reason,
     plan: extractPlanFromSubscription(row),
     created_at: row.created_at,
+    scheduled_cancellation: isScheduledCancellation(row.metadata),
   };
 }
 

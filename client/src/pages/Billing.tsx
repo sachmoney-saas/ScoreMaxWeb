@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CreditCard, Loader2, Sparkles } from "lucide-react";
 import {
@@ -71,6 +71,14 @@ function planFeatures(plan: Plan, lang: "fr" | "en"): string[] {
   return [...(lang === "fr" ? PLAN_BENEFITS[plan].fr : PLAN_BENEFITS[plan].en)];
 }
 
+function formatPeriodEnd(iso: string, lang: "fr" | "en"): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return iso;
+  return new Intl.DateTimeFormat(lang === "fr" ? "fr-FR" : "en-GB", {
+    dateStyle: "long",
+  }).format(date);
+}
+
 function subscriberPlanSummary(
   plan: Plan,
   lang: "fr" | "en",
@@ -103,7 +111,18 @@ export default function Billing() {
     queryKey: BILLING_QUERY_KEY,
     queryFn: fetchBillingState,
     staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void queryClient.invalidateQueries({ queryKey: BILLING_QUERY_KEY });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [queryClient]);
 
   const checkoutMutation = useMutation({
     mutationFn: (plan: Plan) => createBillingCheckout(plan),
@@ -140,7 +159,12 @@ export default function Billing() {
 
   const isSubscriber = Boolean(state?.is_subscriber);
   const isAdmin = Boolean(state?.is_admin);
-  const subscriberPlan: Plan | null = state?.active_subscription?.plan ?? null;
+  const activeSubscription = state?.active_subscription ?? null;
+  const subscriberPlan: Plan | null = activeSubscription?.plan ?? null;
+  const scheduledCancellation = Boolean(
+    activeSubscription?.scheduled_cancellation,
+  );
+  const periodEndIso = activeSubscription?.current_period_end ?? null;
 
   const planDisplayByLang = useMemo(() => {
     return SUBSCRIPTION_PLANS.map((pid) => {
@@ -385,8 +409,20 @@ export default function Billing() {
               en: "Subscription & invoices",
               fr: "Abonnement & factures",
             })}
-            <Badge variant="secondary" className="font-medium">
-              {i18n(language, { en: "Active", fr: "Actif" })}
+            <Badge
+              variant="secondary"
+              className={cn(
+                "font-medium",
+                scheduledCancellation &&
+                  "border-amber-400/35 bg-amber-500/15 text-amber-100",
+              )}
+            >
+              {scheduledCancellation
+                ? i18n(language, {
+                    en: "Scheduled cancellation",
+                    fr: "Annulation programmée",
+                  })
+                : i18n(language, { en: "Active", fr: "Actif" })}
             </Badge>
           </CardTitle>
           <CardDescription className="text-zinc-300">
@@ -405,6 +441,19 @@ export default function Billing() {
                 fr: "Vous avez un abonnement actif.",
               })
             )}
+            {scheduledCancellation ? (
+              <span className="mt-3 block text-sm text-amber-100/90">
+                {periodEndIso
+                  ? i18n(language, {
+                      en: `Premium access remains until ${formatPeriodEnd(periodEndIso, lang)}. No charge after that date.`,
+                      fr: `L'accès premium reste actif jusqu'au ${formatPeriodEnd(periodEndIso, lang)}. Aucun prélèvement après cette date.`,
+                    })
+                  : i18n(language, {
+                      en: "Premium access remains until the end of your current billing period.",
+                      fr: "L'accès premium reste actif jusqu'à la fin de votre période de facturation en cours.",
+                    })}
+              </span>
+            ) : null}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">

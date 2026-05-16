@@ -211,6 +211,11 @@ export type ActiveSubscriptionSummary = {
   /** Checkout plan slug when known (Dodo metadata.plan or legacy granted_reason). */
   plan: Plan | null;
   created_at: string;
+  /**
+   * Dodo: user cancelled but keeps access until `current_period_end`
+   * (`cancel_at_next_billing_date` on the subscription).
+   */
+  scheduled_cancellation: boolean;
 };
 
 /** Premium-features state that the API exposes for any user (free, sub, admin). */
