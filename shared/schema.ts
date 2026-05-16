@@ -19,6 +19,8 @@ export const profiles = pgTable("profiles", {
   subscription_status: text("subscription_status"),
   has_accepted_terms: boolean("has_accepted_terms").default(false).notNull(),
   has_completed_onboarding: boolean("has_completed_onboarding").default(false).notNull(),
+  /** True after any subscription row or billing customer id (persists after cancel). */
+  has_ever_subscribed: boolean("has_ever_subscribed").default(false).notNull(),
   last_active_at: timestamp("last_active_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -39,7 +41,7 @@ export const scanSessions = pgTable("scan_sessions", {
   user_id: uuid("user_id").notNull(),
   source: text("source", { enum: ["onboarding", "manual_rescan", "automated"] }).default("onboarding").notNull(),
   status: text("status", { enum: ["collecting", "ready", "processing", "completed", "failed", "abandoned"] }).default("collecting").notNull(),
-  required_asset_count: integer("required_asset_count").default(8).notNull(),
+  required_asset_count: integer("required_asset_count").default(7).notNull(),
   completed_asset_count: integer("completed_asset_count").default(0).notNull(),
   started_at: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
   ready_at: timestamp("ready_at", { withTimezone: true }),
@@ -224,6 +226,8 @@ export type PremiumAccessState = {
   has_premium_access: boolean;
   /** True when the user has an active subscription row, regardless of admin role. */
   is_subscriber: boolean;
+  /** True if the user subscribed at least once (incl. expired / canceled). */
+  has_ever_subscribed: boolean;
   is_admin: boolean;
   active_subscription: ActiveSubscriptionSummary | null;
 };
@@ -269,7 +273,7 @@ export function isPlan(value: string): value is Plan {
 }
 
 /**
- * Huit clichés JPEG requis pour l’onboarding / une analyse complète ScanFace.
+ * Sept clichés JPEG requis pour l’onboarding / une analyse complète ScanFace.
  * Ne pas étendre ce tuple sans mettre à jour les workers ni `SCAN_ASSET_TO_CANONICAL_SLOT`.
  */
 export const REQUIRED_ONBOARDING_SCAN_ASSET_CODES = [
@@ -279,7 +283,6 @@ export const REQUIRED_ONBOARDING_SCAN_ASSET_CODES = [
   "LOOK_UP",
   "LOOK_DOWN",
   "SMILE",
-  "HAIR_BACK",
   "EYE_CLOSEUP",
 ] as const;
 
@@ -373,7 +376,6 @@ export const SCANFACE_CANONICAL_IMAGE_SLOTS = [
   "look_up",
   "look_down",
   "smile",
-  "hair_back_hand",
   "closeup_eye",
 ] as const;
 
@@ -390,7 +392,6 @@ export const SCAN_ASSET_TO_CANONICAL_SLOT: Record<
   LOOK_UP: "look_up",
   LOOK_DOWN: "look_down",
   SMILE: "smile",
-  HAIR_BACK: "hair_back_hand",
   EYE_CLOSEUP: "closeup_eye",
 };
 
@@ -404,7 +405,6 @@ export const CANONICAL_SLOT_TO_SCAN_ASSET: Record<
   look_up: "LOOK_UP",
   look_down: "LOOK_DOWN",
   smile: "SMILE",
-  hair_back_hand: "HAIR_BACK",
   closeup_eye: "EYE_CLOSEUP",
 };
 

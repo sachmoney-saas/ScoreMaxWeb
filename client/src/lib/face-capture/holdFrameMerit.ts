@@ -27,7 +27,7 @@ const PROFILE_PITCH = 0.26;
 const VERT_PITCH = 0.8;
 const VERT_YAW = 0.2;
 
-/** Gros plans œil / hairline : angles + cadrage (minFaceRatio). */
+/** Gros plan œil : angles + cadrage (minFaceRatio). */
 const CLOSEUP_ANGLE = 0.7;
 const CLOSEUP_FRAMING = 0.3;
 
@@ -54,11 +54,6 @@ function poseGeometricMerit(pose: PoseDefinition, frame: FaceFrame): number {
       angularRangeMidpointFit(pitch, pose.pitchRange) * VERT_PITCH +
       angularRangeMidpointFit(yaw, pose.yawRange) * VERT_YAW
     );
-  }
-  if (pid === "closeup-hairline") {
-    const fr = faceRatio(frame);
-    const framing = Math.min(1, fr / Math.max(pose.minFaceRatio, 1e-6));
-    return tri * CLOSEUP_ANGLE + framing * CLOSEUP_FRAMING;
   }
   if (pid === "closeup-eye") {
     const fr = faceRatio(frame);

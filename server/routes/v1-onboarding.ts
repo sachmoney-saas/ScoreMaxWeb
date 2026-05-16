@@ -149,6 +149,11 @@ async function ensurePotentialImageForCompletedOnboarding(userId: string) {
     return null;
   }
 
+  const existing = await getLatestPotentialImageForUser(userId);
+  if (existing) {
+    return existing;
+  }
+
   try {
     const session = await loadReadyOnboardingSession(userId);
     await triggerOnboardingPotentialImage({
@@ -182,10 +187,12 @@ export function createV1OnboardingRouter(): Router {
         await markScanSessionReady(session.id, userId);
         await markOnboardingCompleted(userId);
 
-        const generationId = await triggerOnboardingPotentialImage({
+        const { generationId, reused } = await triggerOnboardingPotentialImage({
           userId,
           sessionId: session.id,
         });
+
+        const latest = await getLatestPotentialImageForUser(userId);
 
         res.status(200).json({
           ok: true,
@@ -193,7 +200,8 @@ export function createV1OnboardingRouter(): Router {
           data: {
             generation: {
               id: generationId,
-              status: "pending",
+              status: latest?.status ?? "pending",
+              reused,
             },
           },
           error: null,

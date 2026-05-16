@@ -25,6 +25,7 @@ type Profile = {
   is_subscriber: boolean;
   has_accepted_terms: boolean;
   has_completed_onboarding: boolean;
+  has_ever_subscribed: boolean;
 };
 
 type AuthContextType = {

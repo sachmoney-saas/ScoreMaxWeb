@@ -1,7 +1,6 @@
 import { CrownDownStrategy } from "./CrownDownStrategy";
 import { EyeCloseupStrategy } from "./EyeCloseupStrategy";
 import { FrontalStrategy } from "./FrontalStrategy";
-import { HairlineStrategy } from "./HairlineStrategy";
 import { JawUpStrategy } from "./JawUpStrategy";
 import { ProfileLeftStrategy } from "./ProfileLeftStrategy";
 import { ProfileRightStrategy } from "./ProfileRightStrategy";
@@ -18,5 +17,4 @@ export const POSE_STRATEGIES: PoseStrategy[] = [
   new CrownDownStrategy(),
   new SmileStrategy(),
   new EyeCloseupStrategy(),
-  new HairlineStrategy(),
 ];

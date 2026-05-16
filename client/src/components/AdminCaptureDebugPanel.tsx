@@ -123,11 +123,7 @@ function isCloseupEyePoseId(id: PoseId): boolean {
   return id === 'closeup-eye';
 }
 
-function isCloseupHairlinePoseId(id: PoseId): boolean {
-  return id === 'closeup-hairline';
-}
-
-/** Gros plan œil sans PNG encore / hairline : miniature JPEG d’analyse uniquement (sans masque). */
+/** Gros plan œil sans PNG : miniature JPEG d’analyse uniquement (sans masque). */
 function JpegThumbnailOnlyAdminPreview({
   payload,
   language,
@@ -135,21 +131,14 @@ function JpegThumbnailOnlyAdminPreview({
   payload: AdminCaptureDebugPayload;
   language: AppLanguage;
 }) {
-  const eye = isCloseupEyePoseId(payload.poseId);
   return (
     <div className="flex w-full flex-col gap-2">
       <p className="text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-        {eye
-          ? i18n(language, {
-              en: 'Eye close-up — analysis JPEG only (eye-contour PNG unavailable for this capture)',
-              fr:
-                'Gros plan œil — JPEG d’analyse seul (PNG contours indisponible pour cette capture)',
-            })
-          : i18n(language, {
-              en: 'Hairline closeup — analysis JPEG only (no admin flat PNG, no mask overlay)',
-              fr:
-                'Gros plan front — JPEG d’analyse uniquement (pas de PNG aplati admin, pas de masque)',
-            })}
+        {i18n(language, {
+          en: 'Eye close-up — analysis JPEG only (eye-contour PNG unavailable for this capture)',
+          fr:
+            'Gros plan œil — JPEG d’analyse seul (PNG contours indisponible pour cette capture)',
+        })}
       </p>
       <img
         src={payload.thumbnailUrl}
@@ -624,8 +613,7 @@ export function AdminCaptureDebugPanel({
     isCloseupEyePose && (eyeCloseupContourUrl || eyeCloseupCanthalTiltUrl),
   );
   const needsJpegOnlyCloseup =
-    isCloseupHairlinePoseId(payload.poseId) ||
-    (isCloseupEyePose && !eyeCloseupContourUrl && !eyeCloseupCanthalTiltUrl);
+    isCloseupEyePose && !eyeCloseupContourUrl && !eyeCloseupCanthalTiltUrl;
 
   const ovalUrl = payload.annotatedOvalGuideThumbnailUrl;
   const nmUrl = payload.annotatedNoseMouthGuideThumbnailUrl;

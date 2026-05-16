@@ -12,6 +12,7 @@ import { supabaseAdmin } from "./supabase-admin";
 type ProfileAccessRow = {
   id: string;
   role: "user" | "admin" | string | null;
+  has_ever_subscribed: boolean;
 };
 
 type ActiveSubscriptionRow = {
@@ -67,7 +68,7 @@ function toActiveSubscriptionSummary(
 async function loadProfileAccess(userId: string): Promise<ProfileAccessRow> {
   const { data, error } = await supabaseAdmin
     .from("profiles")
-    .select("id, role")
+    .select("id, role, has_ever_subscribed")
     .eq("id", userId)
     .maybeSingle();
 
@@ -153,6 +154,7 @@ export async function getPremiumAccessState(
   return {
     has_premium_access: isAdmin || isSubscriber,
     is_subscriber: isSubscriber,
+    has_ever_subscribed: profile.has_ever_subscribed === true,
     is_admin: isAdmin,
     active_subscription:
       isSubscriber && subscription
@@ -165,6 +167,20 @@ export async function getPremiumAccessState(
 export async function hasPremiumAccess(userId: string): Promise<boolean> {
   const state = await getPremiumAccessState(userId);
   return state.has_premium_access;
+}
+
+/**
+ * True when GDPR account deletion must be refused: active subscription that is
+ * not scheduled to end at period end (Dodo cancel-at-next-billing-date).
+ */
+export async function isAccountDeletionBlockedBySubscription(
+  userId: string,
+): Promise<boolean> {
+  const subscription = await loadActiveSubscriptionRow(userId);
+  if (!subscription || !isActiveWithinPeriod(subscription)) {
+    return false;
+  }
+  return !isScheduledCancellation(subscription.metadata);
 }
 
 async function logSubscriptionEvent(params: {

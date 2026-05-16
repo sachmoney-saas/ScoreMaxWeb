@@ -10,6 +10,7 @@ import {
   ONBOARDING_HERO_MIN_LANDMARKS,
   type HeroMetricHighlight,
 } from "@/lib/face-capture/build-face-mesh-3d";
+import type { BuildFaceMesh3DFrame } from "@/lib/face-capture/build-face-mesh-3d";
 import type { LandmarkPoint } from "@/lib/face-capture/types";
 import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { onboardingPrimaryCtaClassName } from "@/lib/cta-button-styles";
@@ -41,19 +42,27 @@ const SLIDES: readonly {
 type Props = {
   language: AppLanguage;
   frontalLandmarks: LandmarkPoint[];
+  landmarkFrame?: BuildFaceMesh3DFrame;
   eyeLandmarks?: LandmarkPoint[];
+  eyeLandmarkFrame?: BuildFaceMesh3DFrame;
   onContinue: () => void;
   onReviewPoses: () => void;
   isContinuing?: boolean;
+  isSavingCaptures?: boolean;
+  continueDisabled?: boolean;
 };
 
 export function OnboardingScanCompleteScreen({
   language,
   frontalLandmarks,
+  landmarkFrame,
   eyeLandmarks,
+  eyeLandmarkFrame,
   onContinue,
   onReviewPoses,
   isContinuing = false,
+  isSavingCaptures = false,
+  continueDisabled = false,
 }: Props) {
   const [slideIndex, setSlideIndex] = React.useState(0);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -76,6 +85,17 @@ export function OnboardingScanCompleteScreen({
     }
     return frontalLandmarks;
   }, [slide.id, eyeLandmarks, frontalLandmarks]);
+
+  const frameForSlide = React.useMemo((): BuildFaceMesh3DFrame | undefined => {
+    if (
+      slide.id === "eyes" &&
+      eyeLandmarks &&
+      eyeLandmarks.length >= ONBOARDING_HERO_MIN_LANDMARKS
+    ) {
+      return eyeLandmarkFrame ?? landmarkFrame;
+    }
+    return landmarkFrame;
+  }, [slide.id, eyeLandmarkFrame, eyeLandmarks, landmarkFrame]);
 
   const reducedMotion = React.useMemo(
     () =>
@@ -100,7 +120,7 @@ export function OnboardingScanCompleteScreen({
       renderer = new FaceMeshHeroRenderer();
       renderer.init(canvasRef.current);
       renderer.setIdleEnabled(!reducedMotion);
-      renderer.setLandmarks(frontalLandmarks);
+      renderer.setLandmarks(frontalLandmarks, landmarkFrame);
       renderer.setHighlight(slide.id);
       renderer.start();
       rendererRef.current = renderer;
@@ -127,13 +147,13 @@ export function OnboardingScanCompleteScreen({
       rendererRef.current?.dispose();
       rendererRef.current = null;
     };
-  }, [reducedMotion, frontalLandmarks]);
+  }, [frontalLandmarks, landmarkFrame, reducedMotion]);
 
   React.useEffect(() => {
     if (!rendererRef.current || !landmarksForSlide) return;
-    rendererRef.current.setLandmarks(landmarksForSlide);
+    rendererRef.current.setLandmarks(landmarksForSlide, frameForSlide);
     rendererRef.current.setHighlight(slide.id);
-  }, [landmarksForSlide, slide.id]);
+  }, [frameForSlide, landmarksForSlide, slide.id]);
 
   const onPointerDown = React.useCallback((e: React.PointerEvent) => {
     dragRef.current.active = true;
@@ -187,32 +207,25 @@ export function OnboardingScanCompleteScreen({
 
   return (
     <motion.div
-      className="fixed inset-0 z-40 flex flex-col bg-[#050608] text-zinc-50"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.35 }}
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-1 py-2 sm:px-2 sm:py-4"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
     >
-      <motion.div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_55%_at_50%_35%,rgba(56,189,248,0.12),transparent_65%)]"
-        aria-hidden
-      />
-
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] sm:px-6">
-        <header className="shrink-0 text-center">
-          <h1 className="font-hero text-[1.65rem] font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-[2rem]">
-            {i18n(language, {
-              en: "Your scan is complete",
-              fr: "Ton scan est terminé",
-            })}
-          </h1>
-          <p className="mt-2 text-sm text-zinc-400 sm:text-base">
-            {i18n(language, {
-              en: "We've captured your unique facial structure",
-              fr: "Nous avons capturé la structure unique de ton visage",
-            })}
-          </p>
-        </header>
+      <header className="shrink-0 text-center">
+        <h2 className="font-hero text-[1.35rem] font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.65rem]">
+          {i18n(language, {
+            en: "Your scan is complete",
+            fr: "Ton scan est terminé",
+          })}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-300 sm:text-base">
+          {i18n(language, {
+            en: "We've captured your unique facial structure",
+            fr: "Nous avons capturé la structure unique de ton visage",
+          })}
+        </p>
+      </header>
 
         <div className="mt-4 flex shrink-0 justify-center">
           <AnimatePresence mode="wait">
@@ -222,7 +235,10 @@ export function OnboardingScanCompleteScreen({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.2 }}
-              className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.06] px-3.5 py-1.5 text-xs font-medium text-zinc-200 backdrop-blur-sm sm:text-sm"
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium text-zinc-200 sm:text-sm",
+                saasGlassInsetClassName,
+              )}
             >
               <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.85)]" />
               {i18n(language, slide.pill)}
@@ -232,8 +248,7 @@ export function OnboardingScanCompleteScreen({
 
         <motion.div
           ref={viewportRef}
-          className="relative mx-auto mt-3 w-full max-w-md flex-1 touch-pan-y"
-          style={{ minHeight: "min(52vh, 420px)" }}
+          className="relative mx-auto mt-3 w-full shrink-0 aspect-[3/4] max-h-[min(34dvh,300px)] sm:max-h-[min(38dvh,340px)]"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
           onPointerDown={onPointerDown}
@@ -244,7 +259,7 @@ export function OnboardingScanCompleteScreen({
           <canvas
             ref={canvasRef}
             className={cn(
-              "h-full w-full cursor-grab active:cursor-grabbing",
+              "absolute inset-0 h-full w-full touch-none cursor-grab active:cursor-grabbing",
               !webglReady && "opacity-0",
               webglReady && "opacity-100 transition-opacity duration-500",
             )}
@@ -279,7 +294,10 @@ export function OnboardingScanCompleteScreen({
         </motion.div>
 
         <motion.div
-          className="mx-auto mt-4 flex w-full max-w-md shrink-0 items-center justify-center gap-2 rounded-full border border-sky-400/25 bg-sky-500/10 px-4 py-2.5 text-sm font-medium text-sky-100"
+          className={cn(
+            "mx-auto mt-3 flex w-full shrink-0 items-center justify-center gap-2 border-sky-400/25 px-4 py-2.5 text-sm font-medium text-sky-100 sm:mt-4",
+            saasGlassInsetClassName,
+          )}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
@@ -291,7 +309,7 @@ export function OnboardingScanCompleteScreen({
           })}
         </motion.div>
 
-        <div className="mx-auto mt-3 grid w-full max-w-md shrink-0 grid-cols-2 gap-3">
+        <div className="mx-auto mt-3 grid w-full shrink-0 grid-cols-2 gap-3">
           <motion.div
             className={cn("flex flex-col gap-1 px-4 py-3", saasGlassInsetClassName)}
             initial={{ opacity: 0, y: 8 }}
@@ -318,7 +336,7 @@ export function OnboardingScanCompleteScreen({
           </motion.div>
         </div>
 
-        <p className="mt-5 shrink-0 text-center text-sm text-zinc-400">
+        <p className="mt-4 shrink-0 text-center text-sm text-zinc-400 sm:mt-5">
           {i18n(language, {
             en: "Let's see where you stand…",
             fr: "Voyons où tu te situes…",
@@ -326,14 +344,22 @@ export function OnboardingScanCompleteScreen({
         </p>
 
         <motion.div
-          className="mx-auto mt-4 w-full max-w-md shrink-0 space-y-3"
+          className="mx-auto mt-4 w-full shrink-0 space-y-3 pb-1"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
+          {isSavingCaptures ? (
+            <p className="text-center text-xs text-zinc-400">
+              {i18n(language, {
+                en: "Saving your photos…",
+                fr: "Enregistrement de tes photos…",
+              })}
+            </p>
+          ) : null}
           <button
             type="button"
-            disabled={isContinuing}
+            disabled={isContinuing || continueDisabled || isSavingCaptures}
             onClick={onContinue}
             className={cn(
               "flex w-full items-center justify-center px-4 py-3.5 text-base font-semibold transition disabled:opacity-60",
@@ -347,7 +373,7 @@ export function OnboardingScanCompleteScreen({
           </button>
           <button
             type="button"
-            disabled={isContinuing}
+            disabled={isContinuing || isSavingCaptures}
             onClick={onReviewPoses}
             className="w-full text-center text-sm font-medium text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline disabled:opacity-50"
           >
@@ -357,7 +383,6 @@ export function OnboardingScanCompleteScreen({
             })}
           </button>
         </motion.div>
-      </div>
     </motion.div>
   );
 }

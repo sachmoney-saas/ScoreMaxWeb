@@ -4,13 +4,11 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
+import { AuthProvider } from "@/hooks/use-auth";
+import { useUserAccess } from "@/hooks/use-user-access";
 import { useOnboardingPotentialImage } from "@/hooks/use-onboarding-potential-image";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { WaveBackground } from "@/components/background/WaveBackground";
-import { authPageOverlayClassName } from "@/lib/auth-page-shell-styles";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import Onboarding from "@/pages/Onboarding";
@@ -39,7 +37,10 @@ import Confidentialite from "@/pages/Confidentialite";
 import { AUTH_CONFIG } from "@/config/auth";
 import { LanguageProvider } from "@/lib/i18n";
 import { BrandLoader } from "@/components/ui/brand-loader";
-import { isOnboardingPotentialTeaserActive } from "@/lib/onboarding-flow-storage";
+import {
+  readOnboardingFlowState,
+  resolveOnboardingInitialStepForReturningUser,
+} from "@/lib/onboarding-flow-storage";
 
 function FullScreenLoader() {
   return (
@@ -55,23 +56,22 @@ function ProtectedRoute({
 }: {
   component: React.ComponentType;
 }) {
-  const { status } = useOnboardingGate();
-  const { hasPremiumAccess, isAdmin, isLoading: authLoading } = useAuth();
+  const access = useUserAccess();
 
-  if (status === "loading" || authLoading) {
+  if (access.isLoading) {
     return <FullScreenLoader />;
   }
 
-  if (status === "anon") {
+  if (!access.isAuthenticated) {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
   }
 
-  if (status === "needs_onboarding") {
+  if (access.shouldUseOnboardingFlow) {
     return <Redirect to="/onboarding" />;
   }
 
-  if (!hasPremiumAccess && !isAdmin) {
-    return <Redirect to="/billing" />;
+  if (!access.canAccessApp) {
+    return <Redirect to="/onboarding" />;
   }
 
   return (
@@ -84,39 +84,18 @@ function ProtectedRoute({
 }
 
 function BillingLayout({ children }: { children: React.ReactNode }) {
-  const { status } = useOnboardingGate();
-  const { user, hasPremiumAccess, isAdmin, isLoading: authLoading } = useAuth();
+  const access = useUserAccess();
 
-  if (status === "loading" || authLoading) {
+  if (access.isLoading) {
     return <FullScreenLoader />;
   }
 
-  if (!user || status === "anon") {
+  if (!access.isAuthenticated) {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
   }
 
-  if (status === "needs_onboarding") {
+  if (access.shouldUseOnboardingFlow) {
     return <Redirect to="/onboarding" />;
-  }
-
-  const standalonePaywall = !hasPremiumAccess && !isAdmin;
-
-  if (standalonePaywall) {
-    return (
-      <ErrorBoundary>
-        <div className="relative isolate flex min-h-dvh max-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-[#9aaeb5]">
-          <WaveBackground
-            useContainerSize
-            className="pointer-events-none z-0 bg-[#9aaeb5]"
-            canvasClassName="bg-transparent"
-          />
-          <div className={authPageOverlayClassName} aria-hidden />
-          <div className="relative z-10 mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-8">
-            {children}
-          </div>
-        </div>
-      </ErrorBoundary>
-    );
   }
 
   return (
@@ -127,44 +106,49 @@ function BillingLayout({ children }: { children: React.ReactNode }) {
 }
 
 function OnboardingRoute() {
-  const { status } = useOnboardingGate();
-  const { user, hasPremiumAccess, isAdmin, isLoading: authLoading } = useAuth();
-  const shouldCheckPotentialTeaser =
-    !!user && status === "ok" && !hasPremiumAccess && !isAdmin;
-  const persistedPotentialTeaser = isOnboardingPotentialTeaserActive();
+  const access = useUserAccess();
+  const shouldCheckPaywallFunnel =
+    access.kind === "onboarding_paywall_funnel";
   const {
     data: potentialImage,
     isLoading: isPotentialImageLoading,
   } = useOnboardingPotentialImage({
-    enabled: shouldCheckPotentialTeaser,
+    enabled: shouldCheckPaywallFunnel,
   });
 
-  if (status === "loading" || authLoading) {
+  if (access.isLoading) {
     return <FullScreenLoader />;
   }
 
-  if (!user) {
+  if (!access.isAuthenticated) {
     return <Redirect to={AUTH_CONFIG.LOGIN_PATH} />;
   }
 
-  if (status === "ok" && (hasPremiumAccess || isAdmin)) {
+  if (access.canAccessApp) {
     return <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />;
   }
 
-  if (status === "ok" && !hasPremiumAccess && !isAdmin) {
-    if (persistedPotentialTeaser || potentialImage) {
-      return (
-        <ErrorBoundary>
-          <Onboarding initialStep={1} />
-        </ErrorBoundary>
-      );
-    }
+  if (access.kind === "onboarding_paywall_funnel") {
+    const persistedStep = readOnboardingFlowState()?.step ?? null;
+    const initialStep = resolveOnboardingInitialStepForReturningUser({
+      persistedStep,
+      hasPotentialImage: !!potentialImage,
+    });
 
-    if (isPotentialImageLoading) {
+    if (
+      initialStep === 1 &&
+      isPotentialImageLoading &&
+      !potentialImage &&
+      (persistedStep ?? 0) < 1
+    ) {
       return <FullScreenLoader />;
     }
 
-    return <Redirect to="/billing" />;
+    return (
+      <ErrorBoundary>
+        <Onboarding initialStep={initialStep} />
+      </ErrorBoundary>
+    );
   }
 
   return (
@@ -175,23 +159,14 @@ function OnboardingRoute() {
 }
 
 function AuthRedirectRoute() {
-  const { status } = useOnboardingGate();
-  const { hasPremiumAccess, isAdmin, isLoading: authLoading } = useAuth();
+  const access = useUserAccess();
 
-  if (status === "loading" || authLoading) {
+  if (access.isLoading) {
     return <FullScreenLoader />;
   }
 
-  if (status === "ok" && (hasPremiumAccess || isAdmin)) {
-    return <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />;
-  }
-
-  if (status === "ok" && !hasPremiumAccess && !isAdmin) {
-    return <Redirect to="/billing" />;
-  }
-
-  if (status === "needs_onboarding") {
-    return <Redirect to="/onboarding" />;
+  if (access.isAuthenticated) {
+    return <Redirect to={access.postLoginPath} />;
   }
 
   return <AuthPage />;

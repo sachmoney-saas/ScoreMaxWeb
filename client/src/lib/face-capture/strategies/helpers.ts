@@ -1,4 +1,3 @@
-import { foreheadExposure } from "../GeometryScorer";
 import type { FaceFrame, LandmarkPoint } from "../types";
 import { clamp01 } from "./PoseStrategy";
 
@@ -142,9 +141,3 @@ function geometricSmileScore(lms: LandmarkPoint[]): number {
   return Math.min(widthScore, liftScore);
 }
 
-export function hairlineProgress(frame: FaceFrame): number {
-  const exposure = foreheadExposure(frame.landmarks);
-  if (exposure === null) return 0;
-  if (exposure <= 0) return 1;
-  return clamp01(1 - exposure * 8);
-}

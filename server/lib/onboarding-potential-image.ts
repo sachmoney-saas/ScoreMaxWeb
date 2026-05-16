@@ -15,14 +15,37 @@ import {
   uploadR2Object,
 } from "./r2-storage";
 import { supabaseAdmin } from "./supabase-admin";
+import {
+  pickPreferredPotentialGeneration,
+  shouldStartNewPotentialImageGeneration,
+  type PotentialGenerationStatus,
+} from "./onboarding-potential-image-policy";
 
 export const ONBOARDING_POTENTIAL_PROMPT_KEY = "onboarding_potential_6months" as const;
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_MS = 90_000;
-const DUPLICATE_WINDOW_MS = 120_000;
 
 const activePotentialPollers = new Set<string>();
+
+const GENERATION_SELECT =
+  "id, status, r2_bucket, r2_key, error_code, error_message, created_at, source_scan_asset_id, oneshot_job_id";
+
+export type TriggerPotentialImageResult = {
+  generationId: string;
+  reused: boolean;
+};
+
+export type PotentialImagePayload = {
+  id: string;
+  status: "pending" | "completed" | "failed";
+  signed_url: string | null;
+  /** Repère face + masque 3D (`GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY`), sinon photo `FACE_FRONT`. */
+  mask_overlay_signed_url: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+};
 
 type PromptRow = {
   key: string;
@@ -39,7 +62,131 @@ type GenerationRow = {
   user_id: string;
   oneshot_job_id: string | null;
   status: string;
+  r2_bucket: string | null;
+  r2_key: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  created_at: string;
+  source_scan_asset_id: string | null;
 };
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: string }).code === "23505"
+  );
+}
+
+function toGenerationSnapshot(row: GenerationRow) {
+  return {
+    status: row.status as PotentialGenerationStatus,
+    hasOneshotJob: Boolean(row.oneshot_job_id),
+    hasStoredResult: Boolean(row.r2_key),
+  };
+}
+
+async function loadPotentialGenerationsForUser(userId: string): Promise<GenerationRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("scoremax_ai_image_generations")
+    .select(GENERATION_SELECT)
+    .eq("user_id", userId)
+    .eq("prompt_key", ONBOARDING_POTENTIAL_PROMPT_KEY)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error) {
+    logger.error({ err: error, userId }, "Unable to load potential image generations");
+    return [];
+  }
+
+  return (data ?? []) as GenerationRow[];
+}
+
+/**
+ * Génération réutilisable : image terminée conservée, ou job encore en cours.
+ */
+async function findReusablePotentialGeneration(
+  userId: string,
+): Promise<GenerationRow | null> {
+  const rows = await loadPotentialGenerationsForUser(userId);
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const preferred = pickPreferredPotentialGeneration(
+    rows.map((row) => ({
+      status: row.status as PotentialGenerationStatus,
+      createdAtMs: new Date(row.created_at).getTime(),
+    })),
+  );
+  if (!preferred) {
+    return null;
+  }
+
+  const match = rows.find(
+    (row) =>
+      row.status === preferred.status &&
+      new Date(row.created_at).getTime() === preferred.createdAtMs,
+  );
+  if (!match) {
+    return null;
+  }
+
+  if (!shouldStartNewPotentialImageGeneration(toGenerationSnapshot(match))) {
+    return match;
+  }
+
+  return null;
+}
+
+async function generationRowToPayload(
+  row: GenerationRow,
+  userId: string,
+): Promise<PotentialImagePayload | null> {
+  const status = row.status as PotentialGenerationStatus;
+  if (status !== "pending" && status !== "completed" && status !== "failed") {
+    return null;
+  }
+
+  if (status === "pending" && !row.oneshot_job_id) {
+    await markGenerationFailed({
+      generationId: row.id,
+      code: "ONESHOT_JOB_MISSING",
+      message: "Pending OneShot generation has no job id",
+    });
+    return null;
+  }
+
+  if (status === "pending" && row.oneshot_job_id) {
+    dispatchPotentialImagePolling(row.id);
+  }
+
+  let signedUrl: string | null = null;
+  if (status === "completed" && row.r2_key) {
+    signedUrl = await getR2SignedDownloadUrl({
+      bucket: row.r2_bucket ?? undefined,
+      key: row.r2_key,
+      expiresInSeconds: 300,
+    });
+  }
+
+  const maskOverlaySignedUrl = await resolveMaskOverlaySignedUrl({
+    userId,
+    sourceScanAssetId: row.source_scan_asset_id,
+  });
+
+  return {
+    id: row.id,
+    status,
+    signed_url: signedUrl,
+    mask_overlay_signed_url: maskOverlaySignedUrl,
+    error_code: row.error_code,
+    error_message: row.error_message,
+    created_at: row.created_at,
+  };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -266,22 +413,17 @@ export async function recoverPendingPotentialImageGenerations(): Promise<void> {
 export async function triggerOnboardingPotentialImage(params: {
   userId: string;
   sessionId: string;
-}): Promise<string> {
-  const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
-  const { data: dup } = await supabaseAdmin
-    .from("scoremax_ai_image_generations")
-    .select("id")
-    .eq("user_id", params.userId)
-    .eq("status", "pending")
-    .not("oneshot_job_id", "is", null)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (dup?.id) {
-    dispatchPotentialImagePolling(dup.id as string);
-    return dup.id as string;
+}): Promise<TriggerPotentialImageResult> {
+  const reusable = await findReusablePotentialGeneration(params.userId);
+  if (reusable) {
+    if (reusable.status === "pending" && reusable.oneshot_job_id) {
+      dispatchPotentialImagePolling(reusable.id);
+    }
+    logger.info(
+      { userId: params.userId, generationId: reusable.id, status: reusable.status },
+      "Reusing existing onboarding potential image generation",
+    );
+    return { generationId: reusable.id, reused: true };
   }
 
   const faceAsset = await loadLatestFaceFrontScanAsset(params);
@@ -327,6 +469,15 @@ export async function triggerOnboardingPotentialImage(params: {
     .single();
 
   if (insertError || !inserted?.id) {
+    if (isUniqueViolation(insertError)) {
+      const raced = await findReusablePotentialGeneration(params.userId);
+      if (raced) {
+        if (raced.status === "pending" && raced.oneshot_job_id) {
+          dispatchPotentialImagePolling(raced.id);
+        }
+        return { generationId: raced.id, reused: true };
+      }
+    }
     throw new ApiError({
       code: "INTERNAL_SERVER_ERROR",
       status: 500,
@@ -364,7 +515,7 @@ export async function triggerOnboardingPotentialImage(params: {
     }
 
     dispatchPotentialImagePolling(generationId);
-    return generationId;
+    return { generationId, reused: false };
   } catch (error) {
     await markGenerationFailed({
       generationId,
@@ -374,17 +525,6 @@ export async function triggerOnboardingPotentialImage(params: {
     throw error;
   }
 }
-
-export type PotentialImagePayload = {
-  id: string;
-  status: "pending" | "completed" | "failed";
-  signed_url: string | null;
-  /** Repère face + masque 3D (`GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY`), sinon photo `FACE_FRONT`. */
-  mask_overlay_signed_url: string | null;
-  error_code: string | null;
-  error_message: string | null;
-  created_at: string;
-};
 
 async function loadLatestScanAssetSignedUrl(params: {
   userId: string;
@@ -452,71 +592,29 @@ async function resolveMaskOverlaySignedUrl(params: {
 }
 
 export async function getLatestPotentialImageForUser(userId: string): Promise<PotentialImagePayload | null> {
-  const { data, error } = await supabaseAdmin
-    .from("scoremax_ai_image_generations")
-    .select(
-      "id, status, r2_bucket, r2_key, error_code, error_message, created_at, source_scan_asset_id, oneshot_job_id",
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data) {
+  const rows = await loadPotentialGenerationsForUser(userId);
+  if (rows.length === 0) {
     return null;
   }
 
-  const row = data as {
-    id: string;
-    status: string;
-    r2_bucket: string | null;
-    r2_key: string | null;
-    error_code: string | null;
-    error_message: string | null;
-    created_at: string;
-    source_scan_asset_id: string | null;
-    oneshot_job_id: string | null;
-  };
-
-  const status = row.status as PotentialImagePayload["status"];
-  if (status !== "pending" && status !== "completed" && status !== "failed") {
+  const preferred = pickPreferredPotentialGeneration(
+    rows.map((row) => ({
+      status: row.status as PotentialGenerationStatus,
+      createdAtMs: new Date(row.created_at).getTime(),
+    })),
+  );
+  if (!preferred) {
     return null;
   }
 
-  if (status === "pending" && !row.oneshot_job_id) {
-    await markGenerationFailed({
-      generationId: row.id,
-      code: "ONESHOT_JOB_MISSING",
-      message: "Pending OneShot generation has no job id",
-    });
+  const row = rows.find(
+    (candidate) =>
+      candidate.status === preferred.status &&
+      new Date(candidate.created_at).getTime() === preferred.createdAtMs,
+  );
+  if (!row) {
     return null;
   }
 
-  if (status === "pending" && row.oneshot_job_id) {
-    dispatchPotentialImagePolling(row.id);
-  }
-
-  let signedUrl: string | null = null;
-  if (status === "completed" && row.r2_key) {
-    signedUrl = await getR2SignedDownloadUrl({
-      bucket: row.r2_bucket ?? undefined,
-      key: row.r2_key,
-      expiresInSeconds: 300,
-    });
-  }
-
-  const maskOverlaySignedUrl = await resolveMaskOverlaySignedUrl({
-    userId,
-    sourceScanAssetId: row.source_scan_asset_id,
-  });
-
-  return {
-    id: row.id,
-    status,
-    signed_url: signedUrl,
-    mask_overlay_signed_url: maskOverlaySignedUrl,
-    error_code: row.error_code,
-    error_message: row.error_message,
-    created_at: row.created_at,
-  };
+  return generationRowToPayload(row, userId);
 }

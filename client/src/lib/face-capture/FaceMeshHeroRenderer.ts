@@ -4,7 +4,11 @@ import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { buildFaceMesh3DPositions, type HeroMetricHighlight } from './build-face-mesh-3d';
+import {
+  buildFaceMesh3DPositions,
+  type BuildFaceMesh3DFrame,
+  type HeroMetricHighlight,
+} from './build-face-mesh-3d';
 import {
   FACEMESH_LEFT_EYE_CANTHUS_LATERAL,
   FACEMESH_LEFT_EYE_CANTHUS_MEDIAL,
@@ -52,6 +56,8 @@ function segmentsForHighlight(highlight: HeroMetricHighlight): [number, number][
 
 export class FaceMeshHeroRenderer {
   private static readonly MAX_PIXEL_RATIO = 1.5;
+  /** Inclinaison de présentation (rad) : recule légèrement le front vers l’arrière. */
+  private static readonly PRESENTATION_PITCH = -0.09;
 
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene | null = null;
@@ -131,9 +137,9 @@ export class FaceMeshHeroRenderer {
     });
   }
 
-  setLandmarks(landmarks: LandmarkPoint[]): void {
+  setLandmarks(landmarks: LandmarkPoint[], frame?: BuildFaceMesh3DFrame): void {
     this._landmarks = landmarks;
-    const built = buildFaceMesh3DPositions(landmarks);
+    const built = buildFaceMesh3DPositions(landmarks, frame);
     if (!built || !this.meshGeo) return;
 
     const need = built.positions.length;
@@ -147,6 +153,7 @@ export class FaceMeshHeroRenderer {
     }
     this.meshGeo.setDrawRange(0, FACEMESH_TESSELATION_TRIS.length);
     this._rebuildHighlights();
+    this._fitMeshToView();
   }
 
   setHighlight(highlight: HeroMetricHighlight): void {
@@ -172,6 +179,7 @@ export class FaceMeshHeroRenderer {
     if (this.highlightMat) {
       this.highlightMat.resolution.set(w, h);
     }
+    this._fitMeshToView();
   }
 
   start(): void {
@@ -192,15 +200,54 @@ export class FaceMeshHeroRenderer {
     this._raf = 0;
   }
 
+  /** Recule la caméra pour cadrer le maillage (largeur + hauteur) sans déformer les proportions. */
+  private _fitMeshToView(): void {
+    if (!this._positions || !this.camera) return;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < this._positions.length; i += 3) {
+      const x = this._positions[i]!;
+      const y = this._positions[i + 1]!;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+    const width = maxX - minX;
+    const height = maxY - minY;
+    if (
+      !Number.isFinite(width) ||
+      !Number.isFinite(height) ||
+      width < 1e-4 ||
+      height < 1e-4
+    ) {
+      return;
+    }
+
+    const fovRad = (this.camera.fov * Math.PI) / 180;
+    const distV = (height / 2 / Math.tan(fovRad / 2)) * 1.18;
+    const hFov = 2 * Math.atan(Math.tan(fovRad / 2) * this.camera.aspect);
+    const distH = (width / 2 / Math.tan(hFov / 2)) * 1.18;
+    const dist = Math.max(distV, distH, 1.85);
+    this.camera.position.set(0, 0, dist);
+    this.camera.lookAt(0, 0, 0);
+  }
+
   private _renderFrame(): void {
     if (!this.renderer || !this.scene || !this.camera || !this.faceRoot) return;
 
     const t = (performance.now() - this._time) * 0.001;
-    const idleY = this._idleEnabled ? Math.sin(t * 0.55) * 0.12 : 0;
-    const idleX = this._idleEnabled ? Math.sin(t * 0.38) * 0.04 : 0;
+    const idleY = this._idleEnabled ? Math.sin(t * 0.55) * 0.1 : 0;
+    const idleX = this._idleEnabled ? Math.sin(t * 0.38) * 0.018 : 0;
 
     this.faceRoot.rotation.y = this._dragYaw + idleY;
-    this.faceRoot.rotation.x = this._dragPitch + idleX;
+    this.faceRoot.rotation.x =
+      this._dragPitch +
+      idleX +
+      FaceMeshHeroRenderer.PRESENTATION_PITCH;
     this.faceRoot.rotation.z = 0;
 
     this.renderer.render(this.scene, this.camera);

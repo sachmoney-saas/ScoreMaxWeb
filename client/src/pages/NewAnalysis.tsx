@@ -35,7 +35,7 @@ import {
 import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
 import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
-import type { PoseId } from "@/lib/face-capture/types";
+import { CAPTURE_POSES, type PoseId } from "@/lib/face-capture/types";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import {
@@ -177,7 +177,6 @@ export default function NewAnalysis() {
     "crown-down": "LOOK_DOWN",
     "closeup-eye": "EYE_CLOSEUP",
     "closeup-smile": "SMILE",
-    "closeup-hairline": "HAIR_BACK",
   };
 
   const handleCapturedComplete = useCallback(
@@ -621,14 +620,14 @@ export default function NewAnalysis() {
               </span>
               <span className="block text-sm opacity-95">
                 {i18n(language, {
-                  en: `${capturedPoses.length}/8 poses.`,
-                  fr: `${capturedPoses.length}/8 poses.`,
+                  en: `${capturedPoses.length}/${CAPTURE_POSES.length} poses.`,
+                  fr: `${capturedPoses.length}/${CAPTURE_POSES.length} poses.`,
                 })}
               </span>
             </DialogDescription>
           </DialogHeader>
 
-          {/* 8 image grid */}
+          {/* Pose image grid */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {capturedPoses.map((pose) => {
               const code = poseIdToAssetCode[pose.poseId];

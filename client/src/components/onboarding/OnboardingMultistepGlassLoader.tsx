@@ -15,6 +15,8 @@ type Props = {
   cycleResetKey?: string | number;
   /** Délai entre deux étapes (ms). */
   stepIntervalMs?: number;
+  /** `featured` : une barre, texte centré — teaser potentiel. */
+  variant?: "default" | "featured";
 };
 
 /**
@@ -27,6 +29,7 @@ export function OnboardingMultistepGlassLoader({
   className,
   cycleResetKey,
   stepIntervalMs = 1800,
+  variant = "default",
 }: Props) {
   const n = steps.length;
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -46,17 +49,19 @@ export function OnboardingMultistepGlassLoader({
   const safeIndex = Math.min(activeIndex, Math.max(0, n - 1));
   const message = n > 0 ? i18n(language, steps[safeIndex]!) : "";
   const progressPct = n > 0 ? ((safeIndex + 1) / n) * 100 : 0;
+  const isFeatured = variant === "featured";
 
   return (
-    <div
+    <motion.div
       className={cn(
         saasGlassInsetClassName,
-        "w-full p-3 text-left sm:p-4",
+        "w-full",
+        isFeatured ? "px-5 py-6 text-center sm:px-6 sm:py-7" : "p-3 text-left sm:p-4",
         className,
       )}
     >
-      {n > 1 ? (
-        <div
+      {n > 1 && !isFeatured ? (
+        <motion.div
           className="mb-3 flex gap-1.5"
           role="group"
           aria-label={i18n(language, {
@@ -65,7 +70,7 @@ export function OnboardingMultistepGlassLoader({
           })}
         >
           {steps.map((_, i) => (
-            <div
+            <motion.div
               key={i}
               className={cn(
                 "h-1 flex-1 rounded-full transition-colors duration-300",
@@ -74,15 +79,23 @@ export function OnboardingMultistepGlassLoader({
               aria-hidden
             />
           ))}
-        </div>
+        </motion.div>
       ) : null}
 
-      <div className="flex items-start gap-3 text-sm text-zinc-200">
+      <motion.div
+        className={cn(
+          "flex gap-3 text-sm text-zinc-200",
+          isFeatured ? "flex-col items-center" : "items-start",
+        )}
+      >
         <Loader2
-          className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-zinc-400"
+          className={cn(
+            "shrink-0 animate-spin",
+            isFeatured ? "h-6 w-6 text-sky-400" : "mt-0.5 h-4 w-4 text-zinc-400",
+          )}
           aria-hidden
         />
-        <div className="min-w-0 flex-1">
+        <motion.div className={cn("min-w-0", isFeatured ? "w-full" : "flex-1")}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.p
               key={`${cycleResetKey ?? "default"}-${safeIndex}`}
@@ -92,26 +105,39 @@ export function OnboardingMultistepGlassLoader({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="leading-snug"
+              className={cn(
+                "leading-snug",
+                isFeatured && "text-base font-medium text-white sm:text-lg",
+              )}
             >
               {message}
             </motion.p>
           </AnimatePresence>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
-      <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+      <motion.div
+        className={cn(
+          "relative overflow-hidden rounded-full bg-white/10",
+          isFeatured ? "mx-auto mt-5 h-2 w-full max-w-xs" : "mt-3 h-1.5",
+        )}
+      >
         <motion.div
-          className="h-full rounded-full bg-white/45"
+          className={cn(
+            "h-full rounded-full",
+            isFeatured
+              ? "bg-gradient-to-r from-sky-500/80 via-sky-300/90 to-sky-400/80"
+              : "bg-white/45",
+          )}
           initial={false}
           animate={{ width: `${progressPct}%` }}
           transition={{ type: "spring", stiffness: 260, damping: 32 }}
         />
-        <div
+        <motion.div
           className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/25 to-transparent motion-safe:animate-brand-loader-shimmer motion-reduce:hidden"
           aria-hidden
         />
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -9,7 +9,6 @@ import {
   Trash2,
   MoreVertical,
 } from "lucide-react";
-import type { OnboardingScanAssetCode } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,25 +34,26 @@ import {
 } from "@/components/ui/dialog";
 import { FaceCaptureView } from "@/components/FaceCaptureView";
 import { WaveBackground } from "@/components/background/WaveBackground";
+import { BillingPaywall } from "@/components/billing/BillingPaywall";
 import { PotentialPreviewCard } from "@/components/onboarding/PotentialPreviewCard";
 import { OnboardingScanCompleteScreen } from "@/components/onboarding/OnboardingScanCompleteScreen";
 import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
 import { useAuth } from "@/hooks/use-auth";
-import { useOnboardingGate } from "@/hooks/use-onboarding-gate";
-import { useOnboardingScanStatus } from "@/hooks/use-supabase";
+import { useUserAccess } from "@/hooks/use-user-access";
+import { useOnboardingResume } from "@/hooks/use-onboarding-resume";
 import { useOnboardingPotentialImage } from "@/hooks/use-onboarding-potential-image";
+import { getScanAssetLabels, resetScanSessionAssets } from "@/lib/face-analysis";
 import {
-  getScanAssetLabels,
-  resetScanSessionAssets,
-  uploadScanAsset,
-} from "@/lib/face-analysis";
-import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
+  completeOnboardingApi,
+  ONBOARDING_POSE_TO_ASSET,
+  uploadCapturedOnboardingPoses,
+} from "@/lib/onboarding-complete-flow";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
 import { ONBOARDING_HERO_MIN_LANDMARKS } from "@/lib/face-capture/build-face-mesh-3d";
-import type { PoseId } from "@/lib/face-capture/types";
+import { CAPTURE_POSES } from "@/lib/face-capture/types";
 import { deleteMyAccount } from "@/lib/account-api";
 import { supabase } from "@/lib/supabase";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { AUTH_CONFIG } from "@/config/auth";
 import {
@@ -70,18 +70,7 @@ import {
   writeOnboardingFlowState,
 } from "@/lib/onboarding-flow-storage";
 
-const ONBOARDING_POSE_TO_ASSET: Record<PoseId, OnboardingScanAssetCode> = {
-  frontal: "FACE_FRONT",
-  "profile-right": "PROFILE_RIGHT",
-  "profile-left": "PROFILE_LEFT",
-  "jaw-up": "LOOK_UP",
-  "crown-down": "LOOK_DOWN",
-  "closeup-eye": "EYE_CLOSEUP",
-  "closeup-smile": "SMILE",
-  "closeup-hairline": "HAIR_BACK",
-};
-
-const ONBOARDING_TOTAL_STEPS = 2;
+const ONBOARDING_TOTAL_STEPS = 3;
 
 const ONBOARDING_SCAN_UPLOAD_STEPS = [
   {
@@ -113,6 +102,21 @@ const ONBOARDING_SCAN_SESSION_STEPS = [
   },
 ] as const;
 
+const ONBOARDING_RESUME_STEPS = [
+  {
+    en: "Resuming your session…",
+    fr: "Reprise de ta session…",
+  },
+  {
+    en: "Finalizing your scan…",
+    fr: "Finalisation de ton scan…",
+  },
+  {
+    en: "Almost ready…",
+    fr: "Presque prêt…",
+  },
+] as const;
+
 type OnboardingProps = {
   initialStep?: number;
 };
@@ -121,14 +125,17 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const language = useAppLanguage();
   const scanAssetLabels = getScanAssetLabels(language);
   const [, setLocation] = useLocation();
-  const { user, hasPremiumAccess, isAdmin } = useAuth();
-  const { status: gateStatus } = useOnboardingGate();
+  const { user } = useAuth();
+  const access = useUserAccess();
   const [stepIndex, setStepIndex] = React.useState(() => {
     if (initialStep !== undefined) {
       return Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, initialStep));
     }
     const persisted = readOnboardingFlowState();
-    return persisted?.step && persisted.step >= 1 ? 1 : 0;
+    if (persisted?.step != null) {
+      return Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, persisted.step));
+    }
+    return 0;
   });
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
@@ -137,6 +144,9 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const [showScanCompleteHero, setShowScanCompleteHero] = React.useState(false);
   const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
   const [isUploadingCaptures, setIsUploadingCaptures] = React.useState(false);
+  const [isHeroUploading, setIsHeroUploading] = React.useState(false);
+  const [heroUploadDone, setHeroUploadDone] = React.useState(false);
+  const heroUploadDoneRef = React.useRef(false);
   const [isRetakingCaptures, setIsRetakingCaptures] = React.useState(false);
   const [capturePreviewError, setCapturePreviewError] = React.useState<string | null>(
     null,
@@ -153,6 +163,13 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   );
 
   const isPotentialStep = stepIndex === 1;
+  const isBillingStep = stepIndex === 2;
+
+  React.useEffect(() => {
+    if (stepIndex >= 1) {
+      writeOnboardingFlowState({ step: stepIndex });
+    }
+  }, [stepIndex]);
 
   React.useEffect(() => {
     /** Préchargement léger : favicon utilisé sur l'écran d'analyse. */
@@ -167,37 +184,80 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       return;
     }
 
-    if (gateStatus === "ok" && (hasPremiumAccess || isAdmin)) {
+    if (access.canAccessApp) {
+      clearOnboardingFlowState();
       setLocation(AUTH_CONFIG.REDIRECT_PATH);
-      return;
     }
-
-    if (hasStartedRun) {
-      return;
-    }
-
-    if (gateStatus === "ok" && !hasPremiumAccess && !isAdmin) {
-      setLocation("/billing");
-    }
-  }, [
-    gateStatus,
-    hasPremiumAccess,
-    hasStartedRun,
-    isAdmin,
-    setLocation,
-    user,
-  ]);
+  }, [access.canAccessApp, setLocation, user]);
 
   const {
-    data: scanStatus,
-    isLoading: isScanStatusLoading,
-    isError: isScanStatusError,
-  } = useOnboardingScanStatus({ enabled: !isPotentialStep && !!user?.id });
+    phase: capturePhase,
+    scanStatus,
+    isScanStatusLoading,
+    isScanStatusError,
+    isFinalizing,
+    hasPartialUpload,
+    finalizeFromServer,
+  } = useOnboardingResume({
+    captureStepActive: !isPotentialStep,
+    language,
+  });
+
+  const didAutoFinalizeRef = React.useRef(false);
 
   const isOnboardingStep0Blocking =
-    !isPotentialStep && (isScanStatusLoading || isUploadingCaptures);
+    !isPotentialStep &&
+    (isScanStatusLoading ||
+      isUploadingCaptures ||
+      isFinalizing ||
+      (capturePhase === "ready_to_finalize" && !uploadError));
 
   const onboardingSessionId = scanStatus?.session_id;
+
+  React.useEffect(() => {
+    if (
+      isPotentialStep ||
+      capturePhase !== "ready_to_finalize" ||
+      didAutoFinalizeRef.current ||
+      showCameraCapture ||
+      showScanCompleteHero
+    ) {
+      return;
+    }
+
+    didAutoFinalizeRef.current = true;
+    setHasStartedRun(true);
+    setUploadError(null);
+
+    void (async () => {
+      try {
+        const ok = await finalizeFromServer();
+        if (ok) {
+          setStepIndex(1);
+          setHasStartedRun(true);
+        } else {
+          didAutoFinalizeRef.current = false;
+        }
+      } catch (error) {
+        didAutoFinalizeRef.current = false;
+        setUploadError(
+          error instanceof Error
+            ? error.message
+            : i18n(language, {
+                en: "Unable to resume your session. Try again.",
+                fr: "Impossible de reprendre ta session. Réessaye.",
+              }),
+        );
+      }
+    })();
+  }, [
+    capturePhase,
+    finalizeFromServer,
+    isPotentialStep,
+    language,
+    showCameraCapture,
+    showScanCompleteHero,
+  ]);
 
   const {
     data: potentialImage,
@@ -206,6 +266,38 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     enabled: isPotentialStep && !!user?.id,
   });
 
+  const isPotentialBlockingLoad =
+    isPotentialStep &&
+    (isPotentialImageLoading ||
+      !potentialImage ||
+      (potentialImage.status !== "completed" &&
+        potentialImage.status !== "failed"));
+
+  const uploadPosesToScanSession = React.useCallback(
+    async (poses: CapturedPose[], sessionId: string) => {
+      if (!user?.id) return;
+      await uploadCapturedOnboardingPoses({
+        userId: user.id,
+        sessionId,
+        poses,
+        language,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["onboarding-scan-status", user.id],
+      });
+      heroUploadDoneRef.current = true;
+      setHeroUploadDone(true);
+    },
+    [language, user?.id],
+  );
+
+  React.useEffect(() => {
+    if (scanStatus?.is_ready) {
+      heroUploadDoneRef.current = true;
+      setHeroUploadDone(true);
+    }
+  }, [scanStatus?.is_ready]);
+
   const restartOnboardingCapture = React.useCallback(
     async (errorMessage?: string) => {
       if (errorMessage) {
@@ -213,6 +305,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       }
       setShowScanCompleteHero(false);
       setShowCapturedPreview(false);
+      heroUploadDoneRef.current = false;
+      setHeroUploadDone(false);
 
       if (!user?.id || !onboardingSessionId) {
         setCapturedPoses([]);
@@ -285,8 +379,45 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       setCapturedPoses(poses);
       setShowCameraCapture(false);
       setShowScanCompleteHero(true);
+      heroUploadDoneRef.current = false;
+      setHeroUploadDone(false);
+
+      const sessionId = scanStatus?.session_id;
+      if (!user?.id || !sessionId) {
+        setUploadError(
+          i18n(language, {
+            en: "Unable to save your photos. Refresh and try again.",
+            fr: "Impossible d'enregistrer tes photos. Actualise et réessaye.",
+          }),
+        );
+        return;
+      }
+
+      setIsHeroUploading(true);
+      setUploadError(null);
+      try {
+        await uploadPosesToScanSession(poses, sessionId);
+      } catch (error) {
+        console.error("Unable to upload captures after scan:", error);
+        setUploadError(
+          error instanceof Error
+            ? error.message
+            : i18n(language, {
+                en: "Unable to save your photos. Try again when you continue.",
+                fr: "Impossible d'enregistrer tes photos. Réessaye en continuant.",
+              }),
+        );
+      } finally {
+        setIsHeroUploading(false);
+      }
     },
-    [language, restartOnboardingCapture],
+    [
+      language,
+      restartOnboardingCapture,
+      scanStatus?.session_id,
+      uploadPosesToScanSession,
+      user?.id,
+    ],
   );
 
   const handleRetakeCapturesFromPreview = React.useCallback(async () => {
@@ -295,7 +426,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   }, [restartOnboardingCapture]);
 
   const uploadAndCompleteOnboarding = React.useCallback(async () => {
-    if (!user?.id || !onboardingSessionId || capturedPoses.length === 0) {
+    if (!user?.id || !onboardingSessionId) {
       return;
     }
 
@@ -304,38 +435,13 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     setShowCapturedPreview(false);
 
     try {
-      for (const pose of capturedPoses) {
-        const code = ONBOARDING_POSE_TO_ASSET[pose.poseId];
-        if (!code) continue;
-        await uploadScanAsset({
-          userId: user.id,
-          sessionId: onboardingSessionId,
-          assetTypeCode: code,
-          file: new File([pose.blob], `${pose.poseId}.jpg`, {
-            type: "image/jpeg",
-          }),
-          lang: language,
-        });
-
-        for (const trace of guideTraceBlobUploadsFromCapturedPose(pose)) {
-          await uploadScanAsset({
-            userId: user.id,
-            sessionId: onboardingSessionId,
-            assetTypeCode: trace.assetTypeCode,
-            file: new File(
-              [trace.blob],
-              `${pose.poseId}-guide-${trace.fileLabel}.png`,
-              { type: "image/png" },
-            ),
-            lang: language,
-            captureMetadata: trace.captureMetadata,
-          });
-        }
+      if (
+        !heroUploadDoneRef.current &&
+        !scanStatus?.is_ready &&
+        capturedPoses.length > 0
+      ) {
+        await uploadPosesToScanSession(capturedPoses, onboardingSessionId);
       }
-
-      await queryClient.invalidateQueries({
-        queryKey: ["onboarding-scan-status", user.id],
-      });
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
@@ -349,25 +455,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
         );
       }
 
-      const headers = { Authorization: `Bearer ${accessToken}` };
-      const completeResponse = await apiRequest(
-        "POST",
-        "/v1/onboarding/complete",
-        { lang: language },
-        headers,
-      );
-      const completePayload = (await completeResponse.json()) as {
-        data?: { generation?: { id?: string } };
-      };
-
-      if (!completePayload.data?.generation?.id) {
-        throw new Error(
-          i18n(language, {
-            en: "Unable to start preview generation",
-            fr: "Impossible de lancer la génération",
-          }),
-        );
-      }
+      await completeOnboardingApi({ accessToken, language });
 
       writeOnboardingFlowState({ step: 1 });
       setHasStartedRun(true);
@@ -388,12 +476,28 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     } finally {
       setIsUploadingCaptures(false);
     }
-  }, [capturedPoses, language, onboardingSessionId, user?.id]);
+  }, [
+    capturedPoses,
+    language,
+    onboardingSessionId,
+    scanStatus?.is_ready,
+    uploadPosesToScanSession,
+    user?.id,
+  ]);
 
   const frontalCapturePose = React.useMemo(
     () => capturedPoses.find((p) => p.poseId === "frontal"),
     [capturedPoses],
   );
+
+  const onboardingArticleKey =
+    stepIndex === 2
+      ? "onboarding-step-2"
+      : stepIndex === 1
+        ? "onboarding-step-1"
+        : showScanCompleteHero
+          ? "onboarding-step-0-hero"
+          : "onboarding-step-0";
 
   const eyeCapturePose = React.useMemo(
     () => capturedPoses.find((p) => p.poseId === "closeup-eye"),
@@ -411,9 +515,44 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   }, []);
 
   const openOnboardingCapture = React.useCallback(() => {
-    if (!onboardingSessionId || isScanStatusLoading) return;
+    if (
+      !onboardingSessionId ||
+      isScanStatusLoading ||
+      capturePhase === "ready_to_finalize"
+    ) {
+      return;
+    }
     setShowCameraCapture(true);
-  }, [isScanStatusLoading, onboardingSessionId]);
+  }, [capturePhase, isScanStatusLoading, onboardingSessionId]);
+
+  const handleRestartPartialCapture = React.useCallback(() => {
+    void restartOnboardingCapture();
+  }, [restartOnboardingCapture]);
+
+  const handleRetryResumeFinalize = React.useCallback(() => {
+    didAutoFinalizeRef.current = false;
+    setUploadError(null);
+    setHasStartedRun(true);
+    void (async () => {
+      try {
+        const ok = await finalizeFromServer();
+        if (ok) {
+          didAutoFinalizeRef.current = true;
+          setStepIndex(1);
+        }
+      } catch (error) {
+        didAutoFinalizeRef.current = false;
+        setUploadError(
+          error instanceof Error
+            ? error.message
+            : i18n(language, {
+                en: "Unable to resume your session. Try again.",
+                fr: "Impossible de reprendre ta session. Réessaye.",
+              }),
+        );
+      }
+    })();
+  }, [finalizeFromServer, language]);
 
   const handleUnlock = React.useCallback(() => {
     if (!user?.id) {
@@ -422,13 +561,9 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     }
     setIsUnlocking(true);
     try {
-      /**
-       * Paywall : pas d’accès à l’app sans abonnement. `has_completed_onboarding`
-       * est déjà true côté serveur depuis POST /onboarding/complete — pas de
-       * contournement via le cache client.
-       */
-      clearOnboardingFlowState();
-      setLocation("/billing");
+      writeOnboardingFlowState({ step: 2 });
+      setStepIndex(2);
+      setHasStartedRun(true);
     } finally {
       setIsUnlocking(false);
     }
@@ -554,7 +689,12 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="relative z-10 mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:px-6 sm:pb-5 sm:pt-5">
+      <div
+        className={cn(
+          "relative z-10 mx-auto flex min-h-0 w-full flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:px-6 sm:pb-5 sm:pt-5",
+          isBillingStep ? "max-w-5xl" : "max-w-3xl",
+        )}
+      >
         <div className="flex min-h-0 w-full flex-1 flex-col gap-2 sm:gap-3">
           <div className="w-full shrink-0 space-y-2 sm:space-y-2.5">
             <div className="flex justify-center">
@@ -586,7 +726,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <AnimatePresence mode="wait">
               <motion.article
-                key={`onboarding-step-${stepIndex}`}
+                key={onboardingArticleKey}
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -14 }}
@@ -594,18 +734,64 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                 className={cn(
                   saasGlassPanelClassName,
                   "text-white shadow-[0_24px_70px_-35px_rgba(0,0,0,0.65)]",
-                  "flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-6",
-                  "mx-auto w-full max-w-[460px]",
+                  isPotentialBlockingLoad
+                    ? "flex w-full flex-col overflow-hidden p-4 sm:p-6"
+                    : cn(
+                        "flex min-h-0 flex-1 flex-col overflow-hidden",
+                        isBillingStep ? "p-3 sm:p-5 md:p-6" : "p-4 sm:p-6",
+                      ),
+                  "mx-auto w-full",
+                  isBillingStep ? "max-w-full" : "max-w-[460px]",
                 )}
               >
-                {isPotentialStep ? (
-                  <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-1 py-2 pb-[max(6.75rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))] sm:px-2 sm:py-4 sm:pb-28">
+                {isBillingStep ? (
+                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-0 py-1 sm:px-1 sm:py-3 md:py-4">
+                    <BillingPaywall variant="embedded" />
+                  </div>
+                ) : isPotentialStep ? (
+                  <div
+                    className={cn(
+                      "flex min-h-0 flex-col overflow-y-auto px-1 py-2 sm:px-2 sm:py-4",
+                      isPotentialBlockingLoad
+                        ? "justify-start pb-[max(6rem,calc(env(safe-area-inset-bottom,0px)+5rem))]"
+                        : "flex-1 justify-center pb-[max(6.75rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))] sm:pb-28",
+                    )}
+                  >
                     <PotentialPreviewCard
                       language={language}
                       potentialImage={potentialImage ?? null}
                       isLoading={isPotentialImageLoading}
                     />
                   </div>
+                ) : showScanCompleteHero && frontalCapturePose?.landmarks ? (
+                  <OnboardingScanCompleteScreen
+                    language={language}
+                    frontalLandmarks={frontalCapturePose.landmarks}
+                    landmarkFrame={
+                      frontalCapturePose.landmarkFrameWidth &&
+                      frontalCapturePose.landmarkFrameHeight
+                        ? {
+                            width: frontalCapturePose.landmarkFrameWidth,
+                            height: frontalCapturePose.landmarkFrameHeight,
+                          }
+                        : undefined
+                    }
+                    eyeLandmarks={eyeCapturePose?.landmarks}
+                    eyeLandmarkFrame={
+                      eyeCapturePose?.landmarkFrameWidth &&
+                      eyeCapturePose?.landmarkFrameHeight
+                        ? {
+                            width: eyeCapturePose.landmarkFrameWidth,
+                            height: eyeCapturePose.landmarkFrameHeight,
+                          }
+                        : undefined
+                    }
+                    onContinue={handleScanCompleteContinue}
+                    onReviewPoses={handleScanCompleteReviewPoses}
+                    isContinuing={isUploadingCaptures}
+                    isSavingCaptures={isHeroUploading}
+                    continueDisabled={!heroUploadDone && !scanStatus?.is_ready}
+                  />
                 ) : isOnboardingStep0Blocking ? (
                   <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
                     <div className="mx-auto w-full max-w-sm">
@@ -614,10 +800,18 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                         steps={
                           isUploadingCaptures
                             ? ONBOARDING_SCAN_UPLOAD_STEPS
-                            : ONBOARDING_SCAN_SESSION_STEPS
+                            : isFinalizing ||
+                                capturePhase === "ready_to_finalize"
+                              ? ONBOARDING_RESUME_STEPS
+                              : ONBOARDING_SCAN_SESSION_STEPS
                         }
                         cycleResetKey={
-                          isUploadingCaptures ? "upload" : "session"
+                          isUploadingCaptures
+                            ? "upload"
+                            : isFinalizing ||
+                                capturePhase === "ready_to_finalize"
+                              ? "resume"
+                              : "session"
                         }
                       />
                     </div>
@@ -652,11 +846,38 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                         })}
                       </p>
                       <p className="text-sm leading-relaxed text-zinc-300 sm:text-base">
-                        {i18n(language, {
-                          en: "Capture 8 quick poses so our AI can map your face. It takes less than a minute.",
-                          fr: "Capture 8 poses rapides pour qu'on cartographie ton visage. Moins d'une minute.",
-                        })}
+                        {hasPartialUpload && scanStatus
+                          ? i18n(language, {
+                              en: `You already have ${scanStatus.completed_asset_count}/${scanStatus.required_asset_count} photos saved. Finish the remaining poses to continue.`,
+                              fr: `Tu as déjà ${scanStatus.completed_asset_count}/${scanStatus.required_asset_count} photos enregistrées. Termine les poses restantes pour continuer.`,
+                            })
+                          : i18n(language, {
+                              en: `Capture ${CAPTURE_POSES.length} quick poses so our AI can map your face. It takes less than a minute.`,
+                              fr: `Capture ${CAPTURE_POSES.length} poses rapides pour qu'on cartographie ton visage. Moins d'une minute.`,
+                            })}
                       </p>
+                      {hasPartialUpload &&
+                      scanStatus &&
+                      scanStatus.missing_asset_types.length > 0 ? (
+                        <div
+                          className={cn(
+                            saasGlassInsetClassName,
+                            "w-full p-3 text-left sm:p-4",
+                          )}
+                        >
+                          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                            {i18n(language, {
+                              en: "Still missing",
+                              fr: "Encore à capturer",
+                            })}
+                          </p>
+                          <ul className="space-y-1 text-sm text-zinc-200">
+                            {scanStatus.missing_asset_types.map((label) => (
+                              <li key={label}>{label}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
                       {isScanStatusError ? (
                         <p className="text-sm text-red-300">
                           {i18n(language, {
@@ -664,6 +885,19 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                             fr: "Impossible de charger ta session. Actualise la page et réessaye.",
                           })}
                         </p>
+                      ) : null}
+                      {uploadError && capturePhase === "ready_to_finalize" ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleRetryResumeFinalize()}
+                          disabled={isFinalizing}
+                          className="text-sm font-medium text-white underline underline-offset-2 disabled:opacity-50"
+                        >
+                          {i18n(language, {
+                            en: "Retry",
+                            fr: "Réessayer",
+                          })}
+                        </button>
                       ) : null}
                       <div className="w-full max-w-[360px]">
                         <button
@@ -683,12 +917,35 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                             className="h-9 w-9 shrink-0 rounded-lg bg-black object-contain sm:h-10 sm:w-10"
                           />
                           <span className="text-sm font-semibold tracking-tight sm:text-base">
-                            {i18n(language, {
-                              en: "Launch analysis",
-                              fr: "Lancer l'analyse",
-                            })}
+                            {hasPartialUpload
+                              ? i18n(language, {
+                                  en: "Continue capture",
+                                  fr: "Continuer la capture",
+                                })
+                              : i18n(language, {
+                                  en: "Launch analysis",
+                                  fr: "Lancer l'analyse",
+                                })}
                           </span>
                         </button>
+                        {hasPartialUpload ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleRestartPartialCapture()}
+                            disabled={isRetakingCaptures || isScanStatusError}
+                            className="mt-3 text-sm font-medium text-zinc-300 underline underline-offset-2 transition hover:text-white disabled:pointer-events-none disabled:opacity-50"
+                          >
+                            {isRetakingCaptures
+                              ? i18n(language, {
+                                  en: "Resetting…",
+                                  fr: "Réinitialisation…",
+                                })
+                              : i18n(language, {
+                                  en: "Start over",
+                                  fr: "Tout recommencer",
+                                })}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -706,19 +963,6 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
           onCancel={() => setShowCameraCapture(false)}
         />
       ) : null}
-
-      <AnimatePresence>
-        {showScanCompleteHero && frontalCapturePose?.landmarks ? (
-          <OnboardingScanCompleteScreen
-            language={language}
-            frontalLandmarks={frontalCapturePose.landmarks}
-            eyeLandmarks={eyeCapturePose?.landmarks}
-            onContinue={handleScanCompleteContinue}
-            onReviewPoses={handleScanCompleteReviewPoses}
-            isContinuing={isUploadingCaptures}
-          />
-        ) : null}
-      </AnimatePresence>
 
       <Dialog open={showCapturedPreview} onOpenChange={setShowCapturedPreview}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/15 bg-[linear-gradient(135deg,rgba(10,16,22,0.98)_0%,rgba(18,27,35,0.96)_55%,rgba(255,255,255,0.06)_100%)] text-zinc-50 shadow-[0_35px_110px_-70px_rgba(0,0,0,0.95)] sm:rounded-[2rem]">
@@ -738,8 +982,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
               </span>
               <span className="block text-sm opacity-95">
                 {i18n(language, {
-                  en: `${capturedPoses.length}/8 poses.`,
-                  fr: `${capturedPoses.length}/8 poses.`,
+                  en: `${capturedPoses.length}/${CAPTURE_POSES.length} poses.`,
+                  fr: `${capturedPoses.length}/${CAPTURE_POSES.length} poses.`,
                 })}
               </span>
             </DialogDescription>
@@ -803,7 +1047,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
 
       {isPotentialStep ? (
         <div
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-[rgba(14,20,26,0.55)] backdrop-blur-md pointer-events-none"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-30"
           role="region"
           aria-label={i18n(language, {
             en: "Unlock full analysis",

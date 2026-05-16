@@ -47,10 +47,6 @@ export function getScanAssetLabels(
       fr: "Regard vers le bas",
     }),
     SMILE: i18n(lang, { en: "Smile", fr: "Sourire" }),
-    HAIR_BACK: i18n(lang, {
-      en: "Hair from behind",
-      fr: "Cheveux arrière",
-    }),
     EYE_CLOSEUP: i18n(lang, {
       en: "Eye close-up",
       fr: "Gros plan des yeux",

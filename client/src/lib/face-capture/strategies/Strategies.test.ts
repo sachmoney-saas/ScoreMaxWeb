@@ -35,7 +35,6 @@ function frameForPose(poseId: PoseId): FaceFrame {
     "crown-down": { yaw: 0, pitch: 34, roll: 0 },
     "closeup-smile": { yaw: 0, pitch: 0, roll: 0 },
     "closeup-eye": { yaw: 0, pitch: 0, roll: 0 },
-    "closeup-hairline": { yaw: 0, pitch: 0, roll: 0 },
   };
   const blendshapes: Record<string, number> =
     poseId === "closeup-smile"
@@ -80,19 +79,6 @@ describe("closeup-eye blink behaviour", () => {
     const result = strategy.evaluate(frame, poseDef, { holding: true });
     expect(result.hints.some((h) => h.includes("ouvert"))).toBe(false);
     expect(result.ok).toBe(true);
-  });
-});
-
-describe("closeup-hairline pull-back gate", () => {
-  const strategy = POSE_STRATEGIES.find((s) => s.poseId === "closeup-hairline")!;
-  const poseDef = CAPTURE_POSES.find((p) => p.id === "closeup-hairline")!;
-
-  it("blocks ready until pullback satisfied when opting out explicitly", () => {
-    expect(poseDef.requirePullBackBeforeAlign).toBeDefined();
-    const frame = frameForPose("closeup-hairline");
-    const r = strategy.evaluate(frame, poseDef, { holding: false, pullBackSatisfied: false });
-    expect(r.ok).toBe(false);
-    expect(r.hints[0]).toMatch(/Éloignez/);
   });
 });
 

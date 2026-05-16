@@ -53,14 +53,13 @@ Colonnes principales:
 - `is_active` (boolean)
 - `created_at`, `updated_at`
 
-Pour l’onboarding, les 8 types requis actifs sont:
+Pour l’onboarding, les 7 types requis actifs sont:
 - `FACE_FRONT`
 - `PROFILE_LEFT`
 - `PROFILE_RIGHT`
 - `LOOK_UP`
 - `LOOK_DOWN`
 - `SMILE`
-- `HAIR_BACK`
 - `EYE_CLOSEUP`
 
 Usage iOS:
@@ -265,5 +264,4 @@ Conséquence iOS:
 - Regarder en haut → `LOOK_UP`
 - Regarder en bas → `LOOK_DOWN`
 - Sourire → `SMILE`
-- Cheveux en arrière → `HAIR_BACK`
 - Gros plan œil → `EYE_CLOSEUP`

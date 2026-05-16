@@ -13,8 +13,7 @@ export type PoseId =
   | "jaw-up"
   | "crown-down"
   | "closeup-smile"
-  | "closeup-eye"
-  | "closeup-hairline";
+  | "closeup-eye";
 
 export interface LandmarkPoint {
   x: number;
@@ -226,32 +225,6 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     holdMs: 1800,
     qualityGateRequired: true,
     entryDelayMs: 1800,
-  },
-  {
-    id: "closeup-hairline",
-    label: "Gros plan hairline",
-    description: "Rapprochez l'appareil et dégagez bien le front",
-    icon: "💇",
-    /**
-     * Wide angular tolerance: showing the hairline naturally involves
-     * tilting the head forward and approaching the phone, often slightly
-     * off-axis. ±25° yaw, generous pitch (forward bow allowed), ±15° roll.
-     * `minFaceRatio` relevé pour imposer un vrai gros plan sur le front,
-     * cohérent avec le gros plan œil qui précède.
-     */
-    yawRange: [-25, 25],
-    pitchRange: [-25, 30],
-    rollRange: [-15, 15],
-    minFaceRatio: 0.62,
-    holdMs: 1800,
-    qualityGateRequired: true,
-    entryDelayMs: 2200,
-    /**
-     * Après un gros plan œil très serré : le visage doit d'abord redevenir plus petit dans le cadre
-     * (recul du téléphone) avant que le rapprochement pour le hairline soit validé — évite
-     * deux clichés quasi identiques. Seuil plus souple que 0.34 (trop exigeant sur mobile).
-     */
-    requirePullBackBeforeAlign: { maxFaceRatio: 0.48, minStableFrames: 12 },
   },
 ];
 

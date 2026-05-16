@@ -1,7 +1,7 @@
 const STORAGE_KEY = "sm_onb_flow";
 
 export type OnboardingFlowStorage = {
-  /** 0 = capture, 1 = teaser « potentiel » après POST /onboarding/complete */
+  /** 0 = capture, 1 = teaser potentiel, 2 = paywall (fin onboarding) */
   step: number;
 };
 
@@ -41,4 +41,21 @@ export function clearOnboardingFlowState(): void {
 export function isOnboardingPotentialTeaserActive(): boolean {
   const s = readOnboardingFlowState();
   return s !== null && s.step >= 1;
+}
+
+export function isOnboardingBillingStepActive(): boolean {
+  const s = readOnboardingFlowState();
+  return s !== null && s.step >= 2;
+}
+
+/** Étape initiale pour un utilisateur déjà onboardé sans abonnement. */
+export function resolveOnboardingInitialStepForReturningUser(options: {
+  persistedStep: number | null;
+  hasPotentialImage: boolean;
+}): number {
+  const persisted = options.persistedStep ?? 0;
+  if (persisted >= 2) return 2;
+  if (persisted >= 1) return 1;
+  if (options.hasPotentialImage) return 1;
+  return 2;
 }

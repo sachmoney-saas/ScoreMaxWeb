@@ -147,7 +147,7 @@ WITH expected_scan_asset_types(code, label_fr, sort_order) AS (
     ('LOOK_DOWN', 'Regarder en bas', 5),
     ('SMILE', 'Sourire', 6),
     ('HAIR_BACK', 'Cheveux en arrière', 7),
-    ('EYE_CLOSEUP', 'Gros plan œil', 8)
+    ('EYE_CLOSEUP', 'Gros plan œil', 7)
 )
 SELECT
   expected_scan_asset_types.code,

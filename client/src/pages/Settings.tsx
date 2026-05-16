@@ -13,6 +13,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Shield, AlertTriangle, Info } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchBillingState } from "@/lib/billing-api";
 import { i18n, useAppLanguage, useLanguage, type AppLanguage } from "@/lib/i18n";
 import {
   Select,
@@ -49,6 +51,19 @@ export default function Settings() {
     [uiLang],
   );
 
+  const { data: billingState } = useQuery({
+    queryKey: ["billing", "subscription"],
+    queryFn: fetchBillingState,
+    enabled: Boolean(user),
+    staleTime: 30_000,
+  });
+
+  /** Active subscription without scheduled end-of-period cancellation blocks deletion. */
+  const subscriptionBlocksAccountDeletion = Boolean(
+    billingState?.is_subscriber &&
+      !billingState.active_subscription?.scheduled_cancellation,
+  );
+
   const form = useForm({
     resolver: zodResolver(insertProfileSchema.pick({ full_name: true })),
     defaultValues: {
@@ -82,7 +97,7 @@ export default function Settings() {
   const handleDeleteAccount = async () => {
     if (!user) return;
     
-    if (profile?.is_subscriber) {
+    if (subscriptionBlocksAccountDeletion) {
       toast({
         variant: "destructive",
         title: i18n(uiLang, { en: "Action required", fr: "Action requise" }),
@@ -374,7 +389,7 @@ export default function Settings() {
                           fr: "Êtes-vous sûr·e de vouloir supprimer votre compte ?",
                         })}
                       </p>
-                      {profile?.is_subscriber ? (
+                      {subscriptionBlocksAccountDeletion ? (
                         <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium">
                           {i18n(uiLang, {
                             en: 'You have an active subscription. Please cancel it from the Billing tab before you can delete your account.',
@@ -414,7 +429,7 @@ export default function Settings() {
                     <AlertDialogCancel onClick={() => setDeleteConfirmText("")}>
                       {i18n(uiLang, { en: "Cancel", fr: "Annuler" })}
                     </AlertDialogCancel>
-                    {!profile?.is_subscriber && (
+                    {!subscriptionBlocksAccountDeletion && (
                       <AlertDialogAction
                         onClick={handleDeleteAccount}
                         disabled={deleteConfirmText !== deleteConfirmKeyword || isDeletingAccount}

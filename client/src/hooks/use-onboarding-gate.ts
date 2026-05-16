@@ -27,9 +27,9 @@ export type OnboardingGateStatus =
  * une défense contre les drifts admin (suppressions manuelles de jobs)
  * mais ça regressait sur le cas réel d'échec d'analyse.
  *
- * L’accès aux routes `/app/*` (et assimilées) est **en plus** conditionné par
- * `hasPremiumAccess` dans `App.tsx` (`ProtectedRoute`) : onboarding terminé
- * mais non abonné → redirection vers `/billing` (paywall), pas d’intérieur app.
+ * L’accès app est dérivé via `useUserAccess()` : ex-abonnés (`has_ever_subscribed`)
+ * accèdent à `/app` en lecture seule ; seuls les jamais-abonnés restent sur
+ * le funnel `/onboarding`.
  */
 export function useOnboardingGate(): { status: OnboardingGateStatus } {
   const { user, profile, isLoading: authLoading } = useAuth();

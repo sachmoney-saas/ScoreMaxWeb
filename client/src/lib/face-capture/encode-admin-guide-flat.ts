@@ -14,8 +14,7 @@
 // Pose sommet du crâne : aucun PNG aplati (la photo miroir seule n’apporte aucun
 // repère utile à l’admin — économise un encodage et un upload par capture).
 // Pose sourire : 1 PNG (photo + contours lèvres bleu clair, sans masque blanc hors debug).
-// Poses œil / front (hairline) : pas de PNG aplati admin hormis gros plan œil
-// (contours + canthal tilt) ; hairline sans aplati.
+// Pose œil : PNG aplatis admin (contours + canthal tilt).
 
 import {
   applyTransparentCutoutCloseupEyesToContext,
@@ -406,10 +405,6 @@ function isCloseupEyePoseId(id: PoseId): id is 'closeup-eye' {
   return id === 'closeup-eye';
 }
 
-function isCloseupHairlinePoseId(id: PoseId): id is 'closeup-hairline' {
-  return id === 'closeup-hairline';
-}
-
 /**
  * PNG aplatis admin : 5 variantes pour la face de face ; 2 par profil (mâchoire + nez visible)
  * ; 1 pour menton levé ; 1 pour sourire (lèvres + variante dents) ;
@@ -432,10 +427,6 @@ export async function encodeAdminGuideFlattenedPair(opts: {
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(opts.photoBlob);
-
-    if (isCloseupHairlinePoseId(opts.poseId)) {
-      return null;
-    }
 
     if (isCloseupEyePoseId(opts.poseId)) {
       const eyeContoursFlat = await renderSingleFlatGuidePng(

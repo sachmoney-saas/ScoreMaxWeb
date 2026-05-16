@@ -1,6 +1,9 @@
 import * as React from "react";
 import { WaveBackground } from "@/components/background/WaveBackground";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserAccess } from "@/hooks/use-user-access";
+import { SubscriptionLapsedBanner } from "@/components/layout/SubscriptionLapsedBanner";
+import { clearOnboardingFlowState } from "@/lib/onboarding-flow-storage";
 import {
   useAnalysisHistory,
   useDeleteAnalysisJob,
@@ -972,8 +975,15 @@ function ModernAppSidebar() {
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isLoading } = useAuth();
+  const access = useUserAccess();
 
-  if (isLoading) {
+  React.useEffect(() => {
+    if (access.kind === "lapsed_subscriber" || access.kind === "premium") {
+      clearOnboardingFlowState();
+    }
+  }, [access.kind]);
+
+  if (isLoading || access.isLoading) {
     return (
       <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-[#9aaeb5]">
         <WaveBackground />
@@ -1002,7 +1012,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             data-app-scroll-region
             className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-2 py-4 md:p-8"
           >
-            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col animate-in fade-in slide-in-from-bottom-4 duration-500 text-foreground">
+            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 text-foreground">
+              {access.kind === "lapsed_subscriber" ? (
+                <SubscriptionLapsedBanner />
+              ) : null}
               {children}
             </div>
           </div>

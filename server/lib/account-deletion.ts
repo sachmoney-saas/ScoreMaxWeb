@@ -1,9 +1,10 @@
 import { deleteAllScanAssetStorageForUser } from "./analysis-cleanup";
 import { ApiError } from "./errors";
+import { isAccountDeletionBlockedBySubscription } from "./subscriptions";
 import { supabaseAdmin } from "./supabase-admin";
 
 export type DeleteUserAccountOptions = {
-  /** Si false (défaut), refuse si le profil a un abonnement actif. Les admins peuvent passer true. */
+  /** Si false (défaut), refuse si abonnement actif sans annulation programmée. Les admins peuvent passer true. */
   allowActiveSubscriber?: boolean;
 };
 
@@ -15,22 +16,8 @@ export async function deleteUserAccountCompletely(
   options: DeleteUserAccountOptions = {},
 ): Promise<{ storage: Awaited<ReturnType<typeof deleteAllScanAssetStorageForUser>> }> {
   if (!options.allowActiveSubscriber) {
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .select("is_subscriber")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (profileError) {
-      throw new ApiError({
-        code: "INTERNAL_SERVER_ERROR",
-        status: 500,
-        message: "Unable to verify subscription before account deletion",
-        details: profileError,
-      });
-    }
-
-    if (profile?.is_subscriber) {
+    const blocked = await isAccountDeletionBlockedBySubscription(userId);
+    if (blocked) {
       throw new ApiError({
         code: "VALIDATION_ERROR",
         status: 409,

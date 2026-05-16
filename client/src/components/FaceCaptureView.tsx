@@ -52,10 +52,6 @@ const STEP_INSTRUCTION: Record<PoseId, { en: string; fr: string }> = {
     fr: 'Approchez davantage le visage et souriez naturellement.',
     en: 'Move closer to the camera and give a natural smile.',
   },
-  'closeup-hairline': {
-    fr: "Reculez brièvement puis rapprochez fort le téléphone : front et hairline nets.",
-    en: 'Step back briefly, then move very close: forehead and hairline clear.',
-  },
 };
 
 interface FaceCaptureViewProps {

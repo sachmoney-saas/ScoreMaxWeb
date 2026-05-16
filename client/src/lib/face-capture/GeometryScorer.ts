@@ -3,7 +3,7 @@
 // Pure functions, no side effects, no external dependencies.
 // ============================================================
 
-import type { LandmarkPoint, PoseId } from './types';
+import type { LandmarkPoint } from './types';
 
 /**
  * Mouth Aspect Ratio (MAR) — standard real-time smile scorer.
@@ -116,24 +116,6 @@ export function eyebrowEyeDistance(
 
   const dist = Math.hypot(brow.x - eyeC.x, brow.y - eyeC.y);
   return dist / eyeW;
-}
-
-/**
- * Forehead visibility — measures how much of the forehead is exposed.
- * Used for hairline pose: forehead apex (10) should be above the brow ridge (107/336).
- *
- * Returns the vertical gap (nose-same-space normalised) between apex and brow ridge.
- * Positive = apex above brow ridge (good hairline exposure).
- */
-export function foreheadExposure(landmarks: LandmarkPoint[]): number | null {
-  const apex = landmarks[10];  // forehead apex
-  const browL = landmarks[107];
-  const browR = landmarks[336];
-  if (!apex || !browL || !browR) return null;
-
-  const browMidY = (browL.y + browR.y) * 0.5;
-  // In Face Mesh 2D: y increases downward, so apex.y < browMidY → apex is above
-  return apex.y - browMidY;
 }
 
 /**
