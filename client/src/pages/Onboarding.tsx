@@ -1165,12 +1165,14 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     <OnboardingScanCompleteSplash language={language} />
                   )
                 ) : isPotentialStep ? (
+                  // `overflow-hidden` + paddings fluides : tout le contenu
+                  // (titre → CTA Continuer) reste dans la vue, peu importe la
+                  // hauteur. L'ancien combo `justify-center + overflow-y-auto`
+                  // rendait le haut inaccessible quand ça débordait.
                   <div
                     className={cn(
-                      "flex min-h-0 flex-col px-1 py-2 sm:px-2 sm:py-4",
-                      isPotentialBlockingLoad
-                        ? "justify-start overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                        : "flex-1 justify-center overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+                      "flex min-h-0 flex-1 flex-col overflow-hidden px-1 py-[clamp(0.35rem,1.2vh,1rem)] sm:px-2",
+                      isPotentialBlockingLoad ? "justify-start" : "justify-center",
                     )}
                   >
                     <PotentialPreviewCard
@@ -1639,7 +1641,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
         <DialogContent
           aria-describedby={undefined}
           className={cn(
-            "max-h-[min(90dvh,900px)] max-w-[min(100vw-1.25rem,56rem)] overflow-y-auto border-white/15 bg-zinc-950/96 p-4 text-zinc-50 shadow-[0_40px_120px_-80px_rgba(0,0,0,0.92)] backdrop-blur-xl sm:rounded-2xl sm:p-6",
+            "max-h-[min(92dvh,900px)] max-w-[min(100vw-1.25rem,56rem)] overflow-y-auto border-white/15 bg-zinc-950/96 p-3 text-zinc-50 shadow-[0_40px_120px_-80px_rgba(0,0,0,0.92)] backdrop-blur-xl sm:rounded-2xl sm:p-5",
             "[&>button]:text-zinc-400 [&>button]:hover:bg-white/10 [&>button]:hover:text-white",
           )}
         >

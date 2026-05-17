@@ -1,3 +1,4 @@
+import DodoPayments from "dodopayments";
 import type { UnwrapWebhookEvent } from "dodopayments/resources/webhooks";
 import { ApiError } from "../errors";
 import { logger } from "../logger";
@@ -59,32 +60,98 @@ export class DodoWebhookSignatureError extends Error {
 }
 
 /**
+ * Optional list of additional webhook secrets to try after the primary one
+ * fails. Comma-separated whsec_… values.
+ *
+ * Why: Dodo's dashboard supports a single endpoint per webhook, but the
+ * same URL receives both `live_mode` and `test_mode` deliveries when the
+ * dashboard endpoint is configured against a single mode (or when a
+ * developer reuses the prod URL from a localhost dev session paying in
+ * test_mode). Without a fallback we'd 401 those deliveries and Dodo would
+ * give up after a 4xx — leading to silent payment/sync drift that we just
+ * had to recover manually for `zepitop.gestion@gmail.com`.
+ */
+function getAdditionalWebhookSecrets(): string[] {
+  const raw = process.env.DODO_PAYMENTS_WEBHOOK_KEYS_FALLBACK;
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+const additionalUnwrapClients: DodoPayments[] = [];
+
+function getAdditionalUnwrapClients(): DodoPayments[] {
+  if (additionalUnwrapClients.length > 0) return additionalUnwrapClients;
+
+  const extras = getAdditionalWebhookSecrets();
+  for (const secret of extras) {
+    additionalUnwrapClients.push(
+      // We only use `.webhooks.unwrap` on these clients — the bearer token
+      // is never sent because no HTTP call is made. We still pass a dummy
+      // string to satisfy the SDK constructor contract.
+      new DodoPayments({
+        bearerToken: "unused-webhook-verification-only",
+        webhookKey: secret,
+        environment: "test_mode",
+      }),
+    );
+  }
+  return additionalUnwrapClients;
+}
+
+/**
  * Verify the Standard Webhooks signature using the official SDK helper.
  *
- * Throws `DodoWebhookSignatureError` if the signature does not match —
- * the route handler maps that to a 401 to make replay attempts visible
- * in dashboards without being retried by Dodo.
+ * Primary path: the configured `DODO_PAYMENTS_WEBHOOK_KEY`. If that fails
+ * and `DODO_PAYMENTS_WEBHOOK_KEYS_FALLBACK` exposes additional secrets,
+ * each is tried in turn before we give up — this is the documented escape
+ * hatch for cross-mode deliveries against the same URL.
+ *
+ * Throws `DodoWebhookSignatureError` if no secret matches — the route
+ * handler maps that to a 401 to make replay attempts visible in
+ * dashboards without being retried by Dodo.
  */
 export function verifyDodoWebhook(params: {
   rawBody: string;
   headers: DodoWebhookHeaders;
 }): UnwrapWebhookEvent {
-  const client = getDodoClient();
+  const headers = {
+    "webhook-id": params.headers.webhookId,
+    "webhook-signature": params.headers.webhookSignature,
+    "webhook-timestamp": params.headers.webhookTimestamp,
+  };
 
+  const primary = getDodoClient();
+  let primaryError: unknown;
   try {
-    return client.webhooks.unwrap(params.rawBody, {
-      headers: {
-        "webhook-id": params.headers.webhookId,
-        "webhook-signature": params.headers.webhookSignature,
-        "webhook-timestamp": params.headers.webhookTimestamp,
-      },
-    });
+    return primary.webhooks.unwrap(params.rawBody, { headers });
   } catch (error) {
-    throw new DodoWebhookSignatureError(
-      "Invalid Dodo webhook signature",
-      error,
-    );
+    primaryError = error;
   }
+
+  const fallbacks = getAdditionalUnwrapClients();
+  for (let i = 0; i < fallbacks.length; i += 1) {
+    try {
+      const event = fallbacks[i].webhooks.unwrap(params.rawBody, { headers });
+      logger.warn(
+        {
+          webhookId: params.headers.webhookId,
+          fallback_index: i,
+        },
+        "dodo: webhook verified with fallback secret (primary secret did not match — check that prod is on the right mode)",
+      );
+      return event;
+    } catch {
+      // try next
+    }
+  }
+
+  throw new DodoWebhookSignatureError(
+    "Invalid Dodo webhook signature",
+    primaryError,
+  );
 }
 
 type LedgerReservation =

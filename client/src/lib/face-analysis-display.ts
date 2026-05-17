@@ -47,7 +47,7 @@ const workerLabels: Record<string, LocalizedText> = {
   bodyfat: text("Masse grasse faciale", "Facial body fat"),
   cheeks: text("Joues", "Cheeks"),
   chin: text("Menton", "Chin"),
-  coloring: text("Ta colorimétrie globale", "Your global coloring"),
+  coloring: text("Colorimétrie", "Coloring"),
   eye_brows: text("Sourcils", "Eyebrows"),
   eyes: text("Yeux", "Eyes"),
   hair: text("Cheveux", "Hair"),
@@ -497,7 +497,7 @@ const displayMeta: Record<string, WorkerDisplayMeta> = {
     },
   },
   coloring: {
-    label: text("Ta colorimétrie globale", "Your global coloring"),
+    label: text("Colorimétrie", "Coloring"),
     aggregates: {
       "skin.tone": { label: text("Teint de peau", "Skin tone"), kind: "enum", priority: 10, valueLabels: commonEnumLabels },
       "skin.clarity": { label: text("Clarté de la peau", "Skin clarity"), kind: "score", priority: 20 },

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
-import { SiApple, SiGoogle } from "react-icons/si";
+import { SiGoogle } from "react-icons/si";
 import { translateSupabaseError } from "@/lib/error-translator";
 import {
   authOAuthButtonClassName,
@@ -91,7 +91,9 @@ export default function AuthPage() {
     }
   };
 
-  const handleOAuthSignIn = async (provider: "apple" | "google") => {
+  // Apple sign-in temporarily disabled (provider issue) — re-enable by adding
+  // "apple" back to this union and restoring the Apple button below.
+  const handleOAuthSignIn = async (provider: "google") => {
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -145,28 +147,16 @@ export default function AuthPage() {
           </div>
 
           <div className="mt-4 space-y-3 sm:mt-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Button
-                type="button"
-                className={authOAuthButtonClassName}
-                onClick={() => handleOAuthSignIn("google")}
-                disabled={isLoading}
-                data-testid="button-google-auth"
-              >
-                <SiGoogle className="mr-2 h-5 w-5" />
-                Google
-              </Button>
-              <Button
-                type="button"
-                className={authOAuthButtonClassName}
-                onClick={() => handleOAuthSignIn("apple")}
-                disabled={isLoading}
-                data-testid="button-apple-auth"
-              >
-                <SiApple className="mr-2 h-5 w-5" />
-                Apple
-              </Button>
-            </div>
+            <Button
+              type="button"
+              className={authOAuthButtonClassName}
+              onClick={() => handleOAuthSignIn("google")}
+              disabled={isLoading}
+              data-testid="button-google-auth"
+            >
+              <SiGoogle className="mr-2 h-5 w-5" />
+              Google
+            </Button>
 
             <div className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500 sm:text-xs">
               <div className="h-px flex-1 bg-white/15" />

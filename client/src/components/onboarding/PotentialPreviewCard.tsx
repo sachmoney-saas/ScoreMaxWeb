@@ -40,15 +40,14 @@ function TransformationPreviewHeader({
   subtitle: { en: string; fr: string };
 }) {
   return (
-    <header className="w-full text-center">
+    <header className="w-full shrink-0 text-center">
       <h2
         className={cn(
-          "font-hero mx-auto max-w-[min(100%,22ch)] font-semibold tracking-[-0.02em] text-balance text-white",
-          "text-[clamp(1.45rem,0.42rem+3.8vw,2.35rem)] leading-[1.1]",
-          "sm:max-w-[min(100%,28ch)] sm:leading-[1.08]",
-          "md:max-w-[min(100%,32ch)] md:text-[clamp(1.65rem,0.65rem+2.4vw,2.4rem)]",
-          "[@media(max-height:700px)]:text-[clamp(1.2rem,0.25rem+3vw,1.9rem)]",
-          "lg:leading-[1.06]",
+          "font-hero mx-auto max-w-[min(100%,22ch)] font-semibold tracking-[-0.02em] text-balance text-white sm:max-w-[min(100%,28ch)] md:max-w-[min(100%,32ch)]",
+          // Tailles 100% fluides en `vh` : le titre rétrécit avec la hauteur
+          // dispo (et grossit sur les grands écrans) pour rester lisible
+          // sans pousser le CTA hors de la vue.
+          "text-[clamp(1.1rem,3vh,2.1rem)] leading-[1.08]",
         )}
       >
         {i18n(language, {
@@ -56,7 +55,7 @@ function TransformationPreviewHeader({
           fr: "Ton aperçu transformation",
         })}
       </h2>
-      <p className="mt-1.5 text-[0.8125rem] leading-snug text-zinc-300 sm:mt-2 sm:text-sm">
+      <p className="mt-[clamp(0.2rem,0.6vh,0.5rem)] text-[clamp(0.78rem,1.5vh,0.875rem)] leading-snug text-zinc-300">
         {i18n(language, subtitle)}
       </p>
     </header>
@@ -125,7 +124,7 @@ function UnlockFullAnalysisCta({
 }) {
   return (
     <div
-      className="flex w-full flex-col items-center pt-1 sm:pt-2"
+      className="flex w-full shrink-0 flex-col items-center"
       role="region"
       aria-label={i18n(language, {
         en: "Continue",
@@ -137,14 +136,14 @@ function UnlockFullAnalysisCta({
         onClick={() => void onUnlock()}
         disabled={isUnlocking}
         className={cn(
-          "mx-auto flex min-h-[2.75rem] w-full min-w-[10.5rem] max-w-[min(15rem,88vw)] items-center justify-center gap-2 rounded-sm px-6 py-3 text-base transition disabled:pointer-events-none disabled:opacity-60 sm:min-h-[3rem] sm:py-3.5",
+          "mx-auto flex w-full min-w-[10.5rem] max-w-[min(15rem,88vw)] items-center justify-center gap-2 rounded-sm px-6 py-[clamp(0.55rem,1.4vh,0.875rem)] transition disabled:pointer-events-none disabled:opacity-60",
           onboardingPrimaryCtaClassName,
         )}
       >
         {isUnlocking ? (
           <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
         ) : null}
-        <span className="text-center text-sm font-semibold tracking-tight sm:text-base">
+        <span className="text-center text-[clamp(0.85rem,1.7vh,1rem)] font-semibold tracking-tight">
           {i18n(language, {
             en: "Continue",
             fr: "Continuer",
@@ -192,7 +191,7 @@ export function PotentialPreviewCard({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.22, ease: "easeOut" }}
-        className="mx-auto flex w-full max-w-full flex-col items-stretch gap-3 px-0 py-1 sm:gap-4 sm:py-2"
+        className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0"
       >
         <TransformationPreviewHeader
           language={language}
@@ -227,7 +226,7 @@ export function PotentialPreviewCard({
         <div
           className={cn(
             saasGlassInsetClassName,
-            "pointer-events-none w-full max-w-none select-none rounded-2xl p-4 text-left sm:p-5",
+            "pointer-events-none w-full max-w-none shrink-0 select-none rounded-2xl p-[clamp(0.75rem,1.8vh,1.25rem)] text-left",
           )}
           aria-hidden
         >
@@ -240,7 +239,7 @@ export function PotentialPreviewCard({
           </div>
         </div>
         <div
-          className="h-[2.75rem] w-full shrink-0 animate-pulse rounded-sm bg-white/10 sm:h-[3rem]"
+          className="h-[clamp(2.25rem,5.5vh,3rem)] w-full shrink-0 animate-pulse rounded-sm bg-white/10"
           aria-hidden
         />
       </motion.div>
@@ -280,7 +279,7 @@ export function PotentialPreviewCard({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-3 px-0 py-1 sm:gap-4 sm:py-2">
+    <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0">
       <TransformationPreviewHeader
         language={language}
         subtitle={{
@@ -304,16 +303,16 @@ export function PotentialPreviewCard({
       <div
         className={cn(
           saasGlassInsetClassName,
-          "w-full max-w-none rounded-2xl p-4 text-left sm:p-5",
+          "w-full max-w-none shrink-0 rounded-2xl p-[clamp(0.75rem,1.8vh,1.25rem)] text-left",
         )}
       >
-        <h3 className="text-sm font-semibold text-white sm:text-base">
+        <h3 className="text-[clamp(0.85rem,1.7vh,1rem)] font-semibold text-white">
           {i18n(language, {
             en: "What this means",
             fr: "Ce que ça signifie",
           })}
         </h3>
-        <p className="mt-2 w-full max-w-none text-sm leading-relaxed text-zinc-400 sm:text-[0.9375rem]">
+        <p className="mt-[clamp(0.3rem,0.8vh,0.5rem)] w-full max-w-none text-[clamp(0.78rem,1.5vh,0.9375rem)] leading-relaxed text-zinc-400">
           {i18n(language, {
             en: "Follow your personalized ScoreMax protocol for 12 weeks to reach your next potential tier. We'll track your progress and adjust recommendations until you reach your ultimate objective.",
             fr: "Suis ton protocole ScoreMax personnalisé pendant 12 semaines pour passer au palier de potentiel suivant. On suit tes progrès et on ajuste les recommandations jusqu'à ce que tu atteignes ton objectif ultime.",

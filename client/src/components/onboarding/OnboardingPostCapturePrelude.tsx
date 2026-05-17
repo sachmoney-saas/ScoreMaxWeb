@@ -162,19 +162,23 @@ export function OnboardingFacialGeometryLoader({
 
   return (
     <motion.div
-      className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-6 sm:px-6 sm:py-8"
+      // Tailles 100% fluides (vh-based) + `overflow-hidden` : le contenu
+      // s'adapte à la hauteur disponible du panneau onboarding, jamais de
+      // scrollbar. Le `gap` remplace les marges entre les blocs pour que
+      // l'écart se compresse uniformément quand la fenêtre se rétrécit.
+      className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[clamp(0.75rem,2.5vh,2rem)] overflow-hidden px-4 py-[clamp(0.75rem,2vh,1.75rem)] sm:px-6"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
     >
-      <h2 className="font-hero shrink-0 text-center text-[1.2rem] font-semibold leading-snug tracking-[-0.02em] text-white sm:text-[1.4rem]">
+      <h2 className="font-hero shrink-0 text-center text-[clamp(1rem,2.4vh,1.4rem)] font-semibold leading-snug tracking-[-0.02em] text-white">
         {i18n(language, {
           en: "Analyzing facial geometry",
           fr: "Analyse de la géométrie du visage",
         })}
       </h2>
 
-      <div className="relative mx-auto mt-8 flex size-36 shrink-0 items-center justify-center sm:mt-10 sm:size-44">
+      <div className="relative mx-auto flex size-[clamp(5rem,14vh,11rem)] shrink-0 items-center justify-center">
         <div
           className="absolute inset-0 rounded-full border-2 border-white/10"
           aria-hidden
@@ -185,20 +189,18 @@ export function OnboardingFacialGeometryLoader({
           transition={{ duration: 1.15, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
           aria-hidden
         />
-        <div className="flex size-[4.5rem] items-center justify-center sm:size-[5rem]">
-          <Loader2
-            className="size-10 text-sky-400/90 sm:size-11"
-            strokeWidth={2}
-            aria-hidden
-          />
-        </div>
+        <Loader2
+          className="size-[clamp(1.75rem,4.5vh,2.75rem)] text-sky-400/90"
+          strokeWidth={2}
+          aria-hidden
+        />
       </div>
 
       <ul
         className={cn(
-          "mx-auto mt-8 w-full max-w-sm space-y-3 text-left sm:mt-10",
+          "mx-auto w-full max-w-sm shrink-0 space-y-[clamp(0.35rem,1vh,0.75rem)] text-left",
           saasGlassInsetClassName,
-          "rounded-2xl p-4 sm:p-5",
+          "rounded-2xl p-[clamp(0.6rem,1.6vh,1.25rem)]",
         )}
         aria-label={i18n(language, {
           en: "Analysis steps",
@@ -209,10 +211,13 @@ export function OnboardingFacialGeometryLoader({
           const done = index < step;
           const active = index === step;
           return (
-            <li key={label.en} className="flex items-start gap-3">
+            <li
+              key={label.en}
+              className="flex items-start gap-[clamp(0.5rem,1.1vh,0.75rem)]"
+            >
               <span
                 className={cn(
-                  "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold tabular-nums",
+                  "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.5rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
                   done && "border-sky-400/60 bg-sky-400/20 text-sky-200",
                   active &&
                     "border-sky-400 bg-sky-400/25 text-sky-100 shadow-[0_0_14px_rgba(56,189,248,0.35)]",
@@ -226,7 +231,7 @@ export function OnboardingFacialGeometryLoader({
               </span>
               <span
                 className={cn(
-                  "text-sm leading-snug sm:text-[0.9375rem]",
+                  "text-[clamp(0.75rem,1.7vh,0.9375rem)] leading-snug",
                   active && "font-medium text-white",
                   done && "text-zinc-300",
                   !done && !active && "text-zinc-500",

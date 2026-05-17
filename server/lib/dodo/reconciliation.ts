@@ -18,6 +18,19 @@ export type ReconciliationOutcome = {
   errors: Array<{ subscription_id: string; error: string }>;
 };
 
+export type SingleSubscriptionReconciliationOutcome =
+  | {
+      status: "resynced";
+      subscription_id: string;
+      dodo_status: string;
+    }
+  | {
+      status: "orphan";
+      subscription_id: string;
+      dodo_status: string;
+      reason: "no_scoremax_user" | "scoremax_user_missing";
+    };
+
 /**
  * Walk every active-ish Dodo subscription and make sure our DB mirrors it.
  *
@@ -92,6 +105,33 @@ export async function reconcileDodoSubscriptions(): Promise<ReconciliationOutcom
   );
 
   return outcome;
+}
+
+/**
+ * Targeted resync: fetches a single Dodo subscription by id and applies
+ * the same webhook code path. Designed for hotfix paths (e.g. a webhook
+ * delivery was rejected for signature reasons and never landed in our DB):
+ * an admin can replay it without scanning the whole account.
+ */
+export async function reconcileDodoSubscriptionById(
+  subscriptionId: string,
+): Promise<SingleSubscriptionReconciliationOutcome> {
+  const client = getDodoClient();
+  const subscription = await client.subscriptions.retrieve(subscriptionId);
+  const result = await reconcileSingleSubscription(subscription);
+  if (result === "resynced") {
+    return {
+      status: "resynced",
+      subscription_id: subscription.subscription_id,
+      dodo_status: subscription.status,
+    };
+  }
+  return {
+    status: "orphan",
+    subscription_id: subscription.subscription_id,
+    dodo_status: subscription.status,
+    reason: result.reason,
+  };
 }
 
 type ReconcileResult =

@@ -5,9 +5,14 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 
 const DEFAULT_POSITION = 50;
 
-/** Même empreinte que le slider pour l’écran de chargement du potentiel (évite le saut de layout). */
+/**
+ * Même empreinte que le slider pour l'écran de chargement du potentiel
+ * (évite le saut de layout). Les `max-h` sont fluides en `vh` pour laisser
+ * la place au titre, au bloc « What this means » et au CTA Continuer sans
+ * provoquer de scroll.
+ */
 export const beforeAfterMediaFrameClassName =
-  "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(34vh,18.5rem)] overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(38vh,20.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(42vh,22.5rem)] md:max-w-[min(100%,24rem)]";
+  "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(28vh,15.5rem)] overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(32vh,17.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(36vh,19.5rem)] md:max-w-[min(100%,24rem)]";
 
 type Props = {
   language: AppLanguage;

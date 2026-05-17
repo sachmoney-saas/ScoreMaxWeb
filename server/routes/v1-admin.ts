@@ -8,7 +8,10 @@ import { parseGuideTraceMetricsFromStoredRequestPayload } from "../lib/analysis-
 import { requireAdminUser } from "../lib/auth";
 import { ApiError } from "../lib/errors";
 import { downloadR2Object, getDefaultR2Bucket } from "../lib/r2-storage";
-import { reconcileDodoSubscriptions } from "../lib/dodo/reconciliation";
+import {
+  reconcileDodoSubscriptionById,
+  reconcileDodoSubscriptions,
+} from "../lib/dodo/reconciliation";
 import { kickoffMissingPaidAnalyses } from "../lib/post-payment-analysis-rescue";
 import {
   getPremiumAccessState,
@@ -860,6 +863,32 @@ export function createV1AdminRouter(): Router {
       next(error);
     }
   });
+
+  /**
+   * Targeted resync of a single Dodo subscription by id (e.g. after a
+   * signature-rejected webhook delivery). Equivalent to replaying the
+   * delivery without needing access to the Dodo dashboard.
+   */
+  router.post(
+    "/admin/dodo/reconcile/:subscriptionId",
+    async (req, res, next) => {
+      try {
+        await requireAdminUser(req.headers.authorization);
+        const { subscriptionId } = z
+          .object({ subscriptionId: z.string().min(1) })
+          .parse(req.params);
+        const outcome = await reconcileDodoSubscriptionById(subscriptionId);
+        res.status(200).json({
+          ok: true,
+          httpStatus: 200,
+          data: outcome,
+          error: null,
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   /**
    * Long-tail safety net for the post-payment analysis: find every user with

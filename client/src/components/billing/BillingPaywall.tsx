@@ -21,13 +21,13 @@ const paywallOuterClass =
   "relative mx-auto max-w-5xl overflow-hidden rounded-[1.85rem] border border-white/[0.12] bg-zinc-950/55 p-8 shadow-[0_48px_120px_-72px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:p-10";
 
 const paywallEmbeddedClass =
-  "relative w-full overflow-hidden rounded-2xl border border-white/[0.12] bg-black/30 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md sm:p-7 md:p-8";
+  "relative w-full overflow-hidden rounded-2xl border border-white/[0.12] bg-black/30 p-[clamp(0.85rem,2.2vh,2rem)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md";
 
 const planCardInnerClass =
   "relative flex h-full flex-col rounded-2xl border border-white/[0.1] bg-black/40 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm sm:p-6";
 
 const planCardEmbeddedClass =
-  "relative flex h-full flex-col rounded-2xl border border-white/[0.12] bg-black/45 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm sm:p-6 md:p-7";
+  "relative flex h-full flex-col rounded-2xl border border-white/[0.12] bg-black/45 p-[clamp(0.75rem,2vh,1.75rem)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm";
 
 const PLAN_BENEFITS: Record<
   Plan,
@@ -80,7 +80,7 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<Plan>("yearly");
+  const [selectedPlan, setSelectedPlan] = useState<Plan>("monthly");
   const isDialog = variant === "dialog";
   /** Grille / typo « compacte », avec ou sans cadre glass externe. */
   const useEmbeddedLayout = variant === "embedded" || isDialog;
@@ -230,7 +230,9 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
           className={cn(
             "font-display font-bold tracking-tight text-white",
             useEmbeddedLayout
-              ? "text-2xl sm:text-3xl md:text-[1.85rem] md:leading-snug"
+              ? // En mode dialog/embedded : titre fluide en `vh` pour que tout
+                // (titre → bouton Select) tienne dans la viewport sans scroll.
+                "text-[clamp(1.2rem,3vh,1.85rem)] leading-tight"
               : "text-3xl sm:text-4xl",
           )}
         >
@@ -245,7 +247,7 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
           className={cn(
             "leading-relaxed text-zinc-400",
             useEmbeddedLayout
-              ? "mx-auto mt-2.5 max-w-3xl text-sm sm:text-[0.9375rem]"
+              ? "mx-auto mt-[clamp(0.25rem,0.7vh,0.625rem)] max-w-3xl text-[clamp(0.78rem,1.6vh,0.9375rem)]"
               : "mt-3 max-w-2xl text-base",
           )}
         >
@@ -257,8 +259,10 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
 
         <div
           className={cn(
-            "mx-auto mt-6 flex max-w-md justify-center",
-            useEmbeddedLayout && "mt-7 max-w-lg sm:mt-8",
+            "mx-auto flex justify-center",
+            useEmbeddedLayout
+              ? "mt-[clamp(0.65rem,1.7vh,1.5rem)] max-w-lg"
+              : "mt-6 max-w-md",
           )}
           role="tablist"
           aria-label={i18n(language, {
@@ -283,7 +287,10 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
                   aria-controls="billing-plan-panel"
                   tabIndex={isActive ? 0 : -1}
                   className={cn(
-                    "relative flex min-h-[2.75rem] flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition-colors",
+                    "relative flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition-colors",
+                    useEmbeddedLayout
+                      ? "py-[clamp(0.4rem,1.1vh,0.75rem)]"
+                      : "min-h-[2.75rem]",
                     isActive
                       ? "bg-white text-zinc-950 shadow-sm"
                       : "text-zinc-400 hover:text-zinc-200",
@@ -314,8 +321,10 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
           role="tabpanel"
           aria-labelledby={`billing-tab-${pid}`}
           className={cn(
-            "mx-auto mt-5 max-w-md text-left",
-            useEmbeddedLayout && "mt-6 max-w-lg sm:mt-7",
+            "mx-auto text-left",
+            useEmbeddedLayout
+              ? "mt-[clamp(0.6rem,1.6vh,1.5rem)] max-w-lg"
+              : "mt-5 max-w-md",
           )}
         >
           <div
@@ -333,24 +342,56 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
             ) : null}
 
             <div className={pid === "yearly" ? "pr-16" : undefined}>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">
+              <p
+                className={cn(
+                  "font-semibold uppercase tracking-[0.12em] text-zinc-500",
+                  useEmbeddedLayout
+                    ? "text-[clamp(0.7rem,1.4vh,0.875rem)]"
+                    : "text-sm",
+                )}
+              >
                 {label}
               </p>
-              <div className="mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
-                <span className="text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
+              <div
+                className={cn(
+                  "flex flex-wrap items-baseline gap-x-1.5 gap-y-1",
+                  useEmbeddedLayout
+                    ? "mt-[clamp(0.4rem,1vh,0.75rem)]"
+                    : "mt-3",
+                )}
+              >
+                <span
+                  className={cn(
+                    "font-bold tabular-nums tracking-tight text-white",
+                    useEmbeddedLayout
+                      ? "text-[clamp(1.5rem,3.4vh,2.25rem)]"
+                      : "text-3xl sm:text-4xl",
+                  )}
+                >
                   {price}
                 </span>
                 <span className="text-sm text-zinc-400">/ {cadence}</span>
               </div>
               {tagline ? (
-                <p className="mt-1.5 text-sm text-zinc-400">{tagline}</p>
+                <p
+                  className={cn(
+                    "text-zinc-400",
+                    useEmbeddedLayout
+                      ? "mt-[clamp(0.2rem,0.6vh,0.4rem)] text-[clamp(0.75rem,1.4vh,0.875rem)]"
+                      : "mt-1.5 text-sm",
+                  )}
+                >
+                  {tagline}
+                </p>
               ) : null}
             </div>
 
             <ul
               className={cn(
-                "mt-5 flex flex-col text-zinc-200",
-                useEmbeddedLayout ? "gap-3 text-[0.9375rem]" : "gap-2.5 text-sm",
+                "flex flex-col text-zinc-200",
+                useEmbeddedLayout
+                  ? "mt-[clamp(0.6rem,1.4vh,1.25rem)] gap-[clamp(0.3rem,0.9vh,0.75rem)] text-[clamp(0.78rem,1.5vh,0.9375rem)]"
+                  : "mt-5 gap-2.5 text-sm",
               )}
             >
               {planFeatures(pid, lang).map((feature) => (
@@ -374,7 +415,9 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
             className={cn(
               "w-full rounded-xl border border-white/10 bg-white font-semibold text-zinc-950 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] hover:bg-zinc-100",
               useEmbeddedLayout
-                ? "mt-5 h-12 min-h-[3rem] text-[0.9375rem] sm:mt-6"
+                ? // `min-h` retiré : la hauteur réagit au `vh` (rentre toujours
+                  // dans la viewport, jamais coupé en bas du dialog).
+                  "mt-[clamp(0.6rem,1.4vh,1.25rem)] h-[clamp(2.4rem,5.5vh,3rem)] text-[clamp(0.85rem,1.7vh,0.9375rem)]"
                 : "mt-4 h-11 text-base",
             )}
             size="lg"
@@ -400,7 +443,7 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
           className={cn(
             "leading-snug text-zinc-600",
             useEmbeddedLayout
-              ? "mx-auto mt-6 max-w-3xl text-center text-[0.8125rem]"
+              ? "mx-auto mt-[clamp(0.5rem,1.2vh,1.25rem)] max-w-3xl text-center text-[clamp(0.7rem,1.3vh,0.8125rem)]"
               : "mt-5 max-w-xl text-xs",
           )}
         >

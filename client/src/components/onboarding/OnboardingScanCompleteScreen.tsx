@@ -191,19 +191,23 @@ export function OnboardingScanCompleteScreen({
 
   return (
     <motion.div
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-1 py-2 sm:px-2 sm:py-4"
+      // Layout 100% fluide : `gap` + paddings + tailles internes en
+      // `clamp(min, vh, max)` pour que tout l'écran (titre → bouton CTA)
+      // tienne sans scroll dans le panneau onboarding, quelle que soit la
+      // hauteur dispo. `overflow-hidden` est le filet de sécurité.
+      className="flex min-h-0 flex-1 flex-col gap-[clamp(0.35rem,1.3vh,1rem)] overflow-hidden px-1 py-[clamp(0.35rem,1.2vh,1rem)] sm:px-2"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: "easeOut" }}
     >
       <header className="shrink-0 text-center">
-        <h2 className="font-hero text-[1.35rem] font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.65rem]">
+        <h2 className="font-hero text-[clamp(1.1rem,3vh,1.65rem)] font-semibold leading-[1.06] tracking-[-0.015em] text-white">
           {i18n(language, {
             en: "Your scan is complete",
             fr: "Ton scan est terminé",
           })}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-300 sm:text-base">
+        <p className="mt-[clamp(0.2rem,0.6vh,0.5rem)] text-[clamp(0.8rem,1.6vh,1rem)] leading-relaxed text-zinc-300">
           {i18n(language, {
             en: "We've captured your unique facial structure",
             fr: "Nous avons capturé la structure unique de ton visage",
@@ -212,7 +216,7 @@ export function OnboardingScanCompleteScreen({
       </header>
 
       <motion.div
-        className="mx-auto mt-3 flex shrink-0 items-center justify-center gap-2 px-2 text-center text-sm font-medium text-zinc-300 sm:text-[0.9375rem]"
+        className="mx-auto flex shrink-0 items-center justify-center gap-2 px-2 text-center text-[clamp(0.78rem,1.5vh,0.9375rem)] font-medium text-zinc-300"
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.22, ease: "easeOut" }}
@@ -226,7 +230,7 @@ export function OnboardingScanCompleteScreen({
 
       <motion.div
         ref={viewportRef}
-        className="relative mx-auto mt-3 w-full shrink-0 aspect-[3/4] max-h-[min(34dvh,300px)] sm:max-h-[min(38dvh,340px)]"
+        className="relative mx-auto aspect-[3/4] w-full shrink-0 max-h-[min(30dvh,260px)] sm:max-h-[min(34dvh,320px)]"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -245,20 +249,25 @@ export function OnboardingScanCompleteScreen({
 
       <div
         className={cn(
-          "mx-auto mt-3 grid w-full max-w-lg shrink-0 grid-cols-3 gap-2 px-0.5 text-center text-xs sm:max-w-2xl sm:gap-2.5 sm:text-sm",
+          "mx-auto grid w-full max-w-lg shrink-0 grid-cols-3 gap-2 px-0.5 text-center text-xs sm:max-w-2xl sm:gap-2.5 sm:text-sm",
         )}
       >
-        <div className={cn("rounded-xl px-2.5 py-2.5 sm:px-3", saasGlassInsetClassName)}>
+        <div
+          className={cn(
+            "rounded-xl px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] sm:px-3",
+            saasGlassInsetClassName,
+          )}
+        >
           <p className="text-[0.65rem] font-medium uppercase leading-tight tracking-wide text-zinc-500 sm:text-[0.72rem]">
             {i18n(language, {
               en: "Canthal tilt",
               fr: "Inclinaison canthale",
             })}
           </p>
-          <p className="mt-1 flex flex-wrap items-baseline justify-center gap-x-2 gap-y-0">
+          <p className="mt-0.5 flex flex-wrap items-baseline justify-center gap-x-2 gap-y-0">
             {canthalTiltDeg != null ? (
               <>
-                <span className="text-base font-semibold text-sky-100 sm:text-lg">
+                <span className="text-[clamp(0.9rem,2vh,1.125rem)] font-semibold text-sky-100">
                   {canthalCategoryLabel}
                 </span>
                 <span className="text-[0.7rem] tabular-nums text-zinc-500 sm:text-xs">
@@ -266,22 +275,29 @@ export function OnboardingScanCompleteScreen({
                 </span>
               </>
             ) : (
-              <span className="text-base font-semibold text-sky-100 sm:text-lg">—</span>
+              <span className="text-[clamp(0.9rem,2vh,1.125rem)] font-semibold text-sky-100">—</span>
             )}
           </p>
         </div>
-        <div className={cn("rounded-xl px-2.5 py-2.5 sm:px-3", saasGlassInsetClassName)}>
+        <div
+          className={cn(
+            "rounded-xl px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] sm:px-3",
+            saasGlassInsetClassName,
+          )}
+        >
           <p className="text-[0.65rem] font-medium uppercase leading-tight tracking-wide text-zinc-500 sm:text-[0.72rem]">
             {i18n(language, {
               en: "Mouth / nose ratio",
               fr: "Ratio bouche / nez",
             })}
           </p>
-          <p className="mt-1 tabular-nums text-base font-semibold text-sky-100 sm:text-lg">{ratioLabel}</p>
+          <p className="mt-0.5 tabular-nums text-[clamp(0.9rem,2vh,1.125rem)] font-semibold text-sky-100">
+            {ratioLabel}
+          </p>
         </div>
         <div
           className={cn(
-            "relative overflow-hidden rounded-xl border border-dashed border-sky-400/45 bg-gradient-to-b from-sky-500/[0.14] via-white/[0.04] to-transparent px-2.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(56,189,248,0.08)] sm:px-3",
+            "relative overflow-hidden rounded-xl border border-dashed border-sky-400/45 bg-gradient-to-b from-sky-500/[0.14] via-white/[0.04] to-transparent px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(56,189,248,0.08)] sm:px-3",
           )}
         >
           <div
@@ -294,18 +310,20 @@ export function OnboardingScanCompleteScreen({
               fr: "Mesures",
             })}
           </p>
-          <div className="mt-1 flex items-center justify-center gap-1.5 sm:gap-2">
+          <div className="mt-0.5 flex items-center justify-center gap-1.5 sm:gap-2">
             <Layers
               className="size-3.5 shrink-0 text-sky-400/80 sm:size-4"
               strokeWidth={2}
               aria-hidden
             />
-            <p className="tabular-nums text-base font-semibold text-white sm:text-lg">120+</p>
+            <p className="tabular-nums text-[clamp(0.9rem,2vh,1.125rem)] font-semibold text-white">
+              120+
+            </p>
           </div>
         </div>
       </div>
 
-      <p className="mt-4 shrink-0 text-center text-sm text-zinc-400 sm:mt-5">
+      <p className="shrink-0 text-center text-[clamp(0.78rem,1.5vh,0.875rem)] text-zinc-400">
         {i18n(language, {
           en: "Let's see where you stand…",
           fr: "Voyons où tu te situes…",
@@ -313,7 +331,7 @@ export function OnboardingScanCompleteScreen({
       </p>
 
       <motion.div
-        className="mx-auto mt-4 flex w-full max-w-lg shrink-0 flex-col items-center space-y-3 pb-1 sm:max-w-2xl"
+        className="mx-auto flex w-full max-w-lg shrink-0 flex-col items-center gap-[clamp(0.4rem,1vh,0.75rem)] sm:max-w-2xl"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
@@ -331,7 +349,7 @@ export function OnboardingScanCompleteScreen({
           disabled={isContinuing || continueDisabled || isSavingCaptures}
           onClick={onContinue}
           className={cn(
-            "mx-auto flex w-full min-w-[10.5rem] max-w-[min(15rem,88vw)] items-center justify-center px-6 py-3.5 text-base font-semibold transition disabled:opacity-60",
+            "mx-auto flex w-full min-w-[10.5rem] max-w-[min(15rem,88vw)] items-center justify-center px-6 py-[clamp(0.55rem,1.4vh,0.875rem)] text-base font-semibold transition disabled:opacity-60",
             onboardingPrimaryCtaClassName,
           )}
         >
@@ -345,7 +363,7 @@ export function OnboardingScanCompleteScreen({
             type="button"
             disabled={isContinuing || isSavingCaptures}
             onClick={onReviewPoses}
-            className="w-full text-center text-sm font-medium text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline disabled:opacity-50"
+            className="w-full text-center text-[clamp(0.78rem,1.5vh,0.875rem)] font-medium text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline disabled:opacity-50"
           >
             {i18n(language, {
               en: "Review captured poses",

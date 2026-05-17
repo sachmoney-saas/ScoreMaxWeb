@@ -264,12 +264,6 @@ function SidebarNewAnalysisPrimarySlot({
               fr: "Analyse en cours",
             })}
           </div>
-          <span className="text-[10px] leading-snug text-zinc-500">
-            {i18n(language, {
-              en: "Up to once per week",
-              fr: "Au plus une fois par semaine",
-            })}
-          </span>
         </div>
       );
     }
@@ -354,12 +348,6 @@ function SidebarNewAnalysisPrimarySlot({
             fr: "Analyse en cours",
           })}
         </div>
-        <span className="text-[10px] leading-snug text-zinc-500">
-          {i18n(language, {
-            en: "1 per week maximum",
-            fr: "1 par semaine maximum",
-          })}
-        </span>
       </div>
     );
   }
