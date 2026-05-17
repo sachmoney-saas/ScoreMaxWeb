@@ -777,23 +777,53 @@ export default function Landing() {
     visible: { y: 0, opacity: 1 },
   };
 
+  const handleCompleteAnalysisClick = React.useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+
+      const target = document.getElementById("complete-analysis");
+      if (!target) {
+        return;
+      }
+
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+      const fixedHeader = document.querySelector("header");
+      const headerBottom =
+        fixedHeader instanceof HTMLElement
+          ? fixedHeader.getBoundingClientRect().bottom
+          : 0;
+      const scrollOffset = Math.ceil(headerBottom + 24);
+      const targetTop =
+        target.getBoundingClientRect().top + window.scrollY - scrollOffset;
+
+      window.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
+      window.history.pushState(null, "", "#complete-analysis");
+    },
+    [],
+  );
+
   return (
     <div className="landing-grain min-h-screen bg-background relative">
       <FloatingHeader language={language} />
 
-      {/* Hero — mobile : ~1 écran fixe ; md+ : zone un peu plus haute que la fenêtre pour aérer (H1 moins plaqué en haut). */}
-      <section className="relative isolate flex min-h-[100svh] h-[100svh] max-h-[100svh] flex-col overflow-x-hidden max-md:overflow-y-hidden md:h-auto md:max-h-none md:min-h-[108svh] md:overflow-y-visible bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-2 pt-[max(4.75rem,calc(env(safe-area-inset-top,0px)+1rem))] sm:pb-3 sm:pt-[max(5.25rem,calc(env(safe-area-inset-top,0px)+1.25rem))] lg:min-h-[min(118svh,1020px)] lg:pb-10 lg:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))]">
+      {/* Hero — everything is height-aware so the preview stays inside one viewport. */}
+      <section className="relative isolate flex h-[100svh] max-h-[100svh] min-h-[100svh] flex-col overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-2 pt-[max(4.5rem,calc(env(safe-area-inset-top,0px)+1rem))] sm:pb-3 sm:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))] lg:pb-4 lg:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))]">
         <div className="relative mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col lg:max-w-[75%]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="relative z-10 flex min-h-0 flex-1 flex-col justify-center px-1 py-3 sm:px-2 sm:py-5 md:py-6 lg:justify-start lg:pt-[clamp(2.75rem,min(11svh,6.5rem),6.75rem)] xl:pt-[clamp(3.25rem,min(11.5svh,7rem),7.5rem)]"
+            className="relative z-10 flex min-h-0 flex-1 flex-col justify-start px-1 py-2 pt-[clamp(0.5rem,3svh,1.75rem)] sm:px-2 sm:py-3 md:py-4 lg:pt-[clamp(1rem,5svh,3.25rem)] xl:pt-[clamp(1.25rem,5.5svh,3.75rem)]"
           >
-            <div className="mx-auto w-full max-w-[36rem] -translate-y-2 space-y-4 text-center sm:-translate-y-3 sm:max-w-2xl sm:space-y-5 md:translate-y-0 md:space-y-6 lg:max-w-3xl">
+            <div className="mx-auto w-full max-w-[36rem] space-y-[clamp(0.75rem,2.1svh,1.5rem)] text-center sm:max-w-2xl lg:max-w-3xl">
               <motion.h1
                 variants={itemVariants}
-                className="mx-auto max-w-[min(100%,24rem)] font-hero text-[clamp(2.25rem,6.5vw+0.75rem,4.5rem)] font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white sm:max-w-2xl sm:leading-[1.08] md:max-w-3xl md:leading-[1.09] lg:max-w-4xl xl:text-[clamp(2.75rem,5vw+1rem,4.75rem)]"
+                className="mx-auto max-w-[min(100%,24rem)] font-hero text-[clamp(2.15rem,min(6.5vw+0.75rem,10.75svh),4.5rem)] font-semibold leading-[1.04] tracking-[-0.015em] text-balance text-white sm:max-w-2xl sm:leading-[1.06] md:max-w-3xl lg:max-w-4xl xl:text-[clamp(2.5rem,min(5vw+1rem,10.75svh),4.75rem)]"
               >
                 {language === "fr" ? (
                   <>
@@ -809,7 +839,7 @@ export default function Landing() {
               </motion.h1>
               <motion.h2
                 variants={itemVariants}
-                className="mx-auto max-w-[min(100%,36rem)] text-balance font-sans text-base font-medium leading-relaxed tracking-tight text-foreground/72 sm:text-[1.0625rem] md:max-w-xl md:text-lg md:leading-[1.65] lg:max-w-2xl"
+                className="mx-auto max-w-[min(100%,36rem)] text-balance font-sans text-[clamp(0.95rem,min(2.3svh,1.125rem),1.125rem)] font-medium leading-[1.45] tracking-tight text-foreground/72 md:max-w-xl lg:max-w-2xl"
               >
                 {i18n(language, {
                   en: "AI scans your face, scores you out of 100, and delivers the exact plan to transform in 90 days.",
@@ -818,11 +848,11 @@ export default function Landing() {
               </motion.h2>
               <motion.div
                 variants={itemVariants}
-                className="flex flex-col items-center gap-2 pt-0.5 sm:gap-3"
+                className="flex flex-col items-center gap-[clamp(0.4rem,1.2svh,0.75rem)] pt-0.5"
               >
                 <Link
                   href={heroCtaHref}
-                  className="pointer-events-auto inline-flex min-h-12 items-center justify-center rounded-sm border border-primary-border bg-primary px-7 text-base font-semibold text-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_12px_40px_-8px_rgba(0,0,0,0.45)] hover-elevate active-elevate-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:min-h-[3.25rem] sm:px-10 sm:text-lg md:min-h-14 md:px-11 md:text-[1.0625rem]"
+                  className="pointer-events-auto inline-flex min-h-[clamp(2.75rem,6svh,3.5rem)] items-center justify-center rounded-sm border border-primary-border bg-primary px-7 text-base font-semibold text-primary-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.12),0_12px_40px_-8px_rgba(0,0,0,0.45)] hover-elevate active-elevate-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:px-10 sm:text-lg md:px-11 md:text-[1.0625rem]"
                 >
                   {i18n(language, {
                     en: "Discover my score",
@@ -835,23 +865,23 @@ export default function Landing() {
                     en: "Before and after",
                     fr: "Avant et après",
                   })}
-                  className="relative mt-1 w-full max-w-[min(100%,20rem)] sm:mt-2 sm:max-w-md"
+                  className="relative mt-[clamp(0.25rem,1svh,0.5rem)] w-fit max-w-full"
                 >
-                  <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-                    <div className="relative min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
+                  <div className="flex justify-center gap-2 sm:gap-2.5">
+                    <div className="relative aspect-[4/5] w-[clamp(6.75rem,min(23svh,42vw),13.75rem)] min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
                       <img
                         src="/modelav1.jpeg"
                         alt=""
                         decoding="async"
-                        className="aspect-[4/5] w-full object-cover"
+                        className="h-full w-full object-cover"
                       />
                     </div>
-                    <div className="relative min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
+                    <div className="relative aspect-[4/5] w-[clamp(6.75rem,min(23svh,42vw),13.75rem)] min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
                       <img
                         src="/modelap1.jpeg"
                         alt=""
                         decoding="async"
-                        className="aspect-[4/5] w-full object-cover"
+                        className="h-full w-full object-cover"
                       />
                     </div>
                   </div>
@@ -871,6 +901,7 @@ export default function Landing() {
 
           <motion.a
             href="#complete-analysis"
+            onClick={handleCompleteAnalysisClick}
             aria-label={i18n(language, {
               en: "Scroll to next section",
               fr: "Descendre vers la section suivante",
@@ -881,7 +912,7 @@ export default function Landing() {
               opacity: { duration: 0.35, delay: 0.25 },
               y: { duration: 1.8, repeat: Infinity, ease: "easeInOut" },
             }}
-            className="mt-auto flex shrink-0 justify-center pb-1 pt-2 text-foreground/55 transition-colors hover:text-foreground/90 sm:pb-2 sm:pt-3"
+            className="mt-auto hidden shrink-0 justify-center pb-1 pt-2 text-foreground/55 transition-colors hover:text-foreground/90 sm:pb-2 sm:pt-3 [@media(min-height:720px)]:flex"
           >
             <ChevronDown className="h-8 w-8 sm:h-9 sm:w-9" strokeWidth={1.8} />
           </motion.a>
@@ -891,7 +922,7 @@ export default function Landing() {
       {/* Complete Analysis — mobile: hauteur au contenu (< 100vh OK) ; md+: 1 viewport, image calée en bas */}
       <section
         id="complete-analysis"
-        className="relative isolate flex flex-col overflow-x-clip overflow-y-visible bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pb-0 pt-8 md:h-[100svh] md:max-h-[100svh] md:pt-10"
+        className="relative isolate flex scroll-mt-32 flex-col overflow-x-clip overflow-y-visible bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pb-0 pt-8 md:h-[100svh] md:max-h-[100svh] md:scroll-mt-36 md:pt-10"
       >
         <WaveBackground
           position="absolute"
@@ -907,9 +938,12 @@ export default function Landing() {
           >
             <motion.h2
               variants={itemVariants}
-              className="relative z-30 shrink-0 font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
+              className="relative z-30 shrink-0 font-hero text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
             >
-              Your Complete Facial Analysis
+              {i18n(language, {
+                en: "Your Complete Facial Analysis",
+                fr: "Ton analyse faciale complète",
+              })}
             </motion.h2>
 
             <motion.div
