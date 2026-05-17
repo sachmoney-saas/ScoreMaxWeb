@@ -471,8 +471,8 @@ export default function NewAnalysis() {
                       />
                       <span className="text-sm font-semibold tracking-tight sm:text-base">
                         {i18n(language, {
-                          en: "Launch analysis",
-                          fr: "Lancer l'analyse",
+                          en: "Launch scan",
+                          fr: "Lancer le scan",
                         })}
                       </span>
                     </>
@@ -593,7 +593,7 @@ export default function NewAnalysis() {
         />
       ) : null}
 
-      {/* ── Captured preview: grilles des poses + Lancer l’analyse ── */}
+      {/* ── Captured preview: grilles des poses + Lancer le scan ── */}
       <Dialog
         open={
           showCapturedPreview &&
@@ -679,8 +679,8 @@ export default function NewAnalysis() {
                 <ScanFace className="mr-2 h-4 w-4 shrink-0" />
               )}
               {i18n(language, {
-                en: "Launch analysis",
-                fr: "Lancer l'analyse",
+                en: "Launch scan",
+                fr: "Lancer le scan",
               })}
             </Button>
           </div>

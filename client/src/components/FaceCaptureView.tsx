@@ -29,28 +29,28 @@ const STEP_INSTRUCTION: Record<PoseId, { en: string; fr: string }> = {
     en: 'Face the camera with your face centered in the frame.',
   },
   'profile-right': {
-    fr: 'Tournez la tête vers la droite pour scanner votre profil.',
-    en: 'Turn your head to the right to scan your profile.',
+    fr: 'Tourne la tête à gauche.',
+    en: 'Turn your head left.',
   },
   'profile-left': {
-    fr: 'Tournez la tête vers la gauche pour scanner votre profil.',
-    en: 'Turn your head to the left to scan your profile.',
+    fr: 'Tourne la tête à droite.',
+    en: 'Turn your head right.',
   },
   'jaw-up': {
-    fr: 'Levez un peu le menton pour mieux voir la mâchoire.',
-    en: 'Lift your chin slightly so we can see your jawline.',
+    fr: 'Regarde vers le haut.',
+    en: 'Look up.',
   },
   'crown-down': {
-    fr: 'Baissez un peu la tête pour inclure le haut du crâne.',
-    en: 'Lower your head slightly to include the top of your head.',
+    fr: 'Regarde vers le bas.',
+    en: 'Look down.',
   },
   'closeup-eye': {
-    fr: "Approchez encore l'appareil : un œil au centre, en très gros plan.",
-    en: 'Move even closer: one eye centred, very close-up.',
+    fr: 'Rapproche tes yeux.',
+    en: 'Bring your eyes closer.',
   },
   'closeup-smile': {
-    fr: 'Approchez davantage le visage et souriez naturellement.',
-    en: 'Move closer to the camera and give a natural smile.',
+    fr: 'Souriez naturellement.',
+    en: 'Smile naturally.',
   },
 };
 
@@ -606,65 +606,65 @@ export function FaceCaptureView({
               onContinue={resumeAfterAdminPoseReview}
             />
           ) : null}
-        </div>
 
-        <div className="shrink-0 border-t border-black/10 bg-white px-4 py-5 shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.08)]">
-          <button
-            type="button"
-            onClick={() => setCancelConfirmOpen(true)}
-            className="group flex w-full items-center justify-center gap-2 rounded-full border border-black/12 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm transition-all hover:bg-zinc-50"
-          >
-            <svg
-              className="h-4 w-4 transition-transform group-hover:-translate-x-0.5"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-            >
-              <polyline points="10,3 5,8 10,13" />
-            </svg>
-            {i18n(language, { en: 'Cancel', fr: 'Annuler' })}
-          </button>
-        </div>
-
-        {cancelConfirmOpen ? (
-          <div
-            className="absolute inset-0 z-[110] flex flex-col bg-black"
-            role="dialog"
-            aria-modal="true"
-            aria-label={i18n(language, {
-              en: 'Cancel session confirmation',
-              fr: 'Confirmation annulation session',
-            })}
-            onClick={() => setCancelConfirmOpen(false)}
-          >
-            <div className="min-h-0 flex-1" aria-hidden />
+          {cancelConfirmOpen ? (
             <div
-              className="flex shrink-0 flex-col-reverse gap-2 px-4 pb-8 pt-4 sm:flex-row sm:justify-center sm:gap-3 sm:pb-10"
-              onClick={e => e.stopPropagation()}
+              className="absolute inset-0 z-[105] cursor-default bg-transparent"
+              aria-hidden
+              onClick={() => setCancelConfirmOpen(false)}
+            />
+          ) : null}
+        </div>
+
+        <div className="relative z-[120] shrink-0 border-t border-black/10 bg-white px-4 py-5 shadow-[0_-8px_32px_-8px_rgba(0,0,0,0.08)]">
+          {cancelConfirmOpen ? (
+            <div
+              className="flex flex-col gap-2 sm:flex-row sm:gap-3"
+              role="group"
+              aria-label={i18n(language, {
+                en: 'Cancel session confirmation',
+                fr: "Confirmation d'annulation de session",
+              })}
             >
               <button
                 type="button"
-                className="rounded-full border border-white/15 px-4 py-2.5 text-sm text-white/80 transition-colors hover:bg-white/5"
+                className="flex-1 rounded-full border border-black/12 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm transition-all hover:bg-zinc-50"
                 onClick={() => setCancelConfirmOpen(false)}
               >
-                {i18n(language, { en: 'Keep capturing', fr: 'Continuer la capture' })}
+                {i18n(language, { en: "Keep capturing", fr: "Continuer la capture" })}
               </button>
               <button
                 type="button"
-                className="rounded-full border border-red-500/40 bg-red-500/15 px-4 py-2.5 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/25"
+                className="flex-1 rounded-full border border-red-300/80 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow-sm transition-all hover:bg-red-100"
                 onClick={() => {
                   setCancelConfirmOpen(false);
                   stop();
                   onCancel();
                 }}
               >
-                {i18n(language, { en: 'Cancel session', fr: 'Annuler la session' })}
+                {i18n(language, { en: "Cancel session", fr: "Annuler la session" })}
               </button>
             </div>
-          </div>
-        ) : null}
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCancelConfirmOpen(true)}
+              className="group flex w-full items-center justify-center gap-2 rounded-full border border-black/12 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm transition-all hover:bg-zinc-50"
+            >
+              <svg
+                className="h-4 w-4 transition-transform group-hover:-translate-x-0.5"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+              >
+                <polyline points="10,3 5,8 10,13" />
+              </svg>
+              {i18n(language, { en: "Cancel", fr: "Annuler" })}
+            </button>
+          )}
+        </div>
       </div>
 
     </>

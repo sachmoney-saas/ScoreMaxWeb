@@ -7,7 +7,9 @@ export type OnboardingPotentialImage = {
   id: string;
   status: "pending" | "completed" | "failed";
   signed_url: string | null;
-  /** `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` si dispo, sinon `FACE_FRONT`. */
+  /** JPEG visage face (même asset qu’envoyé à OneShot pour le potentiel). */
+  source_face_signed_url: string | null;
+  /** `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` si dispo, sinon `FACE_FRONT` — pour autres usages. */
   mask_overlay_signed_url: string | null;
   error_code: string | null;
   error_message: string | null;

@@ -43,7 +43,7 @@ export function useOnboardingResume(options: {
     if (!user?.id) return false;
 
     if (hasCompletedOnboarding) {
-      writeOnboardingFlowState({ step: 1 });
+      writeOnboardingFlowState({ userId: user.id, step: 2, v: 2 });
       await queryClient.invalidateQueries({
         queryKey: ["onboarding-potential-image", user.id],
       });
@@ -72,7 +72,7 @@ export function useOnboardingResume(options: {
         language: options.language,
       });
 
-      writeOnboardingFlowState({ step: 1 });
+      writeOnboardingFlowState({ userId: user.id, step: 2, v: 2 });
       await queryClient.invalidateQueries({
         queryKey: ["onboarding-potential-image", user.id],
       });

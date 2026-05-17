@@ -1,5 +1,5 @@
 import * as React from "react";
-import { GripVertical, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 
@@ -79,57 +79,53 @@ export function BeforeAfterSlider({
   }, []);
 
   const showAfter = Boolean(afterSrc);
-  const beforeLabel = i18n(language, { en: "Before", fr: "Avant" });
-  const afterLabel = i18n(language, { en: "After", fr: "Après" });
+  const beforeLabel = i18n(language, {
+    en: "CURRENTLY",
+    fr: "ACTUELLEMENT",
+  });
+  const afterLabelLine1 = i18n(language, {
+    en: "AFTER 12",
+    fr: "APRÈS 12",
+  });
+  const afterLabelLine2 = i18n(language, {
+    en: "FIRST WEEKS",
+    fr: "PREMIÈRES SEMAINES",
+  });
+  const afterLabelAria = i18n(language, {
+    en: "After the first 12 weeks",
+    fr: "Après 12 premières semaines",
+  });
+
+  const pillClass =
+    "rounded-md bg-black/50 px-2 py-1 text-[8px] font-semibold uppercase leading-snug tracking-wider text-white/90 backdrop-blur-sm sm:text-[9px]";
 
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "relative aspect-[4/5] w-full max-w-[min(100%,24rem)] select-none overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-w-md",
-        isDragging && "cursor-ew-resize",
-        showAfter &&
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
-        className,
-      )}
-      role={showAfter ? "slider" : "group"}
-      tabIndex={showAfter ? 0 : undefined}
-      aria-valuemin={showAfter ? 0 : undefined}
-      aria-valuemax={showAfter ? 100 : undefined}
-      aria-valuenow={showAfter ? Math.round(position) : undefined}
-      aria-label={i18n(language, {
-        en: "Before and after comparison — drag to compare",
-        fr: "Comparaison avant / après — fais glisser pour comparer",
-      })}
-      onKeyDown={showAfter ? onKeyDown : undefined}
-      onPointerDown={showAfter ? onPointerDown : undefined}
-      onPointerMove={showAfter ? onPointerMove : undefined}
-      onPointerUp={showAfter ? onPointerUp : undefined}
-      onPointerCancel={showAfter ? onPointerUp : undefined}
-    >
-      {beforeSrc ? (
-        <img
-          src={beforeSrc}
-          alt={i18n(language, {
-            en: "Your current look",
-            fr: "Ton look actuel",
-          })}
-          decoding="async"
-          draggable={false}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-          <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
-        </div>
-      )}
-
+    <div className={cn("flex w-full flex-col items-center", className)}>
+      <div
+        ref={containerRef}
+        className={cn(
+          "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(34vh,18.5rem)] select-none overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(38vh,20.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(42vh,22.5rem)] md:max-w-[min(100%,24rem)]",
+          isDragging && "cursor-ew-resize",
+          showAfter &&
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+        )}
+        role={showAfter ? "slider" : "group"}
+        tabIndex={showAfter ? 0 : undefined}
+        aria-valuemin={showAfter ? 0 : undefined}
+        aria-valuemax={showAfter ? 100 : undefined}
+        aria-valuenow={showAfter ? Math.round(position) : undefined}
+        aria-label={i18n(language, {
+          en: "Current vs after 12 weeks — drag to compare",
+          fr: "Actuellement vs après 12 premières semaines — fais glisser pour comparer",
+        })}
+        onKeyDown={showAfter ? onKeyDown : undefined}
+        onPointerDown={showAfter ? onPointerDown : undefined}
+        onPointerMove={showAfter ? onPointerMove : undefined}
+        onPointerUp={showAfter ? onPointerUp : undefined}
+        onPointerCancel={showAfter ? onPointerUp : undefined}
+      >
       {showAfter ? (
-        <div
-          className="absolute inset-0 overflow-hidden"
-          style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
-          aria-hidden={position <= 0}
-        >
+        <>
           <img
             src={afterSrc!}
             alt={i18n(language, {
@@ -140,29 +136,86 @@ export function BeforeAfterSlider({
             draggable={false}
             className="absolute inset-0 h-full w-full object-cover"
           />
-        </div>
+          {beforeSrc ? (
+            <div
+              className="absolute inset-0 overflow-hidden"
+              style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
+              aria-hidden={position <= 0}
+            >
+              <img
+                src={beforeSrc}
+                alt={i18n(language, {
+                  en: "Your current look",
+                  fr: "Ton look actuel",
+                })}
+                decoding="async"
+                draggable={false}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
+            </div>
+          )}
+        </>
       ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.12),transparent_55%),linear-gradient(180deg,rgba(20,28,40,0.55),rgba(10,16,22,0.75))]">
-          <Loader2 className="h-6 w-6 shrink-0 animate-spin text-white/80" aria-hidden />
-          <p className="px-4 text-center text-[11px] font-medium leading-snug text-white/85 sm:text-xs">
-            {i18n(language, {
-              en: "Generating your potential…",
-              fr: "Génération de ton potentiel…",
-            })}
-          </p>
-        </div>
+        <>
+          {beforeSrc ? (
+            <img
+              src={beforeSrc}
+              alt={i18n(language, {
+                en: "Your current look",
+                fr: "Ton look actuel",
+              })}
+              decoding="async"
+              draggable={false}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
+            </div>
+          )}
+
+          <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.12),transparent_55%),linear-gradient(180deg,rgba(20,28,40,0.55),rgba(10,16,22,0.75))]">
+            <Loader2 className="h-6 w-6 shrink-0 animate-spin text-white/80" aria-hidden />
+            <p className="px-4 text-center text-[11px] font-medium leading-snug text-white/85 sm:text-xs">
+              {i18n(language, {
+                en: "Generating your potential…",
+                fr: "Génération de ton potentiel…",
+              })}
+            </p>
+          </div>
+        </>
       )}
 
-      <span className="pointer-events-none absolute bottom-2.5 left-2.5 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90 backdrop-blur-sm">
-        {beforeLabel}
-      </span>
+      {(showAfter || beforeSrc) && (
+        <>
+          <div className="pointer-events-none absolute left-2 top-2 z-20 max-w-[min(12rem,46%)] sm:left-2.5 sm:top-2.5">
+            <span className={cn(pillClass, "block text-left")}>{beforeLabel}</span>
+          </div>
+          {showAfter ? (
+            <div
+              className="pointer-events-none absolute right-2 top-2 z-20 max-w-[min(13.5rem,50%)] sm:right-2.5 sm:top-2.5"
+              aria-label={afterLabelAria}
+            >
+              <span
+                className={cn(
+                  pillClass,
+                  "inline-flex flex-col items-end gap-0 leading-[1.08] text-right",
+                )}
+              >
+                <span>{afterLabelLine1}</span>
+                <span>{afterLabelLine2}</span>
+              </span>
+            </div>
+          ) : null}
+        </>
+      )}
 
       {showAfter ? (
         <>
-          <span className="pointer-events-none absolute bottom-2.5 right-2.5 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/90 backdrop-blur-sm">
-            {afterLabel}
-          </span>
-
           <div
             className="pointer-events-none absolute inset-y-0 z-10 w-0"
             style={{ left: `${position}%` }}
@@ -173,16 +226,15 @@ export function BeforeAfterSlider({
 
           <div
             className={cn(
-              "pointer-events-none absolute top-1/2 z-20 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-[rgba(10,16,22,0.82)] text-white shadow-[0_8px_28px_-12px_rgba(0,0,0,0.85)] backdrop-blur-md transition-transform sm:h-12 sm:w-12",
+              "pointer-events-none absolute top-1/2 z-30 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-[rgba(10,16,22,0.82)] shadow-[0_8px_28px_-12px_rgba(0,0,0,0.85)] backdrop-blur-md transition-transform sm:h-12 sm:w-12",
               isDragging && "scale-105",
             )}
             style={{ left: `${position}%` }}
             aria-hidden
-          >
-            <GripVertical className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.2} />
-          </div>
+          />
         </>
       ) : null}
+      </div>
     </div>
   );
 }

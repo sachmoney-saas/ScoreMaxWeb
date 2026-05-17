@@ -40,6 +40,11 @@ export type PotentialImagePayload = {
   id: string;
   status: "pending" | "completed" | "failed";
   signed_url: string | null;
+  /**
+   * Photo source du scan utilisée pour la génération potentiel (ex. FACE_FRONT) —
+   * même binaire qu’envoyé à OneShot / nano-banana, sans masque ni overlay.
+   */
+  source_face_signed_url: string | null;
   /** Repère face + masque 3D (`GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY`), sinon photo `FACE_FRONT`. */
   mask_overlay_signed_url: string | null;
   error_code: string | null;
@@ -177,10 +182,16 @@ async function generationRowToPayload(
     sourceScanAssetId: row.source_scan_asset_id,
   });
 
+  const sourceFaceSignedUrl = await resolveSourceFaceSignedUrl({
+    userId,
+    sourceScanAssetId: row.source_scan_asset_id,
+  });
+
   return {
     id: row.id,
     status,
     signed_url: signedUrl,
+    source_face_signed_url: sourceFaceSignedUrl,
     mask_overlay_signed_url: maskOverlaySignedUrl,
     error_code: row.error_code,
     error_message: row.error_message,
@@ -540,6 +551,34 @@ async function loadLatestScanAssetSignedUrl(params: {
     .in("upload_status", ["uploaded", "validated"])
     .order("created_at", { ascending: false })
     .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.r2_key) {
+    return null;
+  }
+
+  const row = data as { r2_bucket: string | null; r2_key: string };
+  return getR2SignedDownloadUrl({
+    bucket: row.r2_bucket ?? undefined,
+    key: row.r2_key,
+    expiresInSeconds: 300,
+  });
+}
+
+async function resolveSourceFaceSignedUrl(params: {
+  userId: string;
+  sourceScanAssetId: string | null;
+}): Promise<string | null> {
+  if (!params.sourceScanAssetId) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("scan_assets")
+    .select("r2_bucket, r2_key")
+    .eq("id", params.sourceScanAssetId)
+    .eq("user_id", params.userId)
+    .in("upload_status", ["uploaded", "validated"])
     .maybeSingle();
 
   if (error || !data?.r2_key) {

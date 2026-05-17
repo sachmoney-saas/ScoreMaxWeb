@@ -2,12 +2,17 @@ import * as React from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Box,
   Camera,
+  Check,
+  ChevronLeft,
+  Image as ImageIcon,
   Loader2,
   LogOut,
   ScanFace,
   Trash2,
   MoreVertical,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +42,10 @@ import { WaveBackground } from "@/components/background/WaveBackground";
 import { BillingPaywall } from "@/components/billing/BillingPaywall";
 import { PotentialPreviewCard } from "@/components/onboarding/PotentialPreviewCard";
 import { OnboardingScanCompleteScreen } from "@/components/onboarding/OnboardingScanCompleteScreen";
+import {
+  OnboardingFacialGeometryLoader,
+  OnboardingScanCompleteSplash,
+} from "@/components/onboarding/OnboardingPostCapturePrelude";
 import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserAccess } from "@/hooks/use-user-access";
@@ -70,7 +79,7 @@ import {
   writeOnboardingFlowState,
 } from "@/lib/onboarding-flow-storage";
 
-const ONBOARDING_TOTAL_STEPS = 3;
+const ONBOARDING_TOTAL_STEPS = 4;
 
 const ONBOARDING_SCAN_UPLOAD_STEPS = [
   {
@@ -121,6 +130,8 @@ type OnboardingProps = {
   initialStep?: number;
 };
 
+type ScanHeroPreludePhase = "splash" | "geometry" | "mesh";
+
 export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const language = useAppLanguage();
   const scanAssetLabels = getScanAssetLabels(language);
@@ -131,10 +142,6 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     if (initialStep !== undefined) {
       return Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, initialStep));
     }
-    const persisted = readOnboardingFlowState();
-    if (persisted?.step != null) {
-      return Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, persisted.step));
-    }
     return 0;
   });
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
@@ -142,6 +149,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const [showCameraCapture, setShowCameraCapture] = React.useState(false);
   const [capturedPoses, setCapturedPoses] = React.useState<CapturedPose[]>([]);
   const [showScanCompleteHero, setShowScanCompleteHero] = React.useState(false);
+  const [scanHeroPreludePhase, setScanHeroPreludePhase] =
+    React.useState<ScanHeroPreludePhase>("splash");
   const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
   const [isUploadingCaptures, setIsUploadingCaptures] = React.useState(false);
   const [isHeroUploading, setIsHeroUploading] = React.useState(false);
@@ -159,17 +168,31 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
    * `has_completed_onboarding=true`).
    */
   const [hasStartedRun, setHasStartedRun] = React.useState(
-    () => stepIndex >= 1,
+    () => initialStep !== undefined && initialStep >= 2,
   );
 
-  const isPotentialStep = stepIndex === 1;
-  const isBillingStep = stepIndex === 2;
+  React.useLayoutEffect(() => {
+    if (initialStep !== undefined) return;
+    if (!user?.id) return;
+    const persisted = readOnboardingFlowState(user.id);
+    const next =
+      persisted?.step != null
+        ? Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, persisted.step))
+        : 0;
+    setStepIndex(next);
+    if (next >= 2) setHasStartedRun(true);
+  }, [user?.id, initialStep]);
+
+  const isPotentialStep = stepIndex === 2;
+  const isBillingStep = stepIndex === 3;
+  const isPreCaptureIntroA = stepIndex === 0;
+  const isPreCaptureIntroB = stepIndex === 1;
 
   React.useEffect(() => {
-    if (stepIndex >= 1) {
-      writeOnboardingFlowState({ step: stepIndex });
+    if (user?.id) {
+      writeOnboardingFlowState({ userId: user.id, step: stepIndex, v: 2 });
     }
-  }, [stepIndex]);
+  }, [stepIndex, user?.id]);
 
   React.useEffect(() => {
     /** Préchargement léger : favicon utilisé sur l'écran d'analyse. */
@@ -199,9 +222,15 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     hasPartialUpload,
     finalizeFromServer,
   } = useOnboardingResume({
-    captureStepActive: !isPotentialStep,
+    captureStepActive: stepIndex < 2,
     language,
   });
+
+  /** Reprise avec photos déjà enregistrées : sauter l’intro « Continuer ». */
+  React.useEffect(() => {
+    if (!hasPartialUpload || stepIndex !== 0) return;
+    setStepIndex(1);
+  }, [hasPartialUpload, stepIndex]);
 
   const didAutoFinalizeRef = React.useRef(false);
 
@@ -233,7 +262,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       try {
         const ok = await finalizeFromServer();
         if (ok) {
-          setStepIndex(1);
+          setStepIndex(2);
           setHasStartedRun(true);
         } else {
           didAutoFinalizeRef.current = false;
@@ -258,6 +287,27 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     showCameraCapture,
     showScanCompleteHero,
   ]);
+
+  /** Après capture : écran « scan terminé » (~3s) → loader géométrie → hero 3D. */
+  React.useEffect(() => {
+    if (!showScanCompleteHero) {
+      setScanHeroPreludePhase("splash");
+      return;
+    }
+    setScanHeroPreludePhase("splash");
+    const id = window.setTimeout(() => {
+      setScanHeroPreludePhase("geometry");
+    }, 3000);
+    return () => window.clearTimeout(id);
+  }, [showScanCompleteHero]);
+
+  React.useEffect(() => {
+    if (!showScanCompleteHero || scanHeroPreludePhase !== "geometry") return;
+    const id = window.setTimeout(() => {
+      setScanHeroPreludePhase("mesh");
+    }, 2800);
+    return () => window.clearTimeout(id);
+  }, [showScanCompleteHero, scanHeroPreludePhase]);
 
   const {
     data: potentialImage,
@@ -457,12 +507,12 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
 
       await completeOnboardingApi({ accessToken, language });
 
-      writeOnboardingFlowState({ step: 1 });
+      writeOnboardingFlowState({ userId: user.id, step: 2, v: 2 });
       setHasStartedRun(true);
       await queryClient.invalidateQueries({
         queryKey: ["onboarding-potential-image", user.id],
       });
-      setStepIndex(1);
+      setStepIndex(2);
     } catch (error) {
       console.error("Unable to complete onboarding:", error);
       setUploadError(
@@ -491,13 +541,15 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   );
 
   const onboardingArticleKey =
-    stepIndex === 2
-      ? "onboarding-step-2"
-      : stepIndex === 1
-        ? "onboarding-step-1"
-        : showScanCompleteHero
-          ? "onboarding-step-0-hero"
-          : "onboarding-step-0";
+    stepIndex === 3
+      ? "onboarding-step-3"
+      : stepIndex === 2
+        ? "onboarding-step-2"
+        : stepIndex === 1
+          ? "onboarding-step-1-precap"
+          : showScanCompleteHero
+            ? `onboarding-step-0-hero-${scanHeroPreludePhase}`
+            : "onboarding-step-0";
 
   const eyeCapturePose = React.useMemo(
     () => capturedPoses.find((p) => p.poseId === "closeup-eye"),
@@ -538,7 +590,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
         const ok = await finalizeFromServer();
         if (ok) {
           didAutoFinalizeRef.current = true;
-          setStepIndex(1);
+          setStepIndex(2);
         }
       } catch (error) {
         didAutoFinalizeRef.current = false;
@@ -561,8 +613,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     }
     setIsUnlocking(true);
     try {
-      writeOnboardingFlowState({ step: 2 });
-      setStepIndex(2);
+      writeOnboardingFlowState({ userId: user.id, step: 3, v: 2 });
+      setStepIndex(3);
       setHasStartedRun(true);
     } finally {
       setIsUnlocking(false);
@@ -571,6 +623,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
 
   const handleLogout = React.useCallback(async () => {
     await supabase.auth.signOut();
+    clearOnboardingFlowState();
   }, []);
 
   const handleDeleteAccount = React.useCallback(async () => {
@@ -589,6 +642,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
 
       await deleteMyAccount(accessToken);
 
+      clearOnboardingFlowState();
       await supabase.auth.signOut();
       queryClient.clear();
       setLocation(AUTH_CONFIG.LOGIN_PATH);
@@ -692,7 +746,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       <div
         className={cn(
           "relative z-10 mx-auto flex min-h-0 w-full flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:px-6 sm:pb-5 sm:pt-5",
-          isBillingStep ? "max-w-5xl" : "max-w-3xl",
+          isBillingStep ? "max-w-5xl" : "max-w-3xl md:max-w-4xl xl:max-w-5xl",
         )}
       >
         <div className="flex min-h-0 w-full flex-1 flex-col gap-2 sm:gap-3">
@@ -705,6 +759,43 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
               />
             </div>
 
+            {isPreCaptureIntroB &&
+            !showCameraCapture &&
+            !showScanCompleteHero ? (
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setStepIndex(0)}
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-full text-white/90",
+                    "transition hover:bg-white/15 hover:text-white",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
+                  )}
+                  aria-label={i18n(language, {
+                    en: "Previous step",
+                    fr: "Étape précédente",
+                  })}
+                >
+                  <ChevronLeft className="size-7" strokeWidth={2.35} aria-hidden />
+                </button>
+                <div
+                  className="min-w-0 flex-1 grid gap-1.5"
+                  style={{
+                    gridTemplateColumns: `repeat(${ONBOARDING_TOTAL_STEPS}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {Array.from({ length: ONBOARDING_TOTAL_STEPS }).map((_, index) => (
+                    <div
+                      key={`step-segment-${index}`}
+                      className={cn(
+                        "h-2 rounded-full transition-colors duration-200",
+                        index <= stepIndex ? "bg-white" : "bg-white/25",
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
             <div
               className="grid gap-1.5"
               style={{
@@ -721,6 +812,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                 />
               ))}
             </div>
+            )}
           </div>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -738,10 +830,12 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     ? "flex w-full flex-col overflow-hidden p-4 sm:p-6"
                     : cn(
                         "flex min-h-0 flex-1 flex-col overflow-hidden",
-                        isBillingStep ? "p-3 sm:p-5 md:p-6" : "p-4 sm:p-6",
+                        isBillingStep
+                          ? "p-3 sm:p-5 md:p-6"
+                          : "px-4 pt-7 pb-8 sm:px-6 sm:pt-8 sm:pb-9 md:px-8 md:pt-9 md:pb-10 lg:px-10 lg:pt-10 lg:pb-11",
                       ),
                   "mx-auto w-full",
-                  isBillingStep ? "max-w-full" : "max-w-[460px]",
+                  isBillingStep ? "max-w-full" : "max-w-[460px] md:max-w-2xl lg:max-w-3xl",
                 )}
               >
                 {isBillingStep ? (
@@ -751,19 +845,22 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                 ) : isPotentialStep ? (
                   <div
                     className={cn(
-                      "flex min-h-0 flex-col overflow-y-auto px-1 py-2 sm:px-2 sm:py-4",
+                      "flex min-h-0 flex-col px-1 py-2 sm:px-2 sm:py-4",
                       isPotentialBlockingLoad
-                        ? "justify-start pb-[max(6rem,calc(env(safe-area-inset-bottom,0px)+5rem))]"
-                        : "flex-1 justify-center pb-[max(6.75rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))] sm:pb-28",
+                        ? "justify-start overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
+                        : "flex-1 justify-center overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]",
                     )}
                   >
                     <PotentialPreviewCard
                       language={language}
                       potentialImage={potentialImage ?? null}
                       isLoading={isPotentialImageLoading}
+                      onUnlock={handleUnlock}
+                      isUnlocking={isUnlocking}
                     />
                   </div>
                 ) : showScanCompleteHero && frontalCapturePose?.landmarks ? (
+                  scanHeroPreludePhase === "mesh" ? (
                   <OnboardingScanCompleteScreen
                     language={language}
                     frontalLandmarks={frontalCapturePose.landmarks}
@@ -792,6 +889,11 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     isSavingCaptures={isHeroUploading}
                     continueDisabled={!heroUploadDone && !scanStatus?.is_ready}
                   />
+                  ) : scanHeroPreludePhase === "geometry" ? (
+                    <OnboardingFacialGeometryLoader language={language} />
+                  ) : (
+                    <OnboardingScanCompleteSplash language={language} />
+                  )
                 ) : isOnboardingStep0Blocking ? (
                   <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
                     <div className="mx-auto w-full max-w-sm">
@@ -817,8 +919,21 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
-                    <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-5 text-center sm:gap-6">
+                  <div
+                    className={cn(
+                      "flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden",
+                      "py-0.5 sm:py-1",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "mx-auto flex w-full max-w-[min(100%,22.5rem)] flex-col items-center text-center",
+                        "gap-3 [@media(max-height:700px)]:gap-2",
+                        "sm:max-w-[min(100%,28rem)] sm:gap-4",
+                        "md:max-w-[min(100%,38rem)] md:gap-5",
+                        "lg:max-w-[min(100%,42rem)] lg:gap-6",
+                      )}
+                    >
                       {uploadError ? (
                         <div
                           className={cn(
@@ -839,23 +954,198 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                           <p className="text-sm text-red-200">{capturePreviewError}</p>
                         </div>
                       ) : null}
-                      <p className="font-hero text-[1.35rem] font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.75rem]">
+                      {isPreCaptureIntroA ? (
+                        <>
+                      <h2
+                        className={cn(
+                          "font-hero max-w-[min(100%,22ch)] font-semibold tracking-[-0.02em] text-balance text-white",
+                          "text-[clamp(1.45rem,0.42rem+3.8vw,2.35rem)] leading-[1.1]",
+                          "sm:max-w-[min(100%,26ch)] sm:leading-[1.08]",
+                          "md:max-w-[min(100%,30ch)] md:text-[clamp(1.65rem,0.65rem+2.4vw,2.4rem)]",
+                          "[@media(max-height:700px)]:text-[clamp(1.2rem,0.25rem+3vw,1.9rem)]",
+                          "lg:leading-[1.06]",
+                        )}
+                      >
                         {i18n(language, {
-                          en: "Start your first analysis",
-                          fr: "Lance ta première analyse",
+                          en: "You've never really assessed your looks",
+                          fr: "Tu n'as encore jamais évalué ton physique",
+                        })}
+                      </h2>
+                      <p
+                        className={cn(
+                          "w-full max-w-[min(100%,38ch)] text-pretty text-[0.875rem] font-normal leading-[1.55] text-zinc-300/95",
+                          "sm:max-w-[min(100%,44ch)] sm:text-[0.96875rem] sm:leading-[1.58]",
+                          "md:max-w-[min(100%,50ch)] md:text-[1.035rem] md:leading-[1.55]",
+                          "lg:max-w-[min(100%,54ch)] lg:text-[1.085rem]",
+                          "[@media(max-height:700px)]:text-[0.84375rem] [@media(max-height:700px)]:leading-[1.48]",
+                        )}
+                      >
+                        {i18n(language, {
+                          en: "When you're looksmaxxing, you need real facial depth, not a photo that flattens everything. It's the only serious framework. Flat shots leave too much hidden.",
+                          fr: "Pour décider quoi améliorer en looksmaxxing, il te faut le relief réel de ton visage, pas une image qui l'écrase. C'est le cadre le plus sérieux. Les photos seules ne suffisent pas.",
                         })}
                       </p>
-                      <p className="text-sm leading-relaxed text-zinc-300 sm:text-base">
-                        {hasPartialUpload && scanStatus
-                          ? i18n(language, {
-                              en: `You already have ${scanStatus.completed_asset_count}/${scanStatus.required_asset_count} photos saved. Finish the remaining poses to continue.`,
-                              fr: `Tu as déjà ${scanStatus.completed_asset_count}/${scanStatus.required_asset_count} photos enregistrées. Termine les poses restantes pour continuer.`,
-                            })
-                          : i18n(language, {
-                              en: `Capture ${CAPTURE_POSES.length} quick poses so our AI can map your face. It takes less than a minute.`,
-                              fr: `Capture ${CAPTURE_POSES.length} poses rapides pour qu'on cartographie ton visage. Moins d'une minute.`,
-                            })}
+                      <div className="mx-auto w-max max-w-full">
+                        <img
+                          src="/3dscan1.png"
+                          alt={i18n(language, {
+                            en: "3D facial scan visualization",
+                            fr: "Visualisation d'un scan facial en 3D",
+                          })}
+                          className={cn(
+                            "mx-auto block h-auto w-full max-w-[min(100%,19rem)] object-contain",
+                            "sm:max-w-[min(100%,22rem)] md:max-w-[min(100%,26rem)] lg:max-w-[min(100%,30rem)]",
+                            "max-h-[min(34vh,14.5rem)] sm:max-h-[min(38vh,17rem)] sm:rounded-2xl",
+                            "md:max-h-[min(40vh,19rem)] lg:max-h-[min(42vh,21rem)]",
+                            "rounded-[1.25rem]",
+                            "[filter:drop-shadow(0_20px_40px_rgba(0,0,0,0.45))]",
+                            "[@media(max-height:700px)]:max-h-[min(28vh,12.5rem)]",
+                          )}
+                          decoding="async"
+                          sizes="(min-width: 1024px) 30rem, (min-width: 768px) 26rem, (min-width: 640px) 22rem, 19rem"
+                        />
+                      </div>
+                        </>
+                      ) : (
+                        <>
+                      <h2
+                        className={cn(
+                          "font-hero max-w-[min(100%,22ch)] font-semibold tracking-[-0.02em] text-balance text-white",
+                          "text-[clamp(1.45rem,0.42rem+3.8vw,2.35rem)] leading-[1.1]",
+                          "sm:max-w-[min(100%,28ch)] sm:leading-[1.08]",
+                          "md:max-w-[min(100%,32ch)] md:text-[clamp(1.65rem,0.65rem+2.4vw,2.4rem)]",
+                          "[@media(max-height:700px)]:text-[clamp(1.2rem,0.25rem+3vw,1.9rem)]",
+                          "lg:leading-[1.06]",
+                        )}
+                      >
+                        {i18n(language, {
+                          en: "Let's analyze your face with a 3D scan",
+                          fr: "Analysons maintenant ton visage en scan 3D",
+                        })}
+                      </h2>
+                      <p
+                        className={cn(
+                          "w-full max-w-[min(100%,38ch)] text-pretty text-[0.875rem] font-normal leading-[1.55] text-zinc-300/95",
+                          "sm:max-w-[min(100%,44ch)] sm:text-[0.96875rem] sm:leading-[1.58]",
+                          "md:max-w-[min(100%,50ch)] md:text-[1.035rem] md:leading-[1.55]",
+                          "[@media(max-height:700px)]:text-[0.84375rem] [@media(max-height:700px)]:leading-[1.48]",
+                        )}
+                      >
+                        {i18n(language, {
+                          en: "It only takes about ten seconds. Your data stays private, and you can delete it anytime.",
+                          fr: "Ça prend à peine dix secondes. Tes données restent privées, et tu peux les supprimer quand tu veux.",
+                        })}
                       </p>
+                      <div
+                        className="grid w-full max-w-[min(100%,24rem)] grid-cols-2 gap-2.5 sm:max-w-lg sm:gap-3 md:max-w-xl"
+                      >
+                        <div
+                          className={cn(
+                            "relative flex min-h-0 aspect-[4/5] w-full max-h-[9.5rem] flex-col rounded-2xl sm:max-h-[11rem]",
+                            "border border-red-950/55 bg-[linear-gradient(160deg,rgba(42,8,12,0.92)_0%,rgba(22,4,7,0.97)_100%)]",
+                            "shadow-[0_14px_36px_-16px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.04)]",
+                          )}
+                        >
+                          <X
+                            className="absolute right-2 top-2 z-10 size-12 text-red-800 sm:right-2.5 sm:top-2.5 sm:size-14"
+                            strokeWidth={2.15}
+                          />
+                          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-2 py-3 sm:gap-2.5 sm:px-3 sm:py-4">
+                            <ImageIcon
+                              className="size-9 shrink-0 text-red-800/95 sm:size-11"
+                              strokeWidth={1.85}
+                            />
+                            <span className="text-center text-[0.8125rem] font-semibold leading-tight text-red-700/95 sm:text-sm">
+                              {i18n(language, {
+                                en: "2D Photos",
+                                fr: "Photos 2D",
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          className={cn(
+                            "relative flex min-h-0 aspect-[4/5] w-full max-h-[9.5rem] flex-col rounded-2xl sm:max-h-[11rem]",
+                            "border border-sky-400/40 bg-[linear-gradient(160deg,hsl(199_58%_11%/0.92)_0%,hsl(200_45%_7%/0.97)_100%)]",
+                            "shadow-[0_14px_36px_-16px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(56,189,248,0.14)]",
+                          )}
+                        >
+                          <Check
+                            className="absolute right-2 top-2 z-10 size-12 text-sky-400 sm:right-2.5 sm:top-2.5 sm:size-14"
+                            strokeWidth={2.15}
+                          />
+                          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-2 py-3 sm:gap-2.5 sm:px-3 sm:py-4">
+                            <Box
+                              className="size-9 shrink-0 text-sky-400 sm:size-11"
+                              strokeWidth={2.15}
+                            />
+                            <span className="text-center text-[0.8125rem] font-semibold leading-tight text-sky-400 sm:text-sm">
+                              {i18n(language, {
+                                en: "3D Scan",
+                                fr: "Scan 3D",
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <ol
+                        className={cn(
+                          "m-0 mx-auto flex w-full max-w-[min(100%,24rem)] list-none flex-col gap-3 p-0",
+                          "sm:max-w-lg",
+                        )}
+                      >
+                        <li className="flex w-full min-w-0 items-center justify-center gap-3">
+                          <span
+                            className={cn(
+                              "flex size-8 shrink-0 items-center justify-center rounded-full",
+                              "border border-zinc-600/80 bg-zinc-900/90 text-[0.8125rem] font-semibold tabular-nums text-white",
+                              "ring-1 ring-white/5 sm:size-9 sm:text-sm",
+                            )}
+                            aria-hidden
+                          >
+                            1
+                          </span>
+                          <span className="min-w-0 text-[0.8125rem] font-medium leading-snug text-zinc-200 sm:text-sm">
+                            {i18n(language, {
+                              en: "Enable Camera Permission",
+                              fr: "Autorise l'accès à la caméra",
+                            })}
+                          </span>
+                        </li>
+                        <li className="flex w-full min-w-0 items-center justify-center gap-3">
+                          <span
+                            className={cn(
+                              "flex size-8 shrink-0 items-center justify-center rounded-full",
+                              "border border-zinc-600/80 bg-zinc-900/90 text-[0.8125rem] font-semibold tabular-nums text-white",
+                              "ring-1 ring-white/5 sm:size-9 sm:text-sm",
+                            )}
+                            aria-hidden
+                          >
+                            2
+                          </span>
+                          <span className="min-w-0 text-[0.8125rem] font-medium leading-snug text-zinc-200 sm:text-sm">
+                            {i18n(language, {
+                              en: "Follow the on-screen instructions",
+                              fr: "Suis les instructions à l'écran",
+                            })}
+                          </span>
+                        </li>
+                      </ol>
+                        </>
+                      )}
+                      {hasPartialUpload && scanStatus ? (
+                        <p
+                          className={cn(
+                            "w-full max-w-[min(100%,42ch)] text-sm leading-relaxed text-zinc-300 sm:text-base",
+                            "md:max-w-[min(100%,48ch)]",
+                          )}
+                        >
+                          {i18n(language, {
+                            en: `You already have ${scanStatus.completed_asset_count}/${scanStatus.required_asset_count} photos saved. Finish the remaining poses to continue.`,
+                            fr: `Tu as déjà ${scanStatus.completed_asset_count}/${scanStatus.required_asset_count} photos enregistrées. Termine les poses restantes pour continuer.`,
+                          })}
+                        </p>
+                      ) : null}
                       {hasPartialUpload &&
                       scanStatus &&
                       scanStatus.missing_asset_types.length > 0 ? (
@@ -899,36 +1189,49 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                           })}
                         </button>
                       ) : null}
-                      <div className="w-full max-w-[360px]">
+                      <div
+                        className={cn(
+                          "w-full max-w-[min(100%,20rem)] sm:max-w-[min(100%,22rem)] md:max-w-[min(100%,24rem)]",
+                          "shrink-0 pt-1 sm:pt-1.5",
+                        )}
+                      >
                         <button
                           type="button"
-                          onClick={() => void openOnboardingCapture()}
+                          onClick={() =>
+                            isPreCaptureIntroA
+                              ? setStepIndex(1)
+                              : void openOnboardingCapture()
+                          }
                           disabled={
-                            !onboardingSessionId || isScanStatusError
+                            isPreCaptureIntroA
+                              ? isScanStatusError
+                              : !onboardingSessionId || isScanStatusError
                           }
                           className={cn(
-                            "flex w-full items-center justify-center gap-3 px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-55 sm:py-3.5",
+                            "flex min-h-[2.75rem] w-full items-center justify-center gap-2.5 rounded-2xl px-4 py-3 text-base transition",
+                            "disabled:pointer-events-none disabled:opacity-55 sm:min-h-[3rem] sm:gap-3 sm:px-5 sm:py-3.5",
+                            "[@media(max-height:700px)]:min-h-[2.5rem] [@media(max-height:700px)]:py-2.5 [@media(max-height:700px)]:text-[0.8125rem]",
                             onboardingPrimaryCtaClassName,
                           )}
                         >
-                          <img
-                            src="/favicon.png"
-                            alt=""
-                            className="h-9 w-9 shrink-0 rounded-lg bg-black object-contain sm:h-10 sm:w-10"
-                          />
                           <span className="text-sm font-semibold tracking-tight sm:text-base">
-                            {hasPartialUpload
+                            {isPreCaptureIntroA
                               ? i18n(language, {
-                                  en: "Continue capture",
-                                  fr: "Continuer la capture",
+                                  en: "Continue",
+                                  fr: "Continuer",
                                 })
-                              : i18n(language, {
-                                  en: "Launch analysis",
-                                  fr: "Lancer l'analyse",
-                                })}
+                              : hasPartialUpload
+                                ? i18n(language, {
+                                    en: "Continue capture",
+                                    fr: "Continuer la capture",
+                                  })
+                                : i18n(language, {
+                                    en: "Launch scan",
+                                    fr: "Lancer le scan",
+                                  })}
                           </span>
                         </button>
-                        {hasPartialUpload ? (
+                        {isPreCaptureIntroB && hasPartialUpload ? (
                           <button
                             type="button"
                             onClick={() => void handleRestartPartialCapture()}
@@ -1037,48 +1340,13 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                 <ScanFace className="mr-2 h-4 w-4 shrink-0" />
               )}
               {i18n(language, {
-                en: "Launch analysis",
-                fr: "Lancer l'analyse",
+                en: "Launch scan",
+                fr: "Lancer le scan",
               })}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-
-      {isPotentialStep ? (
-        <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-30"
-          role="region"
-          aria-label={i18n(language, {
-            en: "Unlock full analysis",
-            fr: "Débloquer l'analyse complète",
-          })}
-        >
-          <div className="mx-auto flex w-full max-w-[min(100%,28rem)] justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 sm:max-w-3xl sm:px-6 sm:pb-5">
-            <div className="w-full max-w-[460px]">
-              <button
-                type="button"
-                onClick={() => void handleUnlock()}
-                disabled={isUnlocking}
-                className={cn(
-                  "pointer-events-auto flex w-full items-center justify-center px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-60 sm:py-3.5",
-                  onboardingPrimaryCtaClassName,
-                )}
-              >
-                {isUnlocking ? (
-                  <Loader2 className="mr-2 h-5 w-5 shrink-0 animate-spin" aria-hidden />
-                ) : null}
-                <span className="text-sm font-semibold tracking-tight sm:text-base">
-                  {i18n(language, {
-                    en: "Unlock my full analysis",
-                    fr: "Débloquer mon analyse complète",
-                  })}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

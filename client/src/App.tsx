@@ -37,6 +37,7 @@ import Confidentialite from "@/pages/Confidentialite";
 import { AUTH_CONFIG } from "@/config/auth";
 import { LanguageProvider } from "@/lib/i18n";
 import { BrandLoader } from "@/components/ui/brand-loader";
+import { useAuth } from "@/hooks/use-auth";
 import {
   readOnboardingFlowState,
   resolveOnboardingInitialStepForReturningUser,
@@ -106,6 +107,7 @@ function BillingLayout({ children }: { children: React.ReactNode }) {
 }
 
 function OnboardingRoute() {
+  const { user } = useAuth();
   const access = useUserAccess();
   const shouldCheckPaywallFunnel =
     access.kind === "onboarding_paywall_funnel";
@@ -129,17 +131,17 @@ function OnboardingRoute() {
   }
 
   if (access.kind === "onboarding_paywall_funnel") {
-    const persistedStep = readOnboardingFlowState()?.step ?? null;
+    const persistedStep = readOnboardingFlowState(user?.id)?.step ?? null;
     const initialStep = resolveOnboardingInitialStepForReturningUser({
       persistedStep,
       hasPotentialImage: !!potentialImage,
     });
 
     if (
-      initialStep === 1 &&
+      initialStep === 2 &&
       isPotentialImageLoading &&
       !potentialImage &&
-      (persistedStep ?? 0) < 1
+      (persistedStep ?? 0) < 2
     ) {
       return <FullScreenLoader />;
     }

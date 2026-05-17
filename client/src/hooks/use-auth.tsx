@@ -8,6 +8,7 @@ import {
 } from "react";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { clearOnboardingFlowState } from "@/lib/onboarding-flow-storage";
 import { reportClientError } from "@/lib/report-client-error";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoadingSession(false);
 
         if (event === "SIGNED_OUT") {
+          clearOnboardingFlowState();
           queryClient.clear();
         }
 
@@ -155,6 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
+    if (!error) {
+      clearOnboardingFlowState();
+    }
     if (error) {
       toast({
         variant: "destructive",
