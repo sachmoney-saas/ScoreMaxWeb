@@ -1,5 +1,5 @@
 import * as React from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { BodyfatCompositionMatrixVisual } from "@/components/analysis/workers/BodyfatCompositionMatrix";
 import {
   WorkerSignatureRadar,
@@ -109,6 +109,12 @@ export function LandingCompleteAnalysisOrbit({
   children: React.ReactNode;
 }) {
   const reduceMotion = useReducedMotion();
+  const orbitRef = React.useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: orbitRef,
+    offset: ["start 70%", "end 10%"],
+  });
+  const graphScrollY = useTransform(scrollYProgress, [0, 1], [0, 180]);
   const radarData = React.useMemo(() => buildRadarData(language), [language]);
 
   const radarCard = (
@@ -161,7 +167,7 @@ export function LandingCompleteAnalysisOrbit({
   );
 
   return (
-    <div className="relative isolate mx-auto w-full max-w-[min(100%,110rem)] px-2 sm:px-4">
+    <div ref={orbitRef} className="relative isolate mx-auto w-full max-w-[min(100%,110rem)] px-2 sm:px-4">
       <div
         className={cn(
           "flex flex-col items-stretch",
@@ -170,42 +176,48 @@ export function LandingCompleteAnalysisOrbit({
           "lg:gap-x-4 xl:grid-cols-[0.88fr_1.92fr_0.88fr] xl:gap-x-7 2xl:gap-x-12",
         )}
       >
-        <div
+        <motion.div
           aria-hidden
-          className="hidden min-w-0 flex-col items-end gap-8 pt-2 lg:flex xl:gap-10 xl:pt-4"
+          style={reduceMotion ? undefined : { y: graphScrollY }}
+          className="hidden min-w-0 lg:block lg:will-change-transform"
         >
-          <FloatPane
-            delay={0}
-            reduceMotion={reduceMotion}
-            className="w-full max-w-[min(100%,32rem)]"
-          >
-            {radarCard}
-          </FloatPane>
-          <FloatPane
-            delay={2.2}
-            reduceMotion={reduceMotion}
-            className="w-full max-w-[min(100%,24rem)]"
-          >
-            {coloringCard}
-          </FloatPane>
-        </div>
+          <div className="flex min-w-0 flex-col items-end gap-8 pt-0 lg:-translate-y-6 xl:-translate-y-8 xl:gap-10">
+            <FloatPane
+              delay={0}
+              reduceMotion={reduceMotion}
+              className="w-full max-w-[min(100%,32rem)]"
+            >
+              {radarCard}
+            </FloatPane>
+            <FloatPane
+              delay={2.2}
+              reduceMotion={reduceMotion}
+              className="w-full max-w-[min(100%,24rem)]"
+            >
+              {coloringCard}
+            </FloatPane>
+          </div>
+        </motion.div>
 
         <div className="relative z-10 order-first w-full min-w-0 max-w-[min(100%,78rem)] justify-self-center lg:order-none lg:self-end">
           {children}
         </div>
 
-        <div
+        <motion.div
           aria-hidden
-          className="hidden min-w-0 flex-col items-start gap-6 pt-2 lg:flex xl:pt-4"
+          style={reduceMotion ? undefined : { y: graphScrollY }}
+          className="hidden min-w-0 lg:block lg:will-change-transform"
         >
-          <FloatPane
-            delay={1.1}
-            reduceMotion={reduceMotion}
-            className="w-full max-w-[min(100%,32rem)]"
-          >
-            {matrixCard}
-          </FloatPane>
-        </div>
+          <div className="flex min-w-0 flex-col items-start gap-6 pt-0 lg:-translate-y-6 xl:-translate-y-8">
+            <FloatPane
+              delay={1.1}
+              reduceMotion={reduceMotion}
+              className="w-full max-w-[min(100%,32rem)]"
+            >
+              {matrixCard}
+            </FloatPane>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

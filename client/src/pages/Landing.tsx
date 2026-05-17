@@ -4,7 +4,7 @@ import { WaveBackground } from "@/components/background/WaveBackground";
 import { LandingCompleteAnalysisOrbit } from "@/components/landing/LandingCompleteAnalysisOrbit";
 import { FloatingHeader } from "@/components/layout/FloatingHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { primaryCtaSurfaceClassName } from "@/lib/cta-button-styles";
@@ -31,34 +31,50 @@ type AppearanceImpactCategory = {
   items: AppearanceImpactItem[];
 };
 
+const visibleAppearanceImpactCategoryKeys = new Set<AppearanceImpactCategory["key"]>([
+  "finances",
+  "dating",
+  "health",
+  "law",
+]);
+
+function splitImpactTitle(title: string) {
+  const [firstWord, ...rest] = title.split(" ");
+
+  return {
+    firstWord,
+    rest: rest.join(" "),
+  };
+}
+
 const appearanceImpactCategories: AppearanceImpactCategory[] = [
   {
     key: "finances",
-    label: "Finances",
+    label: "Finance",
     items: [
       {
-        title: "Salaire plus eleve",
+        title: "Salaire plus élevé",
         description: "Les personnes attirantes gagnent 10-15% de plus.",
         source:
           "Hamermesh, D. S., and J. E. Biddle. (1994). The American Economic Review.",
       },
       {
-        title: "Entretiens d'embauche facilites",
+        title: "Entretiens d'embauche facilités",
         description:
-          "Les candidats attirants sont percus comme plus qualifies.",
+          "Les candidats attirants sont perçus comme plus qualifiés.",
         source:
           "Puleo, R. (2006). Journal of Undergraduate Psychological Research.",
       },
       {
-        title: "Pourboires plus eleves",
+        title: "Pourboires plus élevés",
         description:
-          "Les serveurs attirants recoivent $1261 de pourboires en plus par an.",
+          "Les serveurs attirants reçoivent $1261 de pourboires en plus par an.",
         source: "Parrett, M. (2015). Journal of Economic Psychology.",
       },
       {
         title: "Plus de ventes",
         description:
-          "Les clients ont 55% plus de chances d'acheter a des vendeurs attirants.",
+          "Les clients ont 55% plus de chances d'acheter à des vendeurs attirants.",
         source:
           "Reingen, P. H., and Kernan, J. B. (1993). Journal of Consumer Psychology.",
       },
@@ -66,7 +82,7 @@ const appearanceImpactCategories: AppearanceImpactCategory[] = [
   },
   {
     key: "dating",
-    label: "Rencontres",
+    label: "Rencontre",
     items: [
       {
         title: "Plus de matchs",
@@ -76,16 +92,16 @@ const appearanceImpactCategories: AppearanceImpactCategory[] = [
           "Witmer, J., Rosenbusch, H., and Meral, E. O. (2025). Computers in Human Behavior Reports.",
       },
       {
-        title: "Plus de deuxiemes rendez-vous",
+        title: "Plus de deuxièmes rendez-vous",
         description:
-          "Dans les etudes de speed-dating, l'apparence predit regulierement le succes.",
+          "Dans les études de speed-dating, l'apparence prédit régulièrement le succès.",
         source:
           "Eastwick, P. W., and Finkel, E. J. (2008). Journal of Personality and Social Psychology; Luo, S., and Zhang, G. (2009).",
       },
       {
-        title: "Partenaires plus desirables",
+        title: "Partenaires plus désirables",
         description:
-          "Les gens finissent generalement avec quelqu'un de leur ligue, cote apparence.",
+          "Les gens finissent généralement avec quelqu'un de leur ligue, côté apparence.",
         source: "Luo, S. Social and Personality Psychology. 2017.",
       },
       {
@@ -132,26 +148,26 @@ const appearanceImpactCategories: AppearanceImpactCategory[] = [
   },
   {
     key: "health",
-    label: "Sante",
+    label: "Santé",
     items: [
       {
         title: "Meilleure prise en charge",
         description:
-          "Les medecins manquent 3.67 fois plus de diagnostics pour les patients juges peu attirants.",
+          "Les médecins manquent 3.67 fois plus de diagnostics pour les patients jugés peu attirants.",
         source:
           "Tsiga, E., Panagopoulou, E., and Benos, A. (2016). European Journal for Person Centered Healthcare.",
       },
       {
         title: "Mode de vie plus sain",
         description:
-          "Les activites qui te rendent plus attirant sont souvent bonnes pour toi.",
+          "Les activités qui te rendent plus attirant sont souvent bonnes pour toi.",
         source:
           "Arnocky, S., and Davis, A. C. (2024). Frontiers in Psychology.",
       },
       {
         title: "Vies plus longues",
         description:
-          "Les personnes attirantes vivent plus longtemps (peut-etre en partie grace aux raisons ci-dessus).",
+          "Les personnes attirantes vivent plus longtemps (peut-être en partie grâce aux raisons ci-dessus).",
         source:
           "Henderson, J.J.A., and Anglin, J.M. (2003). Evolution and Human Behavior.",
       },
@@ -190,21 +206,21 @@ const appearanceImpactCategories: AppearanceImpactCategory[] = [
       {
         title: "Moins d'arrestations",
         description:
-          "Les personnes attirantes sont moins susceptibles d'etre arretees.",
+          "Les personnes attirantes sont moins susceptibles d'être arrêtées.",
         source:
           "Beaver, K. M., Boccio, C., Smith, S., and Ferguson, C. J. (2019). Psychiatry, Psychology and Law.",
       },
       {
         title: "Moins de condamnations",
         description:
-          "Les personnes attirantes sont moins susceptibles d'etre condamnees.",
+          "Les personnes attirantes sont moins susceptibles d'être condamnées.",
         source:
           "Beaver, K. M., Boccio, C., Smith, S., and Ferguson, C. J. (2019). Psychiatry, Psychology and Law.",
       },
       {
-        title: "Peines plus legeres",
+        title: "Peines plus légères",
         description:
-          "En cas de condamnation, les personnes attirantes recoivent des peines plus legeres.",
+          "En cas de condamnation, les personnes attirantes reçoivent des peines plus légères.",
         source:
           "Mazzella, R., and Feingold, A. (1994). Journal of Applied Social Psychology.",
       },
@@ -273,15 +289,15 @@ const appearanceImpactEnglishContent: Record<
   finances: {
     label: "Finances",
     items: {
-      "Salaire plus eleve": {
+      "Salaire plus élevé": {
         title: "Higher income",
         description: "Attractive people earn 10-15% more.",
       },
-      "Entretiens d'embauche facilites": {
+      "Entretiens d'embauche facilités": {
         title: "Easier hiring outcomes",
         description: "Attractive candidates are perceived as more qualified.",
       },
-      "Pourboires plus eleves": {
+      "Pourboires plus élevés": {
         title: "Higher tips",
         description: "Attractive waiters receive $1,261 more in yearly tips.",
       },
@@ -300,12 +316,12 @@ const appearanceImpactEnglishContent: Record<
         description:
           "On dating apps, appearance matters about 9 times more than your bio.",
       },
-      "Plus de deuxiemes rendez-vous": {
+      "Plus de deuxièmes rendez-vous": {
         title: "More second dates",
         description:
           "In speed-dating studies, appearance consistently predicts success.",
       },
-      "Partenaires plus desirables": {
+      "Partenaires plus désirables": {
         title: "More desirable partners",
         description:
           "People usually end up with someone in their own appearance league.",
@@ -392,7 +408,7 @@ const appearanceImpactEnglishContent: Record<
         title: "Fewer convictions",
         description: "Attractive people are less likely to be convicted.",
       },
-      "Peines plus legeres": {
+      "Peines plus légères": {
         title: "Lighter sentences",
         description:
           "When convicted, attractive people tend to receive lighter sentences.",
@@ -528,9 +544,9 @@ function ScoreProgressSection({ language }: { language: AppLanguage }) {
   const scaledDown = naturalHeight > 0 && scale < 0.999;
 
   return (
-    <section className="overflow-visible bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.17),transparent_36%),radial-gradient(circle_at_78%_72%,rgba(185,204,209,0.16),transparent_44%),linear-gradient(145deg,rgba(10,16,22,0.94)_0%,rgba(20,31,39,0.9)_48%,rgba(185,204,209,0.3)_100%)] px-4 py-8 md:max-h-[100svh] md:overflow-hidden md:py-0">
+    <section className="relative z-10 overflow-visible bg-transparent px-4 py-8 md:max-h-[100svh] md:overflow-hidden md:py-0">
       <div
-        className="mx-auto w-full max-w-5xl"
+        className="relative z-10 mx-auto w-full max-w-5xl"
         style={{
           height: shellHeight,
         }}
@@ -739,31 +755,39 @@ export default function Landing() {
   const language = useAppLanguage();
   const { user } = useAuth();
   const heroCtaHref = user ? "/app/new-analysis" : "/register";
+  const [activeAppearanceCategoryKey, setActiveAppearanceCategoryKey] =
+    React.useState<AppearanceImpactCategory["key"]>("finances");
   const localizedAppearanceImpactCategories = React.useMemo(
     () =>
-      appearanceImpactCategories.map((category) => ({
-        ...category,
-        label:
-          language === "en"
-            ? appearanceImpactEnglishContent[category.key].label
-            : category.label,
-        items:
-          language === "en"
-            ? category.items.map((item) => {
-                const translated =
-                  appearanceImpactEnglishContent[category.key].items[item.title];
-                return translated
-                  ? {
-                      ...item,
-                      title: translated.title,
-                      description: translated.description,
-                    }
-                  : item;
-              })
-            : category.items,
-      })),
+      appearanceImpactCategories
+        .filter((category) => visibleAppearanceImpactCategoryKeys.has(category.key))
+        .map((category) => ({
+          ...category,
+          label:
+            language === "en"
+              ? appearanceImpactEnglishContent[category.key].label
+              : category.label,
+          items:
+            language === "en"
+              ? category.items.map((item) => {
+                  const translated =
+                    appearanceImpactEnglishContent[category.key].items[item.title];
+                  return translated
+                    ? {
+                        ...item,
+                        title: translated.title,
+                        description: translated.description,
+                      }
+                    : item;
+                })
+              : category.items,
+        })),
     [language],
   );
+  const activeAppearanceCategory =
+    localizedAppearanceImpactCategories.find(
+      (category) => category.key === activeAppearanceCategoryKey,
+    ) ?? localizedAppearanceImpactCategories[0];
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -848,7 +872,7 @@ export default function Landing() {
               </motion.h2>
               <motion.div
                 variants={itemVariants}
-                className="flex flex-col items-center gap-[clamp(0.4rem,1.2svh,0.75rem)] pt-0.5"
+                className="flex flex-col items-center gap-0 pt-0.5"
               >
                 <Link
                   href={heroCtaHref}
@@ -865,9 +889,9 @@ export default function Landing() {
                     en: "Before and after",
                     fr: "Avant et après",
                   })}
-                  className="relative mt-[clamp(0.25rem,1svh,0.5rem)] w-fit max-w-full"
+                  className="relative mt-[clamp(3.25rem,7svh,5.5rem)] w-fit max-w-full"
                 >
-                  <div className="flex justify-center gap-2 sm:gap-2.5">
+                  <div className="flex items-center justify-center gap-2 sm:gap-3">
                     <div className="relative aspect-[4/5] w-[clamp(6.75rem,min(23svh,42vw),13.75rem)] min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
                       <img
                         src="/modelav1.jpeg"
@@ -876,6 +900,11 @@ export default function Landing() {
                         className="h-full w-full object-cover"
                       />
                     </div>
+                    <ArrowRight
+                      className="h-6 w-6 shrink-0 text-white/90 drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)] sm:h-7 sm:w-7"
+                      strokeWidth={2.2}
+                      aria-hidden
+                    />
                     <div className="relative aspect-[4/5] w-[clamp(6.75rem,min(23svh,42vw),13.75rem)] min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
                       <img
                         src="/modelap1.jpeg"
@@ -884,15 +913,6 @@ export default function Landing() {
                         className="h-full w-full object-cover"
                       />
                     </div>
-                  </div>
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-[rgba(10,16,22,0.72)] text-white shadow-[0_8px_28px_-12px_rgba(0,0,0,0.85)] backdrop-blur-md sm:h-12 sm:w-12">
-                      <ArrowRight
-                        className="h-[1.35rem] w-[1.35rem] shrink-0 sm:h-6 sm:w-6"
-                        strokeWidth={2.4}
-                        aria-hidden
-                      />
-                    </span>
                   </div>
                 </div>
               </motion.div>
@@ -919,61 +939,74 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Complete Analysis — mobile: hauteur au contenu (< 100vh OK) ; md+: 1 viewport, image calée en bas */}
-      <section
-        id="complete-analysis"
-        className="relative isolate flex scroll-mt-32 flex-col overflow-x-clip overflow-y-visible bg-[radial-gradient(circle_at_32%_18%,rgba(255,255,255,0.12),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.9)_0%,rgba(22,33,42,0.86)_48%,rgba(170,194,201,0.24)_100%)] px-4 pb-0 pt-8 md:h-[100svh] md:max-h-[100svh] md:scroll-mt-36 md:pt-10"
-      >
+      <div className="relative z-0 isolate overflow-x-clip bg-[#15242b]">
         <WaveBackground
           position="absolute"
           className="pointer-events-none z-0 !h-full !min-h-full !w-full"
         />
-        <div className="relative z-10 mx-auto flex w-full max-w-[min(100%,112rem)] flex-col px-3 sm:px-4 md:min-h-0 md:flex-1 lg:px-6">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
-            className="relative z-30 flex flex-col items-center gap-4 text-center md:min-h-0 md:flex-1 md:gap-6"
-          >
-            <motion.h2
-              variants={itemVariants}
-              className="relative z-30 shrink-0 font-hero text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
-            >
-              {i18n(language, {
-                en: "Your Complete Facial Analysis",
-                fr: "Ton analyse faciale complète",
-              })}
-            </motion.h2>
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_34%_18%,rgba(255,255,255,0.08),transparent_36%),linear-gradient(180deg,rgba(6,13,16,0.08)_0%,rgba(6,13,16,0.3)_100%)]" />
 
+        {/* Complete Analysis — mobile: hauteur au contenu (< 100vh OK) ; md+: 1 viewport, image calée en bas */}
+        <section
+          id="complete-analysis"
+          className="relative z-10 isolate flex scroll-mt-32 flex-col overflow-x-clip overflow-y-visible bg-transparent px-4 pb-0 pt-8 md:h-[100svh] md:max-h-[100svh] md:scroll-mt-36 md:pt-10"
+        >
+          <div className="relative z-10 mx-auto flex w-full max-w-[min(100%,112rem)] flex-col px-3 sm:px-4 md:min-h-0 md:flex-1 lg:px-6">
             <motion.div
-              variants={itemVariants}
-              className="relative z-0 flex w-full max-w-[min(100%,96rem)] flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
+              variants={containerVariants}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.2 }}
+              className="relative z-30 flex flex-col items-center gap-4 text-center md:min-h-0 md:flex-1 md:gap-6"
             >
-              <LandingCompleteAnalysisOrbit language={language}>
-                <img
-                  src="/model1.png"
-                  alt={i18n(language, {
-                    en: "Your complete facial analysis model",
-                    fr: "Modèle d'analyse complète du visage",
-                  })}
-                  loading="lazy"
-                  className="mx-auto block h-auto w-full max-w-full object-contain object-bottom select-none max-h-[min(93vh,1080px)]"
-                />
-              </LandingCompleteAnalysisOrbit>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
+              <motion.h2
+                variants={itemVariants}
+                className="relative z-30 shrink-0 font-hero text-3xl font-bold leading-[1.1] tracking-tight text-balance text-white [text-shadow:0_0_1px_rgba(0,0,0,0.75),0_2px_10px_rgba(0,0,0,0.45),0_6px_32px_rgba(15,23,42,0.35)] md:text-5xl"
+              >
+                {i18n(language, {
+                  en: "Your Complete Facial Analysis",
+                  fr: "Ton analyse faciale complète",
+                })}
+              </motion.h2>
+              <motion.p
+                variants={itemVariants}
+                className="relative z-30 mx-auto max-w-[min(100%,48rem)] -mt-1 shrink-0 text-balance text-sm font-medium leading-[1.5] text-white/78 [text-shadow:0_1px_10px_rgba(0,0,0,0.45)] sm:text-base md:-mt-2 md:text-lg"
+              >
+                {i18n(language, {
+                  en: "Every face is unique. We analyse dozens of aspects of your face to understand your personal facial aesthetics.",
+                  fr: "Chaque visage est unique. Nous analysons des dizaines d’aspects de votre visage afin de comprendre votre esthétique faciale personnelle.",
+                })}
+              </motion.p>
 
-      <ScoreProgressSection language={language} />
+              <motion.div
+                variants={itemVariants}
+                className="relative z-0 flex w-full max-w-[min(100%,96rem)] flex-col leading-none md:min-h-0 md:flex-1 md:justify-end"
+              >
+                <LandingCompleteAnalysisOrbit language={language}>
+                  <img
+                    src="/model1.png"
+                    alt={i18n(language, {
+                      en: "Your complete facial analysis model",
+                      fr: "Modèle d'analyse complète du visage",
+                    })}
+                    loading="lazy"
+                    className="mx-auto block h-auto w-full max-w-full object-contain object-bottom select-none max-h-[min(93vh,1080px)]"
+                  />
+                </LandingCompleteAnalysisOrbit>
+              </motion.div>
+            </motion.div>
+          </div>
+        </section>
+
+        <ScoreProgressSection language={language} />
+      </div>
 
       {/* Appearance Impact Section */}
       <section
         id="appearance-impact"
         className="bg-[radial-gradient(circle_at_72%_24%,rgba(255,255,255,0.14),transparent_34%),radial-gradient(circle_at_24%_82%,rgba(185,204,209,0.13),transparent_40%),linear-gradient(145deg,rgba(10,16,22,0.93)_0%,rgba(20,31,39,0.89)_48%,rgba(185,204,209,0.29)_100%)] px-4 py-20 md:py-28"
       >
-        <div className="w-full lg:max-w-[75%] mx-auto">
+        <div className="mx-auto w-full max-w-[52rem]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
@@ -983,29 +1016,45 @@ export default function Landing() {
           >
             <motion.h2
               variants={itemVariants}
-              className="text-center font-hero text-3xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance md:text-5xl"
+              className="mx-auto max-w-[52rem] text-center font-hero text-3xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance md:text-5xl"
             >
               {i18n(language, {
                 en: "Beauty can be",
                 fr: "La beauté peut être",
               })}
+              {" "}
               <span className="block">
-                {i18n(language, {
-                  en: "measured and improved",
-                  fr: "mesurée et améliorée",
-                })}
+                {language === "fr" ? (
+                  <>
+                    <span className="text-[#d6e4ff]">mesurée</span> et{" "}
+                    <span className="text-[#d6e4ff]">améliorée</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[#d6e4ff]">measured</span> and{" "}
+                    <span className="text-[#d6e4ff]">improved</span>
+                  </>
+                )}
               </span>
             </motion.h2>
 
             <motion.div variants={itemVariants} className="w-full">
-              <Tabs defaultValue="finances" className="w-full">
-                <div className="overflow-x-auto pb-3">
-                  <TabsList className="h-auto min-w-full w-max rounded-2xl border border-white/10 bg-black/35 p-1.5 backdrop-blur-sm">
+              <Tabs
+                value={activeAppearanceCategoryKey}
+                onValueChange={(value) =>
+                  setActiveAppearanceCategoryKey(
+                    value as AppearanceImpactCategory["key"],
+                  )
+                }
+                className="w-full"
+              >
+                <div className="overflow-x-auto pb-5 md:flex md:justify-center">
+                  <TabsList className="mx-auto flex h-auto w-max min-w-max gap-2 rounded-none bg-transparent p-0 sm:gap-3">
                     {localizedAppearanceImpactCategories.map((category) => (
                       <TabsTrigger
                         key={category.key}
                         value={category.key}
-                        className="rounded-xl px-4 py-2 text-sm md:text-base"
+                        className="box-border h-11 min-w-[7rem] flex-none rounded-[0.65rem] border border-transparent bg-transparent px-4 text-sm leading-none text-zinc-400 shadow-none transition-colors hover:bg-white/[0.05] hover:text-zinc-100 data-[state=active]:border-white/10 data-[state=active]:bg-[#9fb2bb]/25 data-[state=active]:text-white data-[state=active]:shadow-none sm:min-w-[7.75rem]"
                       >
                         {category.label}
                       </TabsTrigger>
@@ -1013,93 +1062,108 @@ export default function Landing() {
                   </TabsList>
                 </div>
 
-                {localizedAppearanceImpactCategories.map((category) => (
-                  <TabsContent key={category.key} value={category.key}>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {category.items.map((item) => (
-                        <article
-                          key={`${category.key}-${item.title}`}
-                          className="rounded-2xl border border-white/10 bg-black/30 p-4 md:p-5"
-                        >
-              <h3 className="font-display text-lg md:text-xl font-semibold tracking-tight text-foreground">
-                            {item.title}
-                          </h3>
-                          <p className="mt-2 text-sm md:text-base leading-relaxed text-foreground/90">
-                            {item.description}
-                          </p>
-                          <p className="mt-3 text-xs md:text-sm leading-relaxed text-muted-foreground">
-                            {item.source}
-                          </p>
-                        </article>
-                      ))}
-                    </div>
-                  </TabsContent>
-                ))}
+                <AnimatePresence mode="wait" initial={false}>
+                  {activeAppearanceCategory ? (
+                    <motion.div
+                      key={activeAppearanceCategory.key}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.22, ease: "easeOut" }}
+                    >
+                      <TabsContent
+                        value={activeAppearanceCategory.key}
+                        className="mt-0"
+                        forceMount
+                      >
+                        <div className="overflow-hidden rounded-2xl border border-white/[0.28] bg-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                          {activeAppearanceCategory.items.map((item, index) => {
+                            const { firstWord, rest } = splitImpactTitle(item.title);
+
+                            return (
+                              <article
+                                key={`${activeAppearanceCategory.key}-${item.title}`}
+                                className={cn(
+                                  "grid gap-3 overflow-hidden px-5 py-5 text-left sm:px-6 md:h-[7.25rem] md:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.35fr)] md:gap-8 md:px-7 lg:px-8",
+                                  index > 0 && "border-t border-white/[0.14]",
+                                )}
+                              >
+                                <h3 className="font-display text-lg font-semibold leading-tight tracking-tight text-white md:text-xl">
+                                  {firstWord}
+                                  {rest ? (
+                                    <span className="text-[#9fb2bb]"> {rest}</span>
+                                  ) : null}
+                                </h3>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold leading-relaxed text-zinc-100 md:text-base">
+                                    {item.description}
+                                  </p>
+                                  <p className="mt-2 flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[0.625rem] leading-none text-zinc-500 md:text-[0.6875rem]">
+                                    <span className="h-1 w-1 shrink-0 rounded-full border border-[#9fb2bb]/55" />
+                                    <span className="min-w-0 truncate">
+                                      {item.source}
+                                    </span>
+                                  </p>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </TabsContent>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </Tabs>
             </motion.div>
           </motion.div>
         </div>
       </section>
 
-      {/* Who This Is For Section */}
-      <section className="bg-[radial-gradient(circle_at_50%_42%,rgba(120,145,168,0.16),transparent_42%),linear-gradient(180deg,rgba(6,10,16,0.96)_0%,rgba(4,7,12,0.98)_100%)] px-4 py-24 md:py-32">
-        <div className="mx-auto w-full max-w-4xl text-center">
+      {/* CTA Section */}
+      <section className="relative isolate flex min-h-[28rem] overflow-hidden px-4 py-24 md:min-h-[34rem] md:py-32">
+        <WaveBackground
+          position="absolute"
+          className="pointer-events-none z-0 !h-full !min-h-full !w-full"
+        />
+        <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_48%_44%,rgba(255,255,255,0.18),transparent_32%),linear-gradient(180deg,rgba(9,21,25,0.08)_0%,rgba(6,13,16,0.22)_100%)]" />
+        <div className="relative z-10 mx-auto flex w-full max-w-4xl items-center justify-center text-center">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, amount: 0.25 }}
-            className="space-y-7"
+            className="flex flex-col items-center gap-10"
           >
-            <motion.div
-              variants={itemVariants}
-              className="mx-auto h-px w-8 bg-white/20"
-            />
-
-            <motion.p
-              variants={itemVariants}
-              className="text-[11px] font-semibold uppercase tracking-[0.34em] text-zinc-500"
-            >
-              {i18n(language, {
-                en: "A note on who this is for",
-                fr: "Une note sur le profil visé",
-              })}
-            </motion.p>
-
             <motion.h2
               variants={itemVariants}
-              className="font-hero text-4xl font-semibold leading-[1.06] tracking-[-0.015em] text-balance text-white md:text-6xl"
+              className="max-w-3xl text-balance font-hero text-4xl font-semibold leading-[1.08] tracking-[-0.015em] text-white [text-shadow:0_2px_24px_rgba(0,0,0,0.25)] md:text-5xl"
             >
               {i18n(language, {
-                en: "This isn't for everyone",
-                fr: "Ce n'est pas pour tout le monde",
+                en: "Join thousands already transforming their looks.",
+                fr: "Rejoins ceux qui transforment déjà leur apparence.",
               })}
             </motion.h2>
 
-            <motion.p
-              variants={itemVariants}
-              className="mx-auto max-w-3xl text-lg leading-relaxed text-zinc-400 md:text-3xl"
-            >
-              {i18n(language, {
-                en: "Most people see their score and do nothing. They let the number define them. The ones who actually transform treat it as a starting point - and commit to the process.",
-                fr: "La plupart voient leur score et ne font rien. Ils laissent ce nombre les définir. Ceux qui se transforment vraiment le prennent comme un point de départ et s'engagent dans le processus.",
-              })}
-            </motion.p>
-
-            <motion.p
-              variants={itemVariants}
-              className="text-base leading-relaxed text-zinc-500 md:text-xl"
-            >
-              {i18n(language, {
-                en: "ScoreMax is built for them.",
-                fr: "ScoreMax est conçu pour eux.",
-              })}
-            </motion.p>
-
-            <motion.div
-              variants={itemVariants}
-              className="mx-auto h-px w-8 bg-white/20"
-            />
+            <motion.div variants={itemVariants}>
+              <Link
+                href={heroCtaHref}
+                className="group inline-flex min-h-14 overflow-hidden rounded-[0.35rem] border border-white/70 bg-white text-sm font-semibold text-[#071319] shadow-[0_18px_50px_-24px_rgba(0,0,0,0.7)] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 md:text-base"
+              >
+                <span className="flex items-center px-5 md:px-6">
+                  {i18n(language, {
+                    en: "Start your glow-up",
+                    fr: "Démarrer ma transformation",
+                  })}
+                </span>
+                <span className="flex w-12 items-center justify-center border-l border-zinc-200 text-[#071319]">
+                  <ArrowRight
+                    className="h-4 w-4 motion-safe:group-hover:animate-[cta-arrow-nudge_0.75s_ease-in-out_infinite]"
+                    strokeWidth={2.2}
+                    aria-hidden
+                  />
+                </span>
+              </Link>
+            </motion.div>
           </motion.div>
         </div>
       </section>

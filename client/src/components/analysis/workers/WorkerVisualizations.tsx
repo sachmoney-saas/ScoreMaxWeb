@@ -58,12 +58,12 @@ const WORKER_RADAR_PRESETS = {
   },
   /** Landing / hero : schéma lisible sur grand écran. */
   xlarge: {
-    viewPadX: 124,
-    viewPadY: 112,
+    viewPadX: 138,
+    viewPadY: 124,
     size: 600,
     maxRadius: 202,
-    labelOffset: 66,
-    fontSize: 28,
+    labelOffset: 78,
+    fontSize: 36,
     dotR: 5.8,
     polygonStroke: 2.15,
     maxWClass: "max-w-[min(100%,680px)]",
@@ -240,7 +240,7 @@ export function WorkerSignatureRadar({
               fontSize={fontSize}
               fontWeight="600"
               fill={paint.labelFill}
-              letterSpacing="0.04em"
+              letterSpacing="0"
             >
               {lines.map((line, li) => (
                 <tspan key={`${i}-L${li}`} x={lp.x} dy={li === 0 ? 0 : lineHeight}>
@@ -254,7 +254,7 @@ export function WorkerSignatureRadar({
               textAnchor={lp.anchor}
               dominantBaseline="middle"
               fontSize={scoreFont}
-              letterSpacing="0.03em"
+              letterSpacing="0"
             >
               <tspan
                 fontWeight="700"
