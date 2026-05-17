@@ -130,6 +130,17 @@
 }
 
 @layer utilities {
+  @keyframes cta-arrow-nudge {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+
+    50% {
+      transform: translateX(0.25rem);
+    }
+  }
+
   .glass {
     @apply bg-background/70 backdrop-blur-xl border border-border/60 shadow-[0_25px_80px_-40px_rgba(0,0,0,0.75)];
   }
