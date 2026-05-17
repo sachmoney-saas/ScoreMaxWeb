@@ -8,6 +8,8 @@ import { parseGuideTraceMetricsFromStoredRequestPayload } from "../lib/analysis-
 import { requireAdminUser } from "../lib/auth";
 import { ApiError } from "../lib/errors";
 import { downloadR2Object, getDefaultR2Bucket } from "../lib/r2-storage";
+import { reconcileDodoSubscriptions } from "../lib/dodo/reconciliation";
+import { kickoffMissingPaidAnalyses } from "../lib/post-payment-analysis-rescue";
 import {
   getPremiumAccessState,
   grantManualSubscription,
@@ -21,6 +23,23 @@ const adminFailuresQuerySchema = z.object({
   userId: z.string().min(1).optional(),
   search: z.string().trim().min(1).optional(),
 });
+
+const adminWebhookFailuresQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  includeProcessed: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((v) => v === "true"),
+});
+
+type DodoWebhookFailureRow = {
+  webhook_id: string;
+  event_type: string;
+  error: string | null;
+  received_at: string;
+  processed_at: string | null;
+  payload: unknown;
+};
 
 const adminClientErrorsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -779,6 +798,84 @@ export function createV1AdminRouter(): Router {
         ok: true,
         httpStatus: 200,
         data: deleted,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /** Dodo webhook deliveries that failed processing (and have not yet been recovered by a retry). */
+  router.get("/admin/dodo/webhook-failures", async (req, res, next) => {
+    try {
+      await requireAdminUser(req.headers.authorization);
+      const query = adminWebhookFailuresQuerySchema.parse(req.query);
+
+      let rowsQuery = supabaseAdmin
+        .from("dodo_webhook_events")
+        .select("webhook_id, event_type, error, received_at, processed_at, payload")
+        .order("received_at", { ascending: false })
+        .limit(query.limit);
+
+      if (query.includeProcessed) {
+        rowsQuery = rowsQuery.not("error", "is", null);
+      } else {
+        rowsQuery = rowsQuery.is("processed_at", null).not("error", "is", null);
+      }
+
+      const { data, error } = await rowsQuery;
+      if (error) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to load Dodo webhook failures",
+          details: error,
+        });
+      }
+
+      const rows = (data ?? []) as DodoWebhookFailureRow[];
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { failures: rows, total: rows.length },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /** Walk Dodo subscriptions and re-sync any drift in our DB (recover from webhook outages). */
+  router.post("/admin/dodo/reconcile", async (req, res, next) => {
+    try {
+      await requireAdminUser(req.headers.authorization);
+      const outcome = await reconcileDodoSubscriptions();
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: outcome,
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * Long-tail safety net for the post-payment analysis: find every user with
+   * an active subscription who has no analysis_job yet and kick one off.
+   * Designed for an hourly cron — also safe to call manually after a Dodo
+   * webhook outage or a deploy that introduced a regression in the kickoff
+   * path.
+   */
+  router.post("/admin/dodo/kickoff-missing-analyses", async (req, res, next) => {
+    try {
+      await requireAdminUser(req.headers.authorization);
+      const outcome = await kickoffMissingPaidAnalyses();
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: outcome,
         error: null,
       });
     } catch (error) {

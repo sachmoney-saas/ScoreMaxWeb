@@ -24,17 +24,18 @@ export type ScoreMaxErrorCode = z.infer<typeof scoreMaxErrorCodeSchema>;
 /**
  * Analysis tiers control how many provider runs are requested **per worker**.
  *
- * - `freemium`  → 2 runs/worker (used during onboarding, ~2.5× cheaper than standard).
+ * - `freemium`  → 2 runs/worker (used during onboarding, cheapest tier).
  *   With 2 runs the ScanFace aggregator runs normally (average / most_frequent /
  *   collect_texts / ai_summary), so `outputAggregates` has the same shape as standard.
- * - `standard`  → 5 runs/worker (recommended default, full aggregation)
+ * - `standard`  → 3 runs/worker (recommended default for paid subscribers,
+ *   balances cost and aggregation stability).
  *
  * Hard cap on the upstream API side is 10 runs per worker (`MAX_RUNS`).
  * Source of truth: ScoreMax/ScanFace API docs.
  */
 export const ANALYSIS_TIER_RUNS = {
   freemium: 2,
-  standard: 5,
+  standard: 3,
 } as const;
 
 export type AnalysisTier = keyof typeof ANALYSIS_TIER_RUNS;

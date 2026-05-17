@@ -4,6 +4,12 @@ import { logger } from "../logger";
 import { supabaseAdmin } from "../supabase-admin";
 import { getDodoClient } from "./client";
 import {
+  applyDodoDisputeEvent,
+  applyDodoPaymentEvent,
+  applyDodoRefundEvent,
+  type PaymentLifecycleEventType,
+} from "./payment-events";
+import {
   applyDodoSubscriptionEvent,
   type WebhookSubscriptionEventType,
 } from "./subscription-sync";
@@ -17,6 +23,27 @@ const SUBSCRIPTION_EVENT_TYPES = new Set<WebhookSubscriptionEventType>([
   "subscription.cancelled",
   "subscription.failed",
   "subscription.expired",
+]);
+
+const PAYMENT_EVENT_TYPES = new Set<PaymentLifecycleEventType>([
+  "payment.failed",
+  "payment.succeeded",
+  "payment.cancelled",
+]);
+
+const REFUND_EVENT_TYPES = new Set<PaymentLifecycleEventType>([
+  "refund.succeeded",
+  "refund.failed",
+]);
+
+const DISPUTE_EVENT_TYPES = new Set<PaymentLifecycleEventType>([
+  "dispute.opened",
+  "dispute.lost",
+  "dispute.won",
+  "dispute.challenged",
+  "dispute.expired",
+  "dispute.accepted",
+  "dispute.cancelled",
 ]);
 
 export type DodoWebhookHeaders = {
@@ -60,62 +87,121 @@ export function verifyDodoWebhook(params: {
   }
 }
 
-type LedgerInsertResult =
+type LedgerReservation =
   | { status: "fresh" }
-  | { status: "duplicate" };
+  | { status: "retry"; previousError: string | null }
+  | { status: "already_processed" };
 
 /**
- * Insert the webhook id into the idempotency ledger. If the row already
- * exists, the unique constraint fires and we treat the event as a duplicate
- * delivery (Dodo retries up to 8 times — see their docs).
+ * Reserve the delivery in the idempotency ledger.
+ *
+ * Uses an UPSERT keyed on `webhook_id` so that:
+ *  - a brand-new delivery inserts a row with `processed_at = NULL`,
+ *  - a retry of a delivery we *failed* to process (processed_at still NULL)
+ *    is re-attempted and gets a chance to succeed,
+ *  - a retry of a delivery we *already* processed (processed_at set) is
+ *    short-circuited and never re-runs the side effects.
+ *
+ * This is the correct shape for Standard Webhooks at-least-once delivery:
+ * we never lose a fail (Dodo will retry → we will retry), and we never
+ * double-apply a success.
  */
-async function recordWebhookReceived(params: {
+async function reserveWebhookDelivery(params: {
   webhookId: string;
   eventType: string;
   payload: unknown;
-}): Promise<LedgerInsertResult> {
-  const { error } = await supabaseAdmin
+}): Promise<LedgerReservation> {
+  // Step 1 — peek to know whether we have already processed this delivery.
+  const { data: existing, error: peekError } = await supabaseAdmin
     .from("dodo_webhook_events")
-    .insert({
-      webhook_id: params.webhookId,
-      event_type: params.eventType,
-      payload: params.payload as Record<string, unknown>,
+    .select("processed_at, error")
+    .eq("webhook_id", params.webhookId)
+    .maybeSingle();
+
+  if (peekError) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to read Dodo webhook ledger",
+      details: peekError,
     });
-
-  if (!error) {
-    return { status: "fresh" };
   }
 
-  // 23505 = unique_violation on Postgres -> we've already seen this webhook id.
-  if (typeof (error as { code?: string }).code === "string" && (error as { code: string }).code === "23505") {
-    return { status: "duplicate" };
+  if (existing?.processed_at) {
+    return { status: "already_processed" };
   }
 
-  throw new ApiError({
-    code: "INTERNAL_SERVER_ERROR",
-    status: 500,
-    message: "Unable to record Dodo webhook delivery",
-    details: error,
-  });
+  // Step 2 — upsert the row. Either we create it (fresh delivery) or we
+  // overwrite it with the latest payload bytes (Dodo may include richer
+  // data on a retry; we want the freshest snapshot for replay/debug).
+  const { error: upsertError } = await supabaseAdmin
+    .from("dodo_webhook_events")
+    .upsert(
+      {
+        webhook_id: params.webhookId,
+        event_type: params.eventType,
+        payload: params.payload as Record<string, unknown>,
+        // Explicitly null out the previous error so the row reflects the
+        // current attempt and not a stale failure from a prior delivery.
+        error: null,
+      },
+      { onConflict: "webhook_id", ignoreDuplicates: false },
+    );
+
+  if (upsertError) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to record Dodo webhook delivery",
+      details: upsertError,
+    });
+  }
+
+  if (existing) {
+    return { status: "retry", previousError: existing.error ?? null };
+  }
+  return { status: "fresh" };
 }
 
 async function markWebhookProcessed(params: {
   webhookId: string;
-  error?: string;
 }): Promise<void> {
   const { error } = await supabaseAdmin
     .from("dodo_webhook_events")
     .update({
       processed_at: new Date().toISOString(),
-      error: params.error ?? null,
+      error: null,
     })
     .eq("webhook_id", params.webhookId);
 
   if (error) {
-    // Non-fatal: we'll just see the row stay "received" in the ledger.
+    // Non-fatal: we'll just see the row stay "received" in the ledger and
+    // the next Dodo retry will re-process — which is safe because the
+    // downstream apply step is itself idempotent.
     logger.warn(
       { err: error, webhookId: params.webhookId },
       "dodo: failed to mark webhook as processed",
+    );
+  }
+}
+
+async function markWebhookErrored(params: {
+  webhookId: string;
+  error: string;
+}): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("dodo_webhook_events")
+    .update({
+      // Leave processed_at = NULL so the next Dodo retry triggers another
+      // attempt. We only record *why* the previous attempt failed.
+      error: params.error,
+    })
+    .eq("webhook_id", params.webhookId);
+
+  if (error) {
+    logger.warn(
+      { err: error, webhookId: params.webhookId },
+      "dodo: failed to record webhook error on ledger",
     );
   }
 }
@@ -135,18 +221,29 @@ export async function handleDodoWebhook(params: {
 }): Promise<{ status: "ok" | "duplicate" | "ignored" }> {
   const event = verifyDodoWebhook(params);
 
-  const ledger = await recordWebhookReceived({
+  const reservation = await reserveWebhookDelivery({
     webhookId: params.headers.webhookId,
     eventType: event.type,
     payload: event as unknown,
   });
 
-  if (ledger.status === "duplicate") {
+  if (reservation.status === "already_processed") {
     logger.info(
       { webhookId: params.headers.webhookId, eventType: event.type },
-      "dodo: duplicate webhook delivery, skipping processing",
+      "dodo: duplicate webhook delivery (already processed), skipping",
     );
     return { status: "duplicate" };
+  }
+
+  if (reservation.status === "retry") {
+    logger.warn(
+      {
+        webhookId: params.headers.webhookId,
+        eventType: event.type,
+        previousError: reservation.previousError,
+      },
+      "dodo: retrying previously failed webhook delivery",
+    );
   }
 
   try {
@@ -163,6 +260,54 @@ export async function handleDodoWebhook(params: {
       return { status: "ok" };
     }
 
+    if (isPaymentEvent(event.type)) {
+      const paymentEvent = event as Extract<
+        UnwrapWebhookEvent,
+        { type: "payment.failed" | "payment.succeeded" | "payment.cancelled" }
+      >;
+      await applyDodoPaymentEvent({
+        eventType: paymentEvent.type,
+        payment: paymentEvent.data,
+      });
+      await markWebhookProcessed({ webhookId: params.headers.webhookId });
+      return { status: "ok" };
+    }
+
+    if (isRefundEvent(event.type)) {
+      const refundEvent = event as Extract<
+        UnwrapWebhookEvent,
+        { type: "refund.succeeded" | "refund.failed" }
+      >;
+      await applyDodoRefundEvent({
+        eventType: refundEvent.type,
+        refund: refundEvent.data,
+      });
+      await markWebhookProcessed({ webhookId: params.headers.webhookId });
+      return { status: "ok" };
+    }
+
+    if (isDisputeEvent(event.type)) {
+      const disputeEvent = event as Extract<
+        UnwrapWebhookEvent,
+        {
+          type:
+            | "dispute.opened"
+            | "dispute.lost"
+            | "dispute.won"
+            | "dispute.challenged"
+            | "dispute.expired"
+            | "dispute.accepted"
+            | "dispute.cancelled";
+        }
+      >;
+      await applyDodoDisputeEvent({
+        eventType: disputeEvent.type,
+        dispute: disputeEvent.data,
+      });
+      await markWebhookProcessed({ webhookId: params.headers.webhookId });
+      return { status: "ok" };
+    }
+
     logger.info(
       { eventType: event.type, webhookId: params.headers.webhookId },
       "dodo: event type not handled; acknowledging only",
@@ -170,7 +315,7 @@ export async function handleDodoWebhook(params: {
     await markWebhookProcessed({ webhookId: params.headers.webhookId });
     return { status: "ignored" };
   } catch (error) {
-    await markWebhookProcessed({
+    await markWebhookErrored({
       webhookId: params.headers.webhookId,
       error:
         error instanceof Error ? error.message : "unknown webhook handler error",
@@ -183,4 +328,29 @@ function isSubscriptionEvent(
   eventType: string,
 ): eventType is WebhookSubscriptionEventType {
   return SUBSCRIPTION_EVENT_TYPES.has(eventType as WebhookSubscriptionEventType);
+}
+
+function isPaymentEvent(
+  eventType: string,
+): eventType is "payment.failed" | "payment.succeeded" | "payment.cancelled" {
+  return PAYMENT_EVENT_TYPES.has(eventType as PaymentLifecycleEventType);
+}
+
+function isRefundEvent(
+  eventType: string,
+): eventType is "refund.succeeded" | "refund.failed" {
+  return REFUND_EVENT_TYPES.has(eventType as PaymentLifecycleEventType);
+}
+
+function isDisputeEvent(
+  eventType: string,
+): eventType is
+  | "dispute.opened"
+  | "dispute.lost"
+  | "dispute.won"
+  | "dispute.challenged"
+  | "dispute.expired"
+  | "dispute.accepted"
+  | "dispute.cancelled" {
+  return DISPUTE_EVENT_TYPES.has(eventType as PaymentLifecycleEventType);
 }

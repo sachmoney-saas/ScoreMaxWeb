@@ -9,14 +9,11 @@ export const profiles = pgTable("profiles", {
   avatar_url: text("avatar_url"),
   role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
   is_subscriber: boolean("is_subscriber").default(false).notNull(),
-  stripe_customer_id: text("stripe_customer_id"),
-  stripe_subscription_id: text("stripe_subscription_id"),
   /**
    * Dodo Payments customer id (`cus_...`). Set on first successful checkout,
    * reused for portal sessions and reconciliation across webhooks.
    */
   dodo_customer_id: text("dodo_customer_id"),
-  subscription_status: text("subscription_status"),
   has_accepted_terms: boolean("has_accepted_terms").default(false).notNull(),
   has_completed_onboarding: boolean("has_completed_onboarding").default(false).notNull(),
   /** True after any subscription row or billing customer id (persists after cancel). */

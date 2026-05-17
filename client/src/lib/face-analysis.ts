@@ -201,8 +201,8 @@ const SCANFACE_WORKERS = [
  * Build the per-worker analyses array sent to the API.
  *
  * `tier` controls the number of runs requested per worker:
- *   - "freemium" → 2 runs (used during onboarding, ~2.5× cheaper than standard)
- *   - "standard" → 5 runs (default for paid re-analyses)
+ *   - "freemium" → 2 runs (used during onboarding, cheapest tier)
+ *   - "standard" → 3 runs (default for paid re-analyses)
  *
  * `imageId` is intentionally omitted — ScanFace resolves images from
  * `images[]` using the prompt's `requiredImageSlots`.
