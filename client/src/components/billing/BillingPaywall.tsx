@@ -35,25 +35,29 @@ const PLAN_BENEFITS: Record<
 > = {
   monthly: {
     fr: [
-      "1 analyse par semaine",
+      "Une analyse faciale chaque semaine pour suivre ton évolution",
+      "Protocole sur mesure ajusté à chaque analyse",
       "Recommandations personnalisées",
       "Support prioritaire",
     ],
     en: [
-      "1 analysis per week",
+      "A facial analysis every week to track your progress",
+      "Personalized protocol adjusted after each analysis",
       "Personalized recommendations",
       "Priority support",
     ],
   },
   yearly: {
     fr: [
-      "1 analyse par semaine",
+      "Une analyse faciale chaque semaine pour suivre ton évolution",
+      "Protocole sur mesure ajusté à chaque analyse",
       "Recommandations personnalisées",
       "Support prioritaire",
       "2 mois offerts vs mensuel",
     ],
     en: [
-      "1 analysis per week",
+      "A facial analysis every week to track your progress",
+      "Personalized protocol adjusted after each analysis",
       "Personalized recommendations",
       "Priority support",
       "≈2 months free vs monthly",
@@ -66,8 +70,8 @@ function planFeatures(plan: Plan, lang: "fr" | "en"): string[] {
 }
 
 type Props = {
-  /** Intégré dans le panneau glass de l’onboarding (étape finale). */
-  variant?: "standalone" | "embedded";
+  /** `standalone` = page ; `embedded` = panneau interne avec cadre glass ; `dialog` = même contenu que embedded, sans double cadre (pour `DialogContent`). */
+  variant?: "standalone" | "embedded" | "dialog";
 };
 
 export function BillingPaywall({ variant = "standalone" }: Props) {
@@ -76,7 +80,10 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
-  const embedded = variant === "embedded";
+  const [selectedPlan, setSelectedPlan] = useState<Plan>("yearly");
+  const isDialog = variant === "dialog";
+  /** Grille / typo « compacte », avec ou sans cadre glass externe. */
+  const useEmbeddedLayout = variant === "embedded" || isDialog;
 
   const {
     data: state,
@@ -140,7 +147,11 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
     });
   }, [lang]);
 
-  const outerClass = embedded ? paywallEmbeddedClass : paywallOuterClass;
+  const outerClass = isDialog
+    ? "relative w-full"
+    : useEmbeddedLayout
+      ? paywallEmbeddedClass
+      : paywallOuterClass;
 
   if (isPending) {
     return (
@@ -180,6 +191,13 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
     return null;
   }
 
+  const activePlanRow = planDisplayByLang.find((p) => p.pid === selectedPlan);
+  if (!activePlanRow) {
+    return null;
+  }
+  const { pid, label, price, cadence, tagline } = activePlanRow;
+  const isLoadingActivePlan = checkoutMutation.isPending && pendingPlan === pid;
+
   return (
     <div
       className={outerClass}
@@ -189,7 +207,7 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
         fr: "Formules d'abonnement",
       })}
     >
-      {!embedded ? (
+      {variant === "standalone" ? (
         <>
           <div
             className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-[#d6e4ff]/12 blur-[100px]"
@@ -202,35 +220,32 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
         </>
       ) : null}
 
-      <div className="relative">
-        <div
-          className={cn(
-            "mb-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] font-semibold uppercase tracking-[0.2em] text-zinc-300",
-            embedded
-              ? "mb-3 px-3.5 py-1.5 text-[11px]"
-              : "px-3 py-1 text-[10px]",
-          )}
-        >
-          ScoreMax Premium
-        </div>
+      <div
+        className={cn(
+          "relative",
+          useEmbeddedLayout && "text-center",
+        )}
+      >
         <h2
           className={cn(
             "font-display font-bold tracking-tight text-white",
-            embedded ? "text-2xl sm:text-3xl md:text-[1.85rem] md:leading-snug" : "text-3xl sm:text-4xl",
+            useEmbeddedLayout
+              ? "text-2xl sm:text-3xl md:text-[1.85rem] md:leading-snug"
+              : "text-3xl sm:text-4xl",
           )}
         >
-          {embedded
+          {useEmbeddedLayout
             ? i18n(language, {
-                en: "Unlock your full analysis",
-                fr: "Débloque ton analyse complète",
+                en: "Start your Glow Up",
+                fr: "Commences ton Glow Up",
               })
             : i18n(language, { en: "Billing", fr: "Facturation" })}
         </h2>
         <p
           className={cn(
             "leading-relaxed text-zinc-400",
-            embedded
-              ? "mt-2.5 max-w-3xl text-sm sm:text-[0.9375rem]"
+            useEmbeddedLayout
+              ? "mx-auto mt-2.5 max-w-3xl text-sm sm:text-[0.9375rem]"
               : "mt-3 max-w-2xl text-base",
           )}
         >
@@ -242,100 +257,150 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
 
         <div
           className={cn(
-            "grid",
-            embedded
-              ? "mt-7 grid-cols-1 gap-5 sm:mt-8 sm:grid-cols-2 sm:gap-6 lg:gap-7"
-              : "mt-6 gap-6 md:grid-cols-2 md:gap-8",
+            "mx-auto mt-6 flex max-w-md justify-center",
+            useEmbeddedLayout && "mt-7 max-w-lg sm:mt-8",
+          )}
+          role="tablist"
+          aria-label={i18n(language, {
+            en: "Billing period",
+            fr: "Période de facturation",
+          })}
+        >
+          <div className="flex w-full rounded-2xl border border-white/10 bg-black/35 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            {(["monthly", "yearly"] as const).map((pid) => {
+              const isActive = selectedPlan === pid;
+              const tabLabel =
+                pid === "monthly"
+                  ? i18n(language, { en: "Monthly", fr: "Mensuel" })
+                  : i18n(language, { en: "Annual", fr: "Annuel" });
+              return (
+                <button
+                  key={pid}
+                  type="button"
+                  role="tab"
+                  id={`billing-tab-${pid}`}
+                  aria-selected={isActive}
+                  aria-controls="billing-plan-panel"
+                  tabIndex={isActive ? 0 : -1}
+                  className={cn(
+                    "relative flex min-h-[2.75rem] flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition-colors",
+                    isActive
+                      ? "bg-white text-zinc-950 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200",
+                  )}
+                  onClick={() => setSelectedPlan(pid)}
+                >
+                  {tabLabel}
+                  {pid === "yearly" ? (
+                    <span
+                      className={cn(
+                        "rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                        isActive
+                          ? "bg-emerald-600/15 text-emerald-800"
+                          : "border border-white/15 bg-white/[0.06] text-emerald-300/90",
+                      )}
+                    >
+                      {i18n(language, { en: "Save", fr: "Éco" })}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div
+          id="billing-plan-panel"
+          role="tabpanel"
+          aria-labelledby={`billing-tab-${pid}`}
+          className={cn(
+            "mx-auto mt-5 max-w-md text-left",
+            useEmbeddedLayout && "mt-6 max-w-lg sm:mt-7",
           )}
         >
-          {planDisplayByLang.map(({ pid, label, price, cadence, tagline }) => {
-            const isLoadingThisPlan =
-              checkoutMutation.isPending && pendingPlan === pid;
-
-            return (
-              <div
-                key={pid}
-                className={cn(
-                  embedded ? planCardEmbeddedClass : planCardInnerClass,
-                  pid === "yearly" &&
-                    (embedded ? "sm:ring-1 sm:ring-white/15" : "md:ring-1 md:ring-white/15"),
-                )}
-              >
-                {pid === "yearly" ? (
-                  <div className="absolute right-4 top-4">
-                    <span className="rounded-md border border-white/20 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-900">
-                      {i18n(language, { en: "Save", fr: "Économisez" })}
-                    </span>
-                  </div>
-                ) : null}
-
-                <div className={pid === "yearly" ? "pr-16" : undefined}>
-                  <p className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                    {label}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
-                    <span className="text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
-                      {price}
-                    </span>
-                    <span className="text-sm text-zinc-400">/ {cadence}</span>
-                  </div>
-                  {tagline ? (
-                    <p className="mt-1.5 text-sm text-zinc-400">{tagline}</p>
-                  ) : null}
-                </div>
-
-                <ul
-                  className={cn(
-                    "mt-5 flex flex-1 flex-col text-zinc-200",
-                    embedded ? "gap-3 text-[0.9375rem]" : "gap-2.5 text-sm",
-                  )}
-                >
-                  {planFeatures(pid, lang).map((feature) => (
-                    <li key={feature} className="flex gap-2.5">
-                      <Check
-                        className={cn(
-                          "mt-0.5 shrink-0 text-emerald-300/90",
-                          embedded ? "h-[1.125rem] w-[1.125rem]" : "h-4 w-4",
-                        )}
-                        strokeWidth={2.5}
-                        aria-hidden
-                      />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Button
-                  type="button"
-                  className={cn(
-                    "w-full rounded-xl border border-white/10 bg-white font-semibold text-zinc-950 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] hover:bg-zinc-100",
-                    embedded
-                      ? "mt-6 h-12 min-h-[3rem] text-[0.9375rem] sm:mt-7"
-                      : "mt-5 h-11 text-base",
-                  )}
-                  size="lg"
-                  onClick={() => checkoutMutation.mutate(pid)}
-                  disabled={checkoutMutation.isPending}
-                >
-                  {isLoadingThisPlan ? (
-                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-                  ) : (
-                    i18n(language, {
-                      en: `Subscribe — ${label.toLowerCase()}`,
-                      fr: `Passer à l'offre ${label.toLowerCase()}`,
-                    })
-                  )}
-                </Button>
+          <div
+            className={cn(
+              useEmbeddedLayout ? planCardEmbeddedClass : planCardInnerClass,
+              pid === "yearly" && "ring-1 ring-white/15",
+            )}
+          >
+            {pid === "yearly" ? (
+              <div className="absolute right-4 top-4">
+                <span className="rounded-md border border-white/20 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-900">
+                  {i18n(language, { en: "Save", fr: "Économisez" })}
+                </span>
               </div>
-            );
-          })}
+            ) : null}
+
+            <div className={pid === "yearly" ? "pr-16" : undefined}>
+              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">
+                {label}
+              </p>
+              <div className="mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+                <span className="text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
+                  {price}
+                </span>
+                <span className="text-sm text-zinc-400">/ {cadence}</span>
+              </div>
+              {tagline ? (
+                <p className="mt-1.5 text-sm text-zinc-400">{tagline}</p>
+              ) : null}
+            </div>
+
+            <ul
+              className={cn(
+                "mt-5 flex flex-col text-zinc-200",
+                useEmbeddedLayout ? "gap-3 text-[0.9375rem]" : "gap-2.5 text-sm",
+              )}
+            >
+              {planFeatures(pid, lang).map((feature) => (
+                <li key={feature} className="flex gap-2.5">
+                  <Check
+                    className={cn(
+                      "mt-0.5 shrink-0 text-emerald-300/90",
+                      useEmbeddedLayout ? "h-[1.125rem] w-[1.125rem]" : "h-4 w-4",
+                    )}
+                    strokeWidth={2.5}
+                    aria-hidden
+                  />
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <Button
+            type="button"
+            className={cn(
+              "w-full rounded-xl border border-white/10 bg-white font-semibold text-zinc-950 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.5)] hover:bg-zinc-100",
+              useEmbeddedLayout
+                ? "mt-5 h-12 min-h-[3rem] text-[0.9375rem] sm:mt-6"
+                : "mt-4 h-11 text-base",
+            )}
+            size="lg"
+            onClick={() => checkoutMutation.mutate(pid)}
+            disabled={checkoutMutation.isPending}
+            aria-label={i18n(language, {
+              en: `Select ${label} plan`,
+              fr: `Choisir l'offre ${label}`,
+            })}
+          >
+            {isLoadingActivePlan ? (
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            ) : (
+              i18n(language, {
+                en: "Select",
+                fr: "Choisir",
+              })
+            )}
+          </Button>
         </div>
 
         <p
           className={cn(
             "leading-snug text-zinc-600",
-            embedded
-              ? "mx-auto mt-6 max-w-3xl text-center text-[0.8125rem] sm:mx-0 sm:text-left"
+            useEmbeddedLayout
+              ? "mx-auto mt-6 max-w-3xl text-center text-[0.8125rem]"
               : "mt-5 max-w-xl text-xs",
           )}
         >

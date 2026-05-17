@@ -345,8 +345,8 @@ export default function Settings() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-start gap-4 rounded-2xl border border-red-300/20 bg-red-500/10 p-4">
-              <div className="space-y-2 flex-1">
+            <div className="flex flex-col gap-4 rounded-2xl border border-red-300/20 bg-red-500/10 p-4 sm:flex-row sm:items-start">
+              <div className="min-w-0 flex-1 space-y-2">
                 <h4 className="font-semibold text-white">
                   {i18n(uiLang, { en: "Delete account", fr: "Supprimer le compte" })}
                 </h4>
@@ -367,9 +367,13 @@ export default function Settings() {
                 </div>
               </div>
               
+              <div className="w-full sm:w-auto sm:shrink-0">
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="shrink-0 shadow-lg shadow-destructive/20">
+                  <Button
+                    variant="destructive"
+                    className="w-full shadow-lg shadow-destructive/20 sm:w-auto"
+                  >
                     {i18n(uiLang, { en: "Delete my account", fr: "Supprimer mon compte" })}
                   </Button>
                 </AlertDialogTrigger>
@@ -445,6 +449,7 @@ export default function Settings() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -1,8 +1,15 @@
+import { clearOnboardingMeshReplay } from "./onboarding-mesh-replay-storage";
+import type { OnboardingScanStatus } from "@shared/schema";
+import {
+  hasPartialOnboardingUpload,
+  isOnboardingScanSessionComplete,
+} from "./onboarding-resume";
+
 const STORAGE_KEY = "sm_onb_flow";
 
 export type OnboardingFlowStorage = {
   userId: string;
-  /** 0–1 = avant scan, 2 = teaser potentiel, 3 = paywall */
+  /** 0–1 = avant scan, 2 = teaser potentiel, 3 = legacy paywall plein écran (normalisé → 2 + modale). */
   step: number;
   /** 2 = schéma 4 étapes ; absent = ancien schéma 3 étapes (migration à la lecture). */
   v?: number;
@@ -79,6 +86,7 @@ export function writeOnboardingFlowState(state: OnboardingFlowStorage): void {
 export function clearOnboardingFlowState(): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(STORAGE_KEY);
+  clearOnboardingMeshReplay();
 }
 
 /** @param forUserId utilisateur courant (sinon false). */
@@ -95,6 +103,41 @@ export function isOnboardingBillingStepActive(
 ): boolean {
   const s = readOnboardingFlowState(forUserId);
   return s !== null && s.step >= 3;
+}
+
+/** Étape d’entrée pour un utilisateur encore en capture (profil non finalisé). */
+export function resolveOnboardingCaptureInitialStep(options: {
+  persistedStep: number | null;
+  hasCompletedOnboarding: boolean;
+  scanStatus: OnboardingScanStatus | undefined;
+  isScanLoading: boolean;
+  isScanError: boolean;
+}): number | "wait" {
+  if (options.hasCompletedOnboarding) {
+    if ((options.persistedStep ?? 0) >= 3) return 3;
+    return 2;
+  }
+
+  if (
+    options.isScanLoading ||
+    (!options.scanStatus && !options.isScanError)
+  ) {
+    return "wait";
+  }
+
+  if (
+    options.scanStatus &&
+    isOnboardingScanSessionComplete(options.scanStatus)
+  ) {
+    if ((options.persistedStep ?? 0) >= 3) return 3;
+    return 2;
+  }
+
+  if (hasPartialOnboardingUpload(options.scanStatus)) {
+    return 1;
+  }
+
+  return Math.min(1, Math.max(0, options.persistedStep ?? 0));
 }
 
 /** Étape initiale pour un utilisateur déjà onboardé sans abonnement. */

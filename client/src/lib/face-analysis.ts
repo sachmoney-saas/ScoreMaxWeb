@@ -593,11 +593,15 @@ export async function runFaceAnalysis(params: {
   requestId: string;
   sessionId: string;
   userId: string;
+  /** Jeton Supabase de l’utilisateur — requis par `requirePremiumAccess` côté serveur. */
+  accessToken: string;
   tier?: AnalysisTier;
   lang?: AppLanguage;
 }): Promise<AnalysisLaunchResponse> {
   const payload = await buildFaceAnalysisRequest(params);
-  const response = await apiRequest("POST", "/v1/analyses", payload);
+  const response = await apiRequest("POST", "/v1/analyses", payload, {
+    Authorization: `Bearer ${params.accessToken}`,
+  });
   const json = (await response.json()) as {
     data: AnalysisLaunchResponse;
   };

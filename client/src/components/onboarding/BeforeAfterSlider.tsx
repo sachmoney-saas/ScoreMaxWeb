@@ -5,6 +5,10 @@ import { i18n, type AppLanguage } from "@/lib/i18n";
 
 const DEFAULT_POSITION = 50;
 
+/** Même empreinte que le slider pour l’écran de chargement du potentiel (évite le saut de layout). */
+export const beforeAfterMediaFrameClassName =
+  "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(34vh,18.5rem)] overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(38vh,20.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(42vh,22.5rem)] md:max-w-[min(100%,24rem)]";
+
 type Props = {
   language: AppLanguage;
   beforeSrc: string | null;
@@ -104,7 +108,8 @@ export function BeforeAfterSlider({
       <div
         ref={containerRef}
         className={cn(
-          "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(34vh,18.5rem)] select-none overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(38vh,20.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(42vh,22.5rem)] md:max-w-[min(100%,24rem)]",
+          beforeAfterMediaFrameClassName,
+          "select-none",
           isDragging && "cursor-ew-resize",
           showAfter &&
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",

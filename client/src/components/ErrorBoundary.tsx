@@ -2,6 +2,8 @@ import * as React from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { reportClientError } from "@/lib/report-client-error";
+import { storeSupportErrorReport } from "@/lib/support-error-report-storage";
+import { i18n, useAppLanguage } from "@/lib/i18n";
 
 interface Props {
   children: React.ReactNode;
@@ -12,7 +14,57 @@ interface State {
   error?: Error;
 }
 
+function ErrorBoundaryFallback({
+  error,
+  onContactSupport,
+}: {
+  error?: Error;
+  onContactSupport: () => void;
+}) {
+  const language = useAppLanguage();
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-background">
+      <div className="max-w-md w-full space-y-6 text-center">
+        <div className="flex justify-center">
+          <div className="bg-destructive/10 p-4 rounded-full">
+            <AlertTriangle className="h-12 w-12 text-destructive" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {i18n(language, {
+              en: "Something went wrong",
+              fr: "Une erreur s’est produite",
+            })}
+          </h1>
+          <p className="text-muted-foreground">
+            {i18n(language, {
+              en: "An unexpected error occurred in the application.",
+              fr: "Une erreur inattendue s’est produite dans l’application.",
+            })}
+          </p>
+        </div>
+        <div className="pt-4">
+          <Button onClick={onContactSupport} className="w-full rounded-full">
+            {i18n(language, {
+              en: "Contact support",
+              fr: "Contacter le support",
+            })}
+          </Button>
+        </div>
+        {import.meta.env.DEV && (
+          <pre className="mt-8 p-4 bg-secondary rounded-lg text-left text-xs overflow-auto max-h-48 border border-border">
+            {error?.stack}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export class ErrorBoundary extends React.Component<Props, State> {
+  private lastComponentStack: string | undefined;
+
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false };
@@ -30,6 +82,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
       typeof errorInfo.componentStack === "string"
         ? errorInfo.componentStack.slice(0, 12_000)
         : undefined;
+    this.lastComponentStack = componentStack;
     reportClientError({
       source: "react.error_boundary",
       message: error.message || "React render error",
@@ -40,39 +93,25 @@ export class ErrorBoundary extends React.Component<Props, State> {
     });
   }
 
+  private handleContactSupport = () => {
+    const err = this.state.error;
+    storeSupportErrorReport({
+      source: "react.error_boundary",
+      message: err?.message?.slice(0, 2_000) || "Unknown error",
+      stack: err?.stack ? err.stack.slice(0, 12_000) : undefined,
+      componentStack: this.lastComponentStack,
+      href: typeof window !== "undefined" ? window.location.href : "",
+    });
+    window.location.href = "/support/error";
+  };
+
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen w-full flex items-center justify-center p-4 bg-background">
-          <div className="max-w-md w-full space-y-6 text-center">
-            <div className="flex justify-center">
-              <div className="bg-destructive/10 p-4 rounded-full">
-                <AlertTriangle className="h-12 w-12 text-destructive" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold tracking-tight">
-                Something went wrong
-              </h1>
-              <p className="text-muted-foreground">
-                An unexpected error occurred in the application.
-              </p>
-            </div>
-            <div className="pt-4">
-              <Button
-                onClick={() => (window.location.href = "/")}
-                className="w-full rounded-full"
-              >
-                Return to Home
-              </Button>
-            </div>
-            {import.meta.env.DEV && (
-              <pre className="mt-8 p-4 bg-secondary rounded-lg text-left text-xs overflow-auto max-h-48 border border-border">
-                {this.state.error?.stack}
-              </pre>
-            )}
-          </div>
-        </div>
+        <ErrorBoundaryFallback
+          error={this.state.error}
+          onContactSupport={this.handleContactSupport}
+        />
       );
     }
 

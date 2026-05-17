@@ -565,12 +565,38 @@ async function loadLatestScanAssetSignedUrl(params: {
   });
 }
 
+async function loadLatestFaceFrontSignedUrlForUser(
+  userId: string,
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("scan_assets")
+    .select("r2_bucket, r2_key, scan_sessions!inner(source)")
+    .eq("user_id", userId)
+    .eq("asset_type_code", "FACE_FRONT")
+    .in("upload_status", ["uploaded", "validated"])
+    .in("scan_sessions.source", ["onboarding", "manual_rescan"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data?.r2_key) {
+    return null;
+  }
+
+  const row = data as { r2_bucket: string | null; r2_key: string };
+  return getR2SignedDownloadUrl({
+    bucket: row.r2_bucket ?? undefined,
+    key: row.r2_key,
+    expiresInSeconds: 300,
+  });
+}
+
 async function resolveSourceFaceSignedUrl(params: {
   userId: string;
   sourceScanAssetId: string | null;
 }): Promise<string | null> {
   if (!params.sourceScanAssetId) {
-    return null;
+    return loadLatestFaceFrontSignedUrlForUser(params.userId);
   }
 
   const { data, error } = await supabaseAdmin
@@ -582,7 +608,7 @@ async function resolveSourceFaceSignedUrl(params: {
     .maybeSingle();
 
   if (error || !data?.r2_key) {
-    return null;
+    return loadLatestFaceFrontSignedUrlForUser(params.userId);
   }
 
   const row = data as { r2_bucket: string | null; r2_key: string };

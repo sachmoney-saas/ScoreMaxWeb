@@ -7,7 +7,7 @@ import { onboardingPrimaryCtaClassName } from "@/lib/cta-button-styles";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import type { OnboardingPotentialImage } from "@/hooks/use-onboarding-potential-image";
 import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
-import { BeforeAfterSlider } from "@/components/onboarding/BeforeAfterSlider";
+import { BeforeAfterSlider, beforeAfterMediaFrameClassName } from "@/components/onboarding/BeforeAfterSlider";
 
 type Props = {
   language: AppLanguage;
@@ -31,6 +31,37 @@ const POTENTIAL_MULTISTEP_STEPS = [
     fr: "Finalisation de l’aperçu…",
   },
 ] as const;
+
+function TransformationPreviewHeader({
+  language,
+  subtitle,
+}: {
+  language: AppLanguage;
+  subtitle: { en: string; fr: string };
+}) {
+  return (
+    <header className="w-full text-center">
+      <h2
+        className={cn(
+          "font-hero mx-auto max-w-[min(100%,22ch)] font-semibold tracking-[-0.02em] text-balance text-white",
+          "text-[clamp(1.45rem,0.42rem+3.8vw,2.35rem)] leading-[1.1]",
+          "sm:max-w-[min(100%,28ch)] sm:leading-[1.08]",
+          "md:max-w-[min(100%,32ch)] md:text-[clamp(1.65rem,0.65rem+2.4vw,2.4rem)]",
+          "[@media(max-height:700px)]:text-[clamp(1.2rem,0.25rem+3vw,1.9rem)]",
+          "lg:leading-[1.06]",
+        )}
+      >
+        {i18n(language, {
+          en: "Your Transformation Preview",
+          fr: "Ton aperçu transformation",
+        })}
+      </h2>
+      <p className="mt-1.5 text-[0.8125rem] leading-snug text-zinc-300 sm:mt-2 sm:text-sm">
+        {i18n(language, subtitle)}
+      </p>
+    </header>
+  );
+}
 
 type DecodedImageState = "idle" | "loading" | "ready" | "error";
 
@@ -94,11 +125,11 @@ function UnlockFullAnalysisCta({
 }) {
   return (
     <div
-      className="flex w-full flex-col items-stretch pt-1 sm:pt-2"
+      className="flex w-full flex-col items-center pt-1 sm:pt-2"
       role="region"
       aria-label={i18n(language, {
-        en: "Unlock full analysis",
-        fr: "Débloquer l'analyse complète",
+        en: "Continue",
+        fr: "Continuer",
       })}
     >
       <button
@@ -106,7 +137,7 @@ function UnlockFullAnalysisCta({
         onClick={() => void onUnlock()}
         disabled={isUnlocking}
         className={cn(
-          "flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-sm px-4 py-3 text-base transition disabled:pointer-events-none disabled:opacity-60 sm:min-h-[3rem] sm:px-5 sm:py-3.5",
+          "mx-auto flex min-h-[2.75rem] w-full min-w-[10.5rem] max-w-[min(15rem,88vw)] items-center justify-center gap-2 rounded-sm px-6 py-3 text-base transition disabled:pointer-events-none disabled:opacity-60 sm:min-h-[3rem] sm:py-3.5",
           onboardingPrimaryCtaClassName,
         )}
       >
@@ -115,8 +146,8 @@ function UnlockFullAnalysisCta({
         ) : null}
         <span className="text-center text-sm font-semibold tracking-tight sm:text-base">
           {i18n(language, {
-            en: "Unlock my full analysis",
-            fr: "Débloquer mon analyse complète",
+            en: "Continue",
+            fr: "Continuer",
           })}
         </span>
       </button>
@@ -135,7 +166,11 @@ export function PotentialPreviewCard({
   isUnlocking,
 }: Props) {
   const signedUrl = potentialImage?.signed_url ?? null;
-  const beforeSrc = potentialImage?.source_face_signed_url ?? null;
+  /** Côté « actuel » : photo source du scan (identique à l’entrée OneShot), sans masque filaire. */
+  const beforeSrc =
+    potentialImage?.source_face_signed_url ??
+    potentialImage?.mask_overlay_signed_url ??
+    null;
 
   const status = potentialImage?.status ?? "pending";
   const isReady = status === "completed" && !!signedUrl;
@@ -156,30 +191,57 @@ export function PotentialPreviewCard({
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28, ease: "easeOut" }}
-        className="mx-auto flex w-full max-w-sm flex-col items-center gap-5 py-4 text-center sm:gap-6 sm:py-6"
+        transition={{ duration: 0.22, ease: "easeOut" }}
+        className="mx-auto flex w-full max-w-full flex-col items-stretch gap-3 px-0 py-1 sm:gap-4 sm:py-2"
       >
-        <header className="space-y-2 px-2">
-          <Sparkles className="mx-auto h-7 w-7 text-sky-400/90" aria-hidden />
-          <h2 className="font-hero text-[1.35rem] font-semibold leading-[1.06] tracking-[-0.015em] text-white sm:text-[1.65rem]">
-            {i18n(language, {
-              en: "Preparing your preview",
-              fr: "Préparation de ton aperçu",
-            })}
-          </h2>
-          <p className="text-sm leading-relaxed text-zinc-300">
-            {i18n(language, {
-              en: "We're building your potential from your scan. This takes a few seconds.",
-              fr: "On construit ton potentiel à partir de ton scan. Quelques secondes.",
-            })}
-          </p>
-        </header>
-        <OnboardingMultistepGlassLoader
+        <TransformationPreviewHeader
           language={language}
-          steps={POTENTIAL_MULTISTEP_STEPS}
-          cycleResetKey="potential"
-          variant="featured"
-          className="w-full"
+          subtitle={{
+            en: "We're preparing your preview from your scan — just a few seconds.",
+            fr: "On prépare ton aperçu à partir de ton scan — encore quelques secondes.",
+          }}
+        />
+        <motion.div
+          className="w-full shrink-0 self-center"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: "easeOut", delay: 0.03 }}
+        >
+          <div className="mx-auto flex w-full flex-col items-center">
+            <div
+              className={cn(
+                beforeAfterMediaFrameClassName,
+                "flex items-center justify-center p-3 sm:p-4",
+              )}
+            >
+              <OnboardingMultistepGlassLoader
+                language={language}
+                steps={POTENTIAL_MULTISTEP_STEPS}
+                cycleResetKey="potential"
+                variant="featured"
+                className="w-full border-white/10 bg-black/35 shadow-none"
+              />
+            </div>
+          </div>
+        </motion.div>
+        <div
+          className={cn(
+            saasGlassInsetClassName,
+            "pointer-events-none w-full max-w-none select-none rounded-2xl p-4 text-left sm:p-5",
+          )}
+          aria-hidden
+        >
+          <div className="h-4 w-40 animate-pulse rounded bg-white/12 sm:h-5 sm:w-48" />
+          <div className="mt-3 space-y-2.5">
+            <div className="h-3 w-full animate-pulse rounded bg-white/10 sm:h-3.5" />
+            <div className="h-3 w-full animate-pulse rounded bg-white/10 sm:h-3.5" />
+            <div className="h-3 w-full animate-pulse rounded bg-white/10 sm:h-3.5" />
+            <div className="h-3 w-[88%] animate-pulse rounded bg-white/10 sm:h-3.5" />
+          </div>
+        </div>
+        <div
+          className="h-[2.75rem] w-full shrink-0 animate-pulse rounded-sm bg-white/10 sm:h-[3rem]"
+          aria-hidden
         />
       </motion.div>
     );
@@ -219,29 +281,13 @@ export function PotentialPreviewCard({
 
   return (
     <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-3 px-0 py-1 sm:gap-4 sm:py-2">
-      <header className="w-full text-center">
-        <h2
-          className={cn(
-            "font-hero mx-auto max-w-[min(100%,22ch)] font-semibold tracking-[-0.02em] text-balance text-white",
-            "text-[clamp(1.45rem,0.42rem+3.8vw,2.35rem)] leading-[1.1]",
-            "sm:max-w-[min(100%,28ch)] sm:leading-[1.08]",
-            "md:max-w-[min(100%,32ch)] md:text-[clamp(1.65rem,0.65rem+2.4vw,2.4rem)]",
-            "[@media(max-height:700px)]:text-[clamp(1.2rem,0.25rem+3vw,1.9rem)]",
-            "lg:leading-[1.06]",
-          )}
-        >
-          {i18n(language, {
-            en: "Your Transformation Preview",
-            fr: "Ton aperçu transformation",
-          })}
-        </h2>
-        <p className="mt-1.5 text-[0.8125rem] leading-snug text-zinc-300 sm:mt-2 sm:text-sm">
-          {i18n(language, {
-            en: "See how ScoreMax can help you reach your potential.",
-            fr: "Découvre comment ScoreMax peut t'aider à atteindre ton potentiel.",
-          })}
-        </p>
-      </header>
+      <TransformationPreviewHeader
+        language={language}
+        subtitle={{
+          en: "See how ScoreMax can help you reach your potential.",
+          fr: "Découvre comment ScoreMax peut t'aider à atteindre ton potentiel.",
+        }}
+      />
       <motion.div
         className="w-full shrink-0 self-center"
         initial={{ opacity: 0, y: 10 }}

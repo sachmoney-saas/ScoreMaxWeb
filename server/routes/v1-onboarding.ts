@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { optionalAnalysisLangBodySchema } from "@shared/oneshot";
 import { ApiError } from "../lib/errors";
 import { validateBody } from "../lib/validate";
@@ -11,6 +12,24 @@ import {
 import { requireUserId } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { supabaseAdmin } from "../lib/supabase-admin";
+
+const landmarkPointSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  z: z.number().finite(),
+});
+
+const meshReplayFrameSchema = z.object({
+  landmarks: z.array(landmarkPointSchema).min(1).max(600),
+  landmarkFrameWidth: z.number().finite().positive(),
+  landmarkFrameHeight: z.number().finite().positive(),
+});
+
+const meshReplayBodySchema = z.object({
+  sessionId: z.string().uuid(),
+  frontal: meshReplayFrameSchema,
+  eye: meshReplayFrameSchema.nullable().optional(),
+});
 
 async function markOnboardingCompleted(userId: string): Promise<void> {
   const { error } = await supabaseAdmin
@@ -144,6 +163,28 @@ async function hasCompletedOnboarding(userId: string): Promise<boolean> {
   return data.has_completed_onboarding === true;
 }
 
+async function assertOnboardingSessionOwner(params: {
+  userId: string;
+  sessionId: string;
+}): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("scan_sessions")
+    .select("id")
+    .eq("id", params.sessionId)
+    .eq("user_id", params.userId)
+    .in("source", ["onboarding", "manual_rescan"])
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new ApiError({
+      code: "VALIDATION_ERROR",
+      status: 404,
+      message: "Scan session not found",
+      details: error,
+    });
+  }
+}
+
 async function ensurePotentialImageForCompletedOnboarding(userId: string) {
   if (!(await hasCompletedOnboarding(userId))) {
     return null;
@@ -172,6 +213,35 @@ async function ensurePotentialImageForCompletedOnboarding(userId: string) {
 
 export function createV1OnboardingRouter(): Router {
   const router = Router();
+
+  /**
+   * Lance OneShot / nano-banana pour l’aperçu potentiel **avant** POST /complete.
+   * Réutilise une génération en cours ou terminée si elle existe (idempotent).
+   */
+  router.post("/onboarding/start-potential-generation", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const session = await loadReadyOnboardingSession(userId);
+      const { generationId, reused } = await triggerOnboardingPotentialImage({
+        userId,
+        sessionId: session.id,
+      });
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: {
+          generation: {
+            id: generationId,
+            reused,
+          },
+        },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post(
     "/onboarding/complete",
@@ -223,6 +293,83 @@ export function createV1OnboardingRouter(): Router {
         ok: true,
         httpStatus: 200,
         data: { potential_image: payload },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/onboarding/mesh-replay", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const { data, error } = await supabaseAdmin
+        .from("onboarding_mesh_replays")
+        .select("session_id, snapshot, updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to load onboarding mesh replay",
+          details: error,
+        });
+      }
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { mesh_replay: data?.snapshot ?? null },
+        error: null,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/onboarding/mesh-replay", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const body = meshReplayBodySchema.parse(req.body);
+      await assertOnboardingSessionOwner({ userId, sessionId: body.sessionId });
+
+      const now = new Date().toISOString();
+      const snapshot = {
+        v: 1,
+        userId,
+        frontal: body.frontal,
+        eye: body.eye ?? null,
+      };
+
+      const { error } = await supabaseAdmin
+        .from("onboarding_mesh_replays")
+        .upsert(
+          {
+            user_id: userId,
+            session_id: body.sessionId,
+            snapshot,
+            updated_at: now,
+          },
+          { onConflict: "user_id,session_id" },
+        );
+
+      if (error) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to save onboarding mesh replay",
+          details: error,
+        });
+      }
+
+      res.status(200).json({
+        ok: true,
+        httpStatus: 200,
+        data: { mesh_replay: snapshot },
         error: null,
       });
     } catch (error) {

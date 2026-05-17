@@ -55,11 +55,17 @@ import { getScanAssetLabels, resetScanSessionAssets } from "@/lib/face-analysis"
 import {
   completeOnboardingApi,
   ONBOARDING_POSE_TO_ASSET,
+  startOnboardingPotentialGenerationApi,
   uploadCapturedOnboardingPoses,
 } from "@/lib/onboarding-complete-flow";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
 import { ONBOARDING_HERO_MIN_LANDMARKS } from "@/lib/face-capture/build-face-mesh-3d";
 import { CAPTURE_POSES } from "@/lib/face-capture/types";
+import {
+  ONBOARDING_POST_CAPTURE_GEOMETRY_MIN_MS,
+  ONBOARDING_POST_CAPTURE_POTENTIAL_MAX_WAIT_MS,
+  shouldSkipOnboardingGeometryPrelude,
+} from "@/lib/onboarding-post-capture";
 import { deleteMyAccount } from "@/lib/account-api";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
@@ -78,6 +84,15 @@ import {
   readOnboardingFlowState,
   writeOnboardingFlowState,
 } from "@/lib/onboarding-flow-storage";
+import { isOnboardingScanSessionComplete } from "@/lib/onboarding-resume";
+import {
+  clearOnboardingMeshReplay,
+  fetchOnboardingMeshReplayFromServer,
+  readOnboardingMeshReplay,
+  saveOnboardingMeshReplayToServer,
+  type OnboardingMeshReplaySnapshot,
+  writeOnboardingMeshReplay,
+} from "@/lib/onboarding-mesh-replay-storage";
 
 const ONBOARDING_TOTAL_STEPS = 4;
 
@@ -132,6 +147,42 @@ type OnboardingProps = {
 
 type ScanHeroPreludePhase = "splash" | "geometry" | "mesh";
 
+function buildMeshReplaySnapshotFromPoses(
+  userId: string,
+  poses: CapturedPose[],
+): Omit<OnboardingMeshReplaySnapshot, "v"> | null {
+  const frontalPose = poses.find((p) => p.poseId === "frontal");
+  const eyePose = poses.find((p) => p.poseId === "closeup-eye");
+  if (
+    !frontalPose?.landmarks ||
+    frontalPose.landmarks.length < ONBOARDING_HERO_MIN_LANDMARKS ||
+    !frontalPose.landmarkFrameWidth ||
+    !frontalPose.landmarkFrameHeight
+  ) {
+    return null;
+  }
+
+  return {
+    userId,
+    frontal: {
+      landmarks: frontalPose.landmarks,
+      landmarkFrameWidth: frontalPose.landmarkFrameWidth,
+      landmarkFrameHeight: frontalPose.landmarkFrameHeight,
+    },
+    eye:
+      eyePose?.landmarks &&
+      eyePose.landmarks.length > 0 &&
+      eyePose.landmarkFrameWidth &&
+      eyePose.landmarkFrameHeight
+        ? {
+            landmarks: eyePose.landmarks,
+            landmarkFrameWidth: eyePose.landmarkFrameWidth,
+            landmarkFrameHeight: eyePose.landmarkFrameHeight,
+          }
+        : null,
+  };
+}
+
 export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const language = useAppLanguage();
   const scanAssetLabels = getScanAssetLabels(language);
@@ -140,7 +191,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const access = useUserAccess();
   const [stepIndex, setStepIndex] = React.useState(() => {
     if (initialStep !== undefined) {
-      return Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, initialStep));
+      const s = Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, initialStep));
+      return s >= 3 ? 2 : s;
     }
     return 0;
   });
@@ -149,8 +201,14 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const [showCameraCapture, setShowCameraCapture] = React.useState(false);
   const [capturedPoses, setCapturedPoses] = React.useState<CapturedPose[]>([]);
   const [showScanCompleteHero, setShowScanCompleteHero] = React.useState(false);
+  const [isReviewingMeshFromPotential, setIsReviewingMeshFromPotential] =
+    React.useState(false);
   const [scanHeroPreludePhase, setScanHeroPreludePhase] =
     React.useState<ScanHeroPreludePhase>("splash");
+  /** Image potentiel prête / échec / timeout + délai mini atteint — accélère le loader géométrie puis passage mesh. */
+  const [geometryImageWorkDone, setGeometryImageWorkDone] = React.useState(false);
+  /** Reprise du hero 3D depuis l’aperçu potentiel : saute splash + géométrie. */
+  const reopenScanHeroAtMeshRef = React.useRef(false);
   const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
   const [isUploadingCaptures, setIsUploadingCaptures] = React.useState(false);
   const [isHeroUploading, setIsHeroUploading] = React.useState(false);
@@ -162,6 +220,10 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   );
   const [uploadError, setUploadError] = React.useState<string | null>(null);
   const [isUnlocking, setIsUnlocking] = React.useState(false);
+  /** Paywall Premium : modale sur l’étape aperçu avant/après (plus d’étape plein écran). */
+  const [billingPaywallOpen, setBillingPaywallOpen] = React.useState(
+    () => initialStep !== undefined && initialStep >= 3,
+  );
   /**
    * Vrai dès qu'on a démarré l'upload + déclenché l'étape teaser ; bloque
    * la redirection automatique du gate (le serveur a déjà flippé
@@ -171,20 +233,60 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     () => initialStep !== undefined && initialStep >= 2,
   );
 
+  const [meshReplaySnapshot, setMeshReplaySnapshot] = React.useState<
+    OnboardingMeshReplaySnapshot | null
+  >(null);
+
+  React.useEffect(() => {
+    if (!user?.id) {
+      setMeshReplaySnapshot(null);
+      return;
+    }
+    const local = readOnboardingMeshReplay(user.id);
+    setMeshReplaySnapshot(local);
+    if (local) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return;
+        const remote = await fetchOnboardingMeshReplayFromServer(
+          accessToken,
+          user.id,
+        );
+        if (!remote || cancelled) return;
+        writeOnboardingMeshReplay(remote);
+        setMeshReplaySnapshot(remote);
+      } catch (error) {
+        console.warn("Unable to restore onboarding mesh replay:", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   React.useLayoutEffect(() => {
     if (initialStep !== undefined) return;
     if (!user?.id) return;
     const persisted = readOnboardingFlowState(user.id);
-    const next =
+    const rawNext =
       persisted?.step != null
         ? Math.max(0, Math.min(ONBOARDING_TOTAL_STEPS - 1, persisted.step))
         : 0;
+    let next = rawNext;
+    if (next === 3) {
+      setBillingPaywallOpen(true);
+      next = 2;
+    }
     setStepIndex(next);
     if (next >= 2) setHasStartedRun(true);
   }, [user?.id, initialStep]);
 
   const isPotentialStep = stepIndex === 2;
-  const isBillingStep = stepIndex === 3;
   const isPreCaptureIntroA = stepIndex === 0;
   const isPreCaptureIntroB = stepIndex === 1;
 
@@ -221,8 +323,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     isFinalizing,
     hasPartialUpload,
     finalizeFromServer,
+    hasCompletedOnboarding,
   } = useOnboardingResume({
-    captureStepActive: stepIndex < 2,
     language,
   });
 
@@ -242,6 +344,18 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       (capturePhase === "ready_to_finalize" && !uploadError));
 
   const onboardingSessionId = scanStatus?.session_id;
+  const didBackfillMeshReplayRef = React.useRef(false);
+
+  const {
+    data: potentialImage,
+    isLoading: isPotentialImageLoading,
+  } = useOnboardingPotentialImage({
+    enabled:
+      Boolean(user?.id) && (isPotentialStep || showScanCompleteHero),
+  });
+
+  const potentialImageForPreludeRef = React.useRef(potentialImage);
+  potentialImageForPreludeRef.current = potentialImage;
 
   React.useEffect(() => {
     if (
@@ -288,33 +402,115 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     showScanCompleteHero,
   ]);
 
-  /** Après capture : écran « scan terminé » (~3s) → loader géométrie → hero 3D. */
+  /** Si le replay existe déjà dans cet onglet, le pousser vers la source serveur durable. */
+  React.useEffect(() => {
+    if (!meshReplaySnapshot || !onboardingSessionId) return;
+    if (didBackfillMeshReplayRef.current) return;
+    didBackfillMeshReplayRef.current = true;
+
+    void (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return;
+        await saveOnboardingMeshReplayToServer({
+          accessToken,
+          sessionId: onboardingSessionId,
+          snapshot: meshReplaySnapshot,
+        });
+      } catch (error) {
+        didBackfillMeshReplayRef.current = false;
+        console.warn("Unable to backfill onboarding mesh replay:", error);
+      }
+    })();
+  }, [meshReplaySnapshot, onboardingSessionId]);
+
+  /** Arrivée directe à l’étape teaser (ex. autre appareil) : finaliser le profil si le scan est complet. */
+  const didWarmFinalizeRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!isPotentialStep) return;
+    if (hasCompletedOnboarding) return;
+    if (didWarmFinalizeRef.current) return;
+    didWarmFinalizeRef.current = true;
+    void (async () => {
+      try {
+        const ok = await finalizeFromServer();
+        if (!ok) didWarmFinalizeRef.current = false;
+      } catch (error) {
+        didWarmFinalizeRef.current = false;
+        console.error("Warm finalize from teaser step failed:", error);
+      }
+    })();
+  }, [finalizeFromServer, hasCompletedOnboarding, isPotentialStep]);
+
+  React.useEffect(() => {
+    if (scanHeroPreludePhase !== "geometry") {
+      setGeometryImageWorkDone(false);
+    }
+  }, [scanHeroPreludePhase]);
+
+  /** Après capture : écran « scan terminé » (~3s) → loader géométrie seulement si l’aperçu potentiel n’est pas déjà résolu (reconnexion, etc.). */
   React.useEffect(() => {
     if (!showScanCompleteHero) {
       setScanHeroPreludePhase("splash");
       return;
     }
+    if (reopenScanHeroAtMeshRef.current) {
+      reopenScanHeroAtMeshRef.current = false;
+      setScanHeroPreludePhase("mesh");
+      return;
+    }
     setScanHeroPreludePhase("splash");
     const id = window.setTimeout(() => {
-      setScanHeroPreludePhase("geometry");
+      setScanHeroPreludePhase((prev) => {
+        if (prev !== "splash") return prev;
+        return shouldSkipOnboardingGeometryPrelude(
+          potentialImageForPreludeRef.current,
+        )
+          ? "mesh"
+          : "geometry";
+      });
     }, 3000);
     return () => window.clearTimeout(id);
   }, [showScanCompleteHero]);
 
+  const handleGeometryLoaderExit = React.useCallback(() => {
+    setScanHeroPreludePhase("mesh");
+  }, []);
+
+  /**
+   * Loader géométrie : attendre au minimum GEOMETRY_MIN_MS, puis jusqu’à ce que
+   * l’image OneShot (Nano Banana) soit prête — ou échec / timeout.
+   * Le chargeur avance les étapes (~60 s) puis absorbe le reste sur la dernière jusqu’à ce signal.
+   */
   React.useEffect(() => {
     if (!showScanCompleteHero || scanHeroPreludePhase !== "geometry") return;
-    const id = window.setTimeout(() => {
-      setScanHeroPreludePhase("mesh");
-    }, 2800);
-    return () => window.clearTimeout(id);
-  }, [showScanCompleteHero, scanHeroPreludePhase]);
 
-  const {
-    data: potentialImage,
-    isLoading: isPotentialImageLoading,
-  } = useOnboardingPotentialImage({
-    enabled: isPotentialStep && !!user?.id,
-  });
+    const t0 = Date.now();
+
+    const tick = () => {
+      const elapsed = Date.now() - t0;
+      const minGeometryDone = elapsed >= ONBOARDING_POST_CAPTURE_GEOMETRY_MIN_MS;
+      const status = potentialImage?.status;
+      const imageReady =
+        status === "completed" && Boolean(potentialImage?.signed_url);
+      const imageTerminal = status === "failed";
+      const timedOut = elapsed >= ONBOARDING_POST_CAPTURE_POTENTIAL_MAX_WAIT_MS;
+
+      if (minGeometryDone && (imageReady || imageTerminal || timedOut)) {
+        setGeometryImageWorkDone(true);
+      }
+    };
+
+    tick();
+    const intervalId = window.setInterval(tick, 400);
+    return () => window.clearInterval(intervalId);
+  }, [
+    showScanCompleteHero,
+    scanHeroPreludePhase,
+    potentialImage?.status,
+    potentialImage?.signed_url,
+  ]);
 
   const isPotentialBlockingLoad =
     isPotentialStep &&
@@ -341,12 +537,37 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     [language, user?.id],
   );
 
+  const persistMeshReplaySnapshot = React.useCallback(
+    async (poses: CapturedPose[], accessToken?: string | null) => {
+      if (!user?.id) return;
+      const snapshot = buildMeshReplaySnapshotFromPoses(user.id, poses);
+      if (!snapshot) return;
+
+      writeOnboardingMeshReplay(snapshot);
+      setMeshReplaySnapshot(readOnboardingMeshReplay(user.id));
+
+      if (!accessToken || !onboardingSessionId) return;
+      try {
+        const saved = await saveOnboardingMeshReplayToServer({
+          accessToken,
+          sessionId: onboardingSessionId,
+          snapshot,
+        });
+        writeOnboardingMeshReplay(saved);
+        setMeshReplaySnapshot(saved);
+      } catch (error) {
+        console.warn("Unable to persist onboarding mesh replay:", error);
+      }
+    },
+    [onboardingSessionId, user?.id],
+  );
+
   React.useEffect(() => {
-    if (scanStatus?.is_ready) {
+    if (isOnboardingScanSessionComplete(scanStatus)) {
       heroUploadDoneRef.current = true;
       setHeroUploadDone(true);
     }
-  }, [scanStatus?.is_ready]);
+  }, [scanStatus]);
 
   const restartOnboardingCapture = React.useCallback(
     async (errorMessage?: string) => {
@@ -359,6 +580,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       setHeroUploadDone(false);
 
       if (!user?.id || !onboardingSessionId) {
+        clearOnboardingMeshReplay();
+        setMeshReplaySnapshot(null);
         setCapturedPoses([]);
         setShowCameraCapture(true);
         return;
@@ -386,6 +609,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
           queryKey: ["onboarding-scan-status", user.id],
         });
 
+        clearOnboardingMeshReplay();
+        setMeshReplaySnapshot(null);
         setCapturedPoses([]);
         setShowCameraCapture(true);
       } catch (error) {
@@ -447,6 +672,18 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       setUploadError(null);
       try {
         await uploadPosesToScanSession(poses, sessionId);
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        await persistMeshReplaySnapshot(poses, accessToken);
+        if (accessToken) {
+          await startOnboardingPotentialGenerationApi({
+            accessToken,
+            language,
+          });
+          await queryClient.invalidateQueries({
+            queryKey: ["onboarding-potential-image", user.id],
+          });
+        }
       } catch (error) {
         console.error("Unable to upload captures after scan:", error);
         setUploadError(
@@ -463,6 +700,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     },
     [
       language,
+      queryClient,
+      persistMeshReplaySnapshot,
       restartOnboardingCapture,
       scanStatus?.session_id,
       uploadPosesToScanSession,
@@ -487,7 +726,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     try {
       if (
         !heroUploadDoneRef.current &&
-        !scanStatus?.is_ready &&
+        !isOnboardingScanSessionComplete(scanStatus) &&
         capturedPoses.length > 0
       ) {
         await uploadPosesToScanSession(capturedPoses, onboardingSessionId);
@@ -506,6 +745,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       }
 
       await completeOnboardingApi({ accessToken, language });
+      await persistMeshReplaySnapshot(capturedPoses, accessToken);
 
       writeOnboardingFlowState({ userId: user.id, step: 2, v: 2 });
       setHasStartedRun(true);
@@ -530,7 +770,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     capturedPoses,
     language,
     onboardingSessionId,
-    scanStatus?.is_ready,
+    persistMeshReplaySnapshot,
+    scanStatus,
     uploadPosesToScanSession,
     user?.id,
   ]);
@@ -541,36 +782,71 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   );
 
   const onboardingArticleKey =
-    stepIndex === 3
-      ? "onboarding-step-3"
-      : stepIndex === 2
-        ? "onboarding-step-2"
-        : stepIndex === 1
+    stepIndex === 2
+      ? "onboarding-step-2"
+      : stepIndex === 1
           ? "onboarding-step-1-precap"
           : showScanCompleteHero
             ? `onboarding-step-0-hero-${scanHeroPreludePhase}`
             : "onboarding-step-0";
 
-  const eyeCapturePose = React.useMemo(
-    () => capturedPoses.find((p) => p.poseId === "closeup-eye"),
-    [capturedPoses],
-  );
+  const heroFrontalLandmarks =
+    frontalCapturePose?.landmarks ?? meshReplaySnapshot?.frontal?.landmarks;
+  const heroFrontalFrame =
+    frontalCapturePose?.landmarkFrameWidth &&
+    frontalCapturePose?.landmarkFrameHeight
+      ? {
+          width: frontalCapturePose.landmarkFrameWidth,
+          height: frontalCapturePose.landmarkFrameHeight,
+        }
+      : meshReplaySnapshot
+        ? {
+            width: meshReplaySnapshot.frontal.landmarkFrameWidth,
+            height: meshReplaySnapshot.frontal.landmarkFrameHeight,
+          }
+        : undefined;
+
+  const heroHasMeshData =
+    (heroFrontalLandmarks?.length ?? 0) >= ONBOARDING_HERO_MIN_LANDMARKS;
+
+  const canReopenMeshHero =
+    (frontalCapturePose?.landmarks?.length ?? 0) >=
+      ONBOARDING_HERO_MIN_LANDMARKS ||
+    (meshReplaySnapshot?.frontal?.landmarks?.length ?? 0) >=
+      ONBOARDING_HERO_MIN_LANDMARKS;
 
   const handleScanCompleteContinue = React.useCallback(() => {
+    if (isReviewingMeshFromPotential) {
+      setIsReviewingMeshFromPotential(false);
+      setShowScanCompleteHero(false);
+      setStepIndex(2);
+      return;
+    }
     setShowScanCompleteHero(false);
     void uploadAndCompleteOnboarding();
-  }, [uploadAndCompleteOnboarding]);
+  }, [isReviewingMeshFromPotential, uploadAndCompleteOnboarding]);
 
   const handleScanCompleteReviewPoses = React.useCallback(() => {
     setShowScanCompleteHero(false);
     setShowCapturedPreview(true);
   }, []);
 
+  const handleBackFromPotentialStep = React.useCallback(() => {
+    if (!canReopenMeshHero) return;
+    setIsReviewingMeshFromPotential(true);
+    reopenScanHeroAtMeshRef.current = true;
+    setStepIndex(2);
+    setShowCameraCapture(false);
+    setShowCapturedPreview(false);
+    setShowScanCompleteHero(true);
+  }, [canReopenMeshHero]);
+
   const openOnboardingCapture = React.useCallback(() => {
     if (
       !onboardingSessionId ||
       isScanStatusLoading ||
-      capturePhase === "ready_to_finalize"
+      capturePhase === "ready_to_finalize" ||
+      capturePhase === "post_onboarding"
     ) {
       return;
     }
@@ -613,8 +889,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     }
     setIsUnlocking(true);
     try {
-      writeOnboardingFlowState({ userId: user.id, step: 3, v: 2 });
-      setStepIndex(3);
+      writeOnboardingFlowState({ userId: user.id, step: 2, v: 2 });
+      setBillingPaywallOpen(true);
       setHasStartedRun(true);
     } finally {
       setIsUnlocking(false);
@@ -745,8 +1021,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
 
       <div
         className={cn(
-          "relative z-10 mx-auto flex min-h-0 w-full flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:px-6 sm:pb-5 sm:pt-5",
-          isBillingStep ? "max-w-5xl" : "max-w-3xl md:max-w-4xl xl:max-w-5xl",
+          "relative z-10 mx-auto flex min-h-0 w-full flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:px-6 sm:pb-5 sm:pt-5 max-w-3xl md:max-w-4xl xl:max-w-5xl",
         )}
       >
         <div className="flex min-h-0 w-full flex-1 flex-col gap-2 sm:gap-3">
@@ -759,22 +1034,34 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
               />
             </div>
 
-            {isPreCaptureIntroB &&
-            !showCameraCapture &&
-            !showScanCompleteHero ? (
+            {(isPreCaptureIntroB &&
+              !showCameraCapture &&
+              !showScanCompleteHero) ||
+            (isPotentialStep && canReopenMeshHero && !showScanCompleteHero) ? (
               <div className="flex items-center gap-2 sm:gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setStepIndex(0)}
+                  onClick={() =>
+                    isPotentialStep
+                      ? handleBackFromPotentialStep()
+                      : setStepIndex(0)
+                  }
                   className={cn(
                     "flex size-9 shrink-0 items-center justify-center rounded-full text-white/90",
                     "transition hover:bg-white/15 hover:text-white",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
                   )}
-                  aria-label={i18n(language, {
-                    en: "Previous step",
-                    fr: "Étape précédente",
-                  })}
+                  aria-label={
+                    isPotentialStep
+                      ? i18n(language, {
+                          en: "Back to 3D face preview",
+                          fr: "Retour à l’aperçu 3D du visage",
+                        })
+                      : i18n(language, {
+                          en: "Previous step",
+                          fr: "Étape précédente",
+                        })
+                  }
                 >
                   <ChevronLeft className="size-7" strokeWidth={2.35} aria-hidden />
                 </button>
@@ -830,25 +1117,60 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     ? "flex w-full flex-col overflow-hidden p-4 sm:p-6"
                     : cn(
                         "flex min-h-0 flex-1 flex-col overflow-hidden",
-                        isBillingStep
-                          ? "p-3 sm:p-5 md:p-6"
-                          : "px-4 pt-7 pb-8 sm:px-6 sm:pt-8 sm:pb-9 md:px-8 md:pt-9 md:pb-10 lg:px-10 lg:pt-10 lg:pb-11",
+                        "px-4 pt-7 pb-8 sm:px-6 sm:pt-8 sm:pb-9 md:px-8 md:pt-9 md:pb-10 lg:px-10 lg:pt-10 lg:pb-11",
                       ),
                   "mx-auto w-full",
-                  isBillingStep ? "max-w-full" : "max-w-[460px] md:max-w-2xl lg:max-w-3xl",
+                  "max-w-[460px] md:max-w-2xl lg:max-w-3xl",
                 )}
               >
-                {isBillingStep ? (
-                  <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-0 py-1 sm:px-1 sm:py-3 md:py-4">
-                    <BillingPaywall variant="embedded" />
-                  </div>
+                {showScanCompleteHero && heroHasMeshData ? (
+                  scanHeroPreludePhase === "mesh" ? (
+                  <OnboardingScanCompleteScreen
+                    language={language}
+                    frontalLandmarks={heroFrontalLandmarks!}
+                    landmarkFrame={
+                      heroFrontalFrame
+                        ? {
+                            width: heroFrontalFrame.width,
+                            height: heroFrontalFrame.height,
+                          }
+                        : undefined
+                    }
+                    onContinue={handleScanCompleteContinue}
+                    onReviewPoses={
+                      isReviewingMeshFromPotential
+                        ? undefined
+                        : handleScanCompleteReviewPoses
+                    }
+                    isContinuing={
+                      isReviewingMeshFromPotential ? false : isUploadingCaptures
+                    }
+                    isSavingCaptures={
+                      isReviewingMeshFromPotential ? false : isHeroUploading
+                    }
+                    continueDisabled={
+                      isReviewingMeshFromPotential
+                        ? false
+                        : !heroUploadDone &&
+                          !isOnboardingScanSessionComplete(scanStatus)
+                    }
+                  />
+                  ) : scanHeroPreludePhase === "geometry" ? (
+                    <OnboardingFacialGeometryLoader
+                      language={language}
+                      workCompleteSignal={geometryImageWorkDone}
+                      onExitComplete={handleGeometryLoaderExit}
+                    />
+                  ) : (
+                    <OnboardingScanCompleteSplash language={language} />
+                  )
                 ) : isPotentialStep ? (
                   <div
                     className={cn(
                       "flex min-h-0 flex-col px-1 py-2 sm:px-2 sm:py-4",
                       isPotentialBlockingLoad
-                        ? "justify-start overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
-                        : "flex-1 justify-center overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]",
+                        ? "justify-start overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                        : "flex-1 justify-center overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
                     )}
                   >
                     <PotentialPreviewCard
@@ -859,41 +1181,6 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                       isUnlocking={isUnlocking}
                     />
                   </div>
-                ) : showScanCompleteHero && frontalCapturePose?.landmarks ? (
-                  scanHeroPreludePhase === "mesh" ? (
-                  <OnboardingScanCompleteScreen
-                    language={language}
-                    frontalLandmarks={frontalCapturePose.landmarks}
-                    landmarkFrame={
-                      frontalCapturePose.landmarkFrameWidth &&
-                      frontalCapturePose.landmarkFrameHeight
-                        ? {
-                            width: frontalCapturePose.landmarkFrameWidth,
-                            height: frontalCapturePose.landmarkFrameHeight,
-                          }
-                        : undefined
-                    }
-                    eyeLandmarks={eyeCapturePose?.landmarks}
-                    eyeLandmarkFrame={
-                      eyeCapturePose?.landmarkFrameWidth &&
-                      eyeCapturePose?.landmarkFrameHeight
-                        ? {
-                            width: eyeCapturePose.landmarkFrameWidth,
-                            height: eyeCapturePose.landmarkFrameHeight,
-                          }
-                        : undefined
-                    }
-                    onContinue={handleScanCompleteContinue}
-                    onReviewPoses={handleScanCompleteReviewPoses}
-                    isContinuing={isUploadingCaptures}
-                    isSavingCaptures={isHeroUploading}
-                    continueDisabled={!heroUploadDone && !scanStatus?.is_ready}
-                  />
-                  ) : scanHeroPreludePhase === "geometry" ? (
-                    <OnboardingFacialGeometryLoader language={language} />
-                  ) : (
-                    <OnboardingScanCompleteSplash language={language} />
-                  )
                 ) : isOnboardingStep0Blocking ? (
                   <div className="flex min-h-0 flex-1 flex-col justify-center px-1 py-4 sm:px-2 sm:py-6">
                     <div className="mx-auto w-full max-w-sm">
@@ -1345,6 +1632,18 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
               })}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={billingPaywallOpen} onOpenChange={setBillingPaywallOpen}>
+        <DialogContent
+          aria-describedby={undefined}
+          className={cn(
+            "max-h-[min(90dvh,900px)] max-w-[min(100vw-1.25rem,56rem)] overflow-y-auto border-white/15 bg-zinc-950/96 p-4 text-zinc-50 shadow-[0_40px_120px_-80px_rgba(0,0,0,0.92)] backdrop-blur-xl sm:rounded-2xl sm:p-6",
+            "[&>button]:text-zinc-400 [&>button]:hover:bg-white/10 [&>button]:hover:text-white",
+          )}
+        >
+          <BillingPaywall variant="dialog" />
         </DialogContent>
       </Dialog>
     </div>

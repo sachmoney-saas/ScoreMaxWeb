@@ -16,6 +16,7 @@ import {
   FACEMESH_RIGHT_EYE_CANTHUS_LATERAL,
   FACEMESH_RIGHT_EYE_CANTHUS_MEDIAL,
   FACEMESH_RIGHT_EYE_ORDERED,
+  FACEMESH_SAGITTAL_HIGHLIGHT_ORDERED,
 } from './facemesh-feature-contours';
 import {
   FACEMESH_FACE_OVAL_JAW_LOWER_ARC_ORDERED,
@@ -30,6 +31,11 @@ const HIGHLIGHT_OPACITY = 0.92;
 
 type HighlightChain = readonly number[];
 
+const FACEMESH_CANTHAL_SEGMENTS: [number, number][] = [
+  [FACEMESH_RIGHT_EYE_CANTHUS_MEDIAL, FACEMESH_RIGHT_EYE_CANTHUS_LATERAL],
+  [FACEMESH_LEFT_EYE_CANTHUS_MEDIAL, FACEMESH_LEFT_EYE_CANTHUS_LATERAL],
+];
+
 function chainsForHighlight(highlight: HeroMetricHighlight): HighlightChain[] {
   switch (highlight) {
     case 'eyes':
@@ -41,17 +47,26 @@ function chainsForHighlight(highlight: HeroMetricHighlight): HighlightChain[] {
       return [FACEMESH_FACE_OVAL_JAW_LOWER_ARC_ORDERED];
     case 'shape':
       return [FACEMESH_FACE_OVAL_ORDERED];
+    case 'scan_summary':
+      return [FACEMESH_SAGITTAL_HIGHLIGHT_ORDERED];
     default:
       return [];
   }
 }
 
 function segmentsForHighlight(highlight: HeroMetricHighlight): [number, number][] {
-  if (highlight !== 'eyes') return [];
-  return [
-    [FACEMESH_RIGHT_EYE_CANTHUS_MEDIAL, FACEMESH_RIGHT_EYE_CANTHUS_LATERAL],
-    [FACEMESH_LEFT_EYE_CANTHUS_MEDIAL, FACEMESH_LEFT_EYE_CANTHUS_LATERAL],
-  ];
+  switch (highlight) {
+    case 'eyes':
+      return FACEMESH_CANTHAL_SEGMENTS;
+    case 'scan_summary':
+      return [
+        ...FACEMESH_CANTHAL_SEGMENTS,
+        [98, 327],
+        [61, 291],
+      ];
+    default:
+      return [];
+  }
 }
 
 export class FaceMeshHeroRenderer {

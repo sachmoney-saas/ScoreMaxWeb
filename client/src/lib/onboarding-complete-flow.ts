@@ -82,3 +82,35 @@ export async function completeOnboardingApi(params: {
 
   return { generationId };
 }
+
+/**
+ * Démarre la génération d’image potentiel (OneShot) dès que le scan est complet,
+ * **sans** marquer l’onboarding terminé sur le profil (réservé à `/onboarding/complete`).
+ * Permet d’attendre la fin du job avant d’afficher l’écran mesh.
+ */
+export async function startOnboardingPotentialGenerationApi(params: {
+  accessToken: string;
+  language: AppLanguage;
+}): Promise<{ generationId: string }> {
+  const res = await apiRequest(
+    "POST",
+    "/v1/onboarding/start-potential-generation",
+    undefined,
+    { Authorization: `Bearer ${params.accessToken}` },
+  );
+  const body = (await res.json()) as {
+    data?: { generation?: { id?: string } };
+  };
+
+  const generationId = body.data?.generation?.id;
+  if (!generationId) {
+    throw new Error(
+      i18n(params.language, {
+        en: "Unable to start your preview image",
+        fr: "Impossible de lancer l’image d’aperçu",
+      }),
+    );
+  }
+
+  return { generationId };
+}

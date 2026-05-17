@@ -68,6 +68,15 @@ export const scanAssets = pgTable("scan_assets", {
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const onboardingMeshReplays = pgTable("onboarding_mesh_replays", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  user_id: uuid("user_id").notNull(),
+  session_id: uuid("session_id").notNull(),
+  snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 /** Clé JSON dans `scan_assets.capture_metadata` — largeur bouche / largeur nez (segments repère 61↔291 vs 98↔327). */
 export const CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO = "mouth_to_nose_width_ratio" as const;
 /** Corde bouche sur ovale / corde ligne du haut (même géométrie que `GUIDE_TRACE_FACE_FRONT_OVAL`). */
