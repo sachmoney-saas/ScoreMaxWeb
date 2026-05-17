@@ -39,10 +39,10 @@ function CompleteAnalysisColoringCard({ language }: { language: AppLanguage }) {
       <p className={cn(cardTitleClass, "mb-2.5 !mt-0 sm:mb-3")}>
         {i18n(language, { en: "Coloring", fr: "Colorimétrie" })}
       </p>
-      <div className="grid grid-cols-4 gap-x-2.5 gap-y-3 rounded-xl border border-white/14 bg-white/[0.04] p-3 sm:gap-x-3 sm:p-3.5">
+      <div className="grid grid-cols-4 gap-x-1.5 gap-y-3 px-1 py-2 sm:gap-x-2 sm:px-1.5">
         {swatches.map((s) => (
           <div key={s.zone} className="flex min-w-0 flex-col items-center gap-2">
-            <span className="w-full text-center text-[11px] font-semibold uppercase leading-snug tracking-[0.06em] text-zinc-300 sm:text-xs sm:leading-tight">
+            <span className="w-full min-w-0 text-center text-[8px] font-semibold uppercase leading-tight tracking-[0.02em] text-zinc-300 sm:text-[9px] xl:text-[10px]">
               {s.zone}
             </span>
             <div

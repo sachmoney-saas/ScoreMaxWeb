@@ -58,12 +58,12 @@ const WORKER_RADAR_PRESETS = {
   },
   /** Landing / hero : schéma lisible sur grand écran. */
   xlarge: {
-    viewPadX: 100,
-    viewPadY: 92,
+    viewPadX: 124,
+    viewPadY: 112,
     size: 600,
-    maxRadius: 210,
-    labelOffset: 56,
-    fontSize: 18,
+    maxRadius: 202,
+    labelOffset: 66,
+    fontSize: 28,
     dotR: 5.8,
     polygonStroke: 2.15,
     maxWClass: "max-w-[min(100%,680px)]",
