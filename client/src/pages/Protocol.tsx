@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, Layers } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,25 +9,50 @@ import {
   educationalDisclaimerNoticeClassName,
   educationalDisclaimerWrapperClassName,
 } from "@/lib/educational-disclaimer";
-import { useProtocolBreakdown } from "@/lib/protocol";
 import { useAnalysisHistory } from "@/hooks/use-supabase";
 import { useAuth } from "@/hooks/use-auth";
-import { ProtocolRoutine } from "@/components/protocol/ProtocolRoutine";
-import { ProtocolWeekly } from "@/components/protocol/ProtocolWeekly";
-import { ProtocolGeneralRules } from "@/components/protocol/ProtocolGeneralRules";
-import { ProtocolEmptyExperience } from "@/components/protocol/ProtocolEmptyState";
-import { ProtocolItemCard } from "@/components/protocol/ProtocolItemCard";
-import { ProtocolSection } from "@/components/protocol/ProtocolSection";
+import {
+  useAssignStarterPresets,
+  useUserRoutine,
+} from "@/hooks/use-user-routine";
+import {
+  collectAvoidItems,
+  collectEverydayHabits,
+} from "@/lib/protocol-day";
 import { ProtocolHubNavTabs } from "@/components/protocol/ProtocolHubNavTabs";
 import { ProtocolPageShell, ProtocolPageTitle } from "@/components/protocol/ProtocolPageShell";
+import { ProtocolEmptyExperience } from "@/components/protocol/ProtocolEmptyState";
+import {
+  ProtocolTabs,
+  type ProtocolMainTab,
+} from "@/components/protocol/ProtocolTabs";
+import { RoutineDayCarousel } from "@/components/protocol/RoutineDayCarousel";
+import { RoutineAlwaysOn } from "@/components/protocol/RoutineAlwaysOn";
+import { AvoidTab } from "@/components/protocol/AvoidTab";
+import { STARTER_PRESET_IDS } from "@shared/protocol-presets";
 
 export default function ProtocolPage() {
   const language = useAppLanguage();
   const { user } = useAuth();
-  const breakdown = useProtocolBreakdown();
+  const routineQuery = useUserRoutine();
+  const {
+    mutate: assignMissingPresets,
+    isPending: isAssigningPresets,
+    isError: assignPresetsError,
+    error: assignPresetsErrorValue,
+  } = useAssignStarterPresets();
   const { data: history = [] } = useAnalysisHistory({ enabled: !!user?.id });
 
+  const [mainTab, setMainTab] = React.useState<ProtocolMainTab>("routine");
+  const [dayOffset, setDayOffset] = React.useState(0);
+
   const hubNav = <ProtocolHubNavTabs language={language} active="protocol" />;
+
+  const hasCompletedAnalysis = React.useMemo(
+    () =>
+      history.some((a) => a.status === "completed" && a.results.length > 0),
+    [history],
+  );
 
   const latestAnalysisId = React.useMemo(() => {
     const completed = history
@@ -40,7 +65,46 @@ export default function ProtocolPage() {
     return completed[0]?.id ?? null;
   }, [history]);
 
-  if (breakdown.isLoading) {
+  const missingPresetIds = React.useMemo(() => {
+    const active = new Set((routineQuery.data ?? []).map((p) => p.preset.id));
+    return STARTER_PRESET_IDS.filter((id) => !active.has(id));
+  }, [routineQuery.data]);
+
+  React.useEffect(() => {
+    if (!user?.id || !hasCompletedAnalysis) return;
+    if (routineQuery.isLoading || routineQuery.isFetching) return;
+    if (missingPresetIds.length === 0) return;
+    if (isAssigningPresets) return;
+
+    assignMissingPresets(missingPresetIds);
+  }, [
+    user?.id,
+    hasCompletedAnalysis,
+    routineQuery.isLoading,
+    routineQuery.isFetching,
+    missingPresetIds,
+    isAssigningPresets,
+    assignMissingPresets,
+  ]);
+
+  const presets = routineQuery.data ?? [];
+  const everydayHabits = React.useMemo(
+    () => collectEverydayHabits(presets, language),
+    [presets, language],
+  );
+  const avoidItems = React.useMemo(
+    () => collectAvoidItems(presets, language),
+    [presets, language],
+  );
+
+  const isLoading =
+    routineQuery.isLoading ||
+    (hasCompletedAnalysis && presets.length === 0 && isAssigningPresets);
+
+  const assignFailed =
+    hasCompletedAnalysis && presets.length === 0 && assignPresetsError;
+
+  if (isLoading) {
     const loadingLabel = i18n(language, {
       en: "Loading your protocol…",
       fr: "Chargement de ton protocole…",
@@ -63,7 +127,7 @@ export default function ProtocolPage() {
     );
   }
 
-  if (breakdown.error) {
+  if (routineQuery.error) {
     return (
       <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
         <Card className="border-rose-200 bg-rose-50/90 text-rose-950 shadow-none">
@@ -77,7 +141,7 @@ export default function ProtocolPage() {
                 })}
               </p>
               <p className="mt-1 text-xs text-rose-800/90">
-                {breakdown.error.message}
+                {routineQuery.error.message}
               </p>
             </div>
           </CardContent>
@@ -86,55 +150,66 @@ export default function ProtocolPage() {
     );
   }
 
-  if (breakdown.total === 0) {
+  if (assignFailed) {
+    return (
+      <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
+        <Card className="border-rose-200 bg-rose-50/90 text-rose-950 shadow-none">
+          <CardContent className="flex items-start gap-3 p-6 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+            <div>
+              <p className="font-semibold text-rose-900">
+                {i18n(language, {
+                  en: "Couldn't activate your routine.",
+                  fr: "Impossible d'activer ta routine.",
+                })}
+              </p>
+              <p className="mt-1 text-xs text-rose-800/90">
+                {assignPresetsErrorValue instanceof Error
+                  ? assignPresetsErrorValue.message
+                  : String(assignPresetsErrorValue)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </ProtocolPageShell>
+    );
+  }
+
+  if (!hasCompletedAnalysis || presets.length === 0) {
     return (
       <ProtocolEmptyExperience
         language={language}
         latestAnalysisId={latestAnalysisId}
+        variant="needs_analysis"
       />
     );
   }
 
   return (
     <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
-      <div className="space-y-8">
-        <ProtocolRoutine
-          itemsBySlot={breakdown.bySlot}
-          cures={breakdown.cures}
+      <div className="space-y-6">
+        <ProtocolTabs
           language={language}
+          active={mainTab}
+          onChange={setMainTab}
         />
 
-        <ProtocolWeekly
-          items={breakdown.bySlot.get("weekly") ?? []}
-          language={language}
-        />
-
-        <ProtocolGeneralRules
-          items={breakdown.bySlot.get("general") ?? []}
-          language={language}
-        />
-
-        {breakdown.uncategorised.length > 0 ? (
-          <ProtocolSection
-            variant="sheet"
-            title={i18n(language, {
-              en: "Other items",
-              fr: "Autres éléments",
-            })}
-            icon={Layers}
-            count={breakdown.uncategorised.length}
-          >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {breakdown.uncategorised.map((item) => (
-                <ProtocolItemCard
-                  key={item.action.id}
-                  item={item}
-                  language={language}
-                />
-              ))}
-            </div>
-          </ProtocolSection>
-        ) : null}
+        {mainTab === "routine" ? (
+          <div className="space-y-5" role="tabpanel">
+            <RoutineDayCarousel
+              language={language}
+              presets={presets}
+              selectedOffset={dayOffset}
+              onSelectedOffsetChange={setDayOffset}
+              userId={user?.id ?? null}
+            />
+            <RoutineAlwaysOn language={language} items={everydayHabits} />
+          </div>
+        ) : (
+          <div role="tabpanel">
+            <AvoidTab language={language} items={avoidItems} />
+          </div>
+        )}
 
         <div className={educationalDisclaimerWrapperClassName}>
           <p className={educationalDisclaimerNoticeClassName}>

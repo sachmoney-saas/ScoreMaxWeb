@@ -76,9 +76,13 @@ function useSidebarInsetBounds(anchorEl: HTMLElement | null): InsetBounds | null
   return bounds;
 }
 
+export type ProtocolEmptyVariant = "needs_analysis" | "legacy_saved";
+
 export interface ProtocolEmptyExperienceProps {
   language: AppLanguage;
   latestAnalysisId: string | null;
+  /** @default "legacy_saved" */
+  variant?: ProtocolEmptyVariant;
 }
 
 /**
@@ -90,23 +94,55 @@ export interface ProtocolEmptyExperienceProps {
 export function ProtocolEmptyExperience({
   language,
   latestAnalysisId,
+  variant = "legacy_saved",
 }: ProtocolEmptyExperienceProps) {
   const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
 
   const bounds = useSidebarInsetBounds(anchorEl);
 
-  const ctaHref = latestAnalysisId
-    ? `/app/analyses/${latestAnalysisId}`
-    : "/app";
+  const needsAnalysis = variant === "needs_analysis";
 
-  const ctaLabel = latestAnalysisId
+  const ctaHref = needsAnalysis
+    ? latestAnalysisId
+      ? `/app/analyses/${latestAnalysisId}`
+      : "/app"
+    : latestAnalysisId
+      ? `/app/analyses/${latestAnalysisId}`
+      : "/app";
+
+  const ctaLabel = needsAnalysis
     ? i18n(language, {
-        en: "Go to recommendations",
-        fr: "Aller aux recommandations",
+        en: "Run your first analysis",
+        fr: "Lancer ta première analyse",
+      })
+    : latestAnalysisId
+      ? i18n(language, {
+          en: "Go to recommendations",
+          fr: "Aller aux recommandations",
+        })
+      : i18n(language, {
+          en: "Open analyses",
+          fr: "Voir mes analyses",
+        });
+
+  const emptyTitle = needsAnalysis
+    ? i18n(language, {
+        en: "Your protocol starts after your first analysis",
+        fr: "Ton protocole démarre après ta première analyse",
       })
     : i18n(language, {
-        en: "Open analyses",
-        fr: "Voir mes analyses",
+        en: "Nothing in your protocol yet",
+        fr: "Aucun élément dans ton protocole pour l'instant",
+      });
+
+  const emptyDesc = needsAnalysis
+    ? i18n(language, {
+        en: "Complete a face analysis to unlock your personalised daily routine — skincare, habits, and what to avoid.",
+        fr: "Termine une analyse pour débloquer ta routine quotidienne sur mesure — soins, habitudes et éléments à bannir.",
+      })
+    : i18n(language, {
+        en: "When you open an analysis, use the Recommendations tab and add items with “Add to my protocol”. Everything you choose is collected here across all analyses, grouped by part of your day.",
+        fr: "Depuis une analyse, ouvre l'onglet Recommandations puis ajoute des éléments avec « Ajouter à mon protocole ». Tout ce que tu sélectionnes se retrouve ici pour tout le compte, groupé selon les moments du jour.",
       });
 
   const modalCard = (
@@ -127,19 +163,13 @@ export function ProtocolEmptyExperience({
         id="protocol-empty-title"
         className="mt-2 font-display text-xl font-bold tracking-tight text-zinc-950 sm:text-2xl"
       >
-        {i18n(language, {
-          en: "Nothing in your protocol yet",
-          fr: "Aucun élément dans ton protocole pour l'instant",
-        })}
+        {emptyTitle}
       </h2>
       <p
         id="protocol-empty-desc"
         className="mt-3 text-sm leading-relaxed text-zinc-600"
       >
-        {i18n(language, {
-          en: "When you open an analysis, use the Recommendations tab and add items with “Add to my protocol”. Everything you choose is collected here across all analyses, grouped by part of your day.",
-          fr: "Depuis une analyse, ouvre l'onglet Recommandations puis ajoute des éléments avec « Ajouter à mon protocole ». Tout ce que tu sélectionnes se retrouve ici pour tout le compte, groupé selon les moments du jour.",
-        })}
+        {emptyDesc}
       </p>
       <div className="mt-6">
         <Link href={ctaHref}>

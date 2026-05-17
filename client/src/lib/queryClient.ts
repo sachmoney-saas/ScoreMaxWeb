@@ -1,18 +1,61 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { AUTH_CONFIG } from "@/config/auth";
+import { supabase } from "@/lib/supabase";
 import {
   reportClientError,
   shouldSkipClientErrorReportingForUrl,
 } from "@/lib/report-client-error";
 
-async function throwIfResNotOk(res: Response, requestUrl: string) {
-  if (res.status === 401 || res.status === 403) {
-    // Session expired or unauthorized - clear cache and redirect
-    if (typeof window !== "undefined") {
-      queryClient.clear();
-      window.location.href = AUTH_CONFIG.LOGIN_PATH;
-    }
+let unauthorizedRedirectPromise: Promise<void> | null = null;
+
+function redirectToLogin() {
+  if (typeof window === "undefined") {
     return;
+  }
+
+  const loginPath = AUTH_CONFIG.LOGIN_PATH;
+  if (window.location.pathname !== loginPath) {
+    window.location.replace(loginPath);
+  }
+}
+
+async function handleUnauthorizedResponse(status: number, requestUrl: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!unauthorizedRedirectPromise) {
+    unauthorizedRedirectPromise = (async () => {
+      queryClient.clear();
+
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        reportClientError({
+          source: "auth.signout.unauthorized",
+          message: error.message,
+          payload: { path: requestUrl, status },
+        });
+      }
+
+      queryClient.clear();
+      redirectToLogin();
+    })().catch((error) => {
+      reportClientError({
+        source: "auth.signout.unauthorized.failed",
+        message: error instanceof Error ? error.message : String(error),
+        payload: { path: requestUrl, status },
+      });
+      redirectToLogin();
+    });
+  }
+
+  await unauthorizedRedirectPromise;
+}
+
+async function throwIfResNotOk(res: Response, requestUrl: string) {
+  if (res.status === 401) {
+    await handleUnauthorizedResponse(res.status, requestUrl);
+    throw new Error(`${res.status}: ${res.statusText || "Unauthorized"}`);
   }
 
   if (!res.ok) {
