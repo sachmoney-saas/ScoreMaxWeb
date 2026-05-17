@@ -1064,10 +1064,10 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
           </p>
         </div>
         <AnalysisJobAssetPreviewThumb
-          src={faceCheeksGuideSrc ?? faceShapeContourGuideSrc}
+          src={faceShapeContourGuideSrc ?? faceCheeksGuideSrc}
           alt={i18n(language, {
-            en: "Front-face scan overlay: cheek zones guide (bilateral)",
-            fr: "Repère zones joues (prise frontale, bilatéral)",
+            en: "Front-face scan overlay: face shape contour guide",
+            fr: "Repère contour de la forme du visage (prise frontale)",
           })}
           className={PREVIEW_SYM_SCAN_FRAME_CLASS}
           imgClassName={PREVIEW_SYM_SCAN_IMG_CLASSNAME}

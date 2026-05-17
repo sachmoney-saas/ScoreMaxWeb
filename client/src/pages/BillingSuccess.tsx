@@ -179,31 +179,7 @@ function AutoAnalysisBanner({
   }
 
   if (outcome.status === "already_running") {
-    return (
-      <div
-        className={`${bannerBaseClass} border-white/10 bg-white/[0.04] text-zinc-200`}
-        role="status"
-      >
-        <Sparkles
-          className="mt-0.5 h-4 w-4 shrink-0 text-zinc-300"
-          aria-hidden
-        />
-        <div className="space-y-1">
-          <p className="font-medium text-zinc-100">
-            {i18n(language, {
-              fr: "Analyse complète déjà en cours",
-              en: "Full analysis already in progress",
-            })}
-          </p>
-          <p className="text-xs leading-relaxed text-zinc-400">
-            {i18n(language, {
-              fr: "Tu la retrouves dans la barre latérale.",
-              en: "You can follow it in the sidebar.",
-            })}
-          </p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (outcome.status === "skipped_already_kicked") {

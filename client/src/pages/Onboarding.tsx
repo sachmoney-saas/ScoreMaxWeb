@@ -822,7 +822,11 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       setStepIndex(2);
       return;
     }
+    // Go straight to the transformation preview shell: its own skeleton handles
+    // the wait while captured poses are uploaded/finalized in the background.
     setShowScanCompleteHero(false);
+    setStepIndex(2);
+    setHasStartedRun(true);
     void uploadAndCompleteOnboarding();
   }, [isReviewingMeshFromPotential, uploadAndCompleteOnboarding]);
 

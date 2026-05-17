@@ -358,19 +358,6 @@ export function OnboardingScanCompleteScreen({
           ) : null}
           {continueLabel ?? i18n(language, { en: "Continue", fr: "Continuer" })}
         </button>
-        {onReviewPoses ? (
-          <button
-            type="button"
-            disabled={isContinuing || isSavingCaptures}
-            onClick={onReviewPoses}
-            className="w-full text-center text-[clamp(0.78rem,1.5vh,0.875rem)] font-medium text-zinc-400 underline-offset-4 hover:text-zinc-200 hover:underline disabled:opacity-50"
-          >
-            {i18n(language, {
-              en: "Review captured poses",
-              fr: "Vérifier les poses capturées",
-            })}
-          </button>
-        ) : null}
       </motion.div>
     </motion.div>
   );
