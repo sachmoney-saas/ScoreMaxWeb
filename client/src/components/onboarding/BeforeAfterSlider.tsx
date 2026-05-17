@@ -12,7 +12,7 @@ const DEFAULT_POSITION = 50;
  * provoquer de scroll.
  */
 export const beforeAfterMediaFrameClassName =
-  "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(28vh,15.5rem)] overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(32vh,17.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(36vh,19.5rem)] md:max-w-[min(100%,24rem)]";
+  "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(28vh,15.5rem)] overflow-visible rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(32vh,17.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(36vh,19.5rem)] md:max-w-[min(100%,24rem)]";
 
 type Props = {
   language: AppLanguage;
@@ -57,6 +57,7 @@ export function BeforeAfterSlider({
   const onPointerMove = React.useCallback(
     (event: React.PointerEvent) => {
       if (!isDragging) return;
+      event.preventDefault();
       updateFromClientX(event.clientX);
     },
     [isDragging, updateFromClientX],
@@ -114,7 +115,7 @@ export function BeforeAfterSlider({
         ref={containerRef}
         className={cn(
           beforeAfterMediaFrameClassName,
-          "select-none",
+          "touch-none select-none",
           isDragging && "cursor-ew-resize",
           showAfter &&
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
@@ -133,117 +134,120 @@ export function BeforeAfterSlider({
         onPointerMove={showAfter ? onPointerMove : undefined}
         onPointerUp={showAfter ? onPointerUp : undefined}
         onPointerCancel={showAfter ? onPointerUp : undefined}
+        onLostPointerCapture={showAfter ? onPointerUp : undefined}
       >
-      {showAfter ? (
-        <>
-          <img
-            src={afterSrc!}
-            alt={i18n(language, {
-              en: "Your AI-generated potential",
-              fr: "Ton potentiel généré par IA",
-            })}
-            decoding="async"
-            draggable={false}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          {beforeSrc ? (
-            <div
-              className="absolute inset-0 overflow-hidden"
-              style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
-              aria-hidden={position <= 0}
-            >
+        <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
+          {showAfter ? (
+            <>
               <img
-                src={beforeSrc}
+                src={afterSrc!}
                 alt={i18n(language, {
-                  en: "Your current look",
-                  fr: "Ton look actuel",
+                  en: "Your AI-generated potential",
+                  fr: "Ton potentiel généré par IA",
                 })}
                 decoding="async"
                 draggable={false}
                 className="absolute inset-0 h-full w-full object-cover"
               />
-            </div>
+              {beforeSrc ? (
+                <div
+                  className="absolute inset-0 overflow-hidden"
+                  style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
+                  aria-hidden={position <= 0}
+                >
+                  <img
+                    src={beforeSrc}
+                    alt={i18n(language, {
+                      en: "Your current look",
+                      fr: "Ton look actuel",
+                    })}
+                    decoding="async"
+                    draggable={false}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
+                </div>
+              )}
+            </>
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          {beforeSrc ? (
-            <img
-              src={beforeSrc}
-              alt={i18n(language, {
-                en: "Your current look",
-                fr: "Ton look actuel",
-              })}
-              decoding="async"
-              draggable={false}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
-            </div>
-          )}
+            <>
+              {beforeSrc ? (
+                <img
+                  src={beforeSrc}
+                  alt={i18n(language, {
+                    en: "Your current look",
+                    fr: "Ton look actuel",
+                  })}
+                  decoding="async"
+                  draggable={false}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
+                </div>
+              )}
 
-          <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.12),transparent_55%),linear-gradient(180deg,rgba(20,28,40,0.55),rgba(10,16,22,0.75))]">
-            <Loader2 className="h-6 w-6 shrink-0 animate-spin text-white/80" aria-hidden />
-            <p className="px-4 text-center text-[11px] font-medium leading-snug text-white/85 sm:text-xs">
-              {i18n(language, {
-                en: "Generating your potential…",
-                fr: "Génération de ton potentiel…",
-              })}
-            </p>
-          </div>
-        </>
-      )}
+              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.12),transparent_55%),linear-gradient(180deg,rgba(20,28,40,0.55),rgba(10,16,22,0.75))]">
+                <Loader2 className="h-6 w-6 shrink-0 animate-spin text-white/80" aria-hidden />
+                <p className="px-4 text-center text-[11px] font-medium leading-snug text-white/85 sm:text-xs">
+                  {i18n(language, {
+                    en: "Generating your potential…",
+                    fr: "Génération de ton potentiel…",
+                  })}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
 
-      {(showAfter || beforeSrc) && (
-        <>
-          <div className="pointer-events-none absolute left-2 top-2 z-20 max-w-[min(12rem,46%)] sm:left-2.5 sm:top-2.5">
-            <span className={cn(pillClass, "block text-left")}>{beforeLabel}</span>
-          </div>
-          {showAfter ? (
-            <div
-              className="pointer-events-none absolute right-2 top-2 z-20 max-w-[min(13.5rem,50%)] sm:right-2.5 sm:top-2.5"
-              aria-label={afterLabelAria}
-            >
-              <span
-                className={cn(
-                  pillClass,
-                  "inline-flex flex-col items-end gap-0 leading-[1.08] text-right",
-                )}
+        {(showAfter || beforeSrc) && (
+          <>
+            <div className="pointer-events-none absolute left-2 top-2 z-20 max-w-[min(12rem,46%)] sm:left-2.5 sm:top-2.5">
+              <span className={cn(pillClass, "block text-left")}>{beforeLabel}</span>
+            </div>
+            {showAfter ? (
+              <div
+                className="pointer-events-none absolute right-2 top-2 z-20 max-w-[min(13.5rem,50%)] sm:right-2.5 sm:top-2.5"
+                aria-label={afterLabelAria}
               >
-                <span>{afterLabelLine1}</span>
-                <span>{afterLabelLine2}</span>
-              </span>
+                <span
+                  className={cn(
+                    pillClass,
+                    "inline-flex flex-col items-end gap-0 leading-[1.08] text-right",
+                  )}
+                >
+                  <span>{afterLabelLine1}</span>
+                  <span>{afterLabelLine2}</span>
+                </span>
+              </div>
+            ) : null}
+          </>
+        )}
+
+        {showAfter ? (
+          <>
+            <div
+              className="pointer-events-none absolute inset-y-0 z-10 w-0"
+              style={{ left: `${position}%` }}
+              aria-hidden
+            >
+              <div className="absolute inset-y-0 -left-px w-0.5 bg-white/90 shadow-[0_0_12px_rgba(0,0,0,0.45)]" />
             </div>
-          ) : null}
-        </>
-      )}
 
-      {showAfter ? (
-        <>
-          <div
-            className="pointer-events-none absolute inset-y-0 z-10 w-0"
-            style={{ left: `${position}%` }}
-            aria-hidden
-          >
-            <div className="absolute inset-y-0 -left-px w-0.5 bg-white/90 shadow-[0_0_12px_rgba(0,0,0,0.45)]" />
-          </div>
-
-          <div
-            className={cn(
-              "pointer-events-none absolute top-1/2 z-30 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-[rgba(10,16,22,0.82)] shadow-[0_8px_28px_-12px_rgba(0,0,0,0.85)] backdrop-blur-md transition-transform sm:h-12 sm:w-12",
-              isDragging && "scale-105",
-            )}
-            style={{ left: `${position}%` }}
-            aria-hidden
-          />
-        </>
-      ) : null}
+            <div
+              className={cn(
+                "pointer-events-none absolute top-1/2 z-30 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-[rgba(10,16,22,0.82)] shadow-[0_8px_28px_-12px_rgba(0,0,0,0.85)] backdrop-blur-md transition-transform sm:h-12 sm:w-12",
+                isDragging && "scale-105",
+              )}
+              style={{ left: `${position}%` }}
+              aria-hidden
+            />
+          </>
+        ) : null}
       </div>
     </div>
   );
