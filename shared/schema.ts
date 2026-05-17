@@ -2,28 +2,39 @@ import { pgTable, text, timestamp, uuid, boolean, integer, bigint, jsonb, primar
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+/**
+ * `profiles` row shape.
+ *
+ * Real Postgres PK is `user_id` (FK → `auth.users(id)`); the legacy `id`
+ * column is a `GENERATED ALWAYS AS (user_id) STORED` mirror so existing
+ * front-end code doing `.eq("id", auth.uid())` keeps working. Server code
+ * should prefer `user_id`. New consumers must use `user_id`.
+ */
 export const profiles = pgTable("profiles", {
-  id: uuid("id").primaryKey(),
+  user_id: uuid("user_id").primaryKey().notNull(),
+  /** Legacy alias for `user_id` (generated stored). Do not write to it. */
+  id: uuid("id"),
   email: text("email"),
+  /** OAuth-provided display name (Google/Apple). May differ from `full_name`. */
+  display_name: text("display_name"),
   full_name: text("full_name"),
   avatar_url: text("avatar_url"),
+  /** ISO 639-1 locale, defaults to `'fr'`. */
+  locale: text("locale").default("fr").notNull(),
   role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
   is_subscriber: boolean("is_subscriber").default(false).notNull(),
-  stripe_customer_id: text("stripe_customer_id"),
-  stripe_subscription_id: text("stripe_subscription_id"),
   /**
    * Dodo Payments customer id (`cus_...`). Set on first successful checkout,
    * reused for portal sessions and reconciliation across webhooks.
    */
   dodo_customer_id: text("dodo_customer_id"),
-  subscription_status: text("subscription_status"),
   has_accepted_terms: boolean("has_accepted_terms").default(false).notNull(),
   has_completed_onboarding: boolean("has_completed_onboarding").default(false).notNull(),
   /** True after any subscription row or billing customer id (persists after cancel). */
   has_ever_subscribed: boolean("has_ever_subscribed").default(false).notNull(),
   last_active_at: timestamp("last_active_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
 export const scanAssetTypes = pgTable("scan_asset_types", {
@@ -64,6 +75,15 @@ export const scanAssets = pgTable("scan_assets", {
   /** Métriques côté client (repères, etc.) pour l’asset correspondant. */
   capture_metadata: jsonb("capture_metadata").$type<Record<string, unknown>>().default({}).notNull(),
   captured_at: timestamp("captured_at", { withTimezone: true }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const onboardingMeshReplays = pgTable("onboarding_mesh_replays", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  user_id: uuid("user_id").notNull(),
+  session_id: uuid("session_id").notNull(),
+  snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

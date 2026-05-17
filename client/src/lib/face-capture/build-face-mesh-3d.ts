@@ -7,7 +7,12 @@ import {
 } from './facemesh-feature-contours';
 import type { LandmarkPoint } from './types';
 
-export type HeroMetricHighlight = 'eyes' | 'jaw' | 'shape' | 'full';
+export type HeroMetricHighlight =
+  | 'eyes'
+  | 'jaw'
+  | 'shape'
+  | 'full'
+  | 'scan_summary';
 
 export interface FaceMesh3DPositions {
   positions: Float32Array;

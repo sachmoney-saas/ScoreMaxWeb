@@ -72,4 +72,31 @@ describe("onboarding-resume", () => {
       }),
     ).toBe("needs_capture");
   });
+
+  it("deriveOnboardingCapturePhase returns post_onboarding when profile finalized", () => {
+    expect(
+      deriveOnboardingCapturePhase({
+        hasCompletedOnboarding: true,
+        scanStatus: partialStatus,
+        isScanStatusLoading: false,
+        isScanStatusError: false,
+      }),
+    ).toBe("post_onboarding");
+  });
+
+  it("deriveOnboardingCapturePhase returns ready_to_finalize when assets match required even if is_ready lags", () => {
+    const lagReady: OnboardingScanStatus = {
+      ...readyStatus,
+      is_ready: false,
+    };
+    expect(
+      deriveOnboardingCapturePhase({
+        hasCompletedOnboarding: false,
+        scanStatus: lagReady,
+        isScanStatusLoading: false,
+        isScanStatusError: false,
+      }),
+    ).toBe("ready_to_finalize");
+    expect(hasPartialOnboardingUpload(lagReady)).toBe(false);
+  });
 });

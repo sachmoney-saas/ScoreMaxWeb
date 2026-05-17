@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { reportClientError } from "@/lib/report-client-error";
@@ -269,11 +270,18 @@ export function useOnboardingScanStatus(options?: { enabled?: boolean }) {
 
 /**
  * Hook for loading the latest persisted face analysis orchestration result.
+ *
+ * Side-effect: when a job transitions from in-flight (queued/running) to
+ * terminal (completed/failed/canceled), we eagerly invalidate the weekly
+ * standard-quota query so any UI gated on `has_standard_in_flight`
+ * (e.g. the "Analysis running" sidebar badge) updates immediately instead
+ * of waiting for the quota's own 45s polling tick.
  */
 export function useAnalysisHistory(options?: { enabled?: boolean }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  return useQuery<AnalysisHistoryItem[]>({
+  const query = useQuery<AnalysisHistoryItem[]>({
     queryKey: ["analysis-history", user?.id],
     queryFn: async () => {
       if (!user?.id) {
@@ -288,14 +296,35 @@ export function useAnalysisHistory(options?: { enabled?: boolean }) {
       return fetchAnalysisHistory(user.id, authHeaders);
     },
     enabled: !!user?.id && (options?.enabled ?? true),
-    refetchInterval: (query) => {
-      const history = query.state.data ?? [];
-      return history.some((item) => item.status === "queued" || item.status === "running")
+    refetchInterval: (q) => {
+      const history = q.state.data ?? [];
+      return history.some(
+        (item) => item.status === "queued" || item.status === "running",
+      )
         ? 2500
         : false;
     },
     staleTime: 0,
   });
+
+  const wasInFlightRef = useRef(false);
+  useEffect(() => {
+    const history = query.data ?? [];
+    const inFlight = history.some(
+      (item) => item.status === "queued" || item.status === "running",
+    );
+    if (wasInFlightRef.current && !inFlight && user?.id) {
+      void queryClient.invalidateQueries({
+        queryKey: ["subscriber-standard-quota", user.id],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["latest-face-analysis", user.id],
+      });
+    }
+    wasInFlightRef.current = inFlight;
+  }, [query.data, queryClient, user?.id]);
+
+  return query;
 }
 
 export function useDeleteAnalysisJob() {

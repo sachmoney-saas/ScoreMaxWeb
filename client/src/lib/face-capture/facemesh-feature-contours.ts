@@ -31,6 +31,14 @@ export const FACEMESH_LEFT_EYE_CANTHUS_MEDIAL = 362;
 export const FACEMESH_LEFT_EYE_CANTHUS_LATERAL = 263;
 
 /**
+ * Ligne médiane verticale (front → menton) pour le masque récapitulatif post-scan.
+ * Ordre : front, glabelle, pont / arête du nez, pointe, subnasale, lèvre sup., menton.
+ */
+export const FACEMESH_SAGITTAL_HIGHLIGHT_ORDERED: number[] = [
+  10, 151, 9, 8, 168, 6, 2, 164, 17, 152,
+];
+
+/**
  * Sillons / base du nez (une boucle : aile → columelle → aile), arêtes du graphe `FACEMESH_NOSE`.
  */
 export const FACEMESH_NOSE_BOTTOM_ORDERED: number[] = [

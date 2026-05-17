@@ -201,8 +201,8 @@ const SCANFACE_WORKERS = [
  * Build the per-worker analyses array sent to the API.
  *
  * `tier` controls the number of runs requested per worker:
- *   - "freemium" → 2 runs (used during onboarding, ~2.5× cheaper than standard)
- *   - "standard" → 5 runs (default for paid re-analyses)
+ *   - "freemium" → 2 runs (used during onboarding, cheapest tier)
+ *   - "standard" → 3 runs (default for paid re-analyses)
  *
  * `imageId` is intentionally omitted — ScanFace resolves images from
  * `images[]` using the prompt's `requiredImageSlots`.
@@ -593,11 +593,15 @@ export async function runFaceAnalysis(params: {
   requestId: string;
   sessionId: string;
   userId: string;
+  /** Jeton Supabase de l’utilisateur — requis par `requirePremiumAccess` côté serveur. */
+  accessToken: string;
   tier?: AnalysisTier;
   lang?: AppLanguage;
 }): Promise<AnalysisLaunchResponse> {
   const payload = await buildFaceAnalysisRequest(params);
-  const response = await apiRequest("POST", "/v1/analyses", payload);
+  const response = await apiRequest("POST", "/v1/analyses", payload, {
+    Authorization: `Bearer ${params.accessToken}`,
+  });
   const json = (await response.json()) as {
     data: AnalysisLaunchResponse;
   };

@@ -29,6 +29,7 @@ import Protocol from "@/pages/Protocol";
 import ProtocolRecommendations from "@/pages/ProtocolRecommendations";
 import Settings from "@/pages/Settings";
 import SupportClient from "@/pages/SupportClient";
+import ErrorSupportClient from "@/pages/ErrorSupportClient";
 import Billing from "@/pages/Billing";
 import BillingSuccess from "@/pages/BillingSuccess";
 import MentionsLegales from "@/pages/MentionsLegales";
@@ -38,8 +39,10 @@ import { AUTH_CONFIG } from "@/config/auth";
 import { LanguageProvider } from "@/lib/i18n";
 import { BrandLoader } from "@/components/ui/brand-loader";
 import { useAuth } from "@/hooks/use-auth";
+import { useOnboardingScanStatus } from "@/hooks/use-supabase";
 import {
   readOnboardingFlowState,
+  resolveOnboardingCaptureInitialStep,
   resolveOnboardingInitialStepForReturningUser,
 } from "@/lib/onboarding-flow-storage";
 
@@ -107,15 +110,27 @@ function BillingLayout({ children }: { children: React.ReactNode }) {
 }
 
 function OnboardingRoute() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const access = useUserAccess();
   const shouldCheckPaywallFunnel =
     access.kind === "onboarding_paywall_funnel";
+  const needsOnboardingCapture = access.kind === "needs_onboarding_capture";
+
+  const {
+    data: scanStatusForRoute,
+    isLoading: isScanRouteLoading,
+    isError: isScanRouteError,
+  } = useOnboardingScanStatus({
+    enabled: !!user?.id && needsOnboardingCapture,
+  });
+
+  const prefetchPotentialForOnboarding =
+    shouldCheckPaywallFunnel || needsOnboardingCapture;
   const {
     data: potentialImage,
     isLoading: isPotentialImageLoading,
   } = useOnboardingPotentialImage({
-    enabled: shouldCheckPaywallFunnel,
+    enabled: prefetchPotentialForOnboarding,
   });
 
   if (access.isLoading) {
@@ -130,8 +145,9 @@ function OnboardingRoute() {
     return <Redirect to={AUTH_CONFIG.REDIRECT_PATH} />;
   }
 
-  if (access.kind === "onboarding_paywall_funnel") {
-    const persistedStep = readOnboardingFlowState(user?.id)?.step ?? null;
+  const persistedStep = readOnboardingFlowState(user?.id)?.step ?? null;
+
+  if (shouldCheckPaywallFunnel) {
     const initialStep = resolveOnboardingInitialStepForReturningUser({
       persistedStep,
       hasPotentialImage: !!potentialImage,
@@ -149,6 +165,35 @@ function OnboardingRoute() {
     return (
       <ErrorBoundary>
         <Onboarding initialStep={initialStep} />
+      </ErrorBoundary>
+    );
+  }
+
+  if (needsOnboardingCapture) {
+    const entry = resolveOnboardingCaptureInitialStep({
+      persistedStep,
+      hasCompletedOnboarding: profile?.has_completed_onboarding === true,
+      scanStatus: scanStatusForRoute,
+      isScanLoading: isScanRouteLoading,
+      isScanError: isScanRouteError,
+    });
+
+    if (entry === "wait") {
+      return <FullScreenLoader />;
+    }
+
+    if (
+      entry === 2 &&
+      isPotentialImageLoading &&
+      !potentialImage &&
+      (persistedStep ?? 0) < 2
+    ) {
+      return <FullScreenLoader />;
+    }
+
+    return (
+      <ErrorBoundary>
+        <Onboarding initialStep={entry} />
       </ErrorBoundary>
     );
   }
@@ -192,6 +237,8 @@ function Router() {
         <Route path="/confidentialite">
           <Redirect to="/privacy" />
         </Route>
+
+        <Route path="/support/error" component={ErrorSupportClient} />
 
         <Route path={AUTH_CONFIG.LOGIN_PATH}>
           <AuthRedirectRoute />

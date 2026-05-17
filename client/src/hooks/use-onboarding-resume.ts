@@ -5,6 +5,7 @@ import { completeOnboardingApi } from "@/lib/onboarding-complete-flow";
 import {
   deriveOnboardingCapturePhase,
   hasPartialOnboardingUpload,
+  isOnboardingScanSessionComplete,
   type OnboardingCapturePhase,
 } from "@/lib/onboarding-resume";
 import { writeOnboardingFlowState } from "@/lib/onboarding-flow-storage";
@@ -13,10 +14,7 @@ import { queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
 import type { OnboardingScanStatus } from "@shared/schema";
 
-export function useOnboardingResume(options: {
-  captureStepActive: boolean;
-  language: AppLanguage;
-}) {
+export function useOnboardingResume(options: { language: AppLanguage }) {
   const { user, profile } = useAuth();
   const hasCompletedOnboarding = profile?.has_completed_onboarding === true;
 
@@ -25,7 +23,7 @@ export function useOnboardingResume(options: {
     isLoading: isScanStatusLoading,
     isError: isScanStatusError,
   } = useOnboardingScanStatus({
-    enabled: options.captureStepActive && !!user?.id,
+    enabled: !!user?.id,
   });
 
   const [isFinalizing, setIsFinalizing] = React.useState(false);
@@ -50,7 +48,10 @@ export function useOnboardingResume(options: {
       return true;
     }
 
-    if (!scanStatus?.is_ready || !scanStatus.session_id) {
+    if (
+      !isOnboardingScanSessionComplete(scanStatus) ||
+      !scanStatus?.session_id
+    ) {
       return false;
     }
 
@@ -89,8 +90,7 @@ export function useOnboardingResume(options: {
   }, [
     hasCompletedOnboarding,
     options.language,
-    scanStatus?.is_ready,
-    scanStatus?.session_id,
+    scanStatus,
     user?.id,
   ]);
 

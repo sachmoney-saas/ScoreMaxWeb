@@ -1083,7 +1083,7 @@ function RecentUsers({ profiles }: { profiles: AdminProfile[] }) {
               <RoleBadge role={profile.role} />
             </div>
             <p className="mt-3 text-xs text-zinc-400">
-              Inscrit le {formatDate(profile.created_at ?? profile.createdAt, "dd MMM yyyy")}
+              Inscrit le {formatDate(profile.created_at, "dd MMM yyyy")}
             </p>
           </div>
         ))}
@@ -1252,7 +1252,7 @@ function UserManagement(props: UserManagementProps) {
                           </Button>
                         </TableCell>
                         <TableCell className="text-sm text-zinc-400">
-                          {formatDate(profile.created_at ?? profile.createdAt, "dd/MM/yyyy")}
+                          {formatDate(profile.created_at, "dd/MM/yyyy")}
                         </TableCell>
                         <TableCell className="text-right">
                           <DeleteUserDialog

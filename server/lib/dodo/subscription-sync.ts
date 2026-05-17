@@ -6,6 +6,7 @@ import { supabaseAdmin } from "../supabase-admin";
 import { logger } from "../logger";
 import { maybeKickoffPaidAnalysisForUser } from "../post-payment-analysis";
 import { DODO_METADATA_USER_ID_KEY } from "./checkout";
+import { getDodoEnv } from "./env";
 
 type DodoSubscriptionStatus = DodoSubscription["status"];
 
@@ -18,13 +19,6 @@ type WebhookSubscriptionEventType =
   | "subscription.cancelled"
   | "subscription.failed"
   | "subscription.expired";
-
-type DbSubscriptionRow = {
-  id: string;
-  status: SubscriptionStatus;
-  current_period_end: string | null;
-  metadata: Record<string, unknown>;
-};
 
 /**
  * Whether the subscription should still grant premium access in our DB.
@@ -86,10 +80,35 @@ function extractScoreMaxUserId(subscription: DodoSubscription): string | null {
   return null;
 }
 
-function extractPlan(subscription: DodoSubscription): Plan | null {
-  const candidate = subscription.metadata?.plan;
-  if (typeof candidate === "string" && isPlan(candidate)) {
-    return candidate;
+/**
+ * Resolve the canonical `Plan` for a Dodo subscription.
+ *
+ * Priority order:
+ *   1. `product_id` lookup against our configured Dodo products (single
+ *      source of truth — survives upgrades/downgrades via the customer
+ *      portal where our checkout `metadata.plan` is no longer accurate).
+ *   2. `metadata.plan` set at checkout (legacy fallback for accounts created
+ *      before the product map existed, and for safety during env rotation).
+ */
+function resolvePlanFromSubscription(
+  subscription: DodoSubscription,
+): Plan | null {
+  try {
+    const env = getDodoEnv();
+    for (const [plan, productId] of Object.entries(env.productIds) as Array<
+      [Plan, string]
+    >) {
+      if (productId === subscription.product_id) {
+        return plan;
+      }
+    }
+  } catch {
+    // env not configured (tests, partial bootstraps) — fall back to metadata.
+  }
+
+  const metadataPlan = subscription.metadata?.plan;
+  if (typeof metadataPlan === "string" && isPlan(metadataPlan)) {
+    return metadataPlan;
   }
   return null;
 }
@@ -99,7 +118,7 @@ async function resolveUserIdFromCustomerId(
 ): Promise<string | null> {
   const { data, error } = await supabaseAdmin
     .from("profiles")
-    .select("id")
+    .select("user_id")
     .eq("dodo_customer_id", customerId)
     .maybeSingle();
 
@@ -112,7 +131,7 @@ async function resolveUserIdFromCustomerId(
     });
   }
 
-  return (data?.id as string | undefined) ?? null;
+  return (data?.user_id as string | undefined) ?? null;
 }
 
 async function persistDodoCustomerId(params: {
@@ -122,7 +141,7 @@ async function persistDodoCustomerId(params: {
   const { error } = await supabaseAdmin
     .from("profiles")
     .update({ dodo_customer_id: params.dodoCustomerId })
-    .eq("id", params.userId)
+    .eq("user_id", params.userId)
     .is("dodo_customer_id", null);
 
   if (error) {
@@ -134,93 +153,87 @@ async function persistDodoCustomerId(params: {
   }
 }
 
-async function findExistingDodoSubscriptionRow(
-  externalSubscriptionId: string,
-): Promise<DbSubscriptionRow | null> {
-  const { data, error } = await supabaseAdmin
-    .from("user_subscriptions")
-    .select("id, status, current_period_end, metadata")
-    .eq("source", "dodo")
-    .eq("external_subscription_id", externalSubscriptionId)
-    .maybeSingle();
+type UpsertOutcome = {
+  id: string;
+  isFirstInsert: boolean;
+  dbStatus: SubscriptionStatus;
+};
 
-  if (error) {
-    throw new ApiError({
-      code: "INTERNAL_SERVER_ERROR",
-      status: 500,
-      message: "Unable to load existing Dodo subscription row",
-      details: error,
-    });
-  }
+type ApplyDodoActiveRpcRow = {
+  subscription_row_id: string;
+  is_first_insert: boolean;
+  was_active_before: boolean;
+};
 
-  return (data as DbSubscriptionRow | null) ?? null;
-}
-
-async function upsertSubscriptionRow(params: {
+/**
+ * Atomic apply of a Dodo subscription row.
+ *
+ * Uses the dedicated RPC `scoremax_apply_dodo_active_subscription` which:
+ *   - cancels any *other* active dodo row for the same user (prevents the
+ *     partial unique index `scoremax_user_subscriptions_active_uidx` from
+ *     blowing up when a user re-subscribes during a cancel-at-eob grace),
+ *   - performs the atomic UPSERT on `(source, external_subscription_id)`,
+ *   - returns whether the row was just created (drives the "first activation
+ *     → kick off the analysis" decision).
+ */
+async function applySubscriptionRow(params: {
   userId: string;
   subscription: DodoSubscription;
-  existing: DbSubscriptionRow | null;
   plan: Plan | null;
-}): Promise<{ id: string; isFirstInsert: boolean; dbStatus: SubscriptionStatus }> {
-  const { subscription, userId, existing, plan } = params;
+}): Promise<UpsertOutcome> {
+  const { subscription, userId, plan } = params;
 
   const dbStatus = mapDodoStatusToDbStatus(
     subscription.status,
     subscription.cancel_at_next_billing_date,
   );
 
-  const payload = {
-    user_id: userId,
-    status: dbStatus,
-    source: "dodo" as const,
-    current_period_start: subscription.previous_billing_date,
-    current_period_end: subscription.next_billing_date,
-    external_subscription_id: subscription.subscription_id,
-    metadata: {
-      dodo_customer_id: subscription.customer.customer_id,
-      product_id: subscription.product_id,
-      plan,
-      dodo_status: subscription.status,
-      cancel_at_next_billing_date: subscription.cancel_at_next_billing_date,
-      currency: subscription.currency,
-      recurring_pre_tax_amount: subscription.recurring_pre_tax_amount,
-    } satisfies Record<string, unknown>,
-  };
+  const metadata = {
+    dodo_customer_id: subscription.customer.customer_id,
+    product_id: subscription.product_id,
+    plan,
+    dodo_status: subscription.status,
+    cancel_at_next_billing_date: subscription.cancel_at_next_billing_date,
+    currency: subscription.currency,
+    recurring_pre_tax_amount: subscription.recurring_pre_tax_amount,
+  } satisfies Record<string, unknown>;
 
-  if (existing) {
-    const { error } = await supabaseAdmin
-      .from("user_subscriptions")
-      .update(payload)
-      .eq("id", existing.id);
+  const { data, error } = await supabaseAdmin.rpc(
+    "scoremax_apply_dodo_active_subscription",
+    {
+      p_user_id: userId,
+      p_external_subscription_id: subscription.subscription_id,
+      p_status: dbStatus,
+      p_current_period_start: subscription.previous_billing_date,
+      p_current_period_end: subscription.next_billing_date,
+      p_metadata: metadata,
+    },
+  );
 
-    if (error) {
-      throw new ApiError({
-        code: "INTERNAL_SERVER_ERROR",
-        status: 500,
-        message: "Unable to update Dodo subscription row",
-        details: error,
-      });
-    }
-
-    return { id: existing.id, isFirstInsert: false, dbStatus };
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("user_subscriptions")
-    .insert(payload)
-    .select("id")
-    .single();
-
-  if (error || !data) {
+  if (error) {
     throw new ApiError({
       code: "INTERNAL_SERVER_ERROR",
       status: 500,
-      message: "Unable to insert Dodo subscription row",
+      message: "Unable to upsert Dodo subscription row",
       details: error,
     });
   }
 
-  return { id: data.id as string, isFirstInsert: true, dbStatus };
+  const rows = (data ?? []) as ApplyDodoActiveRpcRow[];
+  const row = rows[0];
+  if (!row) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Dodo subscription RPC returned no row",
+    });
+  }
+
+  return {
+    id: row.subscription_row_id,
+    isFirstInsert: row.is_first_insert,
+    dbStatus,
+  };
 }
 
 async function insertSubscriptionEvent(params: {
@@ -252,13 +265,19 @@ async function insertSubscriptionEvent(params: {
 /**
  * Apply a Dodo subscription webhook event to our DB:
  *   - persist the customer id on `profiles` the first time we see it,
- *   - upsert the matching row in `user_subscriptions` (active/canceled/expired),
- *   - append an audit row in `subscription_events`.
+ *   - atomically upsert the matching row in `user_subscriptions`
+ *     (cancelling any stale active row for the same user beforehand),
+ *   - append an audit row in `subscription_events`,
+ *   - on a fresh `subscription.active`, kick off the post-payment analysis.
  *
  * Idempotent: the (source='dodo', external_subscription_id) unique index in
- * Supabase guarantees a single row per Dodo subscription, and a repeat delivery
- * just overwrites the payload with the latest payload — which Dodo guarantees
- * is the freshest snapshot of the subscription at the time of delivery.
+ * Supabase guarantees a single row per Dodo subscription, and a repeat
+ * delivery just overwrites the payload with the latest snapshot.
+ *
+ * Errors from the analysis kickoff are propagated so Dodo retries the
+ * webhook delivery — that gives us a second chance to enqueue the job.
+ * A separate periodic job (`/v1/admin/dodo/kickoff-missing-analyses`)
+ * acts as a long-tail safety net.
  */
 export async function applyDodoSubscriptionEvent(params: {
   eventType: WebhookSubscriptionEventType;
@@ -286,15 +305,11 @@ export async function applyDodoSubscriptionEvent(params: {
 
   await persistDodoCustomerId({ userId, dodoCustomerId: customerId });
 
-  const existing = await findExistingDodoSubscriptionRow(
-    subscription.subscription_id,
-  );
-  const plan = extractPlan(subscription);
+  const plan = resolvePlanFromSubscription(subscription);
 
-  const { id, isFirstInsert, dbStatus } = await upsertSubscriptionRow({
+  const { id, isFirstInsert, dbStatus } = await applySubscriptionRow({
     userId,
     subscription,
-    existing,
     plan,
   });
 
@@ -306,20 +321,19 @@ export async function applyDodoSubscriptionEvent(params: {
       dodo_event_type: eventType,
       dodo_subscription_id: subscription.subscription_id,
       dodo_status: subscription.status,
+      product_id: subscription.product_id,
+      plan,
     },
   });
 
-  if (
-    eventType === "subscription.active" &&
-    isFirstInsert &&
-    dbStatus === "active"
-  ) {
-    void maybeKickoffPaidAnalysisForUser(userId).catch((err) => {
-      logger.error(
-        { err, userId },
-        "post-payment: failed to kick off analysis after first subscription activation",
-      );
-    });
+  if (eventType === "subscription.active" && dbStatus === "active") {
+    // Awaited on purpose: if the kickoff fails (transient DB issue, R2 hiccup,
+    // ScoreMax API timeout, …), we let the error bubble up. The webhook
+    // handler marks the delivery as errored, returns 5xx, and Dodo retries
+    // with exponential backoff. `maybeKickoffPaidAnalysisForUser` is itself
+    // idempotent (it skips when an analysis job already exists), so the
+    // retry will either succeed or no-op safely.
+    await maybeKickoffPaidAnalysisForUser(userId);
   }
 
   return { userId, subscriptionRowId: id };

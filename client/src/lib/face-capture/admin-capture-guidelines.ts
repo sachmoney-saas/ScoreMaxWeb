@@ -149,6 +149,62 @@ export function mouthToNoseWidthRatioFromLandmarks(
   return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
 }
 
+/**
+ * Inclinaison moyenne des segments canthaux (médial → latéral) en degrés,
+ * angles mesurés dans le plan image (px) pour respecter le ratio largeur / hauteur.
+ */
+export function averageCanthalTiltDegreesFromLandmarks(
+  landmarks: LandmarkPoint[],
+  frame?: { width: number; height: number },
+): number | null {
+  const rMed = landmarks[FACEMESH_RIGHT_EYE_CANTHUS_MEDIAL];
+  const rLat = landmarks[FACEMESH_RIGHT_EYE_CANTHUS_LATERAL];
+  const lMed = landmarks[FACEMESH_LEFT_EYE_CANTHUS_MEDIAL];
+  const lLat = landmarks[FACEMESH_LEFT_EYE_CANTHUS_LATERAL];
+  if (
+    !rMed ||
+    !rLat ||
+    !lMed ||
+    !lLat ||
+    rMed.x === undefined ||
+    rLat.x === undefined ||
+    lMed.x === undefined ||
+    lLat.x === undefined
+  ) {
+    return null;
+  }
+  const fw = Math.max(1, frame?.width ?? 1);
+  const fh = Math.max(1, frame?.height ?? 1);
+  const deg = (x0: number, y0: number, x1: number, y1: number) =>
+    (Math.atan2((y1 - y0) * fh, (x1 - x0) * fw) * 180) / Math.PI;
+  const right = deg(rMed.x, rMed.y, rLat.x, rLat.y);
+  const left = deg(lMed.x, lMed.y, lLat.x, lLat.y);
+  const mean = (right + left) / 2;
+  return Number.isFinite(mean) ? mean : null;
+}
+
+/** Bande morte (°) : inclinaisons proches de 0° sont affichées comme « neutre ». */
+const CANTHAL_TILT_NEUTRAL_DEADBAND_DEG = 2.5;
+
+export type CanthalTiltDisplayCategory = "positive" | "neutral" | "negative";
+
+/**
+ * Catégorie d’affichage à partir de la moyenne géométrique des angles (plan image),
+ * même convention que `averageCanthalTiltDegreesFromLandmarks`.
+ */
+export function canthalTiltDisplayCategoryFromMeanDegrees(
+  meanDeg: number,
+): CanthalTiltDisplayCategory {
+  if (meanDeg > CANTHAL_TILT_NEUTRAL_DEADBAND_DEG) return "positive";
+  if (meanDeg < -CANTHAL_TILT_NEUTRAL_DEADBAND_DEG) return "negative";
+  return "neutral";
+}
+
+/** Multiplicateur bouche/nez pour l’UI (2 décimales, même convention que les repères admin). */
+export function formatMouthNoseWidthRatioForDisplay(lang: AppLanguage, ratio: number): string {
+  return formatRatioMultiplierText(lang, ratio);
+}
+
 /** Affichage locale du multiplicateur `0,85x` / `0.85x` (2 décimales). */
 function formatRatioMultiplierText(lang: AppLanguage, ratio: number): string {
   const ratioStr = ratio.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US', {

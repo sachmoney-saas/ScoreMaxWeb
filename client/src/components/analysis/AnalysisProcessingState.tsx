@@ -1,5 +1,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
 import { analysisGlassPanelClassName } from "@/components/analysis/workers/_shared";
@@ -140,6 +141,45 @@ const ANALYSIS_TICKER_MESSAGES: ReadonlyArray<{ en: string; fr: string }> = [
   },
 ];
 
+const IN_APP_ANALYSIS_GEOMETRY_STEPS: ReadonlyArray<{ en: string; fr: string }> = [
+  {
+    en: "Uploading captured poses",
+    fr: "Envoi des poses capturées",
+  },
+  {
+    en: "Mapping facial landmarks",
+    fr: "Cartographie des repères faciaux",
+  },
+  {
+    en: "Stabilizing pose & lighting",
+    fr: "Stabilisation pose et lumière",
+  },
+  {
+    en: "Segmenting facial features",
+    fr: "Segmentation des traits du visage",
+  },
+  {
+    en: "Calculating facial proportions",
+    fr: "Calcul des proportions du visage",
+  },
+  {
+    en: "Measuring symmetry",
+    fr: "Mesure de la symétrie",
+  },
+  {
+    en: "Running worker evaluations",
+    fr: "Évaluation des zones du visage",
+  },
+  {
+    en: "Scoring confidence",
+    fr: "Score de confiance des mesures",
+  },
+  {
+    en: "Generating insights",
+    fr: "Génération des résultats",
+  },
+] as const;
+
 export type ProcessingTickerMessagePair = Readonly<{ en: string; fr: string }>;
 
 function mod(n: number, m: number): number {
@@ -250,6 +290,129 @@ function ProcessingStepTicker({ tone, messages, schedule, rowKeyPrefix }: Proces
           ))}
         </motion.div>
       </AnimatePresence>
+    </div>
+  );
+}
+
+type NumberedAnalysisStepLoaderProps = {
+  tone: "on-dark" | "on-light";
+  language: AppLanguage;
+  title: string;
+  detailHint?: string;
+  elapsedMs: number;
+};
+
+function NumberedAnalysisStepLoader({
+  tone,
+  language,
+  title,
+  detailHint,
+  elapsedMs,
+}: NumberedAnalysisStepLoaderProps) {
+  const activeStep = Math.min(
+    IN_APP_ANALYSIS_GEOMETRY_STEPS.length - 1,
+    Math.floor(Math.max(0, elapsedMs) / 12_000),
+  );
+  const onDark = tone === "on-dark";
+
+  return (
+    <div className="mx-auto flex w-full max-w-[min(100%,24rem)] flex-col items-center gap-[clamp(0.85rem,2.2vh,1.35rem)]">
+      <div className="space-y-1 text-center">
+        <h2
+          className={cn(
+            "font-hero text-[clamp(1.05rem,2.4vh,1.45rem)] font-semibold leading-snug tracking-[-0.02em]",
+            onDark ? "text-white" : "text-slate-950",
+          )}
+        >
+          {title}
+        </h2>
+        {detailHint ? (
+          <p
+            className={cn(
+              "mx-auto max-w-[28ch] text-[clamp(0.72rem,1.5vh,0.875rem)] leading-snug",
+              onDark ? "text-zinc-400" : "text-slate-500",
+            )}
+          >
+            {detailHint}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="relative mx-auto flex size-[clamp(5rem,13vh,7.5rem)] shrink-0 items-center justify-center">
+        <div
+          className={cn(
+            "absolute inset-0 rounded-full border-2",
+            onDark ? "border-white/10" : "border-slate-950/10",
+          )}
+          aria-hidden
+        />
+        <motion.div
+          className="absolute inset-0 rounded-full border-2 border-transparent border-r-sky-400/50 border-t-sky-400"
+          animate={{ rotate: 360 }}
+          transition={{
+            duration: 1.15,
+            repeat: Number.POSITIVE_INFINITY,
+            ease: "linear",
+          }}
+          aria-hidden
+        />
+        <Loader2
+          className="size-[clamp(1.75rem,4.5vh,2.5rem)] text-sky-400/90"
+          strokeWidth={2}
+          aria-hidden
+        />
+      </div>
+
+      <ul
+        className={cn(
+          "mx-auto w-full max-w-sm shrink-0 space-y-[clamp(0.35rem,0.9vh,0.65rem)] rounded-2xl p-[clamp(0.65rem,1.6vh,1rem)] text-left",
+          onDark
+            ? "border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+            : "border border-slate-200 bg-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
+        )}
+        aria-label={i18n(language, {
+          en: "Analysis steps",
+          fr: "Étapes d'analyse",
+        })}
+      >
+        {IN_APP_ANALYSIS_GEOMETRY_STEPS.map((label, index) => {
+          const done = index < activeStep;
+          const active = index === activeStep;
+          return (
+            <li
+              key={label.en}
+              className="flex items-start gap-[clamp(0.5rem,1.1vh,0.75rem)]"
+            >
+              <span
+                className={cn(
+                  "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.45rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
+                  done && "border-sky-400/60 bg-sky-400/20 text-sky-200",
+                  active &&
+                    "border-sky-400 bg-sky-400/25 text-sky-100 shadow-[0_0_14px_rgba(56,189,248,0.35)]",
+                  !done &&
+                    !active &&
+                    (onDark
+                      ? "border-white/15 bg-white/[0.04] text-zinc-500"
+                      : "border-slate-200 bg-slate-950/[0.03] text-slate-400"),
+                )}
+                aria-hidden
+              >
+                {done ? <Check className="size-[0.8em]" strokeWidth={3} /> : index + 1}
+              </span>
+              <span
+                className={cn(
+                  "text-[clamp(0.75rem,1.65vh,0.9rem)] leading-snug",
+                  active && (onDark ? "font-medium text-white" : "font-medium text-slate-950"),
+                  done && (onDark ? "text-zinc-300" : "text-slate-600"),
+                  !done && !active && (onDark ? "text-zinc-500" : "text-slate-400"),
+                )}
+              >
+                {i18n(language, label)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -378,6 +541,22 @@ export function AnalysisProcessingState({
       );
 
   const outerClass = "flex w-full flex-col items-center justify-center px-2 py-2 text-center sm:px-3";
+
+  if (analysisStepTicker) {
+    return (
+      <div className={outerClass}>
+        <div className={panelClass}>
+          <NumberedAnalysisStepLoader
+            tone={tone}
+            language={language}
+            title={titleLabel}
+            detailHint={detailHint}
+            elapsedMs={elapsedMs}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={outerClass}>

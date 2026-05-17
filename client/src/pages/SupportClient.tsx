@@ -2,21 +2,7 @@ import * as React from "react";
 import { MessageCircle, MessageCircleOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppLanguage, i18n } from "@/lib/i18n";
-
-declare global {
-  interface Window {
-    $crisp?: unknown[];
-    CRISP_WEBSITE_ID?: string;
-  }
-}
-
-const CRISP_WEBSITE_ID = "c21924b5-1596-478c-9384-67d8edaa4431";
-const CRISP_SCRIPT_ID = "crisp-support-chat-script";
-
-function crispPush(command: unknown[]): void {
-  window.$crisp = window.$crisp ?? [];
-  (window.$crisp as unknown[]).push(command);
-}
+import { crispPush, initCrispWebsite, CRISP_SCRIPT_ID } from "@/lib/crisp-client";
 
 const supportButtonLabels = {
   open: { en: "Open support", fr: "Ouvrir le support" },
@@ -28,16 +14,7 @@ export default function SupportClient() {
   const [supportOpen, setSupportOpen] = React.useState(false);
 
   React.useEffect(() => {
-    window.$crisp = window.$crisp ?? [];
-    window.CRISP_WEBSITE_ID = CRISP_WEBSITE_ID;
-
-    if (!document.getElementById(CRISP_SCRIPT_ID)) {
-      const script = document.createElement("script");
-      script.id = CRISP_SCRIPT_ID;
-      script.src = "https://client.crisp.chat/l.js";
-      script.async = true;
-      document.head.appendChild(script);
-    }
+    void initCrispWebsite();
 
     const onOpened = () => setSupportOpen(true);
     const onClosed = () => setSupportOpen(false);
@@ -55,6 +32,9 @@ export default function SupportClient() {
   }, []);
 
   function toggleSupport() {
+    if (!document.getElementById(CRISP_SCRIPT_ID)) {
+      void initCrispWebsite();
+    }
     if (supportOpen) {
       crispPush(["do", "chat:close"]);
     } else {
