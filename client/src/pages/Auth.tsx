@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { WaveBackground } from "@/components/background/WaveBackground";
@@ -47,6 +47,12 @@ export default function AuthPage() {
   };
 
   const strength = getPasswordStrength(password);
+
+  useEffect(() => {
+    document.body.style.removeProperty("overflow");
+    document.body.style.removeProperty("padding-right");
+    document.body.style.removeProperty("pointer-events");
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,11 +121,11 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="relative isolate flex min-h-[100svh] items-center overflow-x-hidden px-4 py-5 text-white sm:py-6">
+    <main className="relative isolate z-0 flex min-h-[100svh] items-center overflow-x-hidden px-4 py-5 text-white sm:py-6">
       <WaveBackground position="fixed" className="z-0" />
       <div className={authPageOverlayClassName} aria-hidden />
 
-      <div className="relative z-10 mx-auto w-full min-w-0 max-w-md">
+      <div className="relative z-10 mx-auto w-full min-w-0 max-w-md pointer-events-auto">
         <section className={authPageCardClassName}>
           <div className="min-w-0 space-y-1.5 text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400 sm:text-xs">

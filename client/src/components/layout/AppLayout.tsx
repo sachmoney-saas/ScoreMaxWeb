@@ -562,7 +562,7 @@ function ModernAppSidebar() {
       </SidebarHeader>
 
       <SidebarFooter className={isCollapsed ? "hidden" : "px-2 pt-1 pb-2"}>
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild className="w-full">
             <SidebarMenuButton
               size="lg"
@@ -638,7 +638,10 @@ function ModernAppSidebar() {
             <DropdownMenuSeparator className="bg-white/10" />
             <DropdownMenuItem
               className="cursor-pointer rounded-xl text-zinc-100 focus:bg-white/10 focus:text-white"
-              onClick={() => signOut()}
+              onClick={() => {
+                closeMobileSidebar();
+                void signOut();
+              }}
             >
               <LogOut className="mr-2 h-4 w-4 text-zinc-400" />
               <span>

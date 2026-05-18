@@ -280,7 +280,7 @@ export function WaveBackground({
   return (
     <div
       ref={wrapRef}
-      className={`${position} inset-0 ${className}`}
+      className={`${position} inset-0 pointer-events-none ${className}`}
       aria-hidden="true"
     >
       <canvas

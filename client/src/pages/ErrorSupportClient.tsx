@@ -123,7 +123,7 @@ export default function ErrorSupportClient() {
 
   return (
     <div className={legalPageBgClass}>
-      <FloatingHeader language={language} />
+      <FloatingHeader />
       <main className="relative mx-auto w-full max-w-2xl px-4 pb-20 pt-[max(7.25rem,calc(env(safe-area-inset-top,0px)+5rem))]">
         <div className="rounded-[2rem] border border-white/15 bg-black/35 p-6 text-center shadow-[0_24px_90px_-58px_rgba(0,0,0,0.85)] backdrop-blur-sm md:p-10">
           <Link

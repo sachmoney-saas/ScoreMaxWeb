@@ -102,6 +102,8 @@
 
   html {
     height: 100%;
+    /* Évite les micro-décalages (header fixe) quand la barre de scroll apparaît / est compensée. */
+    scrollbar-gutter: stable;
   }
 
   body {
