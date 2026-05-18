@@ -137,6 +137,14 @@ export function BeforeAfterSlider({
     en: "After the first 12 weeks",
     fr: "Après 12 premières semaines",
   });
+  const currentLookAlt = i18n(language, {
+    en: "Your current look",
+    fr: "Ton look actuel",
+  });
+  const generatedPotentialAlt = i18n(language, {
+    en: "Your AI-generated potential",
+    fr: "Ton potentiel généré par IA",
+  });
 
   const pillClass =
     "rounded-md bg-black/50 px-2 py-1 text-[8px] font-semibold uppercase leading-snug tracking-wider text-white/90 backdrop-blur-sm sm:text-[9px]";
@@ -172,27 +180,21 @@ export function BeforeAfterSlider({
           {showAfter ? (
             <>
               <PortraitPicture
-                src={afterSrc!}
-                avifSrc={afterSrcAvif}
-                alt={i18n(language, {
-                  en: "Your AI-generated potential",
-                  fr: "Ton potentiel généré par IA",
-                })}
+                src={beforeSrc ?? afterSrc!}
+                avifSrc={beforeSrc ? beforeSrcAvif : afterSrcAvif}
+                alt={beforeSrc ? currentLookAlt : generatedPotentialAlt}
                 className={onboardingPortraitImageClassName}
               />
               {beforeSrc ? (
                 <div
-                  className="absolute inset-0 overflow-hidden"
-                  style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
-                  aria-hidden={position <= 0}
+                  className="absolute inset-0 z-[1] overflow-hidden"
+                  style={{ clipPath: `inset(0 0 0 ${position}%)` }}
+                  aria-hidden={position >= 100}
                 >
                   <PortraitPicture
-                    src={beforeSrc}
-                    avifSrc={beforeSrcAvif}
-                    alt={i18n(language, {
-                      en: "Your current look",
-                      fr: "Ton look actuel",
-                    })}
+                    src={afterSrc!}
+                    avifSrc={afterSrcAvif}
+                    alt={generatedPotentialAlt}
                     className={onboardingPortraitImageClassName}
                   />
                 </div>
@@ -208,10 +210,7 @@ export function BeforeAfterSlider({
                 <PortraitPicture
                   src={beforeSrc}
                   avifSrc={beforeSrcAvif}
-                  alt={i18n(language, {
-                    en: "Your current look",
-                    fr: "Ton look actuel",
-                  })}
+                  alt={currentLookAlt}
                   className={onboardingPortraitImageClassName}
                 />
               ) : (
