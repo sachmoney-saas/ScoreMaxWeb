@@ -12,6 +12,7 @@ import {
   beforeAfterMediaFrameClassName,
   onboardingPortraitAspectClassName,
 } from "@/lib/onboarding-portrait-media";
+import { pickBestImageUrl, useAvifSupport } from "@/lib/avif-support";
 
 type Props = {
   language: AppLanguage;
@@ -274,19 +275,41 @@ export function PotentialPreviewCard({
   onUnlock,
   isUnlocking,
 }: Props) {
+  const supportsAvif = useAvifSupport();
+
   const signedUrl = potentialImage?.signed_url ?? null;
+  const signedUrlAvif = potentialImage?.signed_url_avif ?? null;
   /** Côté « actuel » : photo source du scan (identique à l’entrée OneShot), sans masque filaire. */
   const beforeSrc =
     potentialImage?.source_face_signed_url ??
     potentialImage?.mask_overlay_signed_url ??
+    null;
+  const beforeSrcAvif =
+    potentialImage?.source_face_signed_url_avif ??
+    potentialImage?.mask_overlay_signed_url_avif ??
     null;
 
   const status = potentialImage?.status ?? "pending";
   const isReady = status === "completed" && !!signedUrl;
   const isFailed = status === "failed";
   const afterSrc = isReady && signedUrl ? signedUrl : null;
-  const leftDecoded = useDecodedImage(beforeSrc);
-  const rightDecoded = useDecodedImage(afterSrc);
+  const afterSrcAvif = isReady && signedUrlAvif ? signedUrlAvif : null;
+  /**
+   * For the decode probe we want to know when the *actually rendered* bytes
+   * are ready — that is the AVIF when supported, otherwise the JPEG. The
+   * `<picture>` element below will pick the same variant, so this stays in
+   * sync with what the user sees on the screen.
+   */
+  const beforeDisplayUrl = pickBestImageUrl(
+    { avif: beforeSrcAvif, fallback: beforeSrc },
+    supportsAvif,
+  );
+  const afterDisplayUrl = pickBestImageUrl(
+    { avif: afterSrcAvif, fallback: afterSrc },
+    supportsAvif,
+  );
+  const leftDecoded = useDecodedImage(beforeDisplayUrl);
+  const rightDecoded = useDecodedImage(afterDisplayUrl);
 
   const showBlockingLoader =
     !isFailed &&
@@ -409,7 +432,9 @@ export function PotentialPreviewCard({
         <BeforeAfterSlider
           language={language}
           beforeSrc={beforeSrc}
+          beforeSrcAvif={beforeSrcAvif}
           afterSrc={afterSrc}
+          afterSrcAvif={afterSrcAvif}
           className="mx-auto"
         />
       </motion.div>

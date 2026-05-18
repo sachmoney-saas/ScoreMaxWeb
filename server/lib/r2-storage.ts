@@ -1,6 +1,7 @@
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
   type ObjectIdentifier,
@@ -83,6 +84,35 @@ export function getR2SignedDownloadUrl(params: {
   return getSignedUrl(r2Client, command, {
     expiresIn: params.expiresInSeconds ?? 300,
   });
+}
+
+/**
+ * Probe an R2 object without downloading its body.
+ *
+ * Returns `true` if the object exists, `false` for 404/NoSuchKey. Re-throws on
+ * unrelated errors (credentials, network, etc.) so callers can decide whether
+ * to retry or fall back silently.
+ */
+export async function r2ObjectExists(params: {
+  bucket?: string;
+  key: string;
+}): Promise<boolean> {
+  const command = new HeadObjectCommand({
+    Bucket: params.bucket ?? r2Env.bucket,
+    Key: params.key,
+  });
+  try {
+    await r2Client.send(command);
+    return true;
+  } catch (error: unknown) {
+    const name = (error as { name?: string } | null)?.name;
+    const status = (error as { $metadata?: { httpStatusCode?: number } } | null)
+      ?.$metadata?.httpStatusCode;
+    if (name === "NotFound" || name === "NoSuchKey" || status === 404) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export async function deleteR2Objects(params: {

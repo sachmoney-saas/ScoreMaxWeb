@@ -16,6 +16,7 @@ import {
   useUserRoutine,
 } from "@/hooks/use-user-routine";
 import {
+  buildDayPlan,
   collectAvoidItems,
   collectEverydayHabits,
 } from "@/lib/protocol-day";
@@ -27,6 +28,7 @@ import {
   type ProtocolMainTab,
 } from "@/components/protocol/ProtocolTabs";
 import { RoutineDayCarousel } from "@/components/protocol/RoutineDayCarousel";
+import { RoutineDayProgressBar } from "@/components/protocol/RoutineDayProgressBar";
 import { RoutineAlwaysOn } from "@/components/protocol/RoutineAlwaysOn";
 import { AvoidTab } from "@/components/protocol/AvoidTab";
 import { STARTER_PRESET_IDS } from "@shared/protocol-presets";
@@ -88,6 +90,7 @@ export default function ProtocolPage() {
   ]);
 
   const presets = routineQuery.data ?? [];
+  const today = React.useMemo(() => new Date(), []);
   const everydayHabits = React.useMemo(
     () => collectEverydayHabits(presets, language),
     [presets, language],
@@ -95,6 +98,19 @@ export default function ProtocolPage() {
   const avoidItems = React.useMemo(
     () => collectAvoidItems(presets, language),
     [presets, language],
+  );
+
+  /**
+   * Plan du jour affiché dans le header — recalculé pour le `dayOffset` courant
+   * pour que la barre « Progression du jour » du bandeau métal reste en phase
+   * avec le slide actuellement sélectionné dans le carrousel.
+   */
+  const selectedDayPlan = React.useMemo(
+    () =>
+      presets.length > 0
+        ? buildDayPlan(presets, dayOffset, language, today)
+        : null,
+    [presets, dayOffset, language, today],
   );
 
   const isLoading =
@@ -185,8 +201,25 @@ export default function ProtocolPage() {
     );
   }
 
+  const showHeaderProgress = mainTab === "routine" && selectedDayPlan !== null;
+  const header = (
+    <div className="flex flex-col items-stretch gap-4">
+      <ProtocolPageTitle language={language} />
+      {showHeaderProgress ? (
+        <RoutineDayProgressBar
+          language={language}
+          plan={selectedDayPlan!}
+          today={today}
+          userId={user?.id ?? null}
+          variant="header"
+          className="mx-auto w-full max-w-md"
+        />
+      ) : null}
+    </div>
+  );
+
   return (
-    <ProtocolPageShell topNav={hubNav} header={<ProtocolPageTitle language={language} />}>
+    <ProtocolPageShell topNav={hubNav} header={header}>
       <div className="space-y-6">
         <ProtocolTabs
           language={language}

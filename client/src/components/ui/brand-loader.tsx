@@ -1,6 +1,53 @@
+import * as React from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 type BrandLoaderTone = "on-dark" | "on-light";
+
+/** Bleu ciel du titre hero — loaders circulaires, étapes actives. */
+export const SCOREMAX_HERO_SKY = "#d6e4ff";
+
+type HeroSkyProgressRingProps = {
+  className?: string;
+  tone?: BrandLoaderTone;
+  children?: React.ReactNode;
+};
+
+/** Anneau qui tourne (arc seul, sans piste fixe) avec contenu centré. */
+export function HeroSkyProgressRing({
+  className,
+  tone = "on-dark",
+  children,
+}: HeroSkyProgressRingProps) {
+  const labelClass = tone === "on-dark" ? "text-[#d6e4ff]" : "text-[#2d4a6f]";
+
+  return (
+    <div className={cn("relative flex shrink-0 items-center justify-center", className)}>
+      <motion.div
+        className="absolute inset-0 rounded-full border-[3px] border-transparent border-t-[#d6e4ff] border-r-[#d6e4ff]/50"
+        animate={{ rotate: 360 }}
+        transition={{
+          duration: 1.15,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "linear",
+        }}
+        aria-hidden
+      />
+      {children ? (
+        <div
+          className={cn(
+            "relative z-[1] flex size-full items-center justify-center text-center text-[clamp(0.8125rem,2vh,1.0625rem)] font-semibold tabular-nums tracking-tight",
+            labelClass,
+          )}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type BrandLoaderProps = {
   className?: string;

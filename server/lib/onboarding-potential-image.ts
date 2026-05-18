@@ -13,8 +13,14 @@ import {
   downloadR2Object,
   getDefaultR2Bucket,
   getR2SignedDownloadUrl,
+  r2ObjectExists,
   uploadR2Object,
 } from "./r2-storage";
+import {
+  avifKeyFor,
+  ensureAvifVariant,
+  ensureAvifVariantInBackground,
+} from "./avif-variant";
 import { supabaseAdmin } from "./supabase-admin";
 import {
   pickPreferredPotentialGeneration,
@@ -42,12 +48,20 @@ export type PotentialImagePayload = {
   status: "pending" | "completed" | "failed";
   signed_url: string | null;
   /**
+   * AVIF variant of `signed_url` (display-only derivative). `null` when the
+   * variant has not been generated yet — clients should fall back to
+   * `signed_url`.
+   */
+  signed_url_avif: string | null;
+  /**
    * Photo source du scan utilisée pour la génération potentiel (ex. FACE_FRONT) —
    * même binaire qu’envoyé à OneShot / nano-banana, sans masque ni overlay.
    */
   source_face_signed_url: string | null;
+  source_face_signed_url_avif: string | null;
   /** Repère face + masque 3D (`GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY`), sinon photo `FACE_FRONT`. */
   mask_overlay_signed_url: string | null;
+  mask_overlay_signed_url_avif: string | null;
   error_code: string | null;
   error_message: string | null;
   created_at: string;
@@ -147,6 +161,46 @@ async function findReusablePotentialGeneration(
   return null;
 }
 
+/**
+ * Co-sign a JPEG/PNG asset and its AVIF derivative when present on R2.
+ *
+ * Returns `null` for either URL when the underlying object does not exist
+ * (or when AVIF generation has not run yet). Triggers a background AVIF
+ * generation when the source exists but the derivative is missing — so the
+ * *next* read of the same payload picks up the variant.
+ */
+async function signWithAvifFallback(params: {
+  bucket: string | undefined;
+  key: string;
+}): Promise<{ url: string; avifUrl: string | null }> {
+  const [url, avifExists] = await Promise.all([
+    getR2SignedDownloadUrl({
+      bucket: params.bucket,
+      key: params.key,
+      expiresInSeconds: 300,
+    }),
+    r2ObjectExists({
+      bucket: params.bucket,
+      key: avifKeyFor(params.key),
+    }).catch(() => false),
+  ]);
+
+  if (avifExists) {
+    const avifUrl = await getR2SignedDownloadUrl({
+      bucket: params.bucket,
+      key: avifKeyFor(params.key),
+      expiresInSeconds: 300,
+    });
+    return { url, avifUrl };
+  }
+
+  ensureAvifVariantInBackground({
+    bucket: params.bucket,
+    sourceKey: params.key,
+  });
+  return { url, avifUrl: null };
+}
+
 async function generationRowToPayload(
   row: GenerationRow,
   userId: string,
@@ -170,30 +224,36 @@ async function generationRowToPayload(
   }
 
   let signedUrl: string | null = null;
+  let signedUrlAvif: string | null = null;
   if (status === "completed" && row.r2_key) {
-    signedUrl = await getR2SignedDownloadUrl({
+    const signed = await signWithAvifFallback({
       bucket: row.r2_bucket ?? undefined,
       key: row.r2_key,
-      expiresInSeconds: 300,
     });
+    signedUrl = signed.url;
+    signedUrlAvif = signed.avifUrl;
   }
 
-  const maskOverlaySignedUrl = await resolveMaskOverlaySignedUrl({
-    userId,
-    sourceScanAssetId: row.source_scan_asset_id,
-  });
-
-  const sourceFaceSignedUrl = await resolveSourceFaceSignedUrl({
-    userId,
-    sourceScanAssetId: row.source_scan_asset_id,
-  });
+  const [maskOverlay, sourceFace] = await Promise.all([
+    resolveMaskOverlaySignedUrl({
+      userId,
+      sourceScanAssetId: row.source_scan_asset_id,
+    }),
+    resolveSourceFaceSignedUrl({
+      userId,
+      sourceScanAssetId: row.source_scan_asset_id,
+    }),
+  ]);
 
   return {
     id: row.id,
     status,
     signed_url: signedUrl,
-    source_face_signed_url: sourceFaceSignedUrl,
-    mask_overlay_signed_url: maskOverlaySignedUrl,
+    signed_url_avif: signedUrlAvif,
+    source_face_signed_url: sourceFace.url,
+    source_face_signed_url_avif: sourceFace.avifUrl,
+    mask_overlay_signed_url: maskOverlay.url,
+    mask_overlay_signed_url_avif: maskOverlay.avifUrl,
     error_code: row.error_code,
     error_message: row.error_message,
     created_at: row.created_at,
@@ -314,6 +374,21 @@ async function finalizeSuccess(params: {
     if (error) {
       logger.error({ err: error, generationId: params.generationId }, "Failed to persist generation success");
     }
+
+    /**
+     * Generate the AVIF variant *now* while the source buffer is still hot:
+     * the OneShot result is freshly downloaded, ML pipelines no longer need
+     * it for ~ minutes, and clients will hit `/onboarding/potential-image`
+     * within seconds. Saving ~40 % bandwidth on this single asset is the
+     * highest-impact win in the whole AVIF pipeline.
+     *
+     * We still call `ensureAvifVariant` rather than encoding inline so the
+     * helper's in-flight dedupe + R2 head-check stay the single source of
+     * truth for the variant lifecycle.
+     */
+    await ensureAvifVariant({ bucket, sourceKey: key }).catch(() => {
+      // already logged inside ensureAvifVariant
+    });
   } catch (error) {
     logger.error({ err: error, generationId: params.generationId }, "finalizeSuccess failed");
     await markGenerationFailed({
@@ -540,11 +615,15 @@ export async function triggerOnboardingPotentialImage(params: {
   }
 }
 
-async function loadLatestScanAssetSignedUrl(params: {
+type SignedAssetUrls = { url: string | null; avifUrl: string | null };
+
+const EMPTY_SIGNED_ASSET_URLS: SignedAssetUrls = { url: null, avifUrl: null };
+
+async function loadLatestScanAssetSignedUrls(params: {
   userId: string;
   sessionId: string;
   assetTypeCode: string;
-}): Promise<string | null> {
+}): Promise<SignedAssetUrls> {
   const { data, error } = await supabaseAdmin
     .from("scan_assets")
     .select("r2_bucket, r2_key")
@@ -557,20 +636,19 @@ async function loadLatestScanAssetSignedUrl(params: {
     .maybeSingle();
 
   if (error || !data?.r2_key) {
-    return null;
+    return EMPTY_SIGNED_ASSET_URLS;
   }
 
   const row = data as { r2_bucket: string | null; r2_key: string };
-  return getR2SignedDownloadUrl({
+  return signWithAvifFallback({
     bucket: row.r2_bucket ?? undefined,
     key: row.r2_key,
-    expiresInSeconds: 300,
   });
 }
 
-async function loadLatestFaceFrontSignedUrlForUser(
+async function loadLatestFaceFrontSignedUrlsForUser(
   userId: string,
-): Promise<string | null> {
+): Promise<SignedAssetUrls> {
   const { data, error } = await supabaseAdmin
     .from("scan_assets")
     .select("r2_bucket, r2_key, scan_sessions!inner(source)")
@@ -583,23 +661,22 @@ async function loadLatestFaceFrontSignedUrlForUser(
     .maybeSingle();
 
   if (error || !data?.r2_key) {
-    return null;
+    return EMPTY_SIGNED_ASSET_URLS;
   }
 
   const row = data as { r2_bucket: string | null; r2_key: string };
-  return getR2SignedDownloadUrl({
+  return signWithAvifFallback({
     bucket: row.r2_bucket ?? undefined,
     key: row.r2_key,
-    expiresInSeconds: 300,
   });
 }
 
 async function resolveSourceFaceSignedUrl(params: {
   userId: string;
   sourceScanAssetId: string | null;
-}): Promise<string | null> {
+}): Promise<SignedAssetUrls> {
   if (!params.sourceScanAssetId) {
-    return loadLatestFaceFrontSignedUrlForUser(params.userId);
+    return loadLatestFaceFrontSignedUrlsForUser(params.userId);
   }
 
   const { data, error } = await supabaseAdmin
@@ -611,23 +688,22 @@ async function resolveSourceFaceSignedUrl(params: {
     .maybeSingle();
 
   if (error || !data?.r2_key) {
-    return loadLatestFaceFrontSignedUrlForUser(params.userId);
+    return loadLatestFaceFrontSignedUrlsForUser(params.userId);
   }
 
   const row = data as { r2_bucket: string | null; r2_key: string };
-  return getR2SignedDownloadUrl({
+  return signWithAvifFallback({
     bucket: row.r2_bucket ?? undefined,
     key: row.r2_key,
-    expiresInSeconds: 300,
   });
 }
 
 async function resolveMaskOverlaySignedUrl(params: {
   userId: string;
   sourceScanAssetId: string | null;
-}): Promise<string | null> {
+}): Promise<SignedAssetUrls> {
   if (!params.sourceScanAssetId) {
-    return null;
+    return EMPTY_SIGNED_ASSET_URLS;
   }
 
   const { data: src, error: srcErr } = await supabaseAdmin
@@ -638,21 +714,21 @@ async function resolveMaskOverlaySignedUrl(params: {
     .maybeSingle();
 
   if (srcErr || !src?.session_id) {
-    return null;
+    return EMPTY_SIGNED_ASSET_URLS;
   }
 
   const sessionId = src.session_id as string;
 
-  const mask = await loadLatestScanAssetSignedUrl({
+  const mask = await loadLatestScanAssetSignedUrls({
     userId: params.userId,
     sessionId,
     assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
   });
-  if (mask) {
+  if (mask.url) {
     return mask;
   }
 
-  return loadLatestScanAssetSignedUrl({
+  return loadLatestScanAssetSignedUrls({
     userId: params.userId,
     sessionId,
     assetTypeCode: "FACE_FRONT",

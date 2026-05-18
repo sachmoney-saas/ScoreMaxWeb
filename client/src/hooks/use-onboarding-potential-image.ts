@@ -7,10 +7,18 @@ export type OnboardingPotentialImage = {
   id: string;
   status: "pending" | "completed" | "failed";
   signed_url: string | null;
+  /**
+   * AVIF display variant of `signed_url`. When set, the UI should prefer it
+   * inside a `<picture>` element and keep the original as the `<img>`
+   * fallback (older browsers, decode failure).
+   */
+  signed_url_avif: string | null;
   /** JPEG visage face (même asset qu’envoyé à OneShot pour le potentiel). */
   source_face_signed_url: string | null;
+  source_face_signed_url_avif: string | null;
   /** `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` si dispo, sinon `FACE_FRONT` — pour autres usages. */
   mask_overlay_signed_url: string | null;
+  mask_overlay_signed_url_avif: string | null;
   error_code: string | null;
   error_message: string | null;
   created_at: string;

@@ -14,7 +14,10 @@ const DEFAULT_POSITION = 50;
 type Props = {
   language: AppLanguage;
   beforeSrc: string | null;
+  /** Optional AVIF variant of `beforeSrc` (preferred when the browser supports it). */
+  beforeSrcAvif?: string | null;
   afterSrc: string | null;
+  afterSrcAvif?: string | null;
   className?: string;
 };
 
@@ -22,10 +25,42 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
+/**
+ * Render a `<picture>` element preferring AVIF when supplied. We keep `<img>`
+ * as the fallback so legacy decoders (Safari < 16, older Android WebView) and
+ * transient encode failures simply degrade to the original JPEG/PNG.
+ */
+function PortraitPicture({
+  src,
+  avifSrc,
+  alt,
+  className,
+}: {
+  src: string;
+  avifSrc?: string | null;
+  alt: string;
+  className: string;
+}) {
+  return (
+    <picture className="absolute inset-0 block size-full">
+      {avifSrc ? <source srcSet={avifSrc} type="image/avif" /> : null}
+      <img
+        src={src}
+        alt={alt}
+        decoding="async"
+        draggable={false}
+        className={className}
+      />
+    </picture>
+  );
+}
+
 export function BeforeAfterSlider({
   language,
   beforeSrc,
+  beforeSrcAvif,
   afterSrc,
+  afterSrcAvif,
   className,
 }: Props) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -136,14 +171,13 @@ export function BeforeAfterSlider({
         <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
           {showAfter ? (
             <>
-              <img
+              <PortraitPicture
                 src={afterSrc!}
+                avifSrc={afterSrcAvif}
                 alt={i18n(language, {
                   en: "Your AI-generated potential",
                   fr: "Ton potentiel généré par IA",
                 })}
-                decoding="async"
-                draggable={false}
                 className={onboardingPortraitImageClassName}
               />
               {beforeSrc ? (
@@ -152,14 +186,13 @@ export function BeforeAfterSlider({
                   style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
                   aria-hidden={position <= 0}
                 >
-                  <img
+                  <PortraitPicture
                     src={beforeSrc}
+                    avifSrc={beforeSrcAvif}
                     alt={i18n(language, {
                       en: "Your current look",
                       fr: "Ton look actuel",
                     })}
-                    decoding="async"
-                    draggable={false}
                     className={onboardingPortraitImageClassName}
                   />
                 </div>
@@ -172,14 +205,13 @@ export function BeforeAfterSlider({
           ) : (
             <>
               {beforeSrc ? (
-                <img
+                <PortraitPicture
                   src={beforeSrc}
+                  avifSrc={beforeSrcAvif}
                   alt={i18n(language, {
                     en: "Your current look",
                     fr: "Ton look actuel",
                   })}
-                  decoding="async"
-                  draggable={false}
                   className={onboardingPortraitImageClassName}
                 />
               ) : (

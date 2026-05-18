@@ -58,8 +58,8 @@ function AgendaColumn({
   return (
     <div
       className={cn(
-        "flex min-h-[11rem] min-w-0 flex-1 flex-col",
-        "border-b border-zinc-200 md:border-b-0 md:border-r md:last:border-r-0",
+        "flex min-h-0 w-full min-w-0 flex-col",
+        "border-b border-zinc-200 last:border-b-0",
       )}
     >
       <div className="shrink-0 border-b border-zinc-100 bg-zinc-50 px-3 py-2">
@@ -118,8 +118,12 @@ export function RoutineDayPanel({
 
   const canTrack = Boolean(userId);
 
-  const { checkedIds, toggle, percent, completedCount, total } =
-    useRoutineDayCompletion(userId, plan.dayOffset, stepIds, today);
+  const { checkedIds, toggle } = useRoutineDayCompletion(
+    userId,
+    plan.dayOffset,
+    stepIds,
+    today,
+  );
 
   const hasDaily =
     plan.morning.length > 0 ||
@@ -128,38 +132,6 @@ export function RoutineDayPanel({
 
   return (
     <article className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-      {hasDaily && total > 0 && canTrack ? (
-        <div className="shrink-0 space-y-1.5 border-b border-zinc-100 px-4 pt-3 pb-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-              {i18n(language, {
-                en: "Day progress",
-                fr: "Progression du jour",
-              })}
-            </span>
-            <span className="tabular-nums text-sm font-semibold text-zinc-900">
-              {percent}%
-            </span>
-          </div>
-          <div
-            className="h-2 w-full overflow-hidden rounded-full bg-zinc-200"
-            role="progressbar"
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={i18n(language, {
-              en: `Routine completed: ${completedCount} of ${total}`,
-              fr: `Routine : ${completedCount} sur ${total}`,
-            })}
-          >
-            <div
-              className="h-full rounded-full bg-zinc-900 transition-[width] duration-300 ease-out"
-              style={{ width: `${percent}%` }}
-            />
-          </div>
-        </div>
-      ) : null}
-
       <header className="shrink-0 border-b border-zinc-100 px-4 py-3">
         <h2 className="font-display text-sm font-semibold tracking-tight text-zinc-900">
           {formatDayHeader(language, plan.dayOffset, today)}
@@ -174,7 +146,7 @@ export function RoutineDayPanel({
           })}
         </p>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col">
           {SLOTS.map((slot) => (
             <AgendaColumn
               key={slot}

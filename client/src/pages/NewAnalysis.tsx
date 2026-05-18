@@ -390,17 +390,19 @@ export default function NewAnalysis() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 pt-2">
-        <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
-          <Link href="/app">
-            <ArrowLeft className="h-4 w-4 shrink-0" />
-            {i18n(language, {
-              en: "Back to analyses",
-              fr: "Retour aux analyses",
-            })}
-          </Link>
-        </Button>
-      </div>
+      {!shouldShowProcessing ? (
+        <div className="shrink-0 pt-2">
+          <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
+            <Link href="/app">
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              {i18n(language, {
+                en: "Back to analyses",
+                fr: "Retour aux analyses",
+              })}
+            </Link>
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-2">
         <section

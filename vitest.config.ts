@@ -18,6 +18,8 @@ export default defineConfig({
       "client/src/lib/user-access.test.ts",
       "client/src/lib/protocol-day.test.ts",
       "server/lib/onboarding-potential-image-policy.test.ts",
+      "server/lib/avif-variant.test.ts",
+      "client/src/lib/avif-support.test.ts",
     ],
     environment: "node",
   },

@@ -2,7 +2,11 @@ import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
+import {
+  BrandLoader,
+  BrandLoaderTrack,
+  HeroSkyProgressRing,
+} from "@/components/ui/brand-loader";
 import { analysisGlassPanelClassName } from "@/components/analysis/workers/_shared";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
@@ -345,35 +349,12 @@ function NumberedAnalysisStepLoader({
         ) : null}
       </div>
 
-      <div className="relative mx-auto flex size-[clamp(5rem,13vh,7.5rem)] shrink-0 items-center justify-center">
-        <div
-          className={cn(
-            "absolute inset-0 rounded-full border-2",
-            onDark ? "border-white/10" : "border-slate-950/10",
-          )}
-          aria-hidden
-        />
-        <motion.div
-          className="absolute inset-0 rounded-full border-2 border-transparent border-r-[#d6e4ff]/55 border-t-[#d6e4ff]"
-          animate={{ rotate: 360 }}
-          transition={{
-            duration: 1.15,
-            repeat: Number.POSITIVE_INFINITY,
-            ease: "linear",
-          }}
-          aria-hidden
-        />
+      <HeroSkyProgressRing
+        className="mx-auto size-[clamp(5rem,13vh,7.5rem)]"
+        tone={onDark ? "on-dark" : "on-light"}
+      >
         {showElapsedTimer ? (
-          <span
-            className={cn(
-              "relative z-[1] text-[clamp(0.8125rem,2vh,1.0625rem)] font-semibold tabular-nums tracking-tight",
-              onDark ? "text-[#d6e4ff]" : "text-[#2d4a6f]",
-            )}
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {progressLabel}
-          </span>
+          progressLabel
         ) : (
           <Loader2
             className={cn(
@@ -384,7 +365,7 @@ function NumberedAnalysisStepLoader({
             aria-hidden
           />
         )}
-      </div>
+      </HeroSkyProgressRing>
 
       <ul
         className={cn(
@@ -411,10 +392,7 @@ function NumberedAnalysisStepLoader({
                   "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.45rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
                   done && "border-[#d6e4ff]/60 bg-[#d6e4ff]/20 text-[#d6e4ff]",
                   active &&
-                    cn(
-                      "border-[#d6e4ff] bg-[#d6e4ff]/25 shadow-[0_0_14px_rgba(214,228,255,0.35)]",
-                      onDark ? "text-white" : "text-[#1e3a5f]",
-                    ),
+                    "border-[#d6e4ff] bg-[#d6e4ff]/25 text-[#d6e4ff] shadow-[0_0_14px_rgba(214,228,255,0.35)]",
                   !done &&
                     !active &&
                     (onDark
@@ -428,7 +406,10 @@ function NumberedAnalysisStepLoader({
               <span
                 className={cn(
                   "text-[clamp(0.75rem,1.65vh,0.9rem)] leading-snug",
-                  active && (onDark ? "font-medium text-white" : "font-medium text-slate-950"),
+                  active &&
+                    (onDark
+                      ? "font-medium text-[#d6e4ff]"
+                      : "font-medium text-[#2d4a6f]"),
                   done && (onDark ? "text-zinc-300" : "text-slate-600"),
                   !done && !active && (onDark ? "text-zinc-500" : "text-slate-400"),
                 )}

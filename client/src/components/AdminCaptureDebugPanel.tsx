@@ -663,7 +663,7 @@ export function AdminCaptureDebugPanel({
       >
         {i18n(language, { en: 'Admin — capture debug', fr: 'Admin — debug capture' })}
       </p>
-      <motion.div
+      <div
         className="w-full max-w-md rounded-lg border border-white/12 bg-black/60 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-white/85 sm:text-xs"
         aria-label={i18n(language, {
           en: 'Capture metrics at shutter',
@@ -688,7 +688,7 @@ export function AdminCaptureDebugPanel({
             ? ` · max: ${payload.captureMetrics.maxFaceRatio.toFixed(3)}`
             : ''}
         </p>
-      </motion.div>
+      </div>
       <p className="max-w-lg text-center text-xs text-white/55">
         {hasFlatPng
           ? i18n(language, {

@@ -1,5 +1,21 @@
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
+import { probeAvifSupport } from "@/lib/avif-support";
+
+/**
+ * Authenticated image proxy with AVIF negotiation.
+ *
+ * The underlying `/v1/analyses/.../{thumbnail,asset}` endpoints accept a
+ * `?fmt=avif` query parameter (see `serveAssetWithAvifNegotiation` on the
+ * server). When the browser confirms AVIF decode support we *first* try the
+ * `?fmt=avif` URL; if it 404s (legacy asset, unsupported source MIME, encode
+ * failure) we transparently fall back to the original URL. This keeps the
+ * server side simple — no `Vary: Accept` games — while still saving bandwidth
+ * for the 95 %+ of visitors on AVIF-capable browsers.
+ */
+function appendFormatQuery(url: string, fmt: "avif"): string {
+  return `${url}${url.includes("?") ? "&" : "?"}fmt=${fmt}`;
+}
 
 export function AuthenticatedThumbnail({
   src,
@@ -29,6 +45,12 @@ export function AuthenticatedThumbnail({
     setStatus("loading");
     setObjectUrl(null);
 
+    async function fetchWithToken(url: string, token: string) {
+      return fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+
     async function load() {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
@@ -40,11 +62,22 @@ export function AuthenticatedThumbnail({
         return;
       }
 
-      const response = await fetch(src, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const avifSupported = await probeAvifSupport();
+      let response: Response | null = null;
+
+      if (avifSupported) {
+        const avifResponse = await fetchWithToken(
+          appendFormatQuery(src, "avif"),
+          token,
+        );
+        if (avifResponse.ok) {
+          response = avifResponse;
+        }
+      }
+
+      if (!response) {
+        response = await fetchWithToken(src, token);
+      }
 
       if (!response.ok) {
         if (!cancelled) {

@@ -837,7 +837,7 @@ export class CaptureSession {
     const framingRatio = faceRatio(frame);
     this.lastFramingRatio = framingRatio;
     this.lastValidation = { ...validation, faceRatio: framingRatio };
-    this.poseStates[this.currentPoseIndex]!.validation = validation;
+    this.poseStates[this.currentPoseIndex]!.validation = this.lastValidation;
 
     const ready = validation.status === "ready";
     /**
@@ -1604,7 +1604,7 @@ export class CaptureSession {
     this.lastFramingRatio = framingRatio;
     this.lastValidation = { ...validation, faceRatio: framingRatio };
     const ps = this.poseStates[this.currentPoseIndex];
-    if (ps) ps.validation = validation;
+    if (ps) ps.validation = this.lastValidation;
 
     this.renderPoseOverlays(frame, poseDef, false, validation.score);
   }

@@ -4,6 +4,7 @@ import { Check } from "lucide-react";
 import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { HeroSkyProgressRing } from "@/components/ui/brand-loader";
 
 /** Durée cible pour franchir les 8 premières étapes (index 0→8) ; le reste du temps reste sur la dernière. */
 const GEOMETRY_NOMINAL_PHASE_MS = 60_000;
@@ -187,25 +188,9 @@ export function OnboardingFacialGeometryLoader({
         })}
       </h2>
 
-      <div className="relative mx-auto flex size-[clamp(5rem,14vh,11rem)] shrink-0 items-center justify-center">
-        <div
-          className="absolute inset-0 rounded-full border-2 border-white/10"
-          aria-hidden
-        />
-        <motion.div
-          className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#d6e4ff] border-r-[#d6e4ff]/55"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1.15, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-          aria-hidden
-        />
-        <span
-          className="relative z-[1] text-[clamp(0.8125rem,2vh,1.0625rem)] font-semibold tabular-nums tracking-tight text-[#d6e4ff]"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {geometryProgressLabel}
-        </span>
-      </div>
+      <HeroSkyProgressRing className="mx-auto size-[clamp(5rem,14vh,11rem)]" tone="on-dark">
+        {geometryProgressLabel}
+      </HeroSkyProgressRing>
 
       <ul
         className={cn(
@@ -231,7 +216,7 @@ export function OnboardingFacialGeometryLoader({
                   "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.5rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
                   done && "border-[#d6e4ff]/60 bg-[#d6e4ff]/20 text-[#d6e4ff]",
                   active &&
-                    "border-[#d6e4ff] bg-[#d6e4ff]/25 text-white shadow-[0_0_14px_rgba(214,228,255,0.35)]",
+                    "border-[#d6e4ff] bg-[#d6e4ff]/25 text-[#d6e4ff] shadow-[0_0_14px_rgba(214,228,255,0.35)]",
                   !done &&
                     !active &&
                     "border-white/15 bg-white/[0.04] text-zinc-500",
@@ -243,7 +228,7 @@ export function OnboardingFacialGeometryLoader({
               <span
                 className={cn(
                   "text-[clamp(0.75rem,1.7vh,0.9375rem)] leading-snug",
-                  active && "font-medium text-white",
+                  active && "font-medium text-[#d6e4ff]",
                   done && "text-zinc-300",
                   !done && !active && "text-zinc-500",
                 )}
