@@ -25,6 +25,7 @@ import {
   useAnalysisJobStatus,
   useCreateManualAnalysisSession,
   useLaunchManualAnalysis,
+  useRecentScanStatus,
   useSubscriberStandardAnalysisQuota,
 } from "@/hooks/use-supabase";
 import {
@@ -87,6 +88,18 @@ export default function NewAnalysis() {
     isWeeklyAnalysisLocked ||
     subscriberQuotaBlockingUi;
 
+  const recentScanStatus = useRecentScanStatus({
+    enabled: !authLoading && hasPremiumAccess && !heroContentLocked,
+  });
+  const recentScan = recentScanStatus.data;
+  const hasRecentAppScan = Boolean(recentScan && recentScan.received_count > 0);
+  const canLaunchRecentAppScan = Boolean(
+    recentScan?.is_ready && recentScan.latest_session_id,
+  );
+  const recentMissingLabels = (recentScan?.missing_asset_types ?? []).map(
+    (code) => scanAssetLabels[code] ?? code,
+  );
+
   const [, navigate] = useLocation();
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -105,15 +118,18 @@ export default function NewAnalysis() {
   const jobStatusValue = jobStatus.data?.job.status;
   const isAnalyzing =
     jobStatusValue === "queued" || jobStatusValue === "running";
+  const hasJobStatusError = jobStatus.isError;
 
   /**
    * Single source of truth for "show the processing card vs the launch CTA".
    * Includes `Boolean(jobId)` so the UI stays on the processing card across the
    * brief gaps between (a) launch mutation resolving and (b) the first
    * `jobStatus` fetch reporting "queued" — otherwise the launch CTA flashes
-   * back for one render. Failed jobs are excluded so the inline error surfaces.
+   * back for one render. Failed jobs and polling errors are excluded so the
+   * inline error surfaces instead of trapping the user in the loader.
    */
   const shouldShowProcessing =
+    !hasJobStatusError &&
     jobStatusValue !== "failed" &&
     (isAnalyzing ||
       launchMutation.isPending ||
@@ -318,6 +334,47 @@ export default function NewAnalysis() {
     }
   }
 
+  async function handleLaunchRecentAppScan() {
+    const appSessionId = recentScan?.latest_session_id;
+    if (
+      !user?.id ||
+      !appSessionId ||
+      !recentScan?.is_ready ||
+      !hasPremiumAccess ||
+      isWeeklyAnalysisLocked ||
+      subscriberQuotaBlockingUi
+    ) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setMessage(
+      i18n(language, {
+        en: "Preparing launch...",
+        fr: "Préparation du lancement...",
+      }),
+    );
+
+    try {
+      const data = await launchMutation.mutateAsync(appSessionId);
+      setSessionId(appSessionId);
+      setJobId(data.job.id);
+      setMessage(
+        i18n(language, {
+          en: "Analysis queued...",
+          fr: "Analyse en file d'attente...",
+        }),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["recent-scan-status", user.id],
+      });
+      setShowCameraCapture(false);
+      setShowCapturedPreview(false);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, language));
+    }
+  }
+
   /** Opens the live camera capture flow. */
   function openCameraCapture() {
     setErrorMessage(null);
@@ -388,6 +445,12 @@ export default function NewAnalysis() {
     }
   }, [jobStatus.data, language]);
 
+  useEffect(() => {
+    if (jobStatus.isError) {
+      setErrorMessage(getErrorMessage(jobStatus.error, language));
+    }
+  }, [jobStatus.error, jobStatus.isError, language]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {!shouldShowProcessing ? (
@@ -447,39 +510,113 @@ export default function NewAnalysis() {
                 </h1>
               </div>
 
-              <div className="mt-8">
-                <button
-                  type="button"
-                  onClick={() => void openCameraCapture()}
-                  disabled={
-                    authLoading ||
-                    createSessionMutation.isPending ||
-                    isManualAnalysisLocked ||
-                    subscriberQuotaBlockingUi ||
-                    isWeeklyAnalysisLocked
-                  }
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3.5 text-white shadow-[0_16px_30px_-18px_rgba(0,0,0,0.95)] transition hover:bg-[#050505] disabled:pointer-events-none disabled:opacity-55"
-                >
-                  {createSessionMutation.isPending ? (
-                    <span className="flex w-full items-center justify-center py-1">
-                      <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
-                    </span>
-                  ) : (
-                    <>
-                      <img
-                        src="/favicon.png"
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded-lg bg-black object-contain"
-                      />
-                      <span className="text-sm font-semibold tracking-tight sm:text-base">
+              <div className="mt-8 space-y-3">
+                {hasRecentAppScan && recentScan ? (
+                  <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.06] p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-white/45">
+                          {i18n(language, { en: "App scan", fr: "Scan app" })}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold leading-snug text-white">
+                          {i18n(language, {
+                            en: `${recentScan.received_count}/${recentScan.required_count} poses received`,
+                            fr: `${recentScan.received_count}/${recentScan.required_count} poses reçues`,
+                          })}
+                        </p>
+                      </div>
+                      {recentScanStatus.isFetching && !canLaunchRecentAppScan ? (
+                        <Loader2
+                          className="mt-1 h-5 w-5 shrink-0 animate-spin text-white/70"
+                          aria-hidden
+                        />
+                      ) : (
+                        <ScanFace
+                          className="mt-1 h-5 w-5 shrink-0 text-white/70"
+                          aria-hidden
+                        />
+                      )}
+                    </div>
+
+                    {!canLaunchRecentAppScan && recentMissingLabels.length > 0 ? (
+                      <p className="text-xs leading-relaxed text-white/55">
                         {i18n(language, {
-                          en: "Launch scan",
-                          fr: "Lancer le scan",
+                          en: `Missing: ${recentMissingLabels.join(", ")}`,
+                          fr: `Manque : ${recentMissingLabels.join(", ")}`,
                         })}
+                      </p>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => void handleLaunchRecentAppScan()}
+                      disabled={
+                        !canLaunchRecentAppScan ||
+                        launchMutation.isPending ||
+                        authLoading ||
+                        isManualAnalysisLocked ||
+                        subscriberQuotaBlockingUi ||
+                        isWeeklyAnalysisLocked
+                      }
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950 shadow-[0_16px_30px_-18px_rgba(0,0,0,0.95)] transition hover:bg-zinc-200 disabled:pointer-events-none disabled:opacity-55"
+                    >
+                      {launchMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                      ) : (
+                        <ScanFace className="h-4 w-4 shrink-0" />
+                      )}
+                      {canLaunchRecentAppScan
+                        ? i18n(language, {
+                            en: "Launch analysis",
+                            fr: "Lancer l'analyse",
+                          })
+                        : i18n(language, {
+                            en: "Waiting for photos",
+                            fr: "En attente des photos",
+                          })}
+                    </button>
+                  </div>
+                ) : null}
+
+                {!canLaunchRecentAppScan ? (
+                  <button
+                    type="button"
+                    onClick={() => void openCameraCapture()}
+                    disabled={
+                      authLoading ||
+                      createSessionMutation.isPending ||
+                      isManualAnalysisLocked ||
+                      subscriberQuotaBlockingUi ||
+                      isWeeklyAnalysisLocked
+                    }
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-black px-4 py-3.5 text-white shadow-[0_16px_30px_-18px_rgba(0,0,0,0.95)] transition hover:bg-[#050505] disabled:pointer-events-none disabled:opacity-55"
+                  >
+                    {createSessionMutation.isPending ? (
+                      <span className="flex w-full items-center justify-center py-1">
+                        <Loader2 className="h-6 w-6 shrink-0 animate-spin" />
                       </span>
-                    </>
-                  )}
-                </button>
+                    ) : (
+                      <>
+                        <img
+                          src="/favicon.png"
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded-lg bg-black object-contain"
+                        />
+                        <span className="text-sm font-semibold tracking-tight sm:text-base">
+                          {hasRecentAppScan
+                            ? i18n(language, {
+                                en: "Capture from this browser",
+                                fr: "Capturer depuis ce navigateur",
+                              })
+                            : i18n(language, {
+                                en: "Launch scan",
+                                fr: "Lancer le scan",
+                              })}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                ) : null}
               </div>
 
               {message ? (

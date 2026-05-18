@@ -1338,33 +1338,40 @@ BEGIN
     WHERE sat.is_active = TRUE
       AND sat.is_required_onboarding = TRUE
   ),
-  recent_assets AS (
+  picked_session AS (
     SELECT
-      sa.asset_type_code,
-      sa.session_id,
-      sa.created_at,
-      sa.captured_at,
-      ROW_NUMBER() OVER (
-        PARTITION BY sa.asset_type_code
-        ORDER BY sa.created_at DESC
-      ) AS rn
-    FROM public.scan_assets sa
-    WHERE sa.user_id = current_user_id
+      ss.id AS session_id,
+      MAX(COALESCE(sa.captured_at, sa.created_at)) AS latest_captured_at
+    FROM public.scan_sessions ss
+    JOIN public.scan_assets sa
+      ON sa.session_id = ss.id
+     AND sa.user_id = ss.user_id
+    JOIN required_codes rc
+      ON rc.code = sa.asset_type_code
+    WHERE ss.user_id = current_user_id
+      AND ss.source = 'manual_rescan'
+      AND ss.status IN ('collecting', 'ready')
       AND sa.created_at >= window_start
       AND sa.upload_status IN ('uploaded', 'validated')
       AND length(btrim(COALESCE(sa.r2_key, ''))) > 0
+    GROUP BY ss.id
+    ORDER BY latest_captured_at DESC
+    LIMIT 1
   ),
   latest_per_type AS (
-    SELECT ra.*
-    FROM recent_assets ra
-    JOIN required_codes rc ON rc.code = ra.asset_type_code
-    WHERE ra.rn = 1
-  ),
-  picked_session AS (
-    SELECT lpt.session_id
-    FROM latest_per_type lpt
-    ORDER BY lpt.created_at DESC
-    LIMIT 1
+    SELECT DISTINCT ON (sa.asset_type_code)
+      sa.asset_type_code,
+      sa.created_at,
+      sa.captured_at
+    FROM public.scan_assets sa
+    JOIN picked_session ps
+      ON ps.session_id = sa.session_id
+    JOIN required_codes rc
+      ON rc.code = sa.asset_type_code
+    WHERE sa.user_id = current_user_id
+      AND sa.upload_status IN ('uploaded', 'validated')
+      AND length(btrim(COALESCE(sa.r2_key, ''))) > 0
+    ORDER BY sa.asset_type_code, sa.created_at DESC
   ),
   required_array AS (
     SELECT COALESCE(array_agg(rc.code ORDER BY rc.code), ARRAY[]::TEXT[]) AS codes
@@ -1382,13 +1389,13 @@ BEGIN
     COALESCE(array_length(ra.codes, 1), 0) AS required_count,
     COALESCE(array_length(rec.codes, 1), 0) AS received_count,
     ARRAY(
-      SELECT unnest(ra.codes)
-      EXCEPT
-      SELECT unnest(rec.codes)
+      SELECT missing.missing_code
+      FROM unnest(ra.codes) AS missing(missing_code)
+      WHERE NOT (missing.missing_code = ANY(rec.codes))
     )::TEXT[] AS missing_asset_types,
     rec.codes AS received_asset_types,
     (SELECT session_id FROM picked_session) AS latest_session_id,
-    (SELECT MAX(COALESCE(lpt.captured_at, lpt.created_at)) FROM latest_per_type lpt) AS latest_captured_at,
+    (SELECT latest_captured_at FROM picked_session) AS latest_captured_at,
     (
       COALESCE(array_length(ra.codes, 1), 0) > 0
       AND COALESCE(array_length(rec.codes, 1), 0) >= COALESCE(array_length(ra.codes, 1), 0)
