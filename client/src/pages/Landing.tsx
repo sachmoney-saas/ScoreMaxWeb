@@ -4,6 +4,7 @@ import { WaveBackground } from "@/components/background/WaveBackground";
 import { LandingCompleteAnalysisOrbit } from "@/components/landing/LandingCompleteAnalysisOrbit";
 import { FloatingHeader } from "@/components/layout/FloatingHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PictureAvif } from "@/components/ui/picture-avif";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -893,11 +894,12 @@ export default function Landing() {
                 >
                   <div className="flex items-center justify-center gap-2 sm:gap-3">
                     <div className="relative aspect-[4/5] w-[clamp(6.75rem,min(23svh,42vw),13.75rem)] min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
-                      <img
-                        src="/modelav1.jpeg"
+                      <PictureAvif
+                        avifSrc="/modelav1.avif"
+                        fallbackSrc="/modelav1.jpeg"
                         alt=""
-                        decoding="async"
-                        className="h-full w-full object-cover"
+                        className="block h-full w-full"
+                        imgClassName="h-full w-full object-cover"
                       />
                     </div>
                     <ArrowRight
@@ -906,11 +908,12 @@ export default function Landing() {
                       aria-hidden
                     />
                     <div className="relative aspect-[4/5] w-[clamp(6.75rem,min(23svh,42vw),13.75rem)] min-h-0 overflow-hidden rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]">
-                      <img
-                        src="/modelap1.jpeg"
+                      <PictureAvif
+                        avifSrc="/modelap1.avif"
+                        fallbackSrc="/modelap1.jpeg"
                         alt=""
-                        decoding="async"
-                        className="h-full w-full object-cover"
+                        className="block h-full w-full"
+                        imgClassName="h-full w-full object-cover"
                       />
                     </div>
                   </div>

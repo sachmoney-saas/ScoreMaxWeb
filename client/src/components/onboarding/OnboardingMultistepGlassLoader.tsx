@@ -49,6 +49,11 @@ export function OnboardingMultistepGlassLoader({
   const safeIndex = Math.min(activeIndex, Math.max(0, n - 1));
   const message = n > 0 ? i18n(language, steps[safeIndex]!) : "";
   const progressPct = n > 0 ? ((safeIndex + 1) / n) * 100 : 0;
+  const progressRounded = Math.min(100, Math.max(0, Math.round(progressPct)));
+  const progressLabel = i18n(language, {
+    fr: `${progressRounded}\u00a0%`,
+    en: `${progressRounded}%`,
+  });
   const isFeatured = variant === "featured";
 
   return (
@@ -116,10 +121,32 @@ export function OnboardingMultistepGlassLoader({
         </motion.div>
       </motion.div>
 
+      <div
+        className={cn(
+          "flex items-center gap-3",
+          isFeatured
+            ? "mx-auto mt-5 w-full max-w-xs justify-center"
+            : "mt-3 justify-start",
+        )}
+      >
+        <span
+          className={cn(
+            "tabular-nums tracking-tight",
+            isFeatured
+              ? "text-sm font-semibold text-white/90"
+              : "text-xs font-medium text-zinc-400",
+          )}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {progressLabel}
+        </span>
+      </div>
+
       <motion.div
         className={cn(
           "relative overflow-hidden rounded-full bg-white/10",
-          isFeatured ? "mx-auto mt-5 h-2 w-full max-w-xs" : "mt-3 h-1.5",
+          isFeatured ? "mx-auto mt-2 h-2 w-full max-w-xs" : "mt-1.5 h-1.5",
         )}
       >
         <motion.div

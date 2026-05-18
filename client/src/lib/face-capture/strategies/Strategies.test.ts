@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CAPTURE_POSES, type FaceFrame, type LandmarkPoint, type PoseId } from "../types";
 import { POSE_STRATEGIES } from "./index";
 
-function buildLandmarks(): LandmarkPoint[] {
+function buildLandmarks(faceWidth = 0.24): LandmarkPoint[] {
   const lms: LandmarkPoint[] = Array.from({ length: 478 }, () => ({
     x: 0.5,
     y: 0.5,
@@ -11,8 +11,8 @@ function buildLandmarks(): LandmarkPoint[] {
   }));
   lms[33] = { x: 0.35, y: 0.45, z: 0, visibility: 1 };
   lms[263] = { x: 0.65, y: 0.45, z: 0, visibility: 1 };
-  lms[234] = { x: 0.3, y: 0.5, z: 0, visibility: 1 };
-  lms[454] = { x: 0.7, y: 0.5, z: 0, visibility: 1 };
+  lms[234] = { x: 0.5 - faceWidth / 2, y: 0.5, z: 0, visibility: 1 };
+  lms[454] = { x: 0.5 + faceWidth / 2, y: 0.5, z: 0, visibility: 1 };
   lms[10] = { x: 0.5, y: 0.25, z: 0, visibility: 1 };
   lms[152] = { x: 0.5, y: 0.75, z: 0, visibility: 1 };
   lms[13] = { x: 0.5, y: 0.58, z: 0, visibility: 1 };
@@ -83,6 +83,19 @@ describe("closeup-eye blink behaviour", () => {
 });
 
 describe("pose strategies", () => {
+  const frontalStrategy = POSE_STRATEGIES.find((s) => s.poseId === "frontal")!;
+  const frontalPoseDef = CAPTURE_POSES.find((p) => p.id === "frontal")!;
+
+  it("asks the user to step back when the frontal face is too close", () => {
+    const frame = frameForPose("frontal");
+    frame.landmarks = buildLandmarks(0.36);
+
+    const result = frontalStrategy.evaluate(frame, frontalPoseDef);
+
+    expect(result.ok).toBe(false);
+    expect(result.hints).toContain("Reculez légèrement");
+  });
+
   for (const strategy of POSE_STRATEGIES) {
     it(`evaluates ${strategy.poseId}`, () => {
       const poseDef = CAPTURE_POSES.find((p) => p.id === strategy.poseId)!;

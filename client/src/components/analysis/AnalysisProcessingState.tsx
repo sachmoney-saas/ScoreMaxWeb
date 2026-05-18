@@ -300,6 +300,7 @@ type NumberedAnalysisStepLoaderProps = {
   title: string;
   detailHint?: string;
   elapsedMs: number;
+  showElapsedTimer?: boolean;
 };
 
 function NumberedAnalysisStepLoader({
@@ -308,12 +309,18 @@ function NumberedAnalysisStepLoader({
   title,
   detailHint,
   elapsedMs,
+  showElapsedTimer = true,
 }: NumberedAnalysisStepLoaderProps) {
   const activeStep = Math.min(
     IN_APP_ANALYSIS_GEOMETRY_STEPS.length - 1,
     Math.floor(Math.max(0, elapsedMs) / 12_000),
   );
   const onDark = tone === "on-dark";
+
+  const progressPercent = showElapsedTimer
+    ? analysisProgressPercentFromElapsedMs(elapsedMs)
+    : 0;
+  const progressLabel = formatAnalysisProgressPercent(progressPercent, language);
 
   return (
     <div className="mx-auto flex w-full max-w-[min(100%,24rem)] flex-col items-center gap-[clamp(0.85rem,2.2vh,1.35rem)]">
@@ -362,6 +369,19 @@ function NumberedAnalysisStepLoader({
           aria-hidden
         />
       </div>
+
+      {showElapsedTimer ? (
+        <p
+          className={cn(
+            "text-sm tabular-nums tracking-tight",
+            onDark ? "text-zinc-400" : "text-slate-500",
+          )}
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {progressLabel}
+        </p>
+      ) : null}
 
       <ul
         className={cn(
@@ -552,6 +572,7 @@ export function AnalysisProcessingState({
             title={titleLabel}
             detailHint={detailHint}
             elapsedMs={elapsedMs}
+            showElapsedTimer={showElapsedTimer}
           />
         </div>
       </div>
@@ -594,7 +615,11 @@ export function AnalysisProcessingState({
           </p>
         ) : null}
 
-        <BrandLoaderTrack tone={tone} className={cn(trackGap, "w-[min(240px,85%)]")} />
+        <BrandLoaderTrack
+          tone={tone}
+          className={cn(trackGap, "w-[min(240px,85%)]")}
+          progressPercent={showElapsedTimer ? progressPercent : undefined}
+        />
 
         {initializationStepTicker ? (
           <ProcessingStepTicker

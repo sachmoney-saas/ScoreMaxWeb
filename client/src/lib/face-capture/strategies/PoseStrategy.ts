@@ -54,6 +54,18 @@ export function faceRatio(frame: FaceFrame): number {
   return Math.abs(right.x - left.x);
 }
 
+export function faceRatioRangeProgress(
+  value: number,
+  min: number,
+  max?: number,
+): number {
+  if (value < min) return Math.min(1, value / Math.max(min, 1e-6));
+  if (max !== undefined && value > max) {
+    return Math.max(0, 1 - (value - max) / Math.max(max - min, 1e-6));
+  }
+  return 1;
+}
+
 export function clamp01(value: number): number {
   if (value <= 0) return 0;
   if (value >= 1) return 1;

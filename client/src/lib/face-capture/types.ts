@@ -101,6 +101,7 @@ export interface PoseDefinition {
   pitchRange: [number, number];
   rollRange: [number, number];
   minFaceRatio: number;
+  maxFaceRatio?: number;
   holdMs: number;
   qualityGateRequired: boolean;
   /**
@@ -134,6 +135,7 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     pitchRange: [-15, 15],
     rollRange: [-10, 10],
     minFaceRatio: 0.13,
+    maxFaceRatio: 0.3,
     holdMs: 2300,
     qualityGateRequired: true,
   },

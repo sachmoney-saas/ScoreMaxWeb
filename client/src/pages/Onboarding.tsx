@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PictureAvif } from "@/components/ui/picture-avif";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1279,13 +1280,15 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                         })}
                       </p>
                       <div className="mx-auto w-max max-w-full">
-                        <img
-                          src="/3dscan1.png"
+                        <PictureAvif
+                          avifSrc="/3dscan1.avif"
+                          fallbackSrc="/3dscan1.png"
                           alt={i18n(language, {
                             en: "3D facial scan visualization",
                             fr: "Visualisation d'un scan facial en 3D",
                           })}
-                          className={cn(
+                          className="block"
+                          imgClassName={cn(
                             "mx-auto block h-auto w-full max-w-[min(100%,19rem)] object-contain",
                             "sm:max-w-[min(100%,22rem)] md:max-w-[min(100%,26rem)] lg:max-w-[min(100%,30rem)]",
                             "max-h-[min(34vh,14.5rem)] sm:max-h-[min(38vh,17rem)] sm:rounded-2xl",
@@ -1294,7 +1297,6 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                             "[filter:drop-shadow(0_20px_40px_rgba(0,0,0,0.45))]",
                             "[@media(max-height:700px)]:max-h-[min(28vh,12.5rem)]",
                           )}
-                          decoding="async"
                           sizes="(min-width: 1024px) 30rem, (min-width: 768px) 26rem, (min-width: 640px) 22rem, 19rem"
                         />
                       </div>

@@ -107,10 +107,18 @@ export function BrandLoader({
 type BrandLoaderTrackProps = {
   className?: string;
   tone?: BrandLoaderTone;
+  /**
+   * 0–100 : remplissage proportionnel (synchronisé avec le % affiché à l’écran).
+   * Sans valeur : animation indéterminée (shimmer).
+   */
+  progressPercent?: number;
 };
 
-/** Fine piste indéterminée sous le loader (DA SaaS, sans pourcentage trompeur). */
-export function BrandLoaderTrack({ className, tone = "on-dark" }: BrandLoaderTrackProps) {
+export function BrandLoaderTrack({
+  className,
+  tone = "on-dark",
+  progressPercent,
+}: BrandLoaderTrackProps) {
   const track =
     tone === "on-dark"
       ? "bg-white/[0.07]"
@@ -119,6 +127,15 @@ export function BrandLoaderTrack({ className, tone = "on-dark" }: BrandLoaderTra
     tone === "on-dark"
       ? "bg-gradient-to-r from-transparent via-white/35 to-transparent"
       : "bg-gradient-to-r from-transparent via-slate-900/25 to-transparent";
+  const fill =
+    tone === "on-dark"
+      ? "bg-gradient-to-r from-sky-500/70 via-sky-300/90 to-sky-400/75"
+      : "bg-gradient-to-r from-slate-800/80 via-slate-600/90 to-slate-800/80";
+
+  const pct =
+    typeof progressPercent === "number" && Number.isFinite(progressPercent)
+      ? Math.max(0, Math.min(100, progressPercent))
+      : null;
 
   return (
     <div
@@ -127,14 +144,28 @@ export function BrandLoaderTrack({ className, tone = "on-dark" }: BrandLoaderTra
         track,
         className,
       )}
-      aria-hidden
+      role={pct !== null ? "progressbar" : undefined}
+      aria-valuemin={pct !== null ? 0 : undefined}
+      aria-valuemax={pct !== null ? 100 : undefined}
+      aria-valuenow={pct !== null ? Math.round(pct) : undefined}
+      aria-hidden={pct === null ? true : undefined}
     >
-      <div
-        className={cn(
-          "absolute inset-y-0 w-[42%] animate-brand-loader-shimmer rounded-full blur-[1px]",
-          shimmer,
-        )}
-      />
+      {pct !== null ? (
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width] duration-700 ease-out motion-reduce:transition-none",
+            fill,
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      ) : (
+        <div
+          className={cn(
+            "absolute inset-y-0 w-[42%] animate-brand-loader-shimmer rounded-full blur-[1px]",
+            shimmer,
+          )}
+        />
+      )}
     </div>
   );
 }

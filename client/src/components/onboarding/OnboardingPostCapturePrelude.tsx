@@ -136,6 +136,15 @@ export function OnboardingFacialGeometryLoader({
   const lastIndex = GEOMETRY_STEPS.length - 1;
   const didExitRef = React.useRef(false);
 
+  const geometryProgressRounded = Math.min(
+    100,
+    Math.max(0, Math.round(((step + 1) / GEOMETRY_STEPS.length) * 100)),
+  );
+  const geometryProgressLabel = i18n(language, {
+    fr: `${geometryProgressRounded}\u00a0%`,
+    en: `${geometryProgressRounded}%`,
+  });
+
   React.useEffect(() => {
     if (step >= lastIndex) return;
 
@@ -195,6 +204,14 @@ export function OnboardingFacialGeometryLoader({
           aria-hidden
         />
       </div>
+
+      <p
+        className="shrink-0 text-sm font-semibold tabular-nums tracking-tight text-zinc-300"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {geometryProgressLabel}
+      </p>
 
       <ul
         className={cn(
