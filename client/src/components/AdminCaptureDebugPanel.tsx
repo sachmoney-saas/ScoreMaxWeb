@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { AdminCaptureDebugPayload } from '@/lib/face-capture/CaptureSession';
+import { formatFaceRatioForAdmin } from '@/lib/face-capture/types';
 import type { LandmarkPoint, PoseId } from '@/lib/face-capture/types';
 import { MaskRenderer } from '@/lib/face-capture/MaskRenderer';
 import { DEBUG_CAPTURE_WHITE_FACE_MESH } from '@/lib/face-capture/capture-render-debug';
@@ -662,6 +663,32 @@ export function AdminCaptureDebugPanel({
       >
         {i18n(language, { en: 'Admin — capture debug', fr: 'Admin — debug capture' })}
       </p>
+      <motion.div
+        className="w-full max-w-md rounded-lg border border-white/12 bg-black/60 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-white/85 sm:text-xs"
+        aria-label={i18n(language, {
+          en: 'Capture metrics at shutter',
+          fr: 'Métriques au déclenchement',
+        })}
+      >
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-200/80">
+          {i18n(language, { en: 'Pose metrics', fr: 'Métriques pose' })} — {payload.poseId}
+        </p>
+        <p>
+          yaw: {Math.round(payload.captureMetrics.headPose.yaw)}° · pitch:{' '}
+          {Math.round(payload.captureMetrics.headPose.pitch)}° · roll:{' '}
+          {Math.round(payload.captureMetrics.headPose.roll)}°
+        </p>
+        <p className="mt-1">
+          faceRatio: {formatFaceRatioForAdmin(payload.captureMetrics.faceRatio)}
+        </p>
+        <p className="mt-1 text-white/60">
+          {i18n(language, { en: 'Configured thresholds', fr: 'Seuils configurés' })} — min:{' '}
+          {payload.captureMetrics.minFaceRatio.toFixed(3)}
+          {payload.captureMetrics.maxFaceRatio != null
+            ? ` · max: ${payload.captureMetrics.maxFaceRatio.toFixed(3)}`
+            : ''}
+        </p>
+      </motion.div>
       <p className="max-w-lg text-center text-xs text-white/55">
         {hasFlatPng
           ? i18n(language, {

@@ -45,6 +45,47 @@ export interface PoseValidation {
   score: number;
   reasons: string[];
   confidence: number;
+  /**
+   * Largeur joues normalisée (0–1), même métrique que `minFaceRatio` / `maxFaceRatio`
+   * des poses — utile pour le HUD admin et le réglage des seuils.
+   */
+  faceRatio?: number;
+}
+
+/** Multiplicateur mobile : accepter un cadrage ~2× plus serré (visage plus grand dans le cadre). */
+export const MOBILE_CLOSER_FACE_RATIO_MULTIPLIER = 2;
+
+const FACE_RATIO_HARD_CAP = 0.96;
+
+function scalePoseFaceRatioBounds(
+  def: PoseDefinition,
+  multiplier: number,
+): PoseDefinition {
+  const scaled: PoseDefinition = {
+    ...def,
+    minFaceRatio: Math.min(FACE_RATIO_HARD_CAP, def.minFaceRatio * multiplier),
+    ...(def.maxFaceRatio !== undefined
+      ? {
+          maxFaceRatio: Math.min(FACE_RATIO_HARD_CAP, def.maxFaceRatio * multiplier),
+        }
+      : {}),
+  };
+  if (def.requirePullBackBeforeAlign) {
+    scaled.requirePullBackBeforeAlign = {
+      ...def.requirePullBackBeforeAlign,
+      maxFaceRatio: Math.min(
+        FACE_RATIO_HARD_CAP,
+        def.requirePullBackBeforeAlign.maxFaceRatio * multiplier,
+      ),
+    };
+  }
+  return scaled;
+}
+
+/** Formate le ratio facial pour les logs / HUD admin (aligné sur `faceRatio()`). */
+export function formatFaceRatioForAdmin(ratio: number): string {
+  const pct = Math.round(ratio * 1000) / 10;
+  return `${ratio.toFixed(3)} (${pct}%)`;
 }
 
 export type CaptureState =
@@ -256,12 +297,18 @@ const DESKTOP_RELAXED_MIN_FACE_RATIO: Partial<Record<PoseId, number>> = {
 };
 
 /**
- * Liste des poses pour la session : sur PC « classique », assouplit seulement frontal et gros-plan œil.
+ * Liste des poses pour la session :
+ * - PC webcam : min un peu plus bas (visage plus loin OK) ;
+ * - mobile / tactile : min et max ×2 pour autoriser un selfie plus serré.
  */
 export function resolveCapturePoseDefinitionsForRuntime(): PoseDefinition[] {
-  if (!prefersRelaxedPcWebcamCaptureFraming()) return CAPTURE_POSES;
-  return CAPTURE_POSES.map((d) => {
-    const v = DESKTOP_RELAXED_MIN_FACE_RATIO[d.id];
-    return v !== undefined ? { ...d, minFaceRatio: v } : d;
-  });
+  if (prefersRelaxedPcWebcamCaptureFraming()) {
+    return CAPTURE_POSES.map((d) => {
+      const v = DESKTOP_RELAXED_MIN_FACE_RATIO[d.id];
+      return v !== undefined ? { ...d, minFaceRatio: v } : d;
+    });
+  }
+  return CAPTURE_POSES.map((d) =>
+    scalePoseFaceRatioBounds(d, MOBILE_CLOSER_FACE_RATIO_MULTIPLIER),
+  );
 }

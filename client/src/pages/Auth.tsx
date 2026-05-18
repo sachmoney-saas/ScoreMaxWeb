@@ -149,12 +149,6 @@ export default function AuthPage() {
           </Link>
 
           <div className="min-w-0 space-y-1.5 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400 sm:text-xs">
-              {i18n(language, {
-                en: isLogin ? "Sign in" : "Sign up",
-                fr: isLogin ? "Connexion" : "Inscription",
-              })}
-            </p>
             <h1 className="mx-auto max-w-full text-pretty text-[clamp(1.3rem,4.2vw+0.35rem,2.125rem)] font-hero font-semibold leading-[1.08] tracking-[-0.015em] text-white">
               {i18n(language, {
                 en: isLogin ? "Welcome back" : "Create your account",

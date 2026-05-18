@@ -9,7 +9,12 @@ import { Settings2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AdminCaptureDebugPanel } from '@/components/AdminCaptureDebugPanel';
 import { useFaceCapture, listVideoInputDevices } from '../lib/face-capture';
 import type { CapturedPose } from '../lib/face-capture/CaptureSession';
-import { CAPTURE_POSES, type PoseId } from '../lib/face-capture/types';
+import {
+  CAPTURE_POSES,
+  formatFaceRatioForAdmin,
+  resolveCapturePoseDefinitionsForRuntime,
+  type PoseId,
+} from '../lib/face-capture/types';
 import { i18n, type AppLanguage } from '@/lib/i18n';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -160,10 +165,20 @@ export function FaceCaptureView({
     }
   }, [beginPoseSession]);
 
+  const runtimePoseDefinitions = useMemo(
+    () => resolveCapturePoseDefinitionsForRuntime(),
+    [],
+  );
+
   const activePoseId: PoseId | null = useMemo(() => {
     const idx = state.currentPose?.index ?? 0;
-    return CAPTURE_POSES[idx]?.id ?? null;
-  }, [state.currentPose?.index]);
+    return runtimePoseDefinitions[idx]?.id ?? null;
+  }, [runtimePoseDefinitions, state.currentPose?.index]);
+
+  const activePoseFraming = useMemo(() => {
+    if (!activePoseId) return null;
+    return runtimePoseDefinitions.find((p) => p.id === activePoseId) ?? null;
+  }, [activePoseId, runtimePoseDefinitions]);
 
   const instruction =
     activePoseId !== null ? i18n(language, STEP_INSTRUCTION[activePoseId]) : '';
@@ -208,7 +223,7 @@ export function FaceCaptureView({
     ) {
       return null;
     }
-    const poseDef = CAPTURE_POSES.find(p => p.id === activePoseId);
+    const poseDef = runtimePoseDefinitions.find((p) => p.id === activePoseId);
     if (!poseDef) return null;
     const [yMin, yMax] = poseDef.yawRange;
     const y = state.headPose.yaw;
@@ -221,7 +236,13 @@ export function FaceCaptureView({
     if (y < yMin) return 'right';
     if (y > yMax) return 'left';
     return null;
-  }, [state.sessionState, activePoseId, state.headPose, state.validation?.status]);
+  }, [
+    state.sessionState,
+    activePoseId,
+    state.headPose,
+    state.validation?.status,
+    runtimePoseDefinitions,
+  ]);
 
   /** Hors du scroll/padding AppLayout + ancêtres en `transform` (animate-in), sinon `fixed` est faux-vrai plein écran. */
   const captureUi = (
@@ -588,6 +609,20 @@ export function FaceCaptureView({
                     &nbsp;pitch: {state.headPose ? Math.round(state.headPose.pitch) : '-'}°
                     &nbsp;roll: {state.headPose ? Math.round(state.headPose.roll) : '-'}°
                   </div>
+                  <div>
+                    faceRatio:{' '}
+                    {state.validation?.faceRatio != null
+                      ? formatFaceRatioForAdmin(state.validation.faceRatio)
+                      : '-'}
+                  </div>
+                  {activePoseFraming ? (
+                    <div className="text-white/65">
+                      min: {activePoseFraming.minFaceRatio.toFixed(3)}
+                      {activePoseFraming.maxFaceRatio != null
+                        ? ` · max: ${activePoseFraming.maxFaceRatio.toFixed(3)}`
+                        : ''}
+                    </div>
+                  ) : null}
                   <div>hold: {Math.round(state.holdProgress * 100)}%</div>
                 </div>
               ) : null}

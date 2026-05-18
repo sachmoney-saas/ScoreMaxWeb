@@ -105,8 +105,17 @@ export interface CapturedPose {
   landmarkFrameHeight?: number;
 }
 
+export interface AdminCaptureFramingSnapshot {
+  headPose: HeadPose;
+  /** Largeur joues normalisée (0–1), identique à `PoseValidation.faceRatio`. */
+  faceRatio: number;
+  minFaceRatio: number;
+  maxFaceRatio?: number;
+}
+
 export interface AdminCaptureDebugPayload {
   poseId: PoseId;
+  captureMetrics: AdminCaptureFramingSnapshot;
   blob: Blob;
   thumbnailUrl: string;
   landmarks: LandmarkPoint[];
@@ -248,6 +257,7 @@ export class CaptureSession {
   private capturedPoses: CapturedPose[] = [];
   private lastValidation: PoseValidation | null = null;
   private lastHeadPose: HeadPose | null = null;
+  private lastFramingRatio: number | null = null;
   /**
    * Head pose snapshot at the moment the hold started. We compare every
    * subsequent frame's yaw/roll to this anchor to detect deliberate
@@ -404,6 +414,22 @@ export class CaptureSession {
   getLastHeadPose(): HeadPose | null {
     return this.lastHeadPose;
   }
+  getLastFramingRatio(): number | null {
+    return this.lastFramingRatio;
+  }
+
+  private buildAdminCaptureFramingSnapshot(
+    poseDef: PoseDefinition,
+  ): AdminCaptureFramingSnapshot {
+    const headPose = this.lastHeadPose ?? { yaw: 0, pitch: 0, roll: 0 };
+    return {
+      headPose,
+      faceRatio: this.lastFramingRatio ?? 0,
+      minFaceRatio: poseDef.minFaceRatio,
+      maxFaceRatio: poseDef.maxFaceRatio,
+    };
+  }
+
   getFaceInView(): boolean {
     return this.faceInView;
   }
@@ -751,12 +777,15 @@ export class CaptureSession {
       this.faceLossGraceUntil = null;
       this.resetHoldGestureStreaks();
       this.poseStates[0]!.state = "pending";
+      const warmupFr = faceRatio(frame);
+      this.lastFramingRatio = warmupFr;
       const warmupValidation: PoseValidation = {
         poseId: "frontal",
         status: "invalid",
         score: 0,
         reasons: [],
         confidence: frame.confidence,
+        faceRatio: warmupFr,
       };
       this.lastValidation = warmupValidation;
       this.poseStates[0]!.validation = warmupValidation;
@@ -805,7 +834,9 @@ export class CaptureSession {
       holding,
       pullBackSatisfied: this.pullbackGateSatisfied,
     });
-    this.lastValidation = validation;
+    const framingRatio = faceRatio(frame);
+    this.lastFramingRatio = framingRatio;
+    this.lastValidation = { ...validation, faceRatio: framingRatio };
     this.poseStates[this.currentPoseIndex]!.validation = validation;
 
     const ready = validation.status === "ready";
@@ -1139,6 +1170,7 @@ export class CaptureSession {
     if (!this.videoEl) return;
     const idx = this.currentPoseIndex;
     const poseState = this.poseStates[idx]!;
+    const poseDef = this.poses[idx]!;
     if (poseState.state === "capturing" || poseState.state === "captured") return;
     if (performance.now() < this.cooldownUntil) return;
 
@@ -1503,8 +1535,9 @@ export class CaptureSession {
     this.capturedPoses.push(captured);
 
     if (typeof console !== "undefined" && this.config.pauseForAdminCaptureReview === true) {
+      const fr = this.lastFramingRatio ?? 0;
       console.info(
-        `[face-capture] captured ${poseState.poseId} | yaw=${this.lastHeadPose?.yaw} pitch=${this.lastHeadPose?.pitch} roll=${this.lastHeadPose?.roll}`,
+        `[face-capture] captured ${poseState.poseId} | yaw=${this.lastHeadPose?.yaw} pitch=${this.lastHeadPose?.pitch} roll=${this.lastHeadPose?.roll} faceRatio=${fr.toFixed(3)}`,
       );
     }
 
@@ -1523,6 +1556,7 @@ export class CaptureSession {
         type: "admin_capture_debug",
         payload: {
           poseId: poseState.poseId,
+          captureMetrics: this.buildAdminCaptureFramingSnapshot(poseDef),
           blob,
           thumbnailUrl,
           landmarks: lmSnap,
@@ -1566,7 +1600,9 @@ export class CaptureSession {
       holding: true,
       pullBackSatisfied: this.pullbackGateSatisfied,
     });
-    this.lastValidation = validation;
+    const framingRatio = faceRatio(frame);
+    this.lastFramingRatio = framingRatio;
+    this.lastValidation = { ...validation, faceRatio: framingRatio };
     const ps = this.poseStates[this.currentPoseIndex];
     if (ps) ps.validation = validation;
 

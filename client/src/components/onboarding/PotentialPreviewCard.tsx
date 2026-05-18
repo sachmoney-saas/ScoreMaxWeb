@@ -39,7 +39,7 @@ const POTENTIAL_MULTISTEP_STEPS = [
 const DREAM_FACE_PROGRESS_PCT = 14;
 
 const dreamFaceCardClassName =
-  "w-full max-w-none shrink-0 rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,rgba(4,7,12,0.94)_0%,rgba(2,4,8,0.98)_100%)] p-[clamp(0.75rem,1.8vh,1.25rem)] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]";
+  "w-full max-w-none shrink-0 rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(2,4,8,0.97)_0%,rgba(0,1,4,0.99)_100%)] p-[clamp(0.75rem,1.8vh,1.25rem)] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.65)]";
 
 /** Cible affichée : aujourd'hui + 12 semaines (84 jours). */
 function useTwelveWeekTargetDate(): Date {
@@ -340,16 +340,14 @@ export function PotentialPreviewCard({
           )}
           aria-hidden
         >
-          <div className="flex justify-between gap-2">
-            <div className="h-4 w-32 animate-pulse rounded bg-white/12 sm:h-5 sm:w-40" />
-            <div className="h-4 w-24 animate-pulse rounded bg-white/12 sm:h-5 sm:w-28" />
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="h-4 w-28 animate-pulse rounded bg-white/10 sm:h-5 sm:w-36" />
+            <div className="h-1 min-w-[2.5rem] flex-1 animate-pulse rounded-full bg-white/10" />
+            <div className="h-4 w-20 animate-pulse rounded bg-white/10 sm:h-5 sm:w-24" />
           </div>
-          <div className="mt-2.5 flex items-center gap-2 sm:mt-3 sm:gap-2.5">
-            <motion.div className="h-1 min-w-[2.5rem] flex-1 animate-pulse rounded-full bg-white/10" />
-          </motion.div>
-          <div className="mt-2 flex justify-between gap-2">
-            <div className="h-3 w-48 animate-pulse rounded bg-white/10 sm:h-3.5" />
-            <div className="h-3 w-14 animate-pulse rounded bg-white/10 sm:h-3.5" />
+          <div className="mt-2.5 flex justify-between gap-2 sm:mt-3">
+            <div className="h-3 w-48 animate-pulse rounded bg-white/[0.08] sm:h-3.5" />
+            <div className="h-3 w-14 animate-pulse rounded bg-white/[0.08] sm:h-3.5" />
           </div>
         </div>
         <div

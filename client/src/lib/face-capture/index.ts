@@ -28,6 +28,7 @@ export type {
 } from './holdBestFrameTuning';
 export type {
   AdminCaptureDebugPayload,
+  AdminCaptureFramingSnapshot,
   CapturedPose,
   CaptureSessionEvent,
   CaptureSessionState,
