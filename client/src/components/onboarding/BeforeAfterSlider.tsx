@@ -1,18 +1,15 @@
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import {
+  beforeAfterMediaFrameClassName,
+  onboardingPortraitImageClassName,
+} from "@/lib/onboarding-portrait-media";
+
+export { beforeAfterMediaFrameClassName } from "@/lib/onboarding-portrait-media";
 
 const DEFAULT_POSITION = 50;
-
-/**
- * Même empreinte que le slider pour l'écran de chargement du potentiel
- * (évite le saut de layout). Les `max-h` sont fluides en `vh` pour laisser
- * la place au titre, au bloc « What this means » et au CTA Continuer sans
- * provoquer de scroll.
- */
-export const beforeAfterMediaFrameClassName =
-  "relative aspect-[4/5] w-full max-w-[min(100%,21rem)] max-h-[min(28vh,15.5rem)] overflow-visible rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)] sm:max-h-[min(32vh,17.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(36vh,19.5rem)] md:max-w-[min(100%,24rem)]";
 
 type Props = {
   language: AppLanguage;
@@ -147,7 +144,7 @@ export function BeforeAfterSlider({
                 })}
                 decoding="async"
                 draggable={false}
-                className="absolute inset-0 h-full w-full object-cover"
+                className={onboardingPortraitImageClassName}
               />
               {beforeSrc ? (
                 <div
@@ -163,7 +160,7 @@ export function BeforeAfterSlider({
                     })}
                     decoding="async"
                     draggable={false}
-                    className="absolute inset-0 h-full w-full object-cover"
+                    className={onboardingPortraitImageClassName}
                   />
                 </div>
               ) : (
@@ -183,7 +180,7 @@ export function BeforeAfterSlider({
                   })}
                   decoding="async"
                   draggable={false}
-                  className="absolute inset-0 h-full w-full object-cover"
+                  className={onboardingPortraitImageClassName}
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30">
@@ -240,12 +237,17 @@ export function BeforeAfterSlider({
 
             <div
               className={cn(
-                "pointer-events-none absolute top-1/2 z-30 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/30 bg-[rgba(10,16,22,0.82)] shadow-[0_8px_28px_-12px_rgba(0,0,0,0.85)] backdrop-blur-md transition-transform sm:h-12 sm:w-12",
+                "pointer-events-none absolute top-1/2 z-30 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-[0_4px_16px_-4px_rgba(0,0,0,0.45)] ring-1 ring-black/10 transition-transform sm:size-10",
                 isDragging && "scale-105",
               )}
               style={{ left: `${position}%` }}
               aria-hidden
-            />
+            >
+              <span className="-ml-px flex items-center justify-center gap-0 text-zinc-700">
+                <ChevronLeft className="size-3.5 shrink-0 sm:size-4" strokeWidth={2.4} aria-hidden />
+                <ChevronRight className="-ml-1 size-3.5 shrink-0 sm:size-4" strokeWidth={2.4} aria-hidden />
+              </span>
+            </div>
           </>
         ) : null}
       </div>

@@ -1,13 +1,17 @@
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Loader2, Sparkles } from "lucide-react";
+import { Flag, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { onboardingPrimaryCtaClassName } from "@/lib/cta-button-styles";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import type { OnboardingPotentialImage } from "@/hooks/use-onboarding-potential-image";
 import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
-import { BeforeAfterSlider, beforeAfterMediaFrameClassName } from "@/components/onboarding/BeforeAfterSlider";
+import { BeforeAfterSlider } from "@/components/onboarding/BeforeAfterSlider";
+import {
+  beforeAfterMediaFrameClassName,
+  onboardingPortraitAspectClassName,
+} from "@/lib/onboarding-portrait-media";
 
 type Props = {
   language: AppLanguage;
@@ -31,6 +35,112 @@ const POTENTIAL_MULTISTEP_STEPS = [
     fr: "Finalisation de l’aperçu…",
   },
 ] as const;
+
+const DREAM_FACE_PROGRESS_PCT = 14;
+
+const dreamFaceCardClassName =
+  "w-full max-w-none shrink-0 rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,rgba(4,7,12,0.94)_0%,rgba(2,4,8,0.98)_100%)] p-[clamp(0.75rem,1.8vh,1.25rem)] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]";
+
+/** Cible affichée : aujourd'hui + 12 semaines (84 jours). */
+function useTwelveWeekTargetDate(): Date {
+  return React.useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 12 * 7);
+    return d;
+  }, []);
+}
+
+function DreamFaceProgressCard({ language }: { language: AppLanguage }) {
+  const targetDate = useTwelveWeekTargetDate();
+  const targetDateLabel = React.useMemo(
+    () =>
+      targetDate.toLocaleDateString(language === "fr" ? "fr-FR" : "en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+    [language, targetDate],
+  );
+  const targetDateIso = React.useMemo(() => {
+    const y = targetDate.getFullYear();
+    const m = String(targetDate.getMonth() + 1).padStart(2, "0");
+    const day = String(targetDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, [targetDate]);
+
+  return (
+    <div
+      className={dreamFaceCardClassName}
+    >
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+          <Flag
+            className="size-4 shrink-0 text-[#d6e4ff] sm:size-[1.15rem]"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <p className="whitespace-nowrap text-[clamp(0.62rem,1.4vh,0.75rem)] font-bold uppercase leading-tight tracking-wide text-[#d6e4ff] sm:text-xs">
+            {i18n(language, {
+              en: "Your Dream Face",
+              fr: "Ton visage rêvé",
+            })}
+          </p>
+        </div>
+        <div
+          className="min-w-[2.5rem] flex-1 self-center px-0.5 sm:px-1"
+          role="progressbar"
+          aria-valuenow={DREAM_FACE_PROGRESS_PCT}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={i18n(language, {
+            en: "Progress toward your dream face",
+            fr: "Progression vers ton visage rêvé",
+          })}
+        >
+          <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.14]">
+            <div
+              className="h-full rounded-full bg-[#d6e4ff] shadow-[0_0_12px_rgba(214,228,255,0.45)]"
+              style={{ width: `${DREAM_FACE_PROGRESS_PCT}%` }}
+            />
+          </div>
+        </div>
+
+        <time
+          dateTime={targetDateIso}
+          className="max-w-[min(11rem,42%)] shrink-0 text-right text-[clamp(0.72rem,1.5vh,0.8125rem)] font-semibold leading-tight tabular-nums text-white sm:max-w-none sm:text-sm"
+        >
+          {targetDateLabel}
+        </time>
+      </div>
+
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[clamp(0.65rem,1.35vh,0.75rem)] sm:mt-3 sm:text-[0.8125rem]">
+        <p className="min-w-0 leading-snug text-zinc-400">
+          <span className="font-medium text-zinc-300">
+            {i18n(language, {
+              en: "Ultimate NPC",
+              fr: "Ultimate NPC",
+            })}
+          </span>
+          <span className="mx-1 text-zinc-500" aria-hidden>
+            →
+          </span>
+          <span className="font-semibold text-[#d6e4ff]">
+            {i18n(language, {
+              en: "High Tier Normie",
+              fr: "High Tier Normie",
+            })}
+          </span>
+        </p>
+        <span className="shrink-0 tabular-nums text-zinc-500">
+          {i18n(language, {
+            en: "12 weeks",
+            fr: "12 semaines",
+          })}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function TransformationPreviewHeader({
   language,
@@ -136,7 +246,7 @@ function UnlockFullAnalysisCta({
         onClick={() => void onUnlock()}
         disabled={isUnlocking}
         className={cn(
-          "mx-auto flex w-full min-w-[10.5rem] max-w-[min(15rem,88vw)] items-center justify-center gap-2 rounded-sm px-6 py-[clamp(0.55rem,1.4vh,0.875rem)] transition disabled:pointer-events-none disabled:opacity-60",
+          "mx-auto flex w-full min-w-[10.5rem] max-w-full items-center justify-center gap-2 rounded-sm px-6 py-[clamp(0.55rem,1.4vh,0.875rem)] transition disabled:pointer-events-none disabled:opacity-60",
           onboardingPrimaryCtaClassName,
         )}
       >
@@ -225,17 +335,21 @@ export function PotentialPreviewCard({
         </motion.div>
         <div
           className={cn(
-            saasGlassInsetClassName,
-            "pointer-events-none w-full max-w-none shrink-0 select-none rounded-2xl p-[clamp(0.75rem,1.8vh,1.25rem)] text-left",
+            dreamFaceCardClassName,
+            "pointer-events-none select-none",
           )}
           aria-hidden
         >
-          <div className="h-4 w-40 animate-pulse rounded bg-white/12 sm:h-5 sm:w-48" />
-          <div className="mt-3 space-y-2.5">
-            <div className="h-3 w-full animate-pulse rounded bg-white/10 sm:h-3.5" />
-            <div className="h-3 w-full animate-pulse rounded bg-white/10 sm:h-3.5" />
-            <div className="h-3 w-full animate-pulse rounded bg-white/10 sm:h-3.5" />
-            <div className="h-3 w-[88%] animate-pulse rounded bg-white/10 sm:h-3.5" />
+          <div className="flex justify-between gap-2">
+            <div className="h-4 w-32 animate-pulse rounded bg-white/12 sm:h-5 sm:w-40" />
+            <div className="h-4 w-24 animate-pulse rounded bg-white/12 sm:h-5 sm:w-28" />
+          </div>
+          <div className="mt-2.5 flex items-center gap-2 sm:mt-3 sm:gap-2.5">
+            <motion.div className="h-1 min-w-[2.5rem] flex-1 animate-pulse rounded-full bg-white/10" />
+          </motion.div>
+          <div className="mt-2 flex justify-between gap-2">
+            <div className="h-3 w-48 animate-pulse rounded bg-white/10 sm:h-3.5" />
+            <div className="h-3 w-14 animate-pulse rounded bg-white/10 sm:h-3.5" />
           </div>
         </div>
         <div
@@ -248,11 +362,12 @@ export function PotentialPreviewCard({
 
   if (isFailed) {
     return (
-      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 px-2 py-2 sm:gap-5">
+      <div className="mx-auto flex w-full max-w-full flex-col items-center gap-4 px-2 py-2 sm:gap-5">
         <div
           className={cn(
             saasGlassInsetClassName,
-            "relative isolate flex aspect-[4/5] w-full max-w-sm flex-col items-center justify-center overflow-hidden p-6 text-center",
+            "relative isolate flex w-full max-w-full flex-col items-center justify-center overflow-hidden p-6 text-center",
+            onboardingPortraitAspectClassName,
           )}
         >
           <Sparkles className="h-6 w-6 text-zinc-400" />
@@ -300,25 +415,7 @@ export function PotentialPreviewCard({
           className="mx-auto"
         />
       </motion.div>
-      <div
-        className={cn(
-          saasGlassInsetClassName,
-          "w-full max-w-none shrink-0 rounded-2xl p-[clamp(0.75rem,1.8vh,1.25rem)] text-left",
-        )}
-      >
-        <h3 className="text-[clamp(0.85rem,1.7vh,1rem)] font-semibold text-white">
-          {i18n(language, {
-            en: "What this means",
-            fr: "Ce que ça signifie",
-          })}
-        </h3>
-        <p className="mt-[clamp(0.3rem,0.8vh,0.5rem)] w-full max-w-none text-[clamp(0.78rem,1.5vh,0.9375rem)] leading-relaxed text-zinc-400">
-          {i18n(language, {
-            en: "Follow your personalized ScoreMax protocol for 12 weeks to reach your next potential tier. We'll track your progress and adjust recommendations until you reach your ultimate objective.",
-            fr: "Suis ton protocole ScoreMax personnalisé pendant 12 semaines pour passer au palier de potentiel suivant. On suit tes progrès et on ajuste les recommandations jusqu'à ce que tu atteignes ton objectif ultime.",
-          })}
-        </p>
-      </div>
+      <DreamFaceProgressCard language={language} />
       <UnlockFullAnalysisCta
         language={language}
         onUnlock={onUnlock}

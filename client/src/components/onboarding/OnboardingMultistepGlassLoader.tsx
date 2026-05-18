@@ -96,7 +96,7 @@ export function OnboardingMultistepGlassLoader({
         <Loader2
           className={cn(
             "shrink-0 animate-spin",
-            isFeatured ? "h-6 w-6 text-sky-400" : "mt-0.5 h-4 w-4 text-zinc-400",
+            isFeatured ? "h-6 w-6 text-[#d6e4ff]" : "mt-0.5 h-4 w-4 text-zinc-400",
           )}
           aria-hidden
         />
@@ -153,7 +153,7 @@ export function OnboardingMultistepGlassLoader({
           className={cn(
             "h-full rounded-full",
             isFeatured
-              ? "bg-gradient-to-r from-sky-500/80 via-sky-300/90 to-sky-400/80"
+              ? "bg-gradient-to-r from-[#d6e4ff]/85 via-[#d6e4ff] to-[#d6e4ff]/90"
               : "bg-white/45",
           )}
           initial={false}

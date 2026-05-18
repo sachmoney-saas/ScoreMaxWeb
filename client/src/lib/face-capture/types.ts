@@ -134,8 +134,9 @@ export const CAPTURE_POSES: PoseDefinition[] = [
     yawRange: [-10, 10],
     pitchRange: [-15, 15],
     rollRange: [-10, 10],
-    minFaceRatio: 0.13,
-    maxFaceRatio: 0.3,
+    minFaceRatio: 0.11,
+    /** ~0,42 : gros plan selfie un peu plus serré qu’avant (~0,30) ; plage large avec le min. */
+    maxFaceRatio: 0.42,
     holdMs: 2300,
     qualityGateRequired: true,
   },
@@ -249,8 +250,8 @@ export function prefersRelaxedPcWebcamCaptureFraming(): boolean {
 
 /** Seuils un peu plus bas que mobile : le visage peut occuper moins de cadre (webcam plus loin du visage). */
 const DESKTOP_RELAXED_MIN_FACE_RATIO: Partial<Record<PoseId, number>> = {
-  /** Face de face : ~0,10 vs 0,13 mobile — un cran de recul supplémentaire sur PC. */
-  frontal: 0.1,
+  /** Face de face : ~0,09 vs 0,11 mobile — un cran de recul supplémentaire sur PC. */
+  frontal: 0.09,
   "closeup-eye": 0.6,
 };
 

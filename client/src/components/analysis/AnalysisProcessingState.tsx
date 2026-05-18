@@ -354,7 +354,7 @@ function NumberedAnalysisStepLoader({
           aria-hidden
         />
         <motion.div
-          className="absolute inset-0 rounded-full border-2 border-transparent border-r-sky-400/50 border-t-sky-400"
+          className="absolute inset-0 rounded-full border-2 border-transparent border-r-[#d6e4ff]/55 border-t-[#d6e4ff]"
           animate={{ rotate: 360 }}
           transition={{
             duration: 1.15,
@@ -363,25 +363,28 @@ function NumberedAnalysisStepLoader({
           }}
           aria-hidden
         />
-        <Loader2
-          className="size-[clamp(1.75rem,4.5vh,2.5rem)] text-sky-400/90"
-          strokeWidth={2}
-          aria-hidden
-        />
+        {showElapsedTimer ? (
+          <span
+            className={cn(
+              "relative z-[1] text-[clamp(0.8125rem,2vh,1.0625rem)] font-semibold tabular-nums tracking-tight",
+              onDark ? "text-[#d6e4ff]" : "text-[#2d4a6f]",
+            )}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {progressLabel}
+          </span>
+        ) : (
+          <Loader2
+            className={cn(
+              "size-[clamp(1.75rem,4.5vh,2.5rem)]",
+              onDark ? "text-[#d6e4ff]" : "text-[#2d4a6f]",
+            )}
+            strokeWidth={2}
+            aria-hidden
+          />
+        )}
       </div>
-
-      {showElapsedTimer ? (
-        <p
-          className={cn(
-            "text-sm tabular-nums tracking-tight",
-            onDark ? "text-zinc-400" : "text-slate-500",
-          )}
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {progressLabel}
-        </p>
-      ) : null}
 
       <ul
         className={cn(
@@ -406,9 +409,12 @@ function NumberedAnalysisStepLoader({
               <span
                 className={cn(
                   "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.45rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
-                  done && "border-sky-400/60 bg-sky-400/20 text-sky-200",
+                  done && "border-[#d6e4ff]/60 bg-[#d6e4ff]/20 text-[#d6e4ff]",
                   active &&
-                    "border-sky-400 bg-sky-400/25 text-sky-100 shadow-[0_0_14px_rgba(56,189,248,0.35)]",
+                    cn(
+                      "border-[#d6e4ff] bg-[#d6e4ff]/25 shadow-[0_0_14px_rgba(214,228,255,0.35)]",
+                      onDark ? "text-white" : "text-[#1e3a5f]",
+                    ),
                   !done &&
                     !active &&
                     (onDark

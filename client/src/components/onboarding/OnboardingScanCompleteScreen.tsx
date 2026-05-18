@@ -17,6 +17,7 @@ import type { LandmarkPoint } from "@/lib/face-capture/types";
 import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { onboardingPrimaryCtaClassName } from "@/lib/cta-button-styles";
 import { i18n, type AppLanguage } from "@/lib/i18n";
+import { onboardingPortraitAspectClassName } from "@/lib/onboarding-portrait-media";
 import { cn } from "@/lib/utils";
 
 const SCAN_SUMMARY_HIGHLIGHT: HeroMetricHighlight = "scan_summary";
@@ -230,7 +231,10 @@ export function OnboardingScanCompleteScreen({
 
       <motion.div
         ref={viewportRef}
-        className="relative mx-auto aspect-[3/4] w-full shrink-0 max-h-[min(30dvh,260px)] sm:max-h-[min(34dvh,320px)]"
+        className={cn(
+          "relative mx-auto w-full shrink-0 max-h-[min(30dvh,260px)] sm:max-h-[min(34dvh,320px)]",
+          onboardingPortraitAspectClassName,
+        )}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -249,12 +253,12 @@ export function OnboardingScanCompleteScreen({
 
       <div
         className={cn(
-          "mx-auto grid w-full max-w-lg shrink-0 grid-cols-3 gap-2 px-0.5 text-center text-xs sm:max-w-2xl sm:gap-2.5 sm:text-sm",
+          "mx-auto grid w-full max-w-lg shrink-0 gap-2 px-0.5 text-center [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] text-xs sm:max-w-2xl sm:gap-2.5 sm:text-sm",
         )}
       >
         <div
           className={cn(
-            "rounded-xl px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] sm:px-3",
+            "min-w-0 rounded-xl px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] sm:px-3",
             saasGlassInsetClassName,
           )}
         >
@@ -281,7 +285,7 @@ export function OnboardingScanCompleteScreen({
         </div>
         <div
           className={cn(
-            "rounded-xl px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] sm:px-3",
+            "min-w-0 rounded-xl px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] sm:px-3",
             saasGlassInsetClassName,
           )}
         >
@@ -297,28 +301,32 @@ export function OnboardingScanCompleteScreen({
         </div>
         <div
           className={cn(
-            "relative overflow-hidden rounded-xl border border-dashed border-sky-400/45 bg-gradient-to-b from-sky-500/[0.14] via-white/[0.04] to-transparent px-2.5 py-[clamp(0.4rem,1.1vh,0.625rem)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(56,189,248,0.08)] sm:px-3",
+            "relative min-w-0 rounded-xl border border-dashed border-[#d6e4ff]/45 bg-gradient-to-b from-[#d6e4ff]/[0.14] via-white/[0.04] to-transparent py-[clamp(0.4rem,1.1vh,0.625rem)] pl-2 pr-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(214,228,255,0.08)] sm:px-3",
           )}
         >
           <div
-            className="pointer-events-none absolute -right-2 -top-2 size-12 rounded-full bg-sky-400/10 blur-xl"
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]"
             aria-hidden
-          />
-          <p className="text-[0.65rem] font-medium uppercase leading-tight tracking-wide text-sky-200/80 sm:text-[0.72rem]">
-            {i18n(language, {
-              en: "Measurements",
-              fr: "Mesures",
-            })}
-          </p>
-          <div className="mt-0.5 flex items-center justify-center gap-1.5 sm:gap-2">
-            <Layers
-              className="size-3.5 shrink-0 text-sky-400/80 sm:size-4"
-              strokeWidth={2}
-              aria-hidden
-            />
-            <p className="tabular-nums text-[clamp(0.9rem,2vh,1.125rem)] font-semibold text-white">
-              120+
+          >
+            <div className="absolute -right-2 -top-2 size-12 rounded-full bg-[#d6e4ff]/10 blur-xl" />
+          </div>
+          <div className="relative z-[1] min-w-0">
+            <p className="text-center text-[clamp(0.52rem,2.35vw+0.15rem,0.72rem)] font-medium uppercase leading-[1.15] tracking-tight text-[#d6e4ff]/85">
+              {i18n(language, {
+                en: "Measurements",
+                fr: "Mesures",
+              })}
             </p>
+            <div className="mt-0.5 flex min-w-0 items-center justify-center gap-1 sm:gap-1.5 sm:gap-2">
+              <Layers
+                className="size-3 shrink-0 text-[#d6e4ff]/80 sm:size-3.5 md:size-4"
+                strokeWidth={2}
+                aria-hidden
+              />
+              <p className="tabular-nums text-[clamp(0.82rem,1.85vh+0.25rem,1.125rem)] font-semibold text-white">
+                120+
+              </p>
+            </div>
           </div>
         </div>
       </div>

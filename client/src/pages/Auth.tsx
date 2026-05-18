@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { WaveBackground } from "@/components/background/WaveBackground";
 import { Button } from "@/components/ui/button";
@@ -127,6 +127,27 @@ export default function AuthPage() {
 
       <div className="relative z-10 mx-auto w-full min-w-0 max-w-md pointer-events-auto">
         <section className={authPageCardClassName}>
+          <Link
+            href="/"
+            className="mx-auto mb-5 flex w-fit max-w-full items-center justify-center gap-2 rounded-lg outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-white/35 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+            aria-label={i18n(language, {
+              en: "ScoreMax — home",
+              fr: "ScoreMax — accueil",
+            })}
+          >
+            <div className="rounded-lg bg-primary/10 p-1.5">
+              <img
+                src="/favicon.png"
+                alt=""
+                className="h-4 w-4 object-contain"
+              />
+            </div>
+            <span className="font-display text-xl font-bold tracking-tight text-white">
+              Score
+              <span className="text-[#d6e4ff]">Max</span>
+            </span>
+          </Link>
+
           <div className="min-w-0 space-y-1.5 text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-400 sm:text-xs">
               {i18n(language, {

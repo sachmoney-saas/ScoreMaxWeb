@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -86,7 +86,7 @@ export function OnboardingScanCompleteSplash({ language }: SplashProps) {
       <div
         className={cn(
           "flex size-[4.5rem] items-center justify-center rounded-full sm:size-[5.25rem]",
-          "bg-sky-400 shadow-[0_12px_40px_-12px_rgba(56,189,248,0.75)] ring-4 ring-sky-400/25",
+          "bg-[#d6e4ff] shadow-[0_12px_40px_-12px_rgba(214,228,255,0.75)] ring-4 ring-[#d6e4ff]/25",
         )}
       >
         <Check
@@ -193,25 +193,19 @@ export function OnboardingFacialGeometryLoader({
           aria-hidden
         />
         <motion.div
-          className="absolute inset-0 rounded-full border-2 border-transparent border-t-sky-400 border-r-sky-400/50"
+          className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#d6e4ff] border-r-[#d6e4ff]/55"
           animate={{ rotate: 360 }}
           transition={{ duration: 1.15, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
           aria-hidden
         />
-        <Loader2
-          className="size-[clamp(1.75rem,4.5vh,2.75rem)] text-sky-400/90"
-          strokeWidth={2}
-          aria-hidden
-        />
+        <span
+          className="relative z-[1] text-[clamp(0.8125rem,2vh,1.0625rem)] font-semibold tabular-nums tracking-tight text-[#d6e4ff]"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {geometryProgressLabel}
+        </span>
       </div>
-
-      <p
-        className="shrink-0 text-sm font-semibold tabular-nums tracking-tight text-zinc-300"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {geometryProgressLabel}
-      </p>
 
       <ul
         className={cn(
@@ -235,9 +229,9 @@ export function OnboardingFacialGeometryLoader({
               <span
                 className={cn(
                   "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.5rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
-                  done && "border-sky-400/60 bg-sky-400/20 text-sky-200",
+                  done && "border-[#d6e4ff]/60 bg-[#d6e4ff]/20 text-[#d6e4ff]",
                   active &&
-                    "border-sky-400 bg-sky-400/25 text-sky-100 shadow-[0_0_14px_rgba(56,189,248,0.35)]",
+                    "border-[#d6e4ff] bg-[#d6e4ff]/25 text-white shadow-[0_0_14px_rgba(214,228,255,0.35)]",
                   !done &&
                     !active &&
                     "border-white/15 bg-white/[0.04] text-zinc-500",

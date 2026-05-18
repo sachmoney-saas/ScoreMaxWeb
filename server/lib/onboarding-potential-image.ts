@@ -1,4 +1,5 @@
 import { oneshotAspectRatioSchema } from "@shared/oneshot-image";
+import { ONBOARDING_PORTRAIT_ASPECT_RATIO } from "@shared/onboarding-portrait-media";
 import { ApiError } from "./errors";
 import { logger } from "./logger";
 import {
@@ -459,7 +460,9 @@ export async function triggerOnboardingPotentialImage(params: {
 
   const promptRow = await loadActivePrompt();
   const aspectParsed = oneshotAspectRatioSchema.safeParse(promptRow.aspect_ratio);
-  const aspectRatio = aspectParsed.success ? aspectParsed.data : "1:1";
+  const aspectRatio = aspectParsed.success
+    ? aspectParsed.data
+    : ONBOARDING_PORTRAIT_ASPECT_RATIO;
 
   const variant =
     promptRow.model_variant === "default" || promptRow.model_variant === "fast"

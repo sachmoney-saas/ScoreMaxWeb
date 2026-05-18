@@ -88,7 +88,7 @@ describe("pose strategies", () => {
 
   it("asks the user to step back when the frontal face is too close", () => {
     const frame = frameForPose("frontal");
-    frame.landmarks = buildLandmarks(0.36);
+    frame.landmarks = buildLandmarks(0.48);
 
     const result = frontalStrategy.evaluate(frame, frontalPoseDef);
 

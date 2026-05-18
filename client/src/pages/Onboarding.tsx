@@ -1026,7 +1026,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
 
       <div
         className={cn(
-          "relative z-10 mx-auto flex min-h-0 w-full flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:px-6 sm:pb-5 sm:pt-5 max-w-3xl md:max-w-4xl xl:max-w-5xl",
+          "relative z-10 mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-[max(0.5rem,calc(env(safe-area-inset-top,0px)+0.35rem))] sm:max-w-3xl sm:px-6 sm:pb-5 sm:pt-5 md:max-w-4xl",
         )}
       >
         <div className="flex min-h-0 w-full flex-1 flex-col gap-2 sm:gap-3">
@@ -1043,7 +1043,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
               !showCameraCapture &&
               !showScanCompleteHero) ||
             (isPotentialStep && canReopenMeshHero && !showScanCompleteHero) ? (
-              <div className="flex items-center gap-2 sm:gap-2.5">
+              <div className="mx-auto flex w-full max-w-full items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={() =>
@@ -1052,7 +1052,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                       : setStepIndex(0)
                   }
                   className={cn(
-                    "flex size-9 shrink-0 items-center justify-center rounded-full text-white/90",
+                    "flex size-9 shrink-0 items-center justify-center rounded-full text-white/90 sm:size-10",
                     "transition hover:bg-white/15 hover:text-white",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35",
                   )}
@@ -1071,7 +1071,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                   <ChevronLeft className="size-7" strokeWidth={2.35} aria-hidden />
                 </button>
                 <div
-                  className="min-w-0 flex-1 grid gap-1.5"
+                  className="grid min-h-2 min-w-[11rem] w-[17.5rem] max-w-full shrink-0 gap-1.5 sm:w-[19rem] md:w-[20.5rem]"
                   style={{
                     gridTemplateColumns: `repeat(${ONBOARDING_TOTAL_STEPS}, minmax(0, 1fr))`,
                   }}
@@ -1086,23 +1086,29 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     />
                   ))}
                 </div>
+                <div
+                  className="size-9 shrink-0 pointer-events-none opacity-0 sm:size-10"
+                  aria-hidden
+                />
               </div>
             ) : (
-            <div
-              className="grid gap-1.5"
-              style={{
-                gridTemplateColumns: `repeat(${ONBOARDING_TOTAL_STEPS}, minmax(0, 1fr))`,
-              }}
-            >
-              {Array.from({ length: ONBOARDING_TOTAL_STEPS }).map((_, index) => (
-                <div
-                  key={`step-segment-${index}`}
-                  className={cn(
-                    "h-2 rounded-full transition-colors duration-200",
-                    index <= stepIndex ? "bg-white" : "bg-white/25",
-                  )}
-                />
-              ))}
+            <div className="mx-auto w-full max-w-[min(100%,17.5rem)] sm:max-w-[19rem] md:max-w-[20.5rem]">
+              <div
+                className="grid gap-1.5"
+                style={{
+                  gridTemplateColumns: `repeat(${ONBOARDING_TOTAL_STEPS}, minmax(0, 1fr))`,
+                }}
+              >
+                {Array.from({ length: ONBOARDING_TOTAL_STEPS }).map((_, index) => (
+                  <div
+                    key={`step-segment-${index}`}
+                    className={cn(
+                      "h-2 rounded-full transition-colors duration-200",
+                      index <= stepIndex ? "bg-white" : "bg-white/25",
+                    )}
+                  />
+                ))}
+              </div>
             </div>
             )}
           </div>
@@ -1125,7 +1131,9 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                         "px-4 pt-7 pb-8 sm:px-6 sm:pt-8 sm:pb-9 md:px-8 md:pt-9 md:pb-10 lg:px-10 lg:pt-10 lg:pb-11",
                       ),
                   "mx-auto w-full",
-                  "max-w-[460px] md:max-w-2xl lg:max-w-3xl",
+                  isPotentialStep
+                    ? "max-w-[min(100%,28rem)] sm:max-w-[min(100%,32rem)] md:max-w-[min(100%,38rem)] lg:max-w-[min(100%,42rem)] xl:max-w-[min(100%,44rem)]"
+                    : "max-w-[min(100%,24rem)] sm:max-w-[min(100%,25rem)] md:max-w-[min(100%,26rem)] lg:max-w-[min(100%,28rem)]",
                 )}
               >
                 {showScanCompleteHero && heroHasMeshData ? (
@@ -1221,11 +1229,9 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                   >
                     <div
                       className={cn(
-                        "mx-auto flex w-full max-w-[min(100%,22.5rem)] flex-col items-center text-center",
+                        "mx-auto flex w-full max-w-full flex-col items-center text-center",
                         "gap-3 [@media(max-height:700px)]:gap-2",
-                        "sm:max-w-[min(100%,28rem)] sm:gap-4",
-                        "md:max-w-[min(100%,38rem)] md:gap-5",
-                        "lg:max-w-[min(100%,42rem)] lg:gap-6",
+                        "sm:gap-4 md:gap-5 lg:gap-6",
                       )}
                     >
                       {uploadError ? (
@@ -1279,7 +1285,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                           fr: "Pour décider quoi améliorer en looksmaxxing, il te faut le relief réel de ton visage, pas une image qui l'écrase. C'est le cadre le plus sérieux. Les photos seules ne suffisent pas.",
                         })}
                       </p>
-                      <div className="mx-auto w-max max-w-full">
+                      <div className="w-full max-w-full shrink-0">
                         <PictureAvif
                           avifSrc="/3dscan1.avif"
                           fallbackSrc="/3dscan1.png"
@@ -1287,17 +1293,16 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                             en: "3D facial scan visualization",
                             fr: "Visualisation d'un scan facial en 3D",
                           })}
-                          className="block"
+                          className="block w-full"
                           imgClassName={cn(
-                            "mx-auto block h-auto w-full max-w-[min(100%,19rem)] object-contain",
-                            "sm:max-w-[min(100%,22rem)] md:max-w-[min(100%,26rem)] lg:max-w-[min(100%,30rem)]",
-                            "max-h-[min(34vh,14.5rem)] sm:max-h-[min(38vh,17rem)] sm:rounded-2xl",
-                            "md:max-h-[min(40vh,19rem)] lg:max-h-[min(42vh,21rem)]",
+                            "mx-auto block h-auto w-full max-w-full object-contain",
+                            "max-h-[min(50vh,30rem)] sm:max-h-[min(54vh,34rem)] sm:rounded-2xl",
+                            "md:max-h-[min(56vh,36rem)] lg:max-h-[min(58vh,38rem)]",
                             "rounded-[1.25rem]",
                             "[filter:drop-shadow(0_20px_40px_rgba(0,0,0,0.45))]",
-                            "[@media(max-height:700px)]:max-h-[min(28vh,12.5rem)]",
+                            "[@media(max-height:700px)]:max-h-[min(38vh,16.5rem)]",
                           )}
-                          sizes="(min-width: 1024px) 30rem, (min-width: 768px) 26rem, (min-width: 640px) 22rem, 19rem"
+                          sizes="(max-width: 639px) 100vw, (max-width: 1023px) 26rem, 28rem"
                         />
                       </div>
                         </>
@@ -1486,7 +1491,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                       ) : null}
                       <div
                         className={cn(
-                          "w-full max-w-[min(100%,20rem)] sm:max-w-[min(100%,22rem)] md:max-w-[min(100%,24rem)]",
+                          "w-full max-w-full",
                           "shrink-0 pt-1 sm:pt-1.5",
                         )}
                       >

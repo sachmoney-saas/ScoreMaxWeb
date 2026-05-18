@@ -129,7 +129,7 @@ export function BrandLoaderTrack({
       : "bg-gradient-to-r from-transparent via-slate-900/25 to-transparent";
   const fill =
     tone === "on-dark"
-      ? "bg-gradient-to-r from-sky-500/70 via-sky-300/90 to-sky-400/75"
+      ? "bg-gradient-to-r from-[#d6e4ff]/75 via-[#d6e4ff]/95 to-[#d6e4ff]/80"
       : "bg-gradient-to-r from-slate-800/80 via-slate-600/90 to-slate-800/80";
 
   const pct =
