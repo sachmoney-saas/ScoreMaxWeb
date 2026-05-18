@@ -587,7 +587,6 @@ export default function NewAnalysis() {
       !isWeeklyAnalysisLocked ? (
         <FaceCaptureView
           language={language}
-          preCaptureBriefing
           onComplete={handleCapturedComplete}
           onCancel={() => {
             setShowCameraCapture(false);

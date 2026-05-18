@@ -504,10 +504,38 @@ export function AnalysisProcessingState({
   const hasAnchor =
     typeof elapsedAnchorEpochMs === "number" && Number.isFinite(elapsedAnchorEpochMs);
 
+  /**
+   * Le pourcentage 0–99 est censé « partir de 0 » quand l’utilisateur voit le loader.
+   * `created_at` du job est souvent *antérieur* (création en base, upload long, file)
+   * — utiliser `Date.now() - created_at` affichait typiquement ~11 % dès l’ouverture.
+   *
+   * On conserve `elapsedAnchorEpochMs` comme identifiant de job (changement = nouveau run)
+   * mais on mesure l’écoulement depuis le premier rendu où cet ancrage est actif.
+   */
+  const lastServerAnchorRef = React.useRef<number | null>(null);
+  const uiProgressStartRef = React.useRef<number | null>(null);
+
+  React.useLayoutEffect(() => {
+    if (!showElapsedTimer) {
+      return;
+    }
+    if (!hasAnchor) {
+      lastServerAnchorRef.current = null;
+      uiProgressStartRef.current = null;
+      return;
+    }
+    if (lastServerAnchorRef.current !== elapsedAnchorEpochMs) {
+      lastServerAnchorRef.current = elapsedAnchorEpochMs;
+      uiProgressStartRef.current = Date.now();
+    }
+  }, [elapsedAnchorEpochMs, hasAnchor, showElapsedTimer]);
+
   const elapsedMs = React.useMemo(() => {
     if (!showElapsedTimer) return 0;
     if (hasAnchor) {
-      return Math.max(0, Date.now() - elapsedAnchorEpochMs);
+      const start = uiProgressStartRef.current;
+      if (start == null) return 0;
+      return Math.max(0, Date.now() - start);
     }
     return tick * 1000;
   }, [elapsedAnchorEpochMs, hasAnchor, showElapsedTimer, tick]);

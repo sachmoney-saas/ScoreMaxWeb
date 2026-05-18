@@ -70,13 +70,6 @@ export function guideTraceBlobUploadsFromCapturedPose(
           blob: pose.annotatedFaceShapeContourGuideBlob,
         });
       }
-      if (pose.annotatedFrontalCheeksGuideBlob) {
-        uploads.push({
-          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_CHEEKS",
-          fileLabel: "cheeks",
-          blob: pose.annotatedFrontalCheeksGuideBlob,
-        });
-      }
       if (pose.annotatedFrontalMaskOverlayFlatBlob) {
         uploads.push({
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS scoremax_ai_image_prompts (
   prompt text NOT NULL,
   model text NOT NULL DEFAULT 'nano-banana',
   model_variant text NOT NULL DEFAULT 'fast',
-  aspect_ratio text NOT NULL DEFAULT '3:4',
+  aspect_ratio text NOT NULL DEFAULT '1:1',
   safety_filters boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   updated_by uuid REFERENCES auth.users (id) ON DELETE SET NULL,
@@ -44,5 +44,5 @@ VALUES (
   'onboarding_potential_6months',
   'Image générée à la fin de l''onboarding pour montrer le potentiel du user dans 6 mois.',
   'Restyle this photo while keeping the same person''s identity, ethnicity, age, gender, and facial structure. Apply the most flattering looksmaxxing improvements: clearer skin, sharper jawline, healthier hair, brighter eyes, well-groomed eyebrows, balanced face proportions, soft cinematic studio lighting. The result should look like a realistic photo of the same person in 6 months after consistent self-care, fitness, skincare and grooming. Photorealistic, neutral background, head-and-shoulders portrait.',
-  '3:4'
+  '1:1'
 ) ON CONFLICT (key) DO NOTHING;

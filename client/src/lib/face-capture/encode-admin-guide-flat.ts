@@ -6,7 +6,7 @@
 // Résolution = celle du bitmap source (ratio pixel 1, pas de sur-échantillonnage).
 // ============================================================
 //
-// Pose de face : 8 PNG (+ `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : photo + voile + masque 3D Wireframe
+// Pose de face : 7 PNG (+ `GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY` : photo + voile + masque 3D Wireframe
 //   recadré ovale) + nez/bouche + tiers verticaux + angle mâchoire + contour forme du visage +
 //   variante lèvres au repos réutilisant les calques `GUIDE_TRACE_SMILE_LIPS`).
 // Pose profil : 2 PNG (mâchoire + silhouette nez côté visible).
@@ -20,7 +20,6 @@ import {
   applyTransparentCutoutCloseupEyesToContext,
   applyTransparentCutoutSmileLipsToContext,
   applyTransparentCutoutSmileTeethToContext,
-  drawAdminCheeksGuideOnCanvas,
   drawAdminCloseupEyeCanthalTiltGuideOnCanvas,
   drawAdminCloseupEyeContoursGuideOnCanvas,
   drawAdminFaceShapeContourGuideOnCanvas,
@@ -80,8 +79,6 @@ export type AdminFlattenedGuideEncoding =
       verticalThirdsFlat: Blob | null;
       jawAngleFlat: Blob | null;
       faceShapeContourFlat: Blob | null;
-      /** Deux polygones joues (bilatéral) sur cliché frontal + voile. */
-      cheeksFlat: Blob | null;
       /**
        * Cliché frontal + voile sombre + grille blanche 2D (ovale + axe médian
        * et horizontales yeux/bouche). Vignette d’analyse (sidebar) — `null` si
@@ -584,15 +581,6 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       false,
       GUIDE_TRACE_BG_DARKEN_OPACITY,
     ).catch(() => null);
-    const cheeksFlat = await renderSingleFlatGuidePng(
-      bitmap,
-      opts.landmarks,
-      opts.sourceVideoWidth,
-      opts.sourceVideoHeight,
-      drawAdminCheeksGuideOnCanvas,
-      false,
-      GUIDE_TRACE_BG_DARKEN_OPACITY,
-    ).catch(() => null);
     const maskOverlayFlat = await renderFrontalMaskOverlayFlatPng(
       bitmap,
       opts.landmarks,
@@ -623,7 +611,6 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       !verticalThirdsFlat &&
       !jawAngleFlat &&
       !faceShapeContourFlat &&
-      !cheeksFlat &&
       !maskOverlayFlat &&
       !lipsFlat
     )
@@ -635,7 +622,6 @@ export async function encodeAdminGuideFlattenedPair(opts: {
       verticalThirdsFlat,
       jawAngleFlat,
       faceShapeContourFlat,
-      cheeksFlat,
       maskOverlayFlat,
       lipsFlat,
     };

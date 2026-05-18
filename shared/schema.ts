@@ -322,8 +322,6 @@ export const GUIDE_TRACE_SCAN_ASSET_CODES = [
   "GUIDE_TRACE_FACE_FRONT_VERTICAL_THIRDS",
   "GUIDE_TRACE_FACE_FRONT_JAW_ANGLE",
   "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
-  /** Frontal : deux polygones fermés (joue gauche + joue droite du sujet). */
-  "GUIDE_TRACE_FACE_FRONT_CHEEKS",
   /**
    * Cliché frontal selfie : voile sombre 40 % sur la photo puis masque facial
    * 3D (Wireframe + ovale comme en capture live), sans grille 2D ; image

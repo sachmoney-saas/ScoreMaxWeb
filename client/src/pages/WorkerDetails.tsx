@@ -313,14 +313,6 @@ export default function WorkerDetails() {
                 assetTypeCode: "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
               })
             : null,
-        faceFrontCheeksAssetSrc:
-          worker === "symmetry_shape" && analysis && assetPreviewUserId
-            ? buildAnalysisJobAssetPreviewUrl({
-                jobId: analysis.job.id,
-                userId: assetPreviewUserId,
-                assetTypeCode: "GUIDE_TRACE_FACE_FRONT_CHEEKS",
-              })
-            : null,
         jawFrontOvalGuideSrc:
           worker === "jaw" && analysis && assetPreviewUserId
             ? buildAnalysisJobAssetPreviewUrl({
@@ -385,7 +377,6 @@ function renderWorkerBody({
   eyeCloseupAssetSrc,
   verticalThirdsAssetSrc,
   faceFrontShapeContourAssetSrc,
-  faceFrontCheeksAssetSrc,
   jawFrontOvalGuideSrc,
   jawFrontalAngleGuideSrc,
   jawProfileLeftGuideSrc,
@@ -402,7 +393,6 @@ function renderWorkerBody({
   eyeCloseupAssetSrc?: string | null;
   verticalThirdsAssetSrc?: string | null;
   faceFrontShapeContourAssetSrc?: string | null;
-  faceFrontCheeksAssetSrc?: string | null;
   jawFrontOvalGuideSrc?: string | null;
   jawFrontalAngleGuideSrc?: string | null;
   jawProfileLeftGuideSrc?: string | null;
@@ -421,7 +411,6 @@ function renderWorkerBody({
         heroAside={heroAside}
         verticalThirdsAssetSrc={verticalThirdsAssetSrc}
         faceFrontShapeContourAssetSrc={faceFrontShapeContourAssetSrc}
-        faceFrontCheeksAssetSrc={faceFrontCheeksAssetSrc}
       />
     );
     case "jaw":           return (

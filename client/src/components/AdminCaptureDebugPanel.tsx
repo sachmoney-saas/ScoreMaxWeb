@@ -621,7 +621,6 @@ export function AdminCaptureDebugPanel({
   const vtUrl = payload.annotatedVerticalThirdsGuideThumbnailUrl;
   const jawAngleUrl = payload.annotatedJawAngleGuideThumbnailUrl;
   const fcUrl = payload.annotatedFaceShapeContourGuideThumbnailUrl;
-  const cheeksUrl = payload.annotatedFrontalCheeksGuideThumbnailUrl;
   const maskOverlayUrl = payload.annotatedFrontalMaskOverlayFlatThumbnailUrl;
   const frontalLipsUrl = payload.annotatedFrontalLipsGuideThumbnailUrl;
   const jawUrl = payload.annotatedProfileJawGuideThumbnailUrl;
@@ -636,7 +635,6 @@ export function AdminCaptureDebugPanel({
     vtUrl ||
     jawAngleUrl ||
     fcUrl ||
-    cheeksUrl ||
     maskOverlayUrl ||
     frontalLipsUrl,
   );
@@ -862,18 +860,6 @@ export function AdminCaptureDebugPanel({
                   {i18n(language, {
                     en: 'Download PNG — face shape contour',
                     fr: 'Télécharger PNG — contour forme du visage',
-                  })}
-                </a>
-              ) : null}
-              {cheeksUrl ? (
-                <a
-                  href={cheeksUrl}
-                  download={`${payload.poseId}-annotated-cheeks-guide.png`}
-                  className="underline decoration-cyan-500/55 underline-offset-2 hover:text-cyan-50"
-                >
-                  {i18n(language, {
-                    en: 'Download PNG — cheeks (bilateral)',
-                    fr: 'Télécharger PNG — joues (bilatéral)',
                   })}
                 </a>
               ) : null}
@@ -1122,24 +1108,6 @@ export function AdminCaptureDebugPanel({
                   </p>
                   <img
                     src={fcUrl}
-                    alt=""
-                    width={payload.outputWidth}
-                    height={payload.outputHeight}
-                    className="mx-auto block h-auto w-full max-w-full rounded-md"
-                    decoding="async"
-                  />
-                </div>
-              ) : null}
-              {cheeksUrl ? (
-                <div className="w-full">
-                  <p className="mb-2 text-center font-mono text-[10px] uppercase tracking-wide text-white/45">
-                    {i18n(language, {
-                      en: 'Cheeks — flat (left + right polygons)',
-                      fr: 'Joues — fichier aplati (polygones gauche + droite)',
-                    })}
-                  </p>
-                  <img
-                    src={cheeksUrl}
                     alt=""
                     width={payload.outputWidth}
                     height={payload.outputHeight}

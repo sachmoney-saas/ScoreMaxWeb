@@ -1,2 +1,2 @@
-/** Ratio portrait onboarding / avant-après (largeur × hauteur). */
-export const ONBOARDING_PORTRAIT_ASPECT_RATIO = "3:4" as const;
+/** Ratio des previews onboarding / avant-après (OneShot + UI) — carré pour superposition alignée. */
+export const ONBOARDING_PORTRAIT_ASPECT_RATIO = "1:1" as const;

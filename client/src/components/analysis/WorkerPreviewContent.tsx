@@ -1012,14 +1012,6 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
           assetTypeCode: "GUIDE_TRACE_FACE_FRONT_SHAPE_CONTOUR",
         })
       : null;
-  const faceCheeksGuideSrc =
-    previewJob !== null
-      ? buildAnalysisJobAssetPreviewUrl({
-          jobId: previewJob.jobId,
-          userId: previewJob.userId,
-          assetTypeCode: "GUIDE_TRACE_FACE_FRONT_CHEEKS",
-        })
-      : null;
   const locale: FaceAnalysisLocale = language === "fr" ? "fr" : "en";
   const overallNested = getScore(
     aggregates,
@@ -1064,7 +1056,7 @@ function SymmetryShapePreview({ aggregates, language }: PreviewProps) {
           </p>
         </div>
         <AnalysisJobAssetPreviewThumb
-          src={faceShapeContourGuideSrc ?? faceCheeksGuideSrc}
+          src={faceShapeContourGuideSrc}
           alt={i18n(language, {
             en: "Front-face scan overlay: face shape contour guide",
             fr: "Repère contour de la forme du visage (prise frontale)",

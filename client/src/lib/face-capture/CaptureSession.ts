@@ -57,9 +57,6 @@ export interface CapturedPose {
   /** PNG aplati cliché + contour bleu fermé ovale visage (« forme du visage », hors analyse). */
   annotatedFaceShapeContourGuideBlob?: Blob;
   annotatedFaceShapeContourGuideThumbnailUrl?: string;
-  /** PNG aplati cliché frontal + polygones joues gauche/droite (hors analyse). */
-  annotatedFrontalCheeksGuideBlob?: Blob;
-  annotatedFrontalCheeksGuideThumbnailUrl?: string;
   /**
    * PNG aplati cliché frontal selfie + voile sombre puis masque 3D Wireframe
    * (aligné capture live), image recadrée sur la tête. Vignette d’analyse côté sidebar.
@@ -128,7 +125,6 @@ export interface AdminCaptureDebugPayload {
   annotatedVerticalThirdsGuideThumbnailUrl?: string;
   annotatedJawAngleGuideThumbnailUrl?: string;
   annotatedFaceShapeContourGuideThumbnailUrl?: string;
-  annotatedFrontalCheeksGuideThumbnailUrl?: string;
   annotatedFrontalMaskOverlayFlatThumbnailUrl?: string;
   annotatedFrontalLipsGuideThumbnailUrl?: string;
   annotatedProfileJawGuideThumbnailUrl?: string;
@@ -1304,8 +1300,6 @@ export class CaptureSession {
     let annotatedJawAngleGuideThumbnailUrl: string | undefined;
     let annotatedFaceShapeContourGuideBlob: Blob | undefined;
     let annotatedFaceShapeContourGuideThumbnailUrl: string | undefined;
-    let annotatedFrontalCheeksGuideBlob: Blob | undefined;
-    let annotatedFrontalCheeksGuideThumbnailUrl: string | undefined;
     let annotatedFrontalMaskOverlayFlatBlob: Blob | undefined;
     let annotatedFrontalMaskOverlayFlatThumbnailUrl: string | undefined;
     let annotatedFrontalLipsGuideBlob: Blob | undefined;
@@ -1358,10 +1352,6 @@ export class CaptureSession {
             annotatedFaceShapeContourGuideThumbnailUrl = URL.createObjectURL(
               flattened.faceShapeContourFlat,
             );
-          }
-          if (flattened.cheeksFlat) {
-            annotatedFrontalCheeksGuideBlob = flattened.cheeksFlat;
-            annotatedFrontalCheeksGuideThumbnailUrl = URL.createObjectURL(flattened.cheeksFlat);
           }
           if (flattened.maskOverlayFlat) {
             annotatedFrontalMaskOverlayFlatBlob = flattened.maskOverlayFlat;
@@ -1450,12 +1440,6 @@ export class CaptureSession {
         ? {
             annotatedFaceShapeContourGuideBlob,
             annotatedFaceShapeContourGuideThumbnailUrl,
-          }
-        : {}),
-      ...(annotatedFrontalCheeksGuideBlob && annotatedFrontalCheeksGuideThumbnailUrl
-        ? {
-            annotatedFrontalCheeksGuideBlob,
-            annotatedFrontalCheeksGuideThumbnailUrl,
           }
         : {}),
       ...(annotatedFrontalMaskOverlayFlatBlob && annotatedFrontalMaskOverlayFlatThumbnailUrl
@@ -1569,7 +1553,6 @@ export class CaptureSession {
           annotatedVerticalThirdsGuideThumbnailUrl,
           annotatedJawAngleGuideThumbnailUrl,
           annotatedFaceShapeContourGuideThumbnailUrl,
-          annotatedFrontalCheeksGuideThumbnailUrl,
           annotatedFrontalMaskOverlayFlatThumbnailUrl,
           annotatedFrontalLipsGuideThumbnailUrl,
           annotatedProfileJawGuideThumbnailUrl,

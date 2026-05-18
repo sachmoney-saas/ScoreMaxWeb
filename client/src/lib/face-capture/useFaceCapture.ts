@@ -47,16 +47,12 @@ export interface FaceCaptureControls {
   start: () => Promise<void>;
   stop: () => void;
   switchCamera: (deviceId: string | undefined) => Promise<void>;
-  /** Avec `deferSessionStart` : démarre détection + poses après briefing caméra. */
-  beginPoseSession: () => Promise<void>;
   /** Après cliché admin : reprend vers la pose suivante. */
   resumeAfterAdminPoseReview: () => void;
 }
 
 /** Options optionnelles du hook (4ᵉ argument). */
 export interface UseFaceCaptureOptions {
-  /** Si vrai, `init()` active la caméra/MediaPipe sans `session.start()` ; appeler `beginPoseSession()` ensuite. */
-  deferSessionStart?: boolean;
   /** Calque canvas 2D pour repères bleus lorsque le maillage WebGL debug est masqué. */
   guideOverlayRef?: RefObject<HTMLCanvasElement | null>;
 }
@@ -69,8 +65,6 @@ export function useFaceCapture(
 ): [FaceCaptureState, FaceCaptureControls] {
   const sessionRef = useRef<CaptureSession | null>(null);
   const initStarted = useRef(false);
-  /** `session.start()` appelé au moins une fois (ou ignoré si pas defer). */
-  const sessionFlowStartedRef = useRef(false);
   const optionsRef = useRef<UseFaceCaptureOptions | undefined>(options);
   optionsRef.current = options;
   const captureConfigRef = useRef(captureConfig);
@@ -164,15 +158,10 @@ export function useFaceCapture(
       }
       setState(prev => ({ ...prev, isLoading: false }));
 
-      const defer = Boolean(optionsRef.current?.deferSessionStart);
-      if (!defer) {
-        await session.start();
-        sessionFlowStartedRef.current = true;
-        syncState(session);
-      }
+      await session.start();
+      syncState(session);
     } catch (err) {
       initStarted.current = false;
-      sessionFlowStartedRef.current = false;
       sessionRef.current = null;
       setState(prev => ({
         ...prev,
@@ -182,22 +171,6 @@ export function useFaceCapture(
       }));
     }
   }, [videoRef, overlayRef, syncState]);
-
-  const beginPoseSession = useCallback(async () => {
-    const session = sessionRef.current;
-    if (!session || sessionFlowStartedRef.current) return;
-    try {
-      await session.start();
-      sessionFlowStartedRef.current = true;
-      syncState(session);
-    } catch (err) {
-      setState(prev => ({
-        ...prev,
-        error: err instanceof Error ? err.message : 'Capture session failed',
-        sessionState: 'error',
-      }));
-    }
-  }, [syncState]);
 
   const switchCamera = useCallback(async (deviceId: string | undefined) => {
     const session = sessionRef.current;
@@ -221,7 +194,6 @@ export function useFaceCapture(
     sessionRef.current?.stop();
     sessionRef.current = null;
     initStarted.current = false;
-    sessionFlowStartedRef.current = false;
     setState(prev => ({
       ...prev,
       sessionState: 'idle',
@@ -274,6 +246,6 @@ export function useFaceCapture(
 
   return [
     state,
-    { start, stop, switchCamera, beginPoseSession, resumeAfterAdminPoseReview },
+    { start, stop, switchCamera, resumeAfterAdminPoseReview },
   ];
 }

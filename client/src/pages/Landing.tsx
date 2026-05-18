@@ -542,13 +542,13 @@ export default function Landing() {
       <FloatingHeader />
 
       {/* Hero — everything is height-aware so the preview stays inside one viewport. */}
-      <section className="relative isolate flex h-[100svh] max-h-[100svh] min-h-[100svh] flex-col overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-2 pt-[max(4.5rem,calc(env(safe-area-inset-top,0px)+1rem))] sm:pb-3 sm:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))] lg:pb-4 lg:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))]">
+      <section className="relative isolate flex h-[100svh] max-h-[100svh] min-h-[100svh] flex-col overflow-hidden bg-[radial-gradient(circle_at_25%_10%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(145deg,rgba(10,16,22,0.92)_0%,rgba(20,31,39,0.88)_48%,rgba(185,204,209,0.28)_100%)] px-4 pb-2 pt-[max(5.75rem,calc(env(safe-area-inset-top,0px)+1.25rem))] sm:pb-3 sm:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))] lg:pb-4 lg:pt-[max(5rem,calc(env(safe-area-inset-top,0px)+1.25rem))]">
         <div className="relative mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col lg:max-w-[75%]">
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="relative z-10 flex min-h-0 flex-1 flex-col justify-start px-1 py-2 pt-[clamp(0.5rem,3svh,1.75rem)] sm:px-2 sm:py-3 md:py-4 lg:pt-[clamp(1rem,5svh,3.25rem)] xl:pt-[clamp(1.25rem,5.5svh,3.75rem)]"
+            className="relative z-10 flex min-h-0 flex-1 flex-col justify-start px-1 py-2 pt-[clamp(1rem,4.2svh,2.35rem)] sm:px-2 sm:py-3 sm:pt-[clamp(0.5rem,3svh,1.75rem)] md:py-4 lg:pt-[clamp(1rem,5svh,3.25rem)] xl:pt-[clamp(1.25rem,5.5svh,3.75rem)]"
           >
             <div className="mx-auto w-full max-w-[36rem] space-y-[clamp(0.75rem,2.1svh,1.5rem)] text-center sm:max-w-2xl lg:max-w-3xl">
               <motion.h1
@@ -609,7 +609,7 @@ export default function Landing() {
                         fallbackSrc="/modelav1.jpeg"
                         alt=""
                         className="block h-full w-full"
-                        imgClassName="h-full w-full object-cover object-[center_20%]"
+                        imgClassName="h-full w-full object-cover object-center"
                       />
                     </div>
                     <ArrowRight
@@ -628,7 +628,7 @@ export default function Landing() {
                         fallbackSrc="/modelap1.jpeg"
                         alt=""
                         className="block h-full w-full"
-                        imgClassName="h-full w-full object-cover object-[center_20%]"
+                        imgClassName="h-full w-full object-cover object-center"
                       />
                     </div>
                   </div>

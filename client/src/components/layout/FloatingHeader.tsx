@@ -167,25 +167,26 @@ export function FloatingHeader() {
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 100, damping: 20 }}
-        className={`pointer-events-auto flex w-full items-center justify-between rounded-full border px-6 py-3 transition-all duration-300 lg:max-w-[75%] ${
+        className={`pointer-events-auto flex w-full min-w-0 items-center justify-between gap-3 rounded-full border px-4 py-2.5 transition-all duration-300 sm:px-6 sm:py-3 lg:max-w-[75%] ${
           hasScrolled
             ? "glass border-border/60"
             : "border-transparent bg-transparent shadow-none"
         }`}
       >
-        <div className="flex items-center gap-2">
+        {/* shrink-0 : le CTA à droite ne doit pas écraser le marqueur visuel ni le mot-mark */}
+        <div className="flex shrink-0 items-center gap-2">
           <Link
             href="/"
             className="pointer-events-auto flex cursor-pointer items-center gap-2 transition-opacity hover:opacity-80"
           >
-            <div className="rounded-lg bg-primary/10 p-1.5">
+            <div className="shrink-0 rounded-lg bg-primary/10 p-1.5">
               <img
                 src="/favicon.png"
                 alt="ScoreMax favicon"
                 className="h-4 w-4 object-contain"
               />
             </div>
-            <span className="font-display text-xl font-bold tracking-tight">
+            <span className="whitespace-nowrap font-display text-lg font-bold tracking-tight sm:text-xl">
               Score
               <span className="text-[#d6e4ff]">Max</span>
             </span>
@@ -211,7 +212,7 @@ export function FloatingHeader() {
                 </Button>
               </Link>
               <Link href="/register">
-                <Button size="sm" className="rounded-sm px-6 shadow-lg shadow-primary/20">
+                <Button size="sm" className="rounded-sm px-4 shadow-lg shadow-primary/20 sm:px-6">
                   {i18n(language, { en: "Get Started", fr: "Démarrer" })}
                 </Button>
               </Link>

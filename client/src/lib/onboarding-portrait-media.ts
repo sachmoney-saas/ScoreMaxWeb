@@ -1,25 +1,26 @@
 import { cn } from "@/lib/utils";
 
-/** Classe Tailwind : cadre strict 3:4 (largeur / hauteur). */
-export const onboardingPortraitAspectClassName = "aspect-[3/4]" as const;
+/** Classe Tailwind : cadre strict 1:1 (carré). */
+export const onboardingPortraitAspectClassName = "aspect-square" as const;
 
 /**
- * Remplit le cadre 3:4 sans déformation (recadrage centré, léger bias vers le haut pour les portraits).
+ * Remplit le cadre 1:1 sans déformation — cadrage centré (axe horizontal + vertical)
+ * pour que les deux vues avant / après restent superposables au slider.
  */
 export const onboardingPortraitImageClassName =
-  "absolute inset-0 h-full w-full object-cover object-[center_20%]";
+  "absolute inset-0 h-full w-full object-cover object-center";
 
 const portraitFrameShellClassName =
   "relative w-full h-auto overflow-visible rounded-xl border border-white/15 bg-black/25 shadow-[0_12px_36px_-24px_rgba(0,0,0,0.7)]";
 
 /**
- * Cadre avant/après onboarding : ratio 3:4 fixe, taille fluide selon la largeur dispo.
- * Les `max-h` en vh évitent le débordement vertical tout en conservant le ratio quand possible.
+ * Cadre avant/après onboarding : carré 1:1, borné par largeur et hauteur viewport
+ * (les deux contraintes gardent un carré lisible sur mobile).
  */
 export const beforeAfterMediaFrameClassName = cn(
   portraitFrameShellClassName,
   onboardingPortraitAspectClassName,
-  "max-w-[min(100%,21rem)] max-h-[min(28vh,15.5rem)] sm:max-h-[min(32vh,17.5rem)] sm:max-w-[min(100%,23rem)] md:max-h-[min(36vh,19.5rem)] md:max-w-[min(100%,26rem)] lg:max-h-[min(40vh,23rem)] lg:max-w-[min(100%,30rem)] xl:max-h-[min(44vh,26rem)] xl:max-w-[min(100%,34rem)]",
+  "mx-auto w-full max-w-[min(100%,20rem)] max-h-[min(70svh,22rem)] sm:max-w-[min(100%,22rem)] sm:max-h-[min(72svh,24rem)] md:max-w-[min(100%,24rem)] md:max-h-[min(74svh,26rem)] lg:max-w-[min(100%,26rem)] lg:max-h-[min(76svh,28rem)] xl:max-w-[min(100%,28rem)] xl:max-h-[min(78svh,30rem)]",
 );
 
 /** Cadre portrait compact (landing, placeholders). */

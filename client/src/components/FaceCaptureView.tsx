@@ -4,20 +4,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'wouter';
 import { Settings2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AdminCaptureDebugPanel } from '@/components/AdminCaptureDebugPanel';
 import { useFaceCapture, listVideoInputDevices } from '../lib/face-capture';
 import type { CapturedPose } from '../lib/face-capture/CaptureSession';
 import {
-  CAPTURE_POSES,
   formatFaceRatioForAdmin,
   resolveCapturePoseDefinitionsForRuntime,
   type PoseId,
 } from '../lib/face-capture/types';
 import { i18n, type AppLanguage } from '@/lib/i18n';
 import { useAuth } from '@/hooks/use-auth';
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,41 +60,26 @@ interface FaceCaptureViewProps {
   onComplete: (poses: CapturedPose[]) => void;
   onCancel: () => void;
   language?: AppLanguage;
-  /** Bloc infos + Commencer au-dessus du flux caméra avant `session.start()`. */
-  preCaptureBriefing?: boolean;
 }
 
 export function FaceCaptureView({
   onComplete,
   onCancel,
   language = 'fr',
-  preCaptureBriefing = false,
 }: FaceCaptureViewProps) {
   const { adminCaptureExtrasActive } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null!);
   const overlayRef = useRef<HTMLCanvasElement>(null!);
   const guideOverlayRef = useRef<HTMLCanvasElement>(null!);
-  const [briefingDismissed, setBriefingDismissed] = useState(() => !preCaptureBriefing);
-  const [briefingBusy, setBriefingBusy] = useState(false);
-
-  useEffect(() => {
-    setBriefingDismissed(!preCaptureBriefing);
-  }, [preCaptureBriefing]);
 
   const captureSessionConfig = useMemo(
     () => ({ pauseForAdminCaptureReview: Boolean(adminCaptureExtrasActive) }),
     [adminCaptureExtrasActive],
   );
 
-  const captureFaceOptions = useMemo(
-    () => ({
-      deferSessionStart: preCaptureBriefing,
-      guideOverlayRef,
-    }),
-    [preCaptureBriefing],
-  );
+  const captureFaceOptions = useMemo(() => ({ guideOverlayRef }), []);
 
-  const [state, { stop, switchCamera, beginPoseSession, resumeAfterAdminPoseReview }] = useFaceCapture(
+  const [state, { stop, switchCamera, resumeAfterAdminPoseReview }] = useFaceCapture(
     videoRef,
     overlayRef,
     captureSessionConfig,
@@ -147,23 +129,9 @@ export function FaceCaptureView({
     }
   }, [state.sessionState, state.capturedPoses, onComplete]);
 
-  const showPreCaptureBriefingOverlay =
-    preCaptureBriefing && !briefingDismissed && !isLoading && !hasError;
-
   const hasNoFace =
-    !showPreCaptureBriefingOverlay &&
     (state.sessionState === 'AwaitFace' || state.sessionState === 'Aligning' || state.sessionState === 'Holding') &&
     !state.faceInView;
-
-  const handleBriefingConfirm = useCallback(async () => {
-    setBriefingBusy(true);
-    try {
-      await beginPoseSession();
-      setBriefingDismissed(true);
-    } finally {
-      setBriefingBusy(false);
-    }
-  }, [beginPoseSession]);
 
   const runtimePoseDefinitions = useMemo(
     () => resolveCapturePoseDefinitionsForRuntime(),
@@ -185,7 +153,6 @@ export function FaceCaptureView({
 
   const showPoseInstructionOverlay = useMemo(() => {
     if (
-      showPreCaptureBriefingOverlay ||
       isLoading ||
       hasError ||
       state.sessionState === 'AdminPoseReview' ||
@@ -197,15 +164,7 @@ export function FaceCaptureView({
       state.sessionState === 'NextPose' ||
       (Boolean(state.faceInView) && Boolean(state.validation))
     );
-  }, [
-    showPreCaptureBriefingOverlay,
-    isLoading,
-    hasError,
-    instruction,
-    state.sessionState,
-    state.faceInView,
-    state.validation,
-  ]);
+  }, [isLoading, hasError, instruction, state.sessionState, state.faceInView, state.validation]);
 
   /** Indique de quel côté pivoter pour entrer dans la plage de yaw (profils). */
   const profileTurnArrow = useMemo((): 'left' | 'right' | null => {
@@ -315,14 +274,14 @@ export function FaceCaptureView({
             style={{ zIndex: 13, transform: 'scaleX(-1)' }}
           />
 
-          {!isLoading && !hasError && !showPreCaptureBriefingOverlay ? (
+          {!isLoading && !hasError ? (
             <div
               className="selfie-flash-vignette pointer-events-none absolute inset-0 z-[3]"
               aria-hidden
             />
           ) : null}
 
-          {!isLoading && !hasError && !showPreCaptureBriefingOverlay ? (
+          {!isLoading && !hasError ? (
             <div
               className="pointer-events-none absolute inset-0 z-[12]"
               aria-hidden
@@ -332,7 +291,7 @@ export function FaceCaptureView({
             </div>
           ) : null}
 
-          {!isLoading && !hasError && !showPreCaptureBriefingOverlay && adminCaptureExtrasActive ? (
+          {!isLoading && !hasError && adminCaptureExtrasActive ? (
             <div className="absolute right-3 top-3 z-[25] sm:right-4 sm:top-4">
               <DropdownMenu
                 onOpenChange={open => {
@@ -422,67 +381,6 @@ export function FaceCaptureView({
             </div>
           )}
 
-          {showPreCaptureBriefingOverlay ? (
-            <div
-              className="absolute inset-0 z-[42] flex items-center justify-center overflow-y-auto bg-black/90 px-4 py-8"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="face-capture-briefing-title"
-            >
-              <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-black/70 p-6 shadow-xl backdrop-blur-md sm:p-8">
-                <h2
-                  id="face-capture-briefing-title"
-                  className="text-center font-display text-xl font-bold leading-snug tracking-tight text-white sm:text-2xl"
-                >
-                  {i18n(language, {
-                    en: 'Beginning capture',
-                    fr: 'Début de la capture',
-                  })}
-                </h2>
-                <p className="mt-5 text-center text-sm leading-relaxed text-white/90 sm:text-[0.9375rem]">
-                  {i18n(language, {
-                    en: `We analyse your face through ${CAPTURE_POSES.length} main poses. For each pose, follow the on‑screen prompts and stay still until this step completes. Facial data captured here is not shared with third parties and is used solely to compute and display your results within ScoreMax.`,
-                    fr: `Nous analysons votre visage à travers ${CAPTURE_POSES.length} poses principales. Pour chaque pose, suivez les instructions à l'écran et restez stable jusqu'à ce que cette étape soit terminée. Les données relatives à votre visage ne sont pas partagées avec des tiers : elles servent uniquement à l'analyse et à l'affichage de vos résultats dans ScoreMax.`,
-                  })}
-                </p>
-                <p className="mt-4 text-center text-sm leading-relaxed text-white/80">
-                  {i18n(language, {
-                    en: 'Your data can be deleted at any time — no strings attached.',
-                    fr: 'Vos données sont supprimables à tout moment, sans conditions.',
-                  })}
-                </p>
-                <div className="mt-6 flex flex-col items-center gap-5">
-                  <Link
-                    href="/privacy"
-                    className="text-center text-sm font-medium text-emerald-200/95 underline underline-offset-4 hover:text-emerald-100"
-                  >
-                    {i18n(language, {
-                      en: 'Learn more about collected data and how we use them',
-                      fr: 'En savoir plus sur les données récupérées et leurs usages',
-                    })}
-                  </Link>
-                  <div className="flex w-full max-w-xs justify-center">
-                    <Button
-                      type="button"
-                      className="h-11 w-full rounded-full bg-white text-base font-semibold text-slate-950 hover:bg-zinc-200"
-                      disabled={briefingBusy}
-                      onClick={() => void handleBriefingConfirm()}
-                    >
-                      {briefingBusy ? (
-                        <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-                      ) : (
-                        i18n(language, {
-                          en: 'Start',
-                          fr: 'Commencer',
-                        })
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
           {hasError && (
             <div
               className="absolute inset-0 z-20 flex flex-col items-center justify-center"
@@ -512,7 +410,7 @@ export function FaceCaptureView({
             </div>
           )}
 
-          {state.sessionState === 'Holding' && !showPreCaptureBriefingOverlay ? (
+          {state.sessionState === 'Holding' ? (
             <div
               className="pointer-events-none absolute inset-0 z-30 scan-flash-frame"
               aria-hidden
