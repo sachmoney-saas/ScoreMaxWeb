@@ -23,6 +23,7 @@ import {
   assertFreemiumQuotaAvailable,
   buildPayload,
   createAnalysisJob,
+  getNextAnalysisVersion,
   loadRequiredAssets,
   parseGuideTraceMetricsFromStoredRequestPayload,
   refreshScanSessionProgress,
@@ -101,6 +102,19 @@ const scanSessionRouteParamsSchema = z.object({
   sessionId: z.string().uuid(),
 });
 
+const manualAnalysisClientFailureBodySchema = z
+  .object({
+    phase: z
+      .enum(["create_session", "upload_pose", "upload_all", "launch", "unknown"])
+      .default("unknown"),
+    message: z.string().trim().min(1).max(4000),
+    errorCode: z.string().trim().max(128).optional(),
+    errorDetail: z.string().trim().max(8000).optional(),
+    capturedPoseCount: z.number().int().min(0).max(32).optional(),
+    uploadedPoseCount: z.number().int().min(0).max(32).optional(),
+  })
+  .strict();
+
 const signedUploadBodySchema = z.object({
   sessionId: z.string().uuid(),
   assetTypeCode: z
@@ -126,6 +140,11 @@ type ScanAssetThumbnailRow = {
   r2_bucket: string | null;
   r2_key: string;
   mime_type: "image/jpeg" | "image/png";
+};
+
+type AnalysisJobStatusRow = {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed";
 };
 
 async function loadManualSession(params: {
@@ -208,6 +227,115 @@ async function getManualSessionStatus(params: {
     is_ready: missingAssetTypes.length === 0,
     missing_asset_types: missingAssetTypes,
   };
+}
+
+async function createOrUpdateManualAnalysisClientFailureJob(params: {
+  userId: string;
+  session: ScanSessionRow;
+  failure: z.infer<typeof manualAnalysisClientFailureBodySchema>;
+}): Promise<AnalysisJobStatusRow> {
+  const recordedAt = new Date().toISOString();
+  const errorCode = params.failure.errorCode?.trim() || "CLIENT_PRELAUNCH_ERROR";
+  const errorMessage = `${params.failure.phase}: ${params.failure.message}`.slice(0, 4000);
+  const requestPayload = {
+    requestId: `client-failure-${params.userId}-${params.session.id}-${Date.now()}`,
+    images: [],
+    analyses: [],
+    metadata: {
+      source: "manual_rescan",
+      userId: params.userId,
+      sessionId: params.session.id,
+      tier: "standard",
+      clientFailure: {
+        phase: params.failure.phase,
+        message: params.failure.message,
+        errorCode,
+        errorDetail: params.failure.errorDetail ?? null,
+        capturedPoseCount: params.failure.capturedPoseCount ?? null,
+        uploadedPoseCount: params.failure.uploadedPoseCount ?? null,
+        recordedAt,
+      },
+    },
+  };
+
+  const { data: existingJobs, error: existingError } = await supabaseAdmin
+    .from("analysis_jobs")
+    .select("id, status")
+    .eq("user_id", params.userId)
+    .eq("session_id", params.session.id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (existingError) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to inspect existing analysis jobs",
+      details: existingError,
+    });
+  }
+
+  const existingJob = (existingJobs?.[0] ?? null) as AnalysisJobStatusRow | null;
+  if (existingJob) {
+    if (existingJob.status === "failed") {
+      const { error: updateError } = await supabaseAdmin
+        .from("analysis_jobs")
+        .update({
+          error_code: errorCode,
+          error_message: errorMessage,
+          request_payload: requestPayload,
+          failed_at: recordedAt,
+        })
+        .eq("id", existingJob.id)
+        .eq("user_id", params.userId);
+
+      if (updateError) {
+        throw new ApiError({
+          code: "INTERNAL_SERVER_ERROR",
+          status: 500,
+          message: "Unable to update client failure analysis job",
+          details: updateError,
+        });
+      }
+    }
+
+    return existingJob;
+  }
+
+  const version = await getNextAnalysisVersion(params.session.id);
+  const { data: insertedJob, error: insertError } = await supabaseAdmin
+    .from("analysis_jobs")
+    .insert({
+      user_id: params.userId,
+      session_id: params.session.id,
+      trigger_source: "user_rerun",
+      tier: "standard",
+      status: "failed",
+      version,
+      request_payload: requestPayload,
+      error_code: errorCode,
+      error_message: errorMessage,
+      failed_at: recordedAt,
+    })
+    .select("id, status")
+    .single();
+
+  if (insertError || !insertedJob) {
+    throw new ApiError({
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Unable to create client failure analysis job",
+      details: insertError,
+    });
+  }
+
+  await supabaseAdmin
+    .from("scan_sessions")
+    .update({ status: "failed" })
+    .eq("id", params.session.id)
+    .eq("user_id", params.userId);
+
+  return insertedJob as AnalysisJobStatusRow;
 }
 
 export function createV1AnalysesRouter(): Router {
@@ -393,11 +521,43 @@ export function createV1AnalysesRouter(): Router {
   });
 
   router.post(
-    "/analyses/manual-session/:sessionId/launch",
-    validateBody(optionalAnalysisLangBodySchema),
+    "/analyses/manual-session/:sessionId/client-failure",
+    validateBody(manualAnalysisClientFailureBodySchema),
     async (req, res, next) => {
       try {
         const userId = await requireUserId(req.headers.authorization);
+        const params = scanSessionRouteParamsSchema.parse(req.params);
+        const failure = req.body as z.infer<typeof manualAnalysisClientFailureBodySchema>;
+        const session = await loadManualSession({ sessionId: params.sessionId, userId });
+
+        await refreshScanSessionProgress(session.id).catch(() => undefined);
+        const job = await createOrUpdateManualAnalysisClientFailureJob({
+          userId,
+          session,
+          failure,
+        });
+
+        res.status(201).json({
+          ok: true,
+          httpStatus: 201,
+          data: { job },
+          error: null,
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/analyses/manual-session/:sessionId/launch",
+    validateBody(optionalAnalysisLangBodySchema),
+    async (req, res, next) => {
+      let failureUserId: string | null = null;
+      let failureSession: ScanSessionRow | null = null;
+      try {
+        const userId = await requireUserId(req.headers.authorization);
+        failureUserId = userId;
         const params = scanSessionRouteParamsSchema.parse(req.params);
         const { lang } = req.body as { lang?: string };
         assertSupportedAnalysisLang(lang);
@@ -406,6 +566,7 @@ export function createV1AnalysesRouter(): Router {
         await assertSubscriberStandardAnalysisAllowed(userId);
 
         const session = await loadManualSession({ sessionId: params.sessionId, userId });
+        failureSession = session;
         const status = await getManualSessionStatus({ sessionId: session.id, userId });
 
         if (!status.is_ready) {
@@ -460,6 +621,24 @@ export function createV1AnalysesRouter(): Router {
           error: null,
         });
       } catch (error) {
+        if (failureUserId && failureSession) {
+          await createOrUpdateManualAnalysisClientFailureJob({
+            userId: failureUserId,
+            session: failureSession,
+            failure: {
+              phase: "launch",
+              message: error instanceof Error ? error.message : String(error),
+              errorCode:
+                error instanceof ApiError
+                  ? error.code
+                  : error instanceof Error && error.name !== "Error"
+                    ? error.name
+                    : undefined,
+              errorDetail:
+                error instanceof Error ? (error.stack ?? error.message) : undefined,
+            },
+          }).catch(() => undefined);
+        }
         next(error);
       }
     },

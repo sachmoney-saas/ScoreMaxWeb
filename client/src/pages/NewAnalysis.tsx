@@ -20,12 +20,15 @@ import {
 } from "@/hooks/use-supabase";
 import {
   getScanAssetLabels,
+  recordManualAnalysisClientFailure,
 } from "@/lib/face-analysis";
+import { reportClientError } from "@/lib/report-client-error";
 import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
-import { type PoseId } from "@/lib/face-capture/types";
+import { CAPTURE_ORDER, type PoseId } from "@/lib/face-capture/types";
 import { uploadCapturedOnboardingPose } from "@/lib/onboarding-complete-flow";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 import {
   analysisHeroGlassClassName,
 } from "@/components/analysis/workers/_shared";
@@ -33,9 +36,179 @@ import { queryClient } from "@/lib/queryClient";
 import { formatSubscriberStandardQuotaSidebarLine } from "@/lib/subscriber-standard-analysis-copy";
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
+type ManualAnalysisClientFailurePhase =
+  | "create_session"
+  | "upload_pose"
+  | "upload_all"
+  | "launch"
+  | "unknown";
+
+type PoseUploadStatus = "pending" | "uploading" | "uploaded" | "failed";
+
+const CAPTURE_UPLOAD_LABELS: Record<PoseId, { en: string; fr: string }> = {
+  frontal: { en: "Face", fr: "Face" },
+  "profile-right": { en: "Right side", fr: "Côté droit" },
+  "profile-left": { en: "Left side", fr: "Côté gauche" },
+  "jaw-up": { en: "Look up", fr: "Regard haut" },
+  "crown-down": { en: "Look down", fr: "Regard bas" },
+  "closeup-smile": { en: "Smile", fr: "Sourire" },
+  "closeup-eye": { en: "Eyes", fr: "Yeux" },
+};
+
+function createInitialPoseUploadStatuses(): Record<PoseId, PoseUploadStatus> {
+  return CAPTURE_ORDER.reduce(
+    (acc, poseId) => {
+      acc[poseId] = "pending";
+      return acc;
+    },
+    {} as Record<PoseId, PoseUploadStatus>,
+  );
+}
+
+function poseUploadProgressValue(status: PoseUploadStatus): number {
+  if (status === "uploaded" || status === "failed") return 100;
+  if (status === "uploading") return 62;
+  return 6;
+}
+
+function ManualAnalysisUploadProgress({
+  language,
+  statuses,
+}: {
+  language: AppLanguage;
+  statuses: Record<PoseId, PoseUploadStatus>;
+}) {
+  const uploadedCount = CAPTURE_ORDER.filter(
+    (poseId) => statuses[poseId] === "uploaded",
+  ).length;
+  const progressPercent = Math.round((uploadedCount / CAPTURE_ORDER.length) * 100);
+
+  return (
+    <div
+      className="mx-auto flex w-full flex-col items-center px-4 py-6 text-zinc-50 sm:px-6 sm:py-8"
+      role="status"
+      aria-live="polite"
+      aria-label={i18n(language, {
+        en: `${progressPercent}% uploaded`,
+        fr: `${progressPercent} % envoyés`,
+      })}
+    >
+      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#d6e4ff]/60 bg-[#d6e4ff] text-lg font-extrabold tabular-nums tracking-tight text-[#0b1220] shadow-[0_0_32px_rgba(214,228,255,0.38)]">
+        {progressPercent}%
+      </div>
+
+      <ol className="mt-7 w-full max-w-sm space-y-3.5" aria-label={i18n(language, {
+        en: "Photo uploads",
+        fr: "Envoi des photos",
+      })}>
+        {CAPTURE_ORDER.map((poseId, index) => {
+          const status = statuses[poseId];
+          const progress = poseUploadProgressValue(status);
+          const isActive = status === "uploading";
+          const isUploaded = status === "uploaded";
+          const isFailed = status === "failed";
+
+          return (
+            <li
+              key={poseId}
+              className="space-y-1.5"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <span
+                    className={cn(
+                      "shrink-0 text-[0.65rem] font-extrabold tabular-nums tracking-[0.14em]",
+                      isUploaded && "text-[#d6e4ff]",
+                      isActive && "text-[#d6e4ff]",
+                      isFailed && "text-red-100",
+                      !isUploaded && !isActive && !isFailed && "text-zinc-500",
+                    )}
+                    aria-hidden
+                  >
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span
+                    className={cn(
+                      "truncate text-left text-xs font-semibold tracking-tight sm:text-sm",
+                      isUploaded && "text-zinc-200",
+                      isActive && "text-[#d6e4ff]",
+                      isFailed && "text-red-100",
+                      !isUploaded && !isActive && !isFailed && "text-zinc-500",
+                    )}
+                  >
+                    {i18n(language, CAPTURE_UPLOAD_LABELS[poseId])}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 text-[0.65rem] font-bold tabular-nums",
+                    isUploaded && "text-[#d6e4ff]",
+                    isActive && "text-[#d6e4ff]",
+                    isFailed && "text-red-100",
+                    !isUploaded && !isActive && !isFailed && "text-zinc-500",
+                  )}
+                  aria-hidden
+                >
+                  {progress}%
+                </span>
+              </div>
+              <div
+                className="h-2.5 overflow-hidden rounded-full bg-white/[0.08] shadow-[inset_0_1px_1px_rgba(0,0,0,0.35)]"
+                aria-hidden
+              >
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width,background-color] duration-500 ease-out",
+                    isUploaded && "bg-[#d6e4ff]",
+                    isActive && "animate-pulse bg-[#d6e4ff]",
+                    isFailed && "bg-red-300",
+                    !isUploaded && !isActive && !isFailed && "bg-white/15",
+                  )}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function getRawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error ?? "Unknown error");
+}
+
+function getRawErrorDetail(error: unknown): string | undefined {
+  if (error instanceof Error) return error.stack ?? error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return undefined;
+  }
+}
+
+function getRawErrorCode(error: unknown): string | undefined {
+  if (error instanceof DOMException) return error.name;
+  if (error instanceof Error && error.name && error.name !== "Error") {
+    return error.name;
+  }
+  return undefined;
+}
+
 function getErrorMessage(error: unknown, language: AppLanguage): string {
   const message = error instanceof Error ? error.message : String(error ?? "");
   const lower = message.toLowerCase();
+  if (
+    lower.includes("manual analysis session is incomplete") ||
+    lower.includes("missing required scan assets")
+  ) {
+    return i18n(language, {
+      en: "Some photos did not finish uploading. Start a new scan and keep this page open until the analysis starts.",
+      fr: "Certaines photos n’ont pas fini d’être envoyées. Relance un scan et garde la page ouverte jusqu’au démarrage de l’analyse.",
+    });
+  }
   if (
     lower.includes("load failed") ||
     lower.includes("video load error") ||
@@ -45,8 +218,8 @@ function getErrorMessage(error: unknown, language: AppLanguage): string {
     lower.includes("fetch failed")
   ) {
     return i18n(language, {
-      en: "The request failed, likely because of the connection. Check your network and try again.",
-      fr: "La requête a échoué, probablement à cause de la connexion. Vérifie ton réseau et réessaie.",
+      en: "The photo upload or analysis launch failed. Check your network and try again.",
+      fr: "L’envoi des photos ou le lancement de l’analyse a échoué. Vérifie ton réseau et réessaie.",
     });
   }
   if (lower.includes("abort") || lower.includes("timeout")) {
@@ -167,7 +340,11 @@ export default function NewAnalysis() {
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUploadingAll, setIsUploadingAll] = useState(false);
+  const [isLaunchingAfterUploads, setIsLaunchingAfterUploads] = useState(false);
   const [uploadedPoseCount, setUploadedPoseCount] = useState(0);
+  const [poseUploadStatuses, setPoseUploadStatuses] = useState<
+    Record<PoseId, PoseUploadStatus>
+  >(() => createInitialPoseUploadStatuses());
   const uploadPromisesRef = React.useRef<Map<PoseId, Promise<void>>>(new Map());
   const completedUploadPoseIdsRef = React.useRef<Set<PoseId>>(new Set());
   const autoLaunchStartedRef = React.useRef(false);
@@ -189,12 +366,20 @@ export default function NewAnalysis() {
    * back for one render. Failed jobs and polling errors are excluded so the
    * inline error surfaces instead of trapping the user in the loader.
    */
+  const shouldShowUploadProgress =
+    isUploadingAll &&
+    !launchMutation.isPending &&
+    !isLaunchingAfterUploads &&
+    !jobId &&
+    !isAnalyzing &&
+    jobStatusValue !== "completed";
+
   const shouldShowProcessing =
     !hasJobStatusError &&
     jobStatusValue !== "failed" &&
     (isAnalyzing ||
+      isLaunchingAfterUploads ||
       launchMutation.isPending ||
-      isUploadingAll ||
       Boolean(jobId) ||
       jobStatusValue === "completed");
 
@@ -248,11 +433,73 @@ export default function NewAnalysis() {
     autoLaunchStartedRef.current = false;
     setSessionId(null);
     setUploadedPoseCount(0);
+    setPoseUploadStatuses(createInitialPoseUploadStatuses());
     setCapturedPoses([]);
     setJobId(null);
+    setIsUploadingAll(false);
+    setIsLaunchingAfterUploads(false);
     setMessage(null);
     setErrorMessage(null);
   }, []);
+
+  const recordCaptureFailureForAdmin = useCallback(
+    async (params: {
+      phase: ManualAnalysisClientFailurePhase;
+      error: unknown;
+      currentSessionId?: string | null;
+      capturedPoseCount?: number;
+      uploadedPoseCount?: number;
+    }) => {
+      const rawMessage = getRawErrorMessage(params.error);
+      const rawDetail = getRawErrorDetail(params.error);
+      const rawCode = getRawErrorCode(params.error);
+      const currentSessionId = params.currentSessionId ?? sessionId;
+
+      reportClientError({
+        source: `manual_analysis.${params.phase}.failed`,
+        message: rawMessage,
+        errorCode: rawCode,
+        errorDetail: rawDetail,
+        payload: {
+          sessionId: currentSessionId,
+          capturedPoseCount: params.capturedPoseCount,
+          uploadedPoseCount: params.uploadedPoseCount,
+        },
+      });
+
+      if (!currentSessionId) return;
+
+      try {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) return;
+
+        await recordManualAnalysisClientFailure({
+          accessToken,
+          sessionId: currentSessionId,
+          phase: params.phase,
+          message: rawMessage,
+          ...(rawCode ? { errorCode: rawCode } : {}),
+          ...(rawDetail ? { errorDetail: rawDetail } : {}),
+          capturedPoseCount: params.capturedPoseCount,
+          uploadedPoseCount: params.uploadedPoseCount,
+        });
+      } catch (loggingError) {
+        reportClientError({
+          source: "manual_analysis.client_failure_log.failed",
+          message: getRawErrorMessage(loggingError),
+          errorCode: getRawErrorCode(loggingError),
+          errorDetail: getRawErrorDetail(loggingError),
+          payload: {
+            sessionId: currentSessionId,
+            originalPhase: params.phase,
+            originalMessage: rawMessage,
+          },
+        });
+      }
+    },
+    [sessionId],
+  );
 
   const startPoseUpload = useCallback(
     (pose: CapturedPose): Promise<void> => {
@@ -273,6 +520,10 @@ export default function NewAnalysis() {
       }
 
       const uploadRunId = captureRunIdRef.current;
+      setPoseUploadStatuses((previous) => ({
+        ...previous,
+        [pose.poseId]: "uploading",
+      }));
       const uploadPromise = uploadCapturedPoseWithRetry({
         userId: currentUserId,
         sessionId: currentSessionId,
@@ -283,6 +534,10 @@ export default function NewAnalysis() {
           if (captureRunIdRef.current !== uploadRunId) return;
           completedUploadPoseIdsRef.current.add(pose.poseId);
           setUploadedPoseCount(completedUploadPoseIdsRef.current.size);
+          setPoseUploadStatuses((previous) => ({
+            ...previous,
+            [pose.poseId]: "uploaded",
+          }));
         })
         .catch((error) => {
           if (captureRunIdRef.current !== uploadRunId) {
@@ -291,6 +546,10 @@ export default function NewAnalysis() {
           uploadPromisesRef.current.delete(pose.poseId);
           completedUploadPoseIdsRef.current.delete(pose.poseId);
           setUploadedPoseCount(completedUploadPoseIdsRef.current.size);
+          setPoseUploadStatuses((previous) => ({
+            ...previous,
+            [pose.poseId]: "failed",
+          }));
           throw error;
         });
 
@@ -347,6 +606,7 @@ export default function NewAnalysis() {
         }),
       );
 
+      let failurePhase: ManualAnalysisClientFailurePhase = "upload_all";
       try {
         await Promise.all(poses.map((pose) => startPoseUpload(pose)));
         if (captureRunIdRef.current !== completionRunId) return;
@@ -356,9 +616,13 @@ export default function NewAnalysis() {
         });
         if (captureRunIdRef.current !== completionRunId) return;
 
+        setIsLaunchingAfterUploads(true);
+        setIsUploadingAll(false);
+        failurePhase = "launch";
         const data = await launchMutation.mutateAsync(sessionId);
         if (captureRunIdRef.current !== completionRunId) return;
         setJobId(data.job.id);
+        setIsLaunchingAfterUploads(false);
         setMessage(
           i18n(language, {
             en: "Analysis queued...",
@@ -370,7 +634,15 @@ export default function NewAnalysis() {
         autoLaunchStartedRef.current = false;
         setJobId(null);
         setMessage(null);
+        setIsLaunchingAfterUploads(false);
         setErrorMessage(getErrorMessage(error, language));
+        void recordCaptureFailureForAdmin({
+          phase: failurePhase,
+          error,
+          currentSessionId: sessionId,
+          capturedPoseCount: poses.length,
+          uploadedPoseCount: completedUploadPoseIdsRef.current.size,
+        });
       } finally {
         if (captureRunIdRef.current === completionRunId) {
           setIsUploadingAll(false);
@@ -382,6 +654,7 @@ export default function NewAnalysis() {
       isWeeklyAnalysisLocked,
       language,
       launchMutation,
+      recordCaptureFailureForAdmin,
       sessionId,
       startPoseUpload,
       subscriberQuotaBlockingUi,
@@ -426,6 +699,12 @@ export default function NewAnalysis() {
       setShowCameraCapture(false);
     } catch (error) {
       setErrorMessage(getErrorMessage(error, language));
+      void recordCaptureFailureForAdmin({
+        phase: "launch",
+        error,
+        currentSessionId: appSessionId,
+        uploadedPoseCount: recentScan.received_count,
+      });
     }
   }
 
@@ -440,6 +719,11 @@ export default function NewAnalysis() {
       .then(() => setShowCameraCapture(true))
       .catch((error) => {
         setErrorMessage(getErrorMessage(error, language));
+        void recordCaptureFailureForAdmin({
+          phase: "create_session",
+          error,
+          currentSessionId: null,
+        });
       });
   }
 
@@ -447,6 +731,7 @@ export default function NewAnalysis() {
     if (!heroContentLocked) return;
     setShowCameraCapture(false);
     setIsUploadingAll(false);
+    setIsLaunchingAfterUploads(false);
   }, [heroContentLocked]);
 
 
@@ -521,7 +806,12 @@ export default function NewAnalysis() {
             "relative w-full max-w-lg overflow-hidden rounded-[2.5rem] p-6 text-white md:max-w-xl md:p-10",
           )}
         >
-        {shouldShowProcessing ? (
+        {shouldShowUploadProgress ? (
+          <ManualAnalysisUploadProgress
+            language={language}
+            statuses={poseUploadStatuses}
+          />
+        ) : shouldShowProcessing ? (
           <AnalysisProcessingState
             message={analysisMessage}
             minimalChrome

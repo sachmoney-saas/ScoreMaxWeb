@@ -867,6 +867,40 @@ export async function launchManualAnalysis(params: {
   return json.data;
 }
 
+export async function recordManualAnalysisClientFailure(params: {
+  accessToken: string;
+  sessionId: string;
+  phase: "create_session" | "upload_pose" | "upload_all" | "launch" | "unknown";
+  message: string;
+  errorCode?: string;
+  errorDetail?: string;
+  capturedPoseCount?: number;
+  uploadedPoseCount?: number;
+}): Promise<AnalysisLaunchResponse> {
+  const response = await apiRequest(
+    "POST",
+    `/v1/analyses/manual-session/${params.sessionId}/client-failure`,
+    {
+      phase: params.phase,
+      message: params.message,
+      ...(params.errorCode ? { errorCode: params.errorCode } : {}),
+      ...(params.errorDetail ? { errorDetail: params.errorDetail } : {}),
+      ...(params.capturedPoseCount != null
+        ? { capturedPoseCount: params.capturedPoseCount }
+        : {}),
+      ...(params.uploadedPoseCount != null
+        ? { uploadedPoseCount: params.uploadedPoseCount }
+        : {}),
+    },
+    { Authorization: `Bearer ${params.accessToken}` },
+  );
+  const json = (await response.json()) as {
+    data: AnalysisLaunchResponse;
+  };
+
+  return json.data;
+}
+
 export async function fetchAnalysisJobStatus(params: {
   accessToken: string;
   jobId: string;
