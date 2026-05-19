@@ -92,7 +92,7 @@ export function RoutineDayCarousel({
   }, [selectedOffset, onSelectedOffsetChange]);
 
   return (
-    <div className="space-y-3">
+    <div className="-mx-3 space-y-3 sm:mx-0">
       <div
         ref={scrollRef}
         onScroll={handleScroll}

@@ -23,7 +23,7 @@ export function ProtocolTabs({ language, active, onChange }: ProtocolTabsProps) 
         en: "Protocol sections",
         fr: "Sections du protocole",
       })}
-      className="flex gap-4 overflow-x-auto border-b border-white/10 sm:gap-6"
+      className="flex w-full items-center justify-center gap-4 overflow-x-auto border-b border-white/10 sm:gap-6"
     >
       {tabs.map((tab) => {
         const selected = active === tab.id;

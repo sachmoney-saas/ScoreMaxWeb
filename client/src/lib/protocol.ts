@@ -4,6 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import {
+  fetchAnalysisHistory,
+  type AnalysisHistoryItem,
+} from "@/lib/face-analysis";
+import {
+  matchRecommendations,
   normaliseRecommendationRow,
   type Recommendation,
   type RecommendationAction,
@@ -30,6 +35,8 @@ export interface ProtocolItem {
 export interface ProtocolBreakdown {
   /** Items grouped per slot (only slots with at least 1 item are present). */
   bySlot: Map<ProtocolSlot, ProtocolItem[]>;
+  /** Items explicitly meant to be removed/avoided. */
+  avoid: ProtocolItem[];
   /**
    * Items with no slot at all and a `duration_value` set — rendered in the
    * Routine daily block with elapsed / remaining progress (formerly a separate cures section).
@@ -91,6 +98,7 @@ export function buildProtocolBreakdown(
   now: Date = new Date(),
 ): ProtocolBreakdown {
   const bySlot = new Map<ProtocolSlot, ProtocolItem[]>();
+  const avoid: ProtocolItem[] = [];
   const cures: ProtocolCure[] = [];
   const uncategorised: ProtocolItem[] = [];
   const nowMs = now.getTime();
@@ -107,12 +115,20 @@ export function buildProtocolBreakdown(
     const slots = item.recommendation.protocol_slots;
 
     if (slots.length > 0) {
+      let routed = false;
+      if (slots.includes("avoid")) {
+        avoid.push(item);
+        routed = true;
+      }
+
       for (const slot of slots) {
+        if (slot === "avoid") continue;
         const bucket = bySlot.get(slot) ?? [];
         bucket.push(item);
         bySlot.set(slot, bucket);
+        routed = true;
       }
-      continue;
+      if (routed) continue;
     }
 
     const totalDays = durationToDays(item.recommendation);
@@ -139,6 +155,7 @@ export function buildProtocolBreakdown(
 
   return {
     bySlot,
+    avoid,
     cures,
     uncategorised,
     total: items.length,
@@ -146,17 +163,127 @@ export function buildProtocolBreakdown(
 }
 
 /* ============================================================================
- * Hook: load every saved recommendation for the current user
+ * Hook: load active protocol recommendations for the current user
  * ========================================================================= */
 
 type RawJoinedRow = RecommendationAction & {
   recommendation: unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function latestCompletedAnalysis(
+  history: AnalysisHistoryItem[],
+): AnalysisHistoryItem | null {
+  const completed = history
+    .filter((a) => a.status === "completed" && a.results.length > 0)
+    .sort((a, b) => {
+      const ta = new Date(a.completed_at ?? a.created_at).getTime();
+      const tb = new Date(b.completed_at ?? b.created_at).getTime();
+      return tb - ta;
+    });
+  return completed[0] ?? null;
+}
+
+function outputAggregatesFromHistoryResult(
+  result: Record<string, unknown>,
+): Record<string, unknown> {
+  return isRecord(result.outputAggregates) ? result.outputAggregates : {};
+}
+
+function activeActionStatus(status: RecommendationAction["status"]): boolean {
+  return status !== "dismissed";
+}
+
+function defaultRecommendationAction(
+  userId: string,
+  recommendation: Recommendation,
+  timestamp: string,
+): RecommendationAction {
+  return {
+    id: `default:${recommendation.id}`,
+    user_id: userId,
+    recommendation_id: recommendation.id,
+    worker: recommendation.worker,
+    status: "saved",
+    notes: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+}
+
+async function fetchHistoryForProtocol(userId: string): Promise<AnalysisHistoryItem[]> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return [];
+
+  return fetchAnalysisHistory(userId, {
+    Authorization: `Bearer ${token}`,
+  });
+}
+
+async function fetchDefaultProtocolItems(params: {
+  userId: string;
+  actionsByRecommendationId: Map<string, ProtocolItem>;
+  dismissedRecommendationIds: ReadonlySet<string>;
+}): Promise<ProtocolItem[]> {
+  const history = await fetchHistoryForProtocol(params.userId);
+  const latest = latestCompletedAnalysis(history);
+  if (!latest) return [];
+
+  const workers = Array.from(new Set(latest.results.map((row) => row.worker)));
+  if (workers.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("scoremax_recommendations")
+    .select("*")
+    .in("worker", workers)
+    .eq("enabled", true)
+    .order("priority", { ascending: false });
+
+  if (error) throw error;
+
+  const recommendationsByWorker = new Map<string, Recommendation[]>();
+  for (const raw of data ?? []) {
+    const rec = normaliseRecommendationRow(raw);
+    const bucket = recommendationsByWorker.get(rec.worker) ?? [];
+    bucket.push(rec);
+    recommendationsByWorker.set(rec.worker, bucket);
+  }
+
+  const timestamp = latest.completed_at ?? latest.created_at;
+  const defaults: ProtocolItem[] = [];
+  for (const row of latest.results) {
+    const aggregates = outputAggregatesFromHistoryResult(row.result);
+    const recommendations = recommendationsByWorker.get(row.worker) ?? [];
+    const matched = matchRecommendations(recommendations, aggregates);
+
+    for (const recommendation of matched) {
+      if (params.dismissedRecommendationIds.has(recommendation.id)) continue;
+      const explicit = params.actionsByRecommendationId.get(recommendation.id);
+      if (explicit) continue;
+
+      defaults.push({
+        recommendation,
+        action: defaultRecommendationAction(
+          params.userId,
+          recommendation,
+          timestamp,
+        ),
+      });
+    }
+  }
+
+  return defaults;
+}
+
 /**
- * Loads ALL items the current user has added to their protocol, regardless of
- * which analysis they came from. The recommendation row is joined in via the
- * FK declared in the schema (`recommendation_id → scoremax_recommendations.id`).
+ * Loads the protocol as an opt-out model:
+ * - matched latest-analysis recommendations are active by default;
+ * - explicit `saved`/`done`/`in_progress` actions remain active;
+ * - explicit `dismissed` actions hide the recommendation.
  */
 export function useUserProtocol() {
   const { user } = useAuth();
@@ -176,28 +303,44 @@ export function useUserProtocol() {
           `,
         )
         .eq("user_id", userId)
-        .eq("status", "saved")
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
 
       const rows = (data ?? []) as RawJoinedRow[];
 
-      const items: ProtocolItem[] = [];
+      const itemsByRecommendationId = new Map<string, ProtocolItem>();
+      const dismissedRecommendationIds = new Set<string>();
       for (const row of rows) {
         if (!row.recommendation) continue;
         const { recommendation: rawRec, ...action } = row;
+        const typedAction = action as RecommendationAction;
         const recommendation = normaliseRecommendationRow(rawRec);
-        items.push({
+        if (!activeActionStatus(typedAction.status)) {
+          dismissedRecommendationIds.add(recommendation.id);
+          continue;
+        }
+        itemsByRecommendationId.set(recommendation.id, {
           recommendation,
-          action: action as RecommendationAction,
+          action: typedAction,
         });
       }
 
-      return items;
+      const defaults = await fetchDefaultProtocolItems({
+        userId,
+        actionsByRecommendationId: itemsByRecommendationId,
+        dismissedRecommendationIds,
+      }).catch(() => []);
+
+      for (const item of defaults) {
+        itemsByRecommendationId.set(item.recommendation.id, item);
+      }
+
+      return Array.from(itemsByRecommendationId.values());
     },
     enabled: !!userId,
-    staleTime: 1000 * 30,
+    refetchOnMount: true,
+    staleTime: 1000 * 10,
   });
 }
 

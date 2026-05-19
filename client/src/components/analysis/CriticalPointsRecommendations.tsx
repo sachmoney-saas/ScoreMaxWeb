@@ -41,93 +41,18 @@ import { MiniRing } from "@/components/analysis/WorkerPreviewContent";
 import {
   analysisTabActiveMetallicTriggerClassName,
   analysisTabBarGlassClassName,
-  hardmaxxingGradientPillClassName,
   scoreRingMatchMetallicPillClassName,
-  softmaxxingGradientPillClassName,
 } from "@/components/analysis/workers/_shared";
-
-const RECOMMENDATIONS_TYPE_TOGGLE_BTN_BASE = cn(
-  "relative rounded-xl border border-transparent px-4 py-2.5 text-left text-sm font-medium transition-colors sm:px-5",
-  "data-[state=inactive]:text-zinc-500 data-[state=inactive]:hover:bg-white/[0.07] data-[state=inactive]:hover:text-zinc-300",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
-  "data-[state=active]:hover:brightness-[1.02]",
-);
-
-function RecommendationsTypeFilterBar({
-  showSoft,
-  showHard,
-  onSoftChange,
-  onHardChange,
-  language,
-}: {
-  showSoft: boolean;
-  showHard: boolean;
-  onSoftChange: (next: boolean) => void;
-  onHardChange: (next: boolean) => void;
-  language: AppLanguage;
-}) {
-  const toggleSoft = () => {
-    if (showSoft && !showHard) return;
-    onSoftChange(!showSoft);
-  };
-  const toggleHard = () => {
-    if (showHard && !showSoft) return;
-    onHardChange(!showHard);
-  };
-
-  return (
-    <div className="flex w-full justify-center px-2">
-      <div
-        className={cn(
-          analysisTabBarGlassClassName,
-          "inline-flex h-auto max-w-full flex-wrap items-center justify-center gap-1 rounded-2xl p-1.5 sm:flex-nowrap",
-        )}
-        role="group"
-        aria-label={i18n(language, {
-          en: "Filter recommendations by category",
-          fr: "Filtrer les recommandations par type",
-        })}
-      >
-        <button
-          type="button"
-          data-state={showSoft ? "active" : "inactive"}
-          aria-pressed={showSoft}
-          onClick={toggleSoft}
-          className={cn(
-            RECOMMENDATIONS_TYPE_TOGGLE_BTN_BASE,
-            showSoft ? softmaxxingGradientPillClassName : null,
-          )}
-        >
-          <span className="relative z-10 font-semibold">
-            {i18n(language, { en: "Softmaxxing", fr: "Softmaxxing" })}
-          </span>
-        </button>
-        <button
-          type="button"
-          data-state={showHard ? "active" : "inactive"}
-          aria-pressed={showHard}
-          onClick={toggleHard}
-          className={cn(
-            RECOMMENDATIONS_TYPE_TOGGLE_BTN_BASE,
-            showHard ? hardmaxxingGradientPillClassName : null,
-          )}
-        >
-          <span className="relative z-10 font-semibold">
-            {i18n(language, { en: "Hardmaxxing", fr: "Hardmaxxing" })}
-          </span>
-        </button>
-      </div>
-    </div>
-  );
-}
+import { RecommendationTypeFilterBar } from "@/components/analysis/recommendations/RecommendationTypeFilterBar";
 
 const RECOMMENDATIONS_WORKER_TAB_TRIGGER_CLASS = cn(
-  "relative z-0 rounded-xl border border-transparent px-4 py-2.5 text-left text-sm font-medium text-zinc-400 transition-all sm:px-5",
-  "hover:text-zinc-200",
+  "group relative z-0 min-w-[8.75rem] rounded-xl border border-white/[0.11] bg-white/[0.045] px-3.5 py-2.5 text-left text-sm font-medium text-zinc-200/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm transition-all sm:min-w-[9.5rem] sm:px-4",
+  "hover:border-white/[0.18] hover:bg-white/[0.075] hover:text-zinc-50",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(14,20,26,0.96)]",
   analysisTabActiveMetallicTriggerClassName,
   "data-[state=active]:hover:text-zinc-950",
-  "data-[state=active]:[&_span.font-display]:text-zinc-700 data-[state=active]:[&_span.font-display]:opacity-100",
+  "data-[state=active]:[&_span[data-worker-label]]:text-zinc-950",
+  "data-[state=active]:[&_span[data-worker-score]]:bg-zinc-950/10 data-[state=active]:[&_span[data-worker-score]]:text-zinc-700 data-[state=active]:[&_span[data-worker-score]]:ring-zinc-950/10",
 );
 
 /* ============================================================================
@@ -598,7 +523,7 @@ function CriticalPointsRecommendationsImpl({
       <div className={recommendationsReportShellClassName}>
         <div className={recommendationsReportHorizontalInsetClassName}>
           <div className="space-y-4">
-            <RecommendationsTypeFilterBar
+            <RecommendationTypeFilterBar
               showSoft={showSoftmaxxing}
               showHard={showHardmaxxing}
               onSoftChange={setShowSoftmaxxing}
@@ -704,7 +629,7 @@ function CriticalPointsRecommendationsImpl({
     <div className="relative flex flex-col gap-4 sm:gap-5">
       {visibleWorkerGroups.length > 0 ? (
         <div className="space-y-2 sm:space-y-2.5">
-          <RecommendationsTypeFilterBar
+          <RecommendationTypeFilterBar
             showSoft={showSoftmaxxing}
             showHard={showHardmaxxing}
             onSoftChange={setShowSoftmaxxing}
@@ -741,12 +666,18 @@ function CriticalPointsRecommendationsImpl({
                     }
                     className={RECOMMENDATIONS_WORKER_TAB_TRIGGER_CLASS}
                   >
-                    <span className="relative z-10 flex min-w-0 w-full flex-nowrap items-center gap-1.5 sm:gap-2">
-                      <span className="min-w-0 flex-1 truncate text-left text-[clamp(0.75rem,3.4vw,0.875rem)] font-medium leading-tight sm:text-sm">
+                    <span className="relative z-10 flex min-w-0 w-full flex-nowrap items-center justify-between gap-2">
+                      <span
+                        data-worker-label
+                        className="min-w-0 flex-1 truncate text-left text-[clamp(0.75rem,3.4vw,0.875rem)] font-medium leading-tight sm:text-sm"
+                      >
                         {label}
                       </span>
                       {worst !== null ? (
-                        <span className="shrink-0 font-display text-[10px] tabular-nums tracking-tight text-zinc-400 opacity-90 sm:text-xs">
+                        <span
+                          data-worker-score
+                          className="shrink-0 rounded-full bg-white/[0.07] px-1.5 py-0.5 font-display text-[10px] tabular-nums tracking-tight text-zinc-300/80 ring-1 ring-inset ring-white/[0.08] sm:text-xs"
+                        >
                           {worst.toFixed(1)}
                         </span>
                       ) : null}

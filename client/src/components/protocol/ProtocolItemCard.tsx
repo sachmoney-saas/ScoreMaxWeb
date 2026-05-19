@@ -4,7 +4,7 @@ import { Loader2, MinusCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { i18n, type AppLanguage } from "@/lib/i18n";
-import { useDeleteRecommendationAction } from "@/lib/recommendations";
+import { useUpsertRecommendationAction } from "@/lib/recommendations";
 import type { RecommendationRisk } from "@/lib/recommendations";
 import {
   categoryLabel,
@@ -51,7 +51,7 @@ export function ProtocolItemCard({
   surface = "sheet",
 }: ProtocolItemCardProps) {
   const { recommendation: rec, action } = item;
-  const remove = useDeleteRecommendationAction();
+  const dismiss = useUpsertRecommendationAction();
 
   const title = language === "fr" ? rec.title_fr : rec.title_en;
   const summary = language === "fr" ? rec.summary_fr : rec.summary_en;
@@ -64,7 +64,11 @@ export function ProtocolItemCard({
   const isSheet = surface === "sheet";
 
   const handleRemove = (): void => {
-    remove.mutate({ recommendationId: rec.id, worker: action.worker });
+    dismiss.mutate({
+      recommendationId: rec.id,
+      worker: action.worker,
+      status: "dismissed",
+    });
   };
 
   return (
@@ -156,7 +160,7 @@ export function ProtocolItemCard({
             type="button"
             size="sm"
             variant="ghost"
-            disabled={remove.isPending}
+            disabled={dismiss.isPending}
             onClick={handleRemove}
             className={
               isSheet
@@ -164,7 +168,7 @@ export function ProtocolItemCard({
                 : "h-7 gap-1.5 px-2 text-[11px] text-zinc-500 hover:text-rose-300"
             }
           >
-            {remove.isPending ? (
+            {dismiss.isPending ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
               <MinusCircle className="h-3 w-3" />

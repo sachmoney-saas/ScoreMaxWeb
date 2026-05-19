@@ -14,7 +14,6 @@ import {
 import {
   buildReasonFragments,
   useUpsertRecommendationAction,
-  useDeleteRecommendationAction,
   type MatchedRecommendation,
   type Recommendation,
   type RecommendationAction,
@@ -199,7 +198,6 @@ export function RecommendationCard({
 }: RecommendationCardProps) {
   const isDocument = useIsRecommendationDocumentSurface();
   const upsert = useUpsertRecommendationAction();
-  const remove = useDeleteRecommendationAction();
 
   const title = language === "fr" ? rec.title_fr : rec.title_en;
   const summary = language === "fr" ? rec.summary_fr : rec.summary_en;
@@ -208,7 +206,7 @@ export function RecommendationCard({
   const cost = costLabel(rec, language);
 
   const isHard = rec.type === "hard";
-  const isInProtocol = action?.status === "saved";
+  const isInProtocol = action?.status !== "dismissed";
 
   const railDivider = isDocument
     ? "md:border-zinc-200 md:border-r"
@@ -216,13 +214,13 @@ export function RecommendationCard({
 
   const toggleProtocol = (): void => {
     if (isInProtocol) {
-      remove.mutate({ recommendationId: rec.id, worker });
+      upsert.mutate({ recommendationId: rec.id, worker, status: "dismissed" });
     } else {
       upsert.mutate({ recommendationId: rec.id, worker, status: "saved" });
     }
   };
 
-  const isPending = upsert.isPending || remove.isPending;
+  const isPending = upsert.isPending;
 
   return (
     <Card

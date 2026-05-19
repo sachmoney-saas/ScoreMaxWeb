@@ -133,8 +133,8 @@ export function ProtocolTodoTab({
 
       <TodoSection
         title={i18n(language, {
-          en: "One-time actions",
-          fr: "Actions ponctuelles",
+          en: "Recommended actions",
+          fr: "Actions recommandées",
         })}
         count={actions.length}
       >

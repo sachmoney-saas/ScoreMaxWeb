@@ -10,6 +10,7 @@
 --   morning|midday|evening|night = daily timeline placement
 --   weekly                       = recurring but not daily (exercises, massages)
 --   general                      = permanent rule / always-on principle
+--   avoid                        = surfaces under "À bannir"
 --   <empty array>                = treated as a "cure" (one-shot or time-bounded)
 -- ============================================================================
 
@@ -28,7 +29,7 @@ SET protocol_slots = CASE id
   WHEN 'eyes.eyelash_growth_natural'    THEN ARRAY['evening']
   WHEN 'eyes.eyelash_dyeing'            THEN ARRAY[]::text[]
   WHEN 'eyes.eye_patching'              THEN ARRAY['weekly']
-  WHEN 'eyes.no_rubbing'                THEN ARRAY['general']
+  WHEN 'eyes.no_rubbing'                THEN ARRAY['avoid']
   WHEN 'eyes.eyelid_levator_exercise'   THEN ARRAY['weekly']
   WHEN 'eyes.eyebrow_grooming'          THEN ARRAY['weekly']
   ----------------------------------------------------------- HARD --------------

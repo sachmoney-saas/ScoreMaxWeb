@@ -15,6 +15,7 @@ export const PROTOCOL_SLOTS = [
   "night",
   "weekly",
   "general",
+  "avoid",
 ] as const;
 
 export type ProtocolSlot = (typeof PROTOCOL_SLOTS)[number];
@@ -47,6 +48,7 @@ const SLOT_LABELS: Record<ProtocolSlot, { en: string; fr: string }> = {
   night:   { en: "Night",   fr: "Nuit" },
   weekly:  { en: "Weekly",  fr: "Hebdo" },
   general: { en: "Always-on rule", fr: "Règle permanente" },
+  avoid:   { en: "Avoid",   fr: "À bannir" },
 };
 
 const SLOT_DESCRIPTIONS: Record<ProtocolSlot, { en: string; fr: string }> = {
@@ -74,6 +76,10 @@ const SLOT_DESCRIPTIONS: Record<ProtocolSlot, { en: string; fr: string }> = {
     en: "Permanent rule — applies every day, no specific moment.",
     fr: "Règle permanente — s'applique chaque jour, sans moment précis.",
   },
+  avoid: {
+    en: "Things to remove or avoid because they hurt the result.",
+    fr: "Éléments à retirer ou éviter parce qu'ils dégradent le résultat.",
+  },
 };
 
 /** Time-of-day used to sort slots inside the daily timeline (24h, decorative only). */
@@ -84,6 +90,7 @@ const SLOT_REPRESENTATIVE_HOUR: Record<ProtocolSlot, number> = {
   night: 23,
   weekly: 0,
   general: 0,
+  avoid: 0,
 };
 
 export function protocolSlotLabel(

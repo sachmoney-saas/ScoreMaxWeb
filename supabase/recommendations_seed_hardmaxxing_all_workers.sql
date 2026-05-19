@@ -3,11 +3,30 @@
 --
 -- Run after:
 --   1. supabase/recommendations_schema.sql
---   2. supabase/recommendations_protocol_slots_migration.sql
 --
 -- Idempotent: safe to re-run. Uses stable IDs and ON CONFLICT updates content
 -- in place without breaking existing user actions.
 -- ============================================================================
+
+-- Self-heal protocol placement support so the seed can run even when
+-- recommendations_protocol_slots_migration.sql has not been applied yet.
+ALTER TABLE IF EXISTS public.scoremax_recommendations
+  ADD COLUMN IF NOT EXISTS protocol_slots TEXT[] NOT NULL DEFAULT ARRAY[]::text[];
+
+ALTER TABLE IF EXISTS public.scoremax_recommendations
+  DROP CONSTRAINT IF EXISTS scoremax_recommendations_protocol_slots_check;
+
+ALTER TABLE IF EXISTS public.scoremax_recommendations
+  ADD CONSTRAINT scoremax_recommendations_protocol_slots_check
+  CHECK (
+    protocol_slots <@ ARRAY[
+      'morning', 'midday', 'evening', 'night', 'weekly', 'general', 'avoid'
+    ]::text[]
+  );
+
+CREATE INDEX IF NOT EXISTS scoremax_recommendations_protocol_slots_idx
+  ON public.scoremax_recommendations
+  USING GIN (protocol_slots);
 
 WITH raw AS (
   SELECT *

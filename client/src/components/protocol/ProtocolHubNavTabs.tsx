@@ -13,10 +13,51 @@ export type ProtocolHubNavTab = "protocol" | "recommendations";
 
 const PROTOCOL_PATH = "/app/protocol";
 const PROTOCOL_RECOMMENDATIONS_PATH = "/app/protocol/recommendations";
+const APP_SCROLL_REGION_SELECTOR = "[data-app-scroll-region]";
 
 export interface ProtocolHubNavTabsProps {
   language: AppLanguage;
   active: ProtocolHubNavTab;
+}
+
+function shouldKeepCurrentScroll(event: React.MouseEvent<HTMLAnchorElement>): boolean {
+  return (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.shiftKey
+  );
+}
+
+function scrollAppRegionToTop(): void {
+  if (typeof document === "undefined") return;
+
+  const resetScroll = () => {
+    const appScrollRegion = document.querySelector(APP_SCROLL_REGION_SELECTOR);
+    if (appScrollRegion instanceof HTMLElement) {
+      appScrollRegion.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+  };
+
+  resetScroll();
+  if (typeof window !== "undefined") {
+    window.requestAnimationFrame(resetScroll);
+  }
+}
+
+function handleHubNavClick(
+  event: React.MouseEvent<HTMLAnchorElement>,
+  selected: boolean,
+): void {
+  if (selected || shouldKeepCurrentScroll(event)) return;
+  scrollAppRegionToTop();
 }
 
 /**
@@ -41,6 +82,7 @@ export function ProtocolHubNavTabs({ language, active }: ProtocolHubNavTabsProps
       >
         <Link
           href={PROTOCOL_PATH}
+          onClick={(event) => handleHubNavClick(event, protocolSelected)}
           className={
             protocolSelected ? appHubTabLinkActiveClassName : appHubTabLinkInactiveClassName
           }
@@ -51,6 +93,7 @@ export function ProtocolHubNavTabs({ language, active }: ProtocolHubNavTabsProps
         </Link>
         <Link
           href={PROTOCOL_RECOMMENDATIONS_PATH}
+          onClick={(event) => handleHubNavClick(event, recSelected)}
           className={
             recSelected ? appHubTabLinkActiveClassName : appHubTabLinkInactiveClassName
           }

@@ -34,8 +34,9 @@ import { RoutineAlwaysOn } from "@/components/protocol/RoutineAlwaysOn";
 import { AvoidTab } from "@/components/protocol/AvoidTab";
 import { ProtocolTodoTab } from "@/components/protocol/ProtocolTodoTab";
 import { ProtocolNextAnalysisCountdown } from "@/components/protocol/ProtocolNextAnalysisCountdown";
+import { RecommendationTypeFilterBar } from "@/components/analysis/recommendations/RecommendationTypeFilterBar";
 import { STARTER_PRESET_IDS } from "@shared/protocol-presets";
-import { useProtocolBreakdown } from "@/lib/protocol";
+import { buildProtocolBreakdown, useProtocolBreakdown } from "@/lib/protocol";
 import { useSubscriberStandardAnalysisQuota } from "@/hooks/use-supabase";
 
 export default function ProtocolPage() {
@@ -54,6 +55,8 @@ export default function ProtocolPage() {
 
   const [mainTab, setMainTab] = React.useState<ProtocolMainTab>("routine");
   const [dayOffset, setDayOffset] = React.useState(0);
+  const [showSoftmaxxing, setShowSoftmaxxing] = React.useState(true);
+  const [showHardmaxxing, setShowHardmaxxing] = React.useState(true);
 
   const hubNav = <ProtocolHubNavTabs language={language} active="protocol" />;
 
@@ -100,14 +103,45 @@ export default function ProtocolPage() {
   ]);
 
   const presets = routineQuery.data ?? [];
+  const visiblePresets = React.useMemo(
+    () => (showSoftmaxxing ? presets : []),
+    [presets, showSoftmaxxing],
+  );
+  const visibleProtocolBreakdown = React.useMemo(
+    () =>
+      buildProtocolBreakdown(
+        protocolBreakdown.items.filter((item) =>
+          item.recommendation.type === "soft"
+            ? showSoftmaxxing
+            : showHardmaxxing,
+        ),
+      ),
+    [protocolBreakdown.items, showSoftmaxxing, showHardmaxxing],
+  );
+  const visibleProtocolTodoActions = React.useMemo(() => {
+    const actionsById = new Map(
+      visibleProtocolBreakdown.uncategorised.map((item) => [
+        item.recommendation.id,
+        item,
+      ]),
+    );
+
+    for (const items of Array.from(visibleProtocolBreakdown.bySlot.values())) {
+      for (const item of items) {
+        actionsById.set(item.recommendation.id, item);
+      }
+    }
+
+    return Array.from(actionsById.values());
+  }, [visibleProtocolBreakdown]);
   const today = React.useMemo(() => new Date(), []);
   const everydayHabits = React.useMemo(
-    () => collectEverydayHabits(presets, language),
-    [presets, language],
+    () => collectEverydayHabits(visiblePresets, language),
+    [visiblePresets, language],
   );
   const avoidItems = React.useMemo(
-    () => collectAvoidItems(presets, language),
-    [presets, language],
+    () => collectAvoidItems(visiblePresets, language),
+    [visiblePresets, language],
   );
 
   /**
@@ -117,10 +151,10 @@ export default function ProtocolPage() {
    */
   const selectedDayPlan = React.useMemo(
     () =>
-      presets.length > 0
-        ? buildDayPlan(presets, dayOffset, language, today)
+      visiblePresets.length > 0
+        ? buildDayPlan(visiblePresets, dayOffset, language, today)
         : null,
-    [presets, dayOffset, language, today],
+    [visiblePresets, dayOffset, language, today],
   );
 
   const isLoading =
@@ -243,18 +277,30 @@ export default function ProtocolPage() {
 
   return (
     <ProtocolPageShell topNav={hubNav} header={header}>
-      <div className="space-y-6">
-        <ProtocolTabs
-          language={language}
-          active={mainTab}
-          onChange={setMainTab}
-        />
+      <div className="space-y-5">
+        <div className="space-y-2.5">
+          <RecommendationTypeFilterBar
+            showSoft={showSoftmaxxing}
+            showHard={showHardmaxxing}
+            onSoftChange={setShowSoftmaxxing}
+            onHardChange={setShowHardmaxxing}
+            language={language}
+            compact
+            surface="plain"
+            className="px-0"
+          />
+          <ProtocolTabs
+            language={language}
+            active={mainTab}
+            onChange={setMainTab}
+          />
+        </div>
 
         {mainTab === "routine" ? (
           <div className="space-y-5" role="tabpanel">
             <RoutineDayCarousel
               language={language}
-              presets={presets}
+              presets={visiblePresets}
               selectedOffset={dayOffset}
               onSelectedOffsetChange={setDayOffset}
               userId={user?.id ?? null}
@@ -265,15 +311,19 @@ export default function ProtocolPage() {
           <div role="tabpanel">
             <ProtocolTodoTab
               language={language}
-              cures={protocolBreakdown.cures}
-              actions={protocolBreakdown.uncategorised}
+              cures={visibleProtocolBreakdown.cures}
+              actions={visibleProtocolTodoActions}
               isLoading={protocolBreakdown.isLoading}
               error={protocolBreakdown.error}
             />
           </div>
         ) : (
           <div role="tabpanel">
-            <AvoidTab language={language} items={avoidItems} />
+            <AvoidTab
+              language={language}
+              items={avoidItems}
+              recommendations={visibleProtocolBreakdown.avoid}
+            />
           </div>
         )}
 
