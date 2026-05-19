@@ -5,6 +5,11 @@ import { oneshotAspectRatioSchema, oneshotModelVariantSchema } from "@shared/one
 import { deleteAnalysisJobAndAssets } from "../lib/analysis-cleanup";
 import { summarizeStoredAnalysisRequestPayloadForAdmin } from "../lib/analysis-admin-snapshot";
 import { parseGuideTraceMetricsFromStoredRequestPayload } from "../lib/analysis-orchestration";
+import {
+  applyLocalEyeCanthalTiltToResultRows,
+  mergeEyeCanthalTiltIntoCaptureGuideMetrics,
+  tryLoadLatestEyeCanthalTiltDeg,
+} from "../lib/analysis-local-canthal";
 import { requireAdminUser } from "../lib/auth";
 import { ApiError } from "../lib/errors";
 import { downloadR2Object, getDefaultR2Bucket } from "../lib/r2-storage";
@@ -602,7 +607,17 @@ export function createV1AdminRouter(): Router {
         .select("asset_type_code, scan_asset_id")
         .eq("analysis_job_id", params.jobId);
 
-      const captureGuideMetrics = parseGuideTraceMetricsFromStoredRequestPayload(jobRow.request_payload);
+      const eyeCanthalTiltDeg = jobRow.session_id
+        ? await tryLoadLatestEyeCanthalTiltDeg({
+            userId: jobRow.user_id,
+            sessionId: jobRow.session_id,
+            context: "admin_analysis_detail_response",
+          })
+        : null;
+      const captureGuideMetrics = mergeEyeCanthalTiltIntoCaptureGuideMetrics(
+        parseGuideTraceMetricsFromStoredRequestPayload(jobRow.request_payload),
+        eyeCanthalTiltDeg,
+      );
       const requestPayloadSummary = summarizeStoredAnalysisRequestPayloadForAdmin(jobRow.request_payload);
 
       res.status(200).json({
@@ -624,7 +639,7 @@ export function createV1AdminRouter(): Router {
             completed_at: jobRow.completed_at,
           },
           user_email: (profile as ProfileLookupRow | null)?.email ?? null,
-          results: results ?? [],
+          results: applyLocalEyeCanthalTiltToResultRows(results, eyeCanthalTiltDeg),
           capture_guide_metrics: captureGuideMetrics,
           request_payload: jobRow.request_payload ?? null,
           request_payload_summary: requestPayloadSummary,

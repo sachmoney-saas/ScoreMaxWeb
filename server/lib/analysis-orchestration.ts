@@ -5,6 +5,7 @@ import {
 } from "@shared/oneshot";
 import {
   ANALYSIS_METADATA_GUIDE_TRACE_METRICS,
+  CAPTURE_META_EYE_CANTHAL_TILT_DEG,
   CAPTURE_META_FRONT_JAW_ANGLE_DEG,
   CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO,
   CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO,
@@ -230,6 +231,8 @@ export function parseGuideTraceMetricsFromStoredRequestPayload(
   if (ro !== undefined) metrics[CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO] = ro;
   const ra = pickFiniteMetric(m[CAPTURE_META_FRONT_JAW_ANGLE_DEG]);
   if (ra !== undefined) metrics[CAPTURE_META_FRONT_JAW_ANGLE_DEG] = ra;
+  const re = pickFiniteMetric(m[CAPTURE_META_EYE_CANTHAL_TILT_DEG]);
+  if (re !== undefined) metrics[CAPTURE_META_EYE_CANTHAL_TILT_DEG] = re;
   return Object.keys(metrics).length > 0 ? metrics : null;
 }
 
@@ -447,4 +450,3 @@ export async function assertFreemiumQuotaAvailable(userId: string): Promise<void
     });
   }
 }
-

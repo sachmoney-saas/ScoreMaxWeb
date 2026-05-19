@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { FaceCaptureView } from "@/components/FaceCaptureView";
 import { AnalysisProcessingState, analysisElapsedAnchorEpochMs } from "@/components/analysis/AnalysisProcessingState";
+import { HeroSkyProgressRing } from "@/components/ui/brand-loader";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -21,6 +22,7 @@ import {
 import {
   getScanAssetLabels,
   recordManualAnalysisClientFailure,
+  type ScanAssetUploadProgress,
 } from "@/lib/face-analysis";
 import { reportClientError } from "@/lib/report-client-error";
 import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
@@ -65,23 +67,42 @@ function createInitialPoseUploadStatuses(): Record<PoseId, PoseUploadStatus> {
   );
 }
 
-function poseUploadProgressValue(status: PoseUploadStatus): number {
-  if (status === "uploaded" || status === "failed") return 100;
-  if (status === "uploading") return 62;
-  return 6;
+function createInitialPoseUploadProgressPercents(): Record<PoseId, number> {
+  return CAPTURE_ORDER.reduce(
+    (acc, poseId) => {
+      acc[poseId] = 0;
+      return acc;
+    },
+    {} as Record<PoseId, number>,
+  );
+}
+
+function clampUploadPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function scanAssetUploadProgressPercent(progress: ScanAssetUploadProgress): number {
+  if (progress.totalBytes <= 0) return 0;
+  return clampUploadPercent((progress.loadedBytes / progress.totalBytes) * 100);
 }
 
 function ManualAnalysisUploadProgress({
   language,
   statuses,
+  progressByPose,
 }: {
   language: AppLanguage;
   statuses: Record<PoseId, PoseUploadStatus>;
+  progressByPose: Record<PoseId, number>;
 }) {
-  const uploadedCount = CAPTURE_ORDER.filter(
-    (poseId) => statuses[poseId] === "uploaded",
-  ).length;
-  const progressPercent = Math.round((uploadedCount / CAPTURE_ORDER.length) * 100);
+  const progressPercent = clampUploadPercent(
+    CAPTURE_ORDER.reduce((total, poseId) => {
+      const status = statuses[poseId];
+      const progress = status === "uploaded" ? 100 : progressByPose[poseId] ?? 0;
+      return total + progress;
+    }, 0) / CAPTURE_ORDER.length,
+  );
 
   return (
     <div
@@ -93,9 +114,9 @@ function ManualAnalysisUploadProgress({
         fr: `${progressPercent} % envoyés`,
       })}
     >
-      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#d6e4ff]/60 bg-[#d6e4ff] text-lg font-extrabold tabular-nums tracking-tight text-[#0b1220] shadow-[0_0_32px_rgba(214,228,255,0.38)]">
+      <HeroSkyProgressRing className="size-20 drop-shadow-[0_8px_28px_rgba(0,0,0,0.38)]">
         {progressPercent}%
-      </div>
+      </HeroSkyProgressRing>
 
       <ol className="mt-7 w-full max-w-sm space-y-3.5" aria-label={i18n(language, {
         en: "Photo uploads",
@@ -103,7 +124,8 @@ function ManualAnalysisUploadProgress({
       })}>
         {CAPTURE_ORDER.map((poseId, index) => {
           const status = statuses[poseId];
-          const progress = poseUploadProgressValue(status);
+          const progress =
+            status === "uploaded" ? 100 : progressByPose[poseId] ?? 0;
           const isActive = status === "uploading";
           const isUploaded = status === "uploaded";
           const isFailed = status === "failed";
@@ -154,13 +176,17 @@ function ManualAnalysisUploadProgress({
               </div>
               <div
                 className="h-2.5 overflow-hidden rounded-full bg-white/[0.08] shadow-[inset_0_1px_1px_rgba(0,0,0,0.35)]"
-                aria-hidden
+                role="progressbar"
+                aria-label={i18n(language, CAPTURE_UPLOAD_LABELS[poseId])}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progress}
               >
                 <div
                   className={cn(
                     "h-full rounded-full transition-[width,background-color] duration-500 ease-out",
                     isUploaded && "bg-[#d6e4ff]",
-                    isActive && "animate-pulse bg-[#d6e4ff]",
+                    isActive && "bg-[#d6e4ff]",
                     isFailed && "bg-red-300",
                     !isUploaded && !isActive && !isFailed && "bg-white/15",
                   )}
@@ -265,6 +291,7 @@ async function uploadCapturedPoseWithRetry(params: {
   sessionId: string;
   pose: CapturedPose;
   language: AppLanguage;
+  onUploadProgress?: (progress: ScanAssetUploadProgress) => void;
 }): Promise<void> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= CAPTURE_POSE_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
@@ -345,6 +372,9 @@ export default function NewAnalysis() {
   const [poseUploadStatuses, setPoseUploadStatuses] = useState<
     Record<PoseId, PoseUploadStatus>
   >(() => createInitialPoseUploadStatuses());
+  const [poseUploadProgressPercents, setPoseUploadProgressPercents] = useState<
+    Record<PoseId, number>
+  >(() => createInitialPoseUploadProgressPercents());
   const uploadPromisesRef = React.useRef<Map<PoseId, Promise<void>>>(new Map());
   const completedUploadPoseIdsRef = React.useRef<Set<PoseId>>(new Set());
   const autoLaunchStartedRef = React.useRef(false);
@@ -434,6 +464,7 @@ export default function NewAnalysis() {
     setSessionId(null);
     setUploadedPoseCount(0);
     setPoseUploadStatuses(createInitialPoseUploadStatuses());
+    setPoseUploadProgressPercents(createInitialPoseUploadProgressPercents());
     setCapturedPoses([]);
     setJobId(null);
     setIsUploadingAll(false);
@@ -524,16 +555,31 @@ export default function NewAnalysis() {
         ...previous,
         [pose.poseId]: "uploading",
       }));
+      setPoseUploadProgressPercents((previous) => ({
+        ...previous,
+        [pose.poseId]: 0,
+      }));
       const uploadPromise = uploadCapturedPoseWithRetry({
         userId: currentUserId,
         sessionId: currentSessionId,
         pose,
         language,
+        onUploadProgress: (progress) => {
+          if (captureRunIdRef.current !== uploadRunId) return;
+          setPoseUploadProgressPercents((previous) => ({
+            ...previous,
+            [pose.poseId]: scanAssetUploadProgressPercent(progress),
+          }));
+        },
       })
         .then(() => {
           if (captureRunIdRef.current !== uploadRunId) return;
           completedUploadPoseIdsRef.current.add(pose.poseId);
           setUploadedPoseCount(completedUploadPoseIdsRef.current.size);
+          setPoseUploadProgressPercents((previous) => ({
+            ...previous,
+            [pose.poseId]: 100,
+          }));
           setPoseUploadStatuses((previous) => ({
             ...previous,
             [pose.poseId]: "uploaded",
@@ -810,6 +856,7 @@ export default function NewAnalysis() {
           <ManualAnalysisUploadProgress
             language={language}
             statuses={poseUploadStatuses}
+            progressByPose={poseUploadProgressPercents}
           />
         ) : shouldShowProcessing ? (
           <AnalysisProcessingState

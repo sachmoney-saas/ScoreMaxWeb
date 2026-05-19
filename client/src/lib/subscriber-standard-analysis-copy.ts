@@ -27,6 +27,28 @@ export function formatSubscriberCooldownCountdownLine(
   return `${days} d · ${pad(hours)} h · ${pad(minutes)} min`;
 }
 
+export function formatSubscriberProtocolNextAnalysisLine(
+  lang: AppLanguage,
+  parts: { days: number; hours: number; minutes: number },
+): string {
+  const { days, hours, minutes } = parts;
+
+  if (lang === "fr") {
+    if (days > 0) {
+      const dayUnit = days === 1 ? "jour" : "jours";
+      return `Prochaine analyse dans ${days} ${dayUnit} ${hours} h`;
+    }
+    return `Prochaine analyse dans ${hours} h ${minutes} min`;
+  }
+
+  if (days > 0) {
+    const dayUnit = days === 1 ? "day" : "days";
+    return `Next analysis in ${days} ${dayUnit} ${hours} h`;
+  }
+
+  return `Next analysis in ${hours} h ${minutes} min`;
+}
+
 /** Texte sous « Nouvelle analyse » dans la sidebar (abonnés seulement). */
 export function formatSubscriberStandardQuotaSidebarLine(
   lang: AppLanguage,

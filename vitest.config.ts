@@ -17,6 +17,7 @@ export default defineConfig({
       "client/src/lib/capture-flow-config.test.ts",
       "client/src/lib/user-access.test.ts",
       "client/src/lib/protocol-day.test.ts",
+      "client/src/lib/subscriber-standard-analysis-copy.test.ts",
       "client/src/components/onboarding/BeforeAfterSlider.test.tsx",
       "server/lib/onboarding-potential-image-policy.test.ts",
       "server/lib/avif-variant.test.ts",

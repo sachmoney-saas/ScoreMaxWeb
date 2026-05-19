@@ -17,6 +17,11 @@ import {
   resetUnreferencedScanSessionAssets,
 } from "../lib/analysis-cleanup";
 import { dispatchAnalysisJob, persistAnalysisJobAssets } from "../lib/analysis-jobs";
+import {
+  applyLocalEyeCanthalTiltToResultRows,
+  mergeEyeCanthalTiltIntoCaptureGuideMetrics,
+  tryLoadLatestEyeCanthalTiltDeg,
+} from "../lib/analysis-local-canthal";
 import { ApiError } from "../lib/errors";
 import { validateBody, validateQuery } from "../lib/validate";
 import {
@@ -894,7 +899,7 @@ export function createV1AnalysesRouter(): Router {
         const { data: job, error: jobError } = await supabaseAdmin
           .from("analysis_jobs")
           .select(
-            "id, user_id, status, trigger_source, version, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
+            "id, user_id, session_id, status, trigger_source, version, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
           )
           .eq("id", params.jobId)
           .maybeSingle();
@@ -924,15 +929,25 @@ export function createV1AnalysesRouter(): Router {
           });
         }
 
+        const eyeCanthalTiltDeg = await tryLoadLatestEyeCanthalTiltDeg({
+          userId: ownerId,
+          sessionId: (job as { session_id: string }).session_id,
+          context: "analysis_detail_response",
+        });
+        const captureGuideMetrics = mergeEyeCanthalTiltIntoCaptureGuideMetrics(
+          parseGuideTraceMetricsFromStoredRequestPayload(
+            (job as { request_payload?: unknown }).request_payload,
+          ),
+          eyeCanthalTiltDeg,
+        );
+
         res.status(200).json({
           ok: true,
           httpStatus: 200,
           data: {
             job,
-            results: results ?? [],
-            capture_guide_metrics: parseGuideTraceMetricsFromStoredRequestPayload(
-              (job as { request_payload?: unknown }).request_payload,
-            ),
+            results: applyLocalEyeCanthalTiltToResultRows(results, eyeCanthalTiltDeg),
+            capture_guide_metrics: captureGuideMetrics,
           },
           error: null,
         });
@@ -1221,7 +1236,7 @@ export function createV1AnalysesRouter(): Router {
         const { data: latestJob, error: latestJobError } = await supabaseAdmin
           .from("analysis_jobs")
           .select(
-            "id, status, trigger_source, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
+            "id, user_id, session_id, status, trigger_source, started_at, completed_at, failed_at, error_code, error_message, created_at, request_payload",
           )
           .eq("user_id", userId)
           .neq("status", "failed")
@@ -1264,15 +1279,25 @@ export function createV1AnalysesRouter(): Router {
           });
         }
 
+        const eyeCanthalTiltDeg = await tryLoadLatestEyeCanthalTiltDeg({
+          userId,
+          sessionId: (latestJob as { session_id: string }).session_id,
+          context: "latest_analysis_response",
+        });
+        const captureGuideMetrics = mergeEyeCanthalTiltIntoCaptureGuideMetrics(
+          parseGuideTraceMetricsFromStoredRequestPayload(
+            (latestJob as { request_payload?: unknown }).request_payload,
+          ),
+          eyeCanthalTiltDeg,
+        );
+
         res.status(200).json({
           ok: true,
           httpStatus: 200,
           data: {
             job: latestJob,
-            results: results ?? [],
-            capture_guide_metrics: parseGuideTraceMetricsFromStoredRequestPayload(
-              (latestJob as { request_payload?: unknown }).request_payload,
-            ),
+            results: applyLocalEyeCanthalTiltToResultRows(results, eyeCanthalTiltDeg),
+            capture_guide_metrics: captureGuideMetrics,
           },
           error: null,
         });

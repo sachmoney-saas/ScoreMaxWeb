@@ -1,5 +1,6 @@
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
 import {
+  CAPTURE_META_EYE_CANTHAL_TILT_DEG,
   CAPTURE_META_FRONT_JAW_ANGLE_DEG,
   CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO,
   CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO,
@@ -160,6 +161,9 @@ export function guideTraceBlobUploadsFromCapturedPose(
           assetTypeCode: "GUIDE_TRACE_EYE_CANTHAL_TILT",
           fileLabel: "eye-canthal-tilt",
           blob: pose.annotatedCloseupEyeCanthalTiltGuideBlob,
+          captureMetadata: {
+            [CAPTURE_META_EYE_CANTHAL_TILT_DEG]: pose.eyeCanthalTiltDeg ?? null,
+          },
         });
       }
       break;

@@ -95,6 +95,8 @@ export const CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO =
   "oval_mouth_over_upper_line_width_ratio" as const;
 /** Angle au sommet du repère V mâchoire (degrés), face de face. */
 export const CAPTURE_META_FRONT_JAW_ANGLE_DEG = "front_jaw_angle_deg" as const;
+/** Inclinaison canthale moyenne (degrés), gros plan yeux. Positif = canthus latéral plus haut. */
+export const CAPTURE_META_EYE_CANTHAL_TILT_DEG = "eye_canthal_tilt_deg" as const;
 
 /**
  * Clé sous `AnalysesRequest.metadata` : mesures issues de `scan_assets.capture_metadata`,
@@ -112,11 +114,29 @@ export const FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES = [
 export type FrontalGuideTraceMetricAssetCode =
   (typeof FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES)[number];
 
-/** Métriques des repères 2D face de face, jointes au payload vers ScanFace. */
+/** PNG repères yeux dont les métriques `CAPTURE_META_*` sont fusionnées pour l’analyse. */
+export const EYE_GUIDE_TRACE_METRIC_ASSET_CODES = [
+  "GUIDE_TRACE_EYE_CANTHAL_TILT",
+] as const;
+
+export type EyeGuideTraceMetricAssetCode =
+  (typeof EYE_GUIDE_TRACE_METRIC_ASSET_CODES)[number];
+
+/** PNG repères dont les métriques `CAPTURE_META_*` sont fusionnées pour l’analyse. */
+export const GUIDE_TRACE_METRIC_ASSET_CODES = [
+  ...FRONTAL_GUIDE_TRACE_METRIC_ASSET_CODES,
+  ...EYE_GUIDE_TRACE_METRIC_ASSET_CODES,
+] as const;
+
+export type GuideTraceMetricAssetCode =
+  (typeof GUIDE_TRACE_METRIC_ASSET_CODES)[number];
+
+/** Métriques des repères 2D capture, exposées côté analyse sans recalculer depuis l’image. */
 export type GuideTraceMetricsForAnalysis = {
   [CAPTURE_META_MOUTH_TO_NOSE_WIDTH_RATIO]?: number;
   [CAPTURE_META_OVAL_MOUTH_OVER_UPPER_WIDTH_RATIO]?: number;
   [CAPTURE_META_FRONT_JAW_ANGLE_DEG]?: number;
+  [CAPTURE_META_EYE_CANTHAL_TILT_DEG]?: number;
 };
 
 export const analysisJobs = pgTable("analysis_jobs", {

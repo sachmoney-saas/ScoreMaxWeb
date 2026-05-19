@@ -1,5 +1,6 @@
 import * as React from "react";
 import { AlertTriangle } from "lucide-react";
+import { Redirect } from "wouter";
 
 import { BrandLoader, BrandLoaderTrack } from "@/components/ui/brand-loader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,19 +32,25 @@ import { RoutineDayCarousel } from "@/components/protocol/RoutineDayCarousel";
 import { RoutineDayProgressBar } from "@/components/protocol/RoutineDayProgressBar";
 import { RoutineAlwaysOn } from "@/components/protocol/RoutineAlwaysOn";
 import { AvoidTab } from "@/components/protocol/AvoidTab";
+import { ProtocolTodoTab } from "@/components/protocol/ProtocolTodoTab";
+import { ProtocolNextAnalysisCountdown } from "@/components/protocol/ProtocolNextAnalysisCountdown";
 import { STARTER_PRESET_IDS } from "@shared/protocol-presets";
+import { useProtocolBreakdown } from "@/lib/protocol";
+import { useSubscriberStandardAnalysisQuota } from "@/hooks/use-supabase";
 
 export default function ProtocolPage() {
   const language = useAppLanguage();
   const { user } = useAuth();
   const routineQuery = useUserRoutine();
+  const protocolBreakdown = useProtocolBreakdown();
   const {
     mutate: assignMissingPresets,
     isPending: isAssigningPresets,
     isError: assignPresetsError,
     error: assignPresetsErrorValue,
   } = useAssignStarterPresets();
-  const { data: history = [] } = useAnalysisHistory({ enabled: !!user?.id });
+  const historyQuery = useAnalysisHistory({ enabled: !!user?.id });
+  const history = historyQuery.data ?? [];
 
   const [mainTab, setMainTab] = React.useState<ProtocolMainTab>("routine");
   const [dayOffset, setDayOffset] = React.useState(0);
@@ -55,6 +62,9 @@ export default function ProtocolPage() {
       history.some((a) => a.status === "completed" && a.results.length > 0),
     [history],
   );
+  const subscriberQuotaQuery = useSubscriberStandardAnalysisQuota({
+    enabled: hasCompletedAnalysis,
+  });
 
   const latestAnalysisId = React.useMemo(() => {
     const completed = history
@@ -114,11 +124,16 @@ export default function ProtocolPage() {
   );
 
   const isLoading =
+    historyQuery.isLoading ||
     routineQuery.isLoading ||
     (hasCompletedAnalysis && presets.length === 0 && isAssigningPresets);
 
   const assignFailed =
     hasCompletedAnalysis && presets.length === 0 && assignPresetsError;
+
+  if (historyQuery.isSuccess && !hasCompletedAnalysis) {
+    return <Redirect to="/app/new-analysis" />;
+  }
 
   if (isLoading) {
     const loadingLabel = i18n(language, {
@@ -191,12 +206,11 @@ export default function ProtocolPage() {
     );
   }
 
-  if (!hasCompletedAnalysis || presets.length === 0) {
+  if (presets.length === 0) {
     return (
       <ProtocolEmptyExperience
         language={language}
         latestAnalysisId={latestAnalysisId}
-        variant="needs_analysis"
       />
     );
   }
@@ -204,7 +218,16 @@ export default function ProtocolPage() {
   const showHeaderProgress = mainTab === "routine" && selectedDayPlan !== null;
   const header = (
     <div className="flex flex-col items-stretch gap-4">
-      <ProtocolPageTitle language={language} />
+      <div className="flex flex-col items-center gap-2">
+        <ProtocolPageTitle language={language} />
+        <ProtocolNextAnalysisCountdown
+          language={language}
+          nextAvailableAt={subscriberQuotaQuery.data?.next_available_at}
+          onMayHaveUnlocked={() => {
+            void subscriberQuotaQuery.refetch();
+          }}
+        />
+      </div>
       {showHeaderProgress ? (
         <RoutineDayProgressBar
           language={language}
@@ -237,6 +260,16 @@ export default function ProtocolPage() {
               userId={user?.id ?? null}
             />
             <RoutineAlwaysOn language={language} items={everydayHabits} />
+          </div>
+        ) : mainTab === "todo" ? (
+          <div role="tabpanel">
+            <ProtocolTodoTab
+              language={language}
+              cures={protocolBreakdown.cures}
+              actions={protocolBreakdown.uncategorised}
+              isLoading={protocolBreakdown.isLoading}
+              error={protocolBreakdown.error}
+            />
           </div>
         ) : (
           <div role="tabpanel">

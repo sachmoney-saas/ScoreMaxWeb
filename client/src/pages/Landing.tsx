@@ -939,7 +939,7 @@ export default function Landing() {
                   fr: "© 2026 ScoreMax. Tous droits réservés.",
                 })}
               </p>
-              <p className="mt-1 text-xs">V1.03</p>
+              <p className="mt-1 text-xs">V1.04</p>
             </div>
           </div>
 

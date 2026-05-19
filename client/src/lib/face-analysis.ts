@@ -249,6 +249,82 @@ function isAbortError(error: unknown): boolean {
   return false;
 }
 
+function createAbortError(message: string): Error {
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
+export type ScanAssetUploadProgress = {
+  loadedBytes: number;
+  totalBytes: number;
+};
+
+type R2UploadResponse = {
+  ok: boolean;
+  status: number;
+  statusText: string;
+};
+
+function putScanAssetWithProgress(params: {
+  uploadUrl: string;
+  file: File;
+  onUploadProgress?: (progress: ScanAssetUploadProgress) => void;
+}): Promise<R2UploadResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let settled = false;
+
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      callback();
+    };
+
+    xhr.open("PUT", params.uploadUrl, true);
+    xhr.timeout = SCAN_ASSET_R2_PUT_TIMEOUT_MS;
+    xhr.setRequestHeader("Content-Type", params.file.type);
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      params.onUploadProgress?.({
+        loadedBytes: event.loaded,
+        totalBytes: event.total,
+      });
+    };
+
+    xhr.onload = () => {
+      settle(() => {
+        resolve({
+          ok: xhr.status >= 200 && xhr.status < 300,
+          status: xhr.status,
+          statusText: xhr.statusText,
+        });
+      });
+    };
+
+    xhr.onerror = () => {
+      settle(() => {
+        reject(new TypeError("Network request failed"));
+      });
+    };
+
+    xhr.ontimeout = () => {
+      settle(() => {
+        reject(createAbortError("Upload timed out"));
+      });
+    };
+
+    xhr.onabort = () => {
+      settle(() => {
+        reject(createAbortError("Upload aborted"));
+      });
+    };
+
+    xhr.send(params.file);
+  });
+}
+
 /** Erreurs PostgREST / réseau souvent transitoires entre R2 et la persistance. */
 function isRetriableScanAssetPersistError(error: {
   code?: string;
@@ -369,6 +445,7 @@ export async function uploadScanAsset(params: {
   file: File;
   lang?: AppLanguage;
   captureMetadata?: Record<string, unknown>;
+  onUploadProgress?: (progress: ScanAssetUploadProgress) => void;
 }): Promise<void> {
   const lang = params.lang ?? getPreferredLanguage();
   if (!["image/jpeg", "image/png"].includes(params.file.type)) {
@@ -424,15 +501,12 @@ export async function uploadScanAsset(params: {
     throw new Error(faceAnalysisMessage(lang, "signedUploadFailed"));
   }
 
-  let uploadResponse: Response;
+  let uploadResponse: R2UploadResponse;
   try {
-    uploadResponse = await fetch(uploadData.upload_url, {
-      method: "PUT",
-      headers: {
-        "Content-Type": params.file.type,
-      },
-      body: params.file,
-      signal: AbortSignal.timeout(SCAN_ASSET_R2_PUT_TIMEOUT_MS),
+    uploadResponse = await putScanAssetWithProgress({
+      uploadUrl: uploadData.upload_url,
+      file: params.file,
+      onUploadProgress: params.onUploadProgress,
     });
   } catch (error) {
     if (isAbortError(error)) {
@@ -458,6 +532,10 @@ export async function uploadScanAsset(params: {
     });
     throw new Error(faceAnalysisMessage(lang, "r2UploadFailed"));
   }
+  params.onUploadProgress?.({
+    loadedBytes: params.file.size,
+    totalBytes: params.file.size,
+  });
 
   const captureMetadata: Record<string, unknown> =
     params.captureMetadata &&

@@ -17,6 +17,7 @@ import { PoseValidator } from "./PoseValidator";
 import { evaluateFrameQualityForCapture, evaluateFrameQualityMinimal } from "./QualityGate";
 import { faceRatio } from "./strategies/PoseStrategy";
 import {
+  averageCanthalTiltDegreesFromLandmarks,
   frontalJawAngleMetricsFromLandmarks,
   jpegOutputDimensions,
   mouthToNoseWidthRatioFromLandmarks,
@@ -90,6 +91,8 @@ export interface CapturedPose {
   /** PNG aplati gros plan yeux : lignes canthus médial → latéral par œil (canthal tilt). */
   annotatedCloseupEyeCanthalTiltGuideBlob?: Blob;
   annotatedCloseupEyeCanthalTiltGuideThumbnailUrl?: string;
+  /** Inclinaison canthale moyenne (degrés), positif quand le canthus latéral est plus haut. */
+  eyeCanthalTiltDeg?: number;
   /** Largeur bouche / largeur nez (indices 61↔291 vs 98↔327), même calcul que sur le PNG nez–bouche. */
   mouthToNoseWidthRatio?: number;
   /** Largeur chord bouche ovale / largeur chord ligne haute (≤ 1 si petit trait = bouche). */
@@ -1419,6 +1422,15 @@ export class CaptureSession {
         ? frontalJawAngleMetricsFromLandmarks(lmSnap)?.angleDeg
         : undefined;
 
+    const eyeCanthalTiltDeg =
+      poseState.poseId === "closeup-eye" &&
+      lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD
+        ? averageCanthalTiltDegreesFromLandmarks(lmSnap, {
+            width: jpegDims.outW,
+            height: jpegDims.outH,
+          }) ?? undefined
+        : undefined;
+
     const captured: CapturedPose = {
       poseId: poseState.poseId,
       blob,
@@ -1503,6 +1515,7 @@ export class CaptureSession {
         ? { ovalMouthOverUpperLineWidthRatio }
         : {}),
       ...(frontalJawAngleDeg !== undefined ? { frontalJawAngleDeg } : {}),
+      ...(eyeCanthalTiltDeg !== undefined ? { eyeCanthalTiltDeg } : {}),
       ...(lmSnap.length >= CaptureSession.MIN_LANDMARKS_FOR_PAYLOAD
         ? {
             landmarks: lmSnap.map((p) => ({

@@ -10,14 +10,18 @@ import {
   type OnboardingScanAssetCode,
   type ScanFaceCanonicalSlot,
 } from "@shared/schema";
-
-const onboardingAssetCodeLookup = new Set<string>(
-  REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
-);
+import {
+  applyLocalEyeCanthalTiltToAnalysisResponse,
+  tryLoadLatestEyeCanthalTiltDeg,
+} from "./analysis-local-canthal";
 import { mapUnknownError } from "./errors";
 import { logger } from "./logger";
 import { runScoreMaxAnalyses } from "./scoremax-client";
 import { supabaseAdmin } from "./supabase-admin";
+
+const onboardingAssetCodeLookup = new Set<string>(
+  REQUIRED_ONBOARDING_SCAN_ASSET_CODES,
+);
 
 const activeJobIds = new Set<string>();
 
@@ -266,7 +270,16 @@ export async function processPersistedAnalysisJob(jobId: string): Promise<void> 
       payload,
     });
 
-    const analysis = await runScoreMaxAnalyses(payload);
+    const rawAnalysis = await runScoreMaxAnalyses(payload);
+    const eyeCanthalTiltDeg = await tryLoadLatestEyeCanthalTiltDeg({
+      userId: job.user_id,
+      sessionId: job.session_id,
+      context: "analysis_job_persist",
+    });
+    const analysis = applyLocalEyeCanthalTiltToAnalysisResponse(
+      rawAnalysis,
+      eyeCanthalTiltDeg,
+    );
     await persistAnalysisResults({ jobId: job.id, userId: job.user_id, analysis });
     await markSessionCompleted(job);
 

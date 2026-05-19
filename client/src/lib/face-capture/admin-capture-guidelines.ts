@@ -8,6 +8,10 @@
 // ============================================================
 
 import { getPreferredLanguage, type AppLanguage } from "@/lib/i18n";
+import {
+  canthalTiltCategoryFromMeanDegrees,
+  type CanthalTiltCategory,
+} from "@shared/canthal-tilt";
 import { CAPTURE_MAX_LONG_EDGE_PX } from './CameraManager';
 import {
   FACEMESH_LEFT_EYE_CANTHUS_LATERAL,
@@ -192,10 +196,7 @@ export function averageCanthalTiltDegreesFromLandmarks(
   return Number.isFinite(mean) ? mean : null;
 }
 
-/** Bande morte (°) : inclinaisons proches de 0° sont affichées comme « neutre ». */
-const CANTHAL_TILT_NEUTRAL_DEADBAND_DEG = 0.5;
-
-export type CanthalTiltDisplayCategory = "positive" | "neutral" | "negative";
+export type CanthalTiltDisplayCategory = CanthalTiltCategory;
 
 /**
  * Catégorie d’affichage à partir de la moyenne géométrique des angles (plan image),
@@ -204,9 +205,7 @@ export type CanthalTiltDisplayCategory = "positive" | "neutral" | "negative";
 export function canthalTiltDisplayCategoryFromMeanDegrees(
   meanDeg: number,
 ): CanthalTiltDisplayCategory {
-  if (meanDeg > CANTHAL_TILT_NEUTRAL_DEADBAND_DEG) return "positive";
-  if (meanDeg < -CANTHAL_TILT_NEUTRAL_DEADBAND_DEG) return "negative";
-  return "neutral";
+  return canthalTiltCategoryFromMeanDegrees(meanDeg) ?? "neutral";
 }
 
 /** Multiplicateur bouche/nez pour l’UI (2 décimales, même convention que les repères admin). */

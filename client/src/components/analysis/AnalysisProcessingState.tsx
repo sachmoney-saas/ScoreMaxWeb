@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   BrandLoader,
@@ -13,12 +13,8 @@ import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 const INITIALIZATION_STEPS_TICKER_MS = 5000;
 
 /** Temps affiché pour passer linéairement de 0 % à 99 % (l’analyse reste affichée à 99 % ensuite). */
-const ANALYSIS_PROGRESS_RAMP_MS = 150 * 1000; // 2 min 30
+const ANALYSIS_PROGRESS_RAMP_MS = 180 * 1000; // 3 min
 const ANALYSIS_PROGRESS_CAP_PERCENT = 99;
-
-/** Entre deux messages du ticker analyse in-app (~2 min avec ~27 lignes). */
-const ANALYSIS_STEPS_RANDOM_MS_MIN = 5000;
-const ANALYSIS_STEPS_RANDOM_MS_MAX = 10_000;
 
 const INITIALIZATION_TICKER_MESSAGES: ReadonlyArray<{
   en: string;
@@ -64,124 +60,61 @@ const INITIALIZATION_TICKER_SCHEDULE = {
   intervalMs: INITIALIZATION_STEPS_TICKER_MS,
 } as const;
 
-const ANALYSIS_TICKER_SCHEDULE = {
-  kind: "random",
-  minMs: ANALYSIS_STEPS_RANDOM_MS_MIN,
-  maxMs: ANALYSIS_STEPS_RANDOM_MS_MAX,
-} as const;
+type AnalysisWorkerStep = Readonly<{
+  worker: string;
+  en: string;
+  fr: string;
+}>;
 
-const ANALYSIS_TICKER_MESSAGES: ReadonlyArray<{ en: string; fr: string }> = [
-  { fr: "Harmonisation gauche-droite du visage.", en: "Left–right facial harmonisation." },
-  { fr: "Lecture des tiers verticaux.", en: "Reading vertical facial thirds." },
-  {
-    fr: "Mesure du rythme des cinquièmes sous les yeux.",
-    en: "Measuring horizontal fifths under the eyes.",
-  },
-  {
-    fr: "Analyse orbitaire et blanc scléral.",
-    en: "Orbital landmarks and scleral exposure.",
-  },
-  { fr: "Courbes et densité des sourcils.", en: "Brow shape and fullness." },
-  {
-    fr: "Profil du dos du nez et symétrie des narines.",
-    en: "Nasal dorsum profile and nostril symmetry.",
-  },
-  { fr: "Philtre, sillons et volume des lèvres.", en: "Philtrum, folds and lip volume." },
-  { fr: "Volume et courbure des pommettes.", en: "Cheek volume and curvature." },
-  { fr: "Plan du menton et ligne mandibulaire.", en: "Chin plane and jawline contour." },
-  {
-    fr: "Angle de la mâchoire et relief latéral.",
-    en: "Gonial angle and lateral jaw relief.",
-  },
-  { fr: "Transition mâchoire–cou.", en: "Jaw-to-neck transition." },
-  {
-    fr: "Arc du sourire et équilibre des commissures.",
-    en: "Smile arc and commissure balance.",
-  },
-  {
-    fr: "Ligne frontale et densité des cheveux.",
-    en: "Hairline and perceived hair density.",
-  },
-  {
-    fr: "Contraste cheveux / peau aux tempes.",
-    en: "Hair-to-skin contrast at the temples.",
-  },
-  { fr: "Peau : homogénéité et micro-texture.", en: "Skin evenness and micro-texture." },
-  {
-    fr: "Teint : zones front / joues / nez.",
-    en: "Tone balance across forehead, cheeks and nose.",
-  },
-  { fr: "Rougeurs et micro-contrastes cutanés.", en: "Redness and subtle skin contrasts." },
-  {
-    fr: "Brillances et pores en lumière normée.",
-    en: "Shine and pore structure under normed light.",
-  },
-  {
-    fr: "Croisement des vues frontale et trois-quarts.",
-    en: "Cross-checking frontal and three-quarter views.",
-  },
-  {
-    fr: "Recoupement des poses pour plus de stabilité.",
-    en: "Cross-validating poses for stability.",
-  },
-  {
-    fr: "Points de repère sur la zone péri-orbitaire.",
-    en: "Anchoring peri-orbital reference points.",
-  },
-  {
-    fr: "Carte fine du nez : ombres et jonctions.",
-    en: "Fine nasal map — shadows and transitions.",
-  },
-  {
-    fr: "Géométrie du vermillon et du cupidon.",
-    en: "Vermillion contour and Cupid's bow geometry.",
-  },
-  { fr: "Indices de forme faciale globale.", en: "Global facial shape cues." },
-  { fr: "Calage sur le score global sur 100.", en: "Locking onto the score out of 100." },
-  { fr: "Pondération des scores par zone.", en: "Weighted scoring by facial zone." },
-  {
-    fr: "Préparation des textes et repères visuels.",
-    en: "Preparing captions and visual callouts.",
-  },
-];
-
-const IN_APP_ANALYSIS_GEOMETRY_STEPS: ReadonlyArray<{ en: string; fr: string }> = [
-  {
-    en: "Uploading captured poses",
-    fr: "Envoi des poses capturées",
-  },
-  {
-    en: "Mapping facial landmarks",
-    fr: "Cartographie des repères faciaux",
-  },
-  {
-    en: "Stabilizing pose & lighting",
-    fr: "Stabilisation pose et lumière",
-  },
-  {
-    en: "Segmenting facial features",
-    fr: "Segmentation des traits du visage",
-  },
-  {
-    en: "Calculating facial proportions",
-    fr: "Calcul des proportions du visage",
-  },
-  {
-    en: "Measuring symmetry",
-    fr: "Mesure de la symétrie",
-  },
-  {
-    en: "Running worker evaluations",
-    fr: "Évaluation des zones du visage",
-  },
-  {
-    en: "Scoring confidence",
-    fr: "Score de confiance des mesures",
-  },
-  {
-    en: "Generating insights",
-    fr: "Génération des résultats",
-  },
+const IN_APP_ANALYSIS_WORKER_STEPS: ReadonlyArray<AnalysisWorkerStep> = [
+  { worker: "age", fr: "Âge apparent : estimation visuelle", en: "Apparent age: visual estimate" },
+  { worker: "age", fr: "Âge apparent : rétention juvénile", en: "Apparent age: juvenile retention" },
+  { worker: "age", fr: "Âge apparent : maturité structurelle", en: "Apparent age: structural maturity" },
+  { worker: "bodyfat", fr: "Masse grasse : niveau facial global", en: "Body fat: global facial level" },
+  { worker: "bodyfat", fr: "Masse grasse : douceur du bas visage", en: "Body fat: lower-face softness" },
+  { worker: "bodyfat", fr: "Masse grasse : contraste os / volume", en: "Body fat: bone-to-volume contrast" },
+  { worker: "cheeks", fr: "Joues : projection malaire", en: "Cheeks: malar projection" },
+  { worker: "cheeks", fr: "Joues : volume et creux", en: "Cheeks: fullness and hollows" },
+  { worker: "cheeks", fr: "Joues : contour zygomatique", en: "Cheeks: zygomatic contour" },
+  { worker: "chin", fr: "Menton : projection frontale", en: "Chin: frontal projection" },
+  { worker: "chin", fr: "Menton : hauteur et proportion", en: "Chin: height and proportion" },
+  { worker: "chin", fr: "Menton : intégration labio-mentonnière", en: "Chin: labiomental integration" },
+  { worker: "coloring", fr: "Colorimétrie : contraste global", en: "Coloring: global contrast" },
+  { worker: "coloring", fr: "Colorimétrie : sous-ton peau / cheveux", en: "Coloring: skin and hair undertone" },
+  { worker: "coloring", fr: "Colorimétrie : harmonie du visage", en: "Coloring: facial color harmony" },
+  { worker: "eye_brows", fr: "Sourcils : densité et toilettage", en: "Eyebrows: density and grooming" },
+  { worker: "eye_brows", fr: "Sourcils : arche et inclinaison", en: "Eyebrows: arch and tilt" },
+  { worker: "eye_brows", fr: "Sourcils : matrice masculin / subtil", en: "Eyebrows: masculine / subtle matrix" },
+  { worker: "eyes", fr: "Yeux : inclinaison canthale", en: "Eyes: canthal tilt" },
+  { worker: "eyes", fr: "Yeux : exposition palpébrale", en: "Eyes: eyelid exposure" },
+  { worker: "eyes", fr: "Yeux : support orbitaire", en: "Eyes: orbital support" },
+  { worker: "hair", fr: "Cheveux : ligne frontale", en: "Hair: hairline" },
+  { worker: "hair", fr: "Cheveux : densité perçue", en: "Hair: perceived density" },
+  { worker: "hair", fr: "Cheveux : cadrage du visage", en: "Hair: facial framing" },
+  { worker: "jaw", fr: "Mâchoire : angle gonial", en: "Jaw: gonial angle" },
+  { worker: "jaw", fr: "Mâchoire : largeur mandibulaire", en: "Jaw: mandibular width" },
+  { worker: "jaw", fr: "Mâchoire : soutien du tiers inférieur", en: "Jaw: lower-third support" },
+  { worker: "lips", fr: "Lèvres : volume du vermillon", en: "Lips: vermillion volume" },
+  { worker: "lips", fr: "Lèvres : philtre et arc de Cupidon", en: "Lips: philtrum and Cupid's bow" },
+  { worker: "lips", fr: "Lèvres : ratio haut / bas", en: "Lips: upper-to-lower ratio" },
+  { worker: "neck", fr: "Cou : angle cervico-mentonnier", en: "Neck: cervicomental angle" },
+  { worker: "neck", fr: "Cou : posture et largeur", en: "Neck: posture and width" },
+  { worker: "neck", fr: "Cou : transition mâchoire-cou", en: "Neck: jaw-to-neck transition" },
+  { worker: "nose", fr: "Nez : dos nasal et arête", en: "Nose: dorsum and bridge" },
+  { worker: "nose", fr: "Nez : largeur alaire", en: "Nose: alar width" },
+  { worker: "nose", fr: "Nez : projection de profil", en: "Nose: profile projection" },
+  { worker: "skin", fr: "Peau : texture et pores", en: "Skin: texture and pores" },
+  { worker: "skin", fr: "Peau : lissage et hydratation", en: "Skin: smoothness and hydration" },
+  { worker: "skin", fr: "Peau : rougeurs et imperfections", en: "Skin: redness and blemishes" },
+  { worker: "skin_tint", fr: "Teint : niveau de bronzage", en: "Skin tone: tan level" },
+  { worker: "skin_tint", fr: "Teint : uniformité des zones", en: "Skin tone: zone uniformity" },
+  { worker: "skin_tint", fr: "Teint : harmonie phototype", en: "Skin tone: phototype harmony" },
+  { worker: "smile", fr: "Sourire : teinte dentaire", en: "Smile: tooth shade" },
+  { worker: "smile", fr: "Sourire : arc et commissures", en: "Smile: arc and commissures" },
+  { worker: "smile", fr: "Sourire : corridor buccal", en: "Smile: buccal corridor" },
+  { worker: "symmetry_shape", fr: "Symétrie : tiers verticaux", en: "Symmetry: vertical thirds" },
+  { worker: "symmetry_shape", fr: "Symétrie : forme globale du visage", en: "Symmetry: global face shape" },
+  { worker: "symmetry_shape", fr: "Symétrie : équilibre gauche-droite", en: "Symmetry: left-right balance" },
 ] as const;
 
 export type ProcessingTickerMessagePair = Readonly<{ en: string; fr: string }>;
@@ -190,12 +123,68 @@ function mod(n: number, m: number): number {
   return ((n % m) + m) % m;
 }
 
+function deterministicJitterWeight(index: number): number {
+  const raw = Math.sin((index + 1) * 12.9898 + 78.233) * 43758.5453;
+  const unit = raw - Math.floor(raw);
+  return 0.86 + unit * 0.28;
+}
+
+function buildJitteredStepStartTimes(stepCount: number, totalMs: number): number[] {
+  if (stepCount <= 0) return [0];
+  if (stepCount === 1) return [0];
+  const weights = Array.from({ length: stepCount - 1 }, (_, index) =>
+    deterministicJitterWeight(index),
+  );
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const startTimes = [0];
+  let elapsed = 0;
+
+  for (let index = 0; index < weights.length; index += 1) {
+    elapsed += (weights[index] / totalWeight) * totalMs;
+    startTimes.push(index === weights.length - 1 ? totalMs : Math.round(elapsed));
+  }
+
+  return startTimes;
+}
+
+const ANALYSIS_WORKER_STEP_START_TIMES_MS = buildJitteredStepStartTimes(
+  IN_APP_ANALYSIS_WORKER_STEPS.length,
+  ANALYSIS_PROGRESS_RAMP_MS,
+);
+
+function analysisWorkerStepIndexFromElapsedMs(elapsedMs: number): number {
+  if (elapsedMs <= 0) return 0;
+  const lastStepIndex = IN_APP_ANALYSIS_WORKER_STEPS.length - 1;
+  if (elapsedMs >= ANALYSIS_PROGRESS_RAMP_MS) return lastStepIndex;
+
+  for (let index = 1; index < ANALYSIS_WORKER_STEP_START_TIMES_MS.length; index += 1) {
+    if (elapsedMs < ANALYSIS_WORKER_STEP_START_TIMES_MS[index]) {
+      return Math.max(0, index - 1);
+    }
+  }
+
+  return lastStepIndex;
+}
+
+function getVisibleAnalysisStepIndices(activeStep: number, totalSteps: number): number[] {
+  const visibleCount = Math.min(7, totalSteps);
+  const maxStart = Math.max(0, totalSteps - visibleCount);
+  const start = Math.max(0, Math.min(activeStep - 3, maxStart));
+  return Array.from({ length: visibleCount }, (_, index) => start + index);
+}
+
+function analysisStepOpacity(offset: number): number {
+  const distance = Math.abs(offset);
+  if (distance === 0) return 1;
+  if (distance === 1) return offset < 0 ? 0.64 : 0.7;
+  if (distance === 2) return offset < 0 ? 0.36 : 0.46;
+  return offset < 0 ? 0.18 : 0.28;
+}
+
 type ProcessingStepTickerProps = {
   tone: "on-dark" | "on-light";
   messages: readonly ProcessingTickerMessagePair[];
-  schedule:
-    | typeof INITIALIZATION_TICKER_SCHEDULE
-    | typeof ANALYSIS_TICKER_SCHEDULE;
+  schedule: typeof INITIALIZATION_TICKER_SCHEDULE;
   rowKeyPrefix: string;
 };
 
@@ -208,36 +197,10 @@ function ProcessingStepTicker({ tone, messages, schedule, rowKeyPrefix }: Proces
   React.useEffect(() => {
     if (n <= 0) return;
 
-    if (schedule.kind === "fixed") {
-      const id = window.setInterval(() => {
-        setActiveIndex((previous) => (previous + 1) % n);
-      }, schedule.intervalMs);
-      return () => window.clearInterval(id);
-    }
-
-    let cancelled = false;
-    let timeoutId = 0;
-
-    const bump = () => {
+    const id = window.setInterval(() => {
       setActiveIndex((previous) => (previous + 1) % n);
-      scheduleNext();
-    };
-
-    const scheduleNext = () => {
-      const span = Math.max(0, schedule.maxMs - schedule.minMs);
-      const delay =
-        schedule.minMs + (span > 0 ? Math.floor(Math.random() * (span + 1)) : 0);
-      timeoutId = window.setTimeout(() => {
-        if (cancelled) return;
-        bump();
-      }, delay);
-    };
-
-    scheduleNext();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
+    }, schedule.intervalMs);
+    return () => window.clearInterval(id);
   }, [n, schedule]);
 
   const indices = React.useMemo(
@@ -315,9 +278,10 @@ function NumberedAnalysisStepLoader({
   elapsedMs,
   showElapsedTimer = true,
 }: NumberedAnalysisStepLoaderProps) {
-  const activeStep = Math.min(
-    IN_APP_ANALYSIS_GEOMETRY_STEPS.length - 1,
-    Math.floor(Math.max(0, elapsedMs) / 12_000),
+  const activeStep = analysisWorkerStepIndexFromElapsedMs(Math.max(0, elapsedMs));
+  const visibleStepIndices = getVisibleAnalysisStepIndices(
+    activeStep,
+    IN_APP_ANALYSIS_WORKER_STEPS.length,
   );
   const onDark = tone === "on-dark";
 
@@ -379,46 +343,70 @@ function NumberedAnalysisStepLoader({
           fr: "Étapes d'analyse",
         })}
       >
-        {IN_APP_ANALYSIS_GEOMETRY_STEPS.map((label, index) => {
-          const done = index < activeStep;
-          const active = index === activeStep;
-          return (
-            <li
-              key={label.en}
-              className="flex items-start gap-[clamp(0.5rem,1.1vh,0.75rem)]"
-            >
-              <span
-                className={cn(
-                  "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.45rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
-                  done && "border-[#d6e4ff]/60 bg-[#d6e4ff]/20 text-[#d6e4ff]",
-                  active &&
-                    "border-[#d6e4ff] bg-[#d6e4ff]/25 text-[#d6e4ff] shadow-[0_0_14px_rgba(214,228,255,0.35)]",
-                  !done &&
-                    !active &&
-                    (onDark
-                      ? "border-white/15 bg-white/[0.04] text-zinc-500"
-                      : "border-slate-200 bg-slate-950/[0.03] text-slate-400"),
-                )}
-                aria-hidden
+        <AnimatePresence mode="popLayout" initial={false}>
+          {visibleStepIndices.map((stepIndex) => {
+            const label = IN_APP_ANALYSIS_WORKER_STEPS[stepIndex];
+            const offset = stepIndex - activeStep;
+            const active = offset === 0;
+            const past = offset < 0;
+            const upcoming = offset > 0;
+            const opacity = analysisStepOpacity(offset);
+
+            return (
+              <motion.li
+                key={`${label.worker}-${stepIndex}`}
+                layout
+                initial={{
+                  opacity: 0,
+                  y: upcoming ? 10 : -10,
+                }}
+                animate={{
+                  opacity,
+                  y: 0,
+                }}
+                exit={{
+                  opacity: 0,
+                  y: past ? -12 : 12,
+                }}
+                transition={{
+                  duration: 0.45,
+                  ease: "easeOut",
+                }}
+                className="flex items-start gap-[clamp(0.5rem,1.1vh,0.75rem)]"
+                aria-current={active ? "step" : undefined}
               >
-                {done ? <Check className="size-[0.8em]" strokeWidth={3} /> : index + 1}
-              </span>
-              <span
-                className={cn(
-                  "text-[clamp(0.75rem,1.65vh,0.9rem)] leading-snug",
-                  active &&
-                    (onDark
-                      ? "font-medium text-[#d6e4ff]"
-                      : "font-medium text-[#2d4a6f]"),
-                  done && (onDark ? "text-zinc-300" : "text-slate-600"),
-                  !done && !active && (onDark ? "text-zinc-500" : "text-slate-400"),
-                )}
-              >
-                {i18n(language, label)}
-              </span>
-            </li>
-          );
-        })}
+                <span
+                  className={cn(
+                    "mt-0.5 flex size-[clamp(1.1rem,2.2vh,1.45rem)] shrink-0 items-center justify-center rounded-full border text-[clamp(0.55rem,1.2vh,0.7rem)] font-bold tabular-nums",
+                    past && "border-[#d6e4ff]/35 bg-[#d6e4ff]/10 text-[#d6e4ff]",
+                    active &&
+                      "border-[#d6e4ff] bg-[#d6e4ff]/25 text-[#d6e4ff] shadow-[0_0_14px_rgba(214,228,255,0.35)]",
+                    upcoming &&
+                      (onDark
+                        ? "border-white/15 bg-white/[0.04] text-zinc-500"
+                        : "border-slate-200 bg-slate-950/[0.03] text-slate-400"),
+                  )}
+                  aria-hidden
+                >
+                  {String(stepIndex + 1).padStart(2, "0")}
+                </span>
+                <span
+                  className={cn(
+                    "text-[clamp(0.75rem,1.65vh,0.9rem)] leading-snug",
+                    active &&
+                      (onDark
+                        ? "font-medium text-[#d6e4ff]"
+                        : "font-medium text-[#2d4a6f]"),
+                    past && (onDark ? "text-zinc-300" : "text-slate-600"),
+                    upcoming && (onDark ? "text-zinc-500" : "text-slate-400"),
+                  )}
+                >
+                  {i18n(language, label)}
+                </span>
+              </motion.li>
+            );
+          })}
+        </AnimatePresence>
       </ul>
     </div>
   );
@@ -642,14 +630,6 @@ export function AnalysisProcessingState({
             messages={INITIALIZATION_TICKER_MESSAGES}
             schedule={INITIALIZATION_TICKER_SCHEDULE}
             rowKeyPrefix="init-step"
-          />
-        ) : null}
-        {!initializationStepTicker && analysisStepTicker ? (
-          <ProcessingStepTicker
-            tone={tone}
-            messages={ANALYSIS_TICKER_MESSAGES}
-            schedule={ANALYSIS_TICKER_SCHEDULE}
-            rowKeyPrefix="analysis-step"
           />
         ) : null}
       </div>
