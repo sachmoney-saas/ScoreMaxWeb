@@ -2,22 +2,19 @@ import * as React from "react";
 import { motion } from "framer-motion";
 import { Flag, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { onboardingPrimaryCtaClassName } from "@/lib/cta-button-styles";
 import { i18n, type AppLanguage } from "@/lib/i18n";
 import type { OnboardingPotentialImage } from "@/hooks/use-onboarding-potential-image";
+import { useAuthenticatedImageObjectUrl } from "@/hooks/use-authenticated-image-object-url";
 import { OnboardingMultistepGlassLoader } from "@/components/onboarding/OnboardingMultistepGlassLoader";
 import { BeforeAfterSlider } from "@/components/onboarding/BeforeAfterSlider";
-import {
-  beforeAfterMediaFrameClassName,
-  onboardingPortraitAspectClassName,
-} from "@/lib/onboarding-portrait-media";
-import { pickBestImageUrl, useAvifSupport } from "@/lib/avif-support";
+import { beforeAfterMediaFrameClassName } from "@/lib/onboarding-portrait-media";
 
 type Props = {
   language: AppLanguage;
   potentialImage: OnboardingPotentialImage | null | undefined;
   isLoading: boolean;
+  suppressPreview?: boolean;
   onUnlock: () => void | Promise<void>;
   isUnlocking: boolean;
 };
@@ -173,57 +170,6 @@ function TransformationPreviewHeader({
   );
 }
 
-type DecodedImageState = "idle" | "loading" | "ready" | "error";
-
-function useDecodedImage(src: string | null): DecodedImageState {
-  const [state, setState] = React.useState<DecodedImageState>(
-    src ? "loading" : "idle",
-  );
-
-  React.useEffect(() => {
-    if (!src) {
-      setState("idle");
-      return;
-    }
-
-    let cancelled = false;
-    const img = new Image();
-    img.decoding = "async";
-
-    const markReady = () => {
-      const maybeDecode = typeof img.decode === "function" ? img.decode() : null;
-      void Promise.resolve(maybeDecode)
-        .catch(() => undefined)
-        .then(() => {
-          if (!cancelled) {
-            setState("ready");
-          }
-        });
-    };
-
-    setState("loading");
-    img.onload = markReady;
-    img.onerror = () => {
-      if (!cancelled) {
-        setState("error");
-      }
-    };
-    img.src = src;
-
-    if (img.complete && img.naturalWidth > 0) {
-      markReady();
-    }
-
-    return () => {
-      cancelled = true;
-      img.onload = null;
-      img.onerror = null;
-    };
-  }, [src]);
-
-  return state;
-}
-
 function UnlockFullAnalysisCta({
   language,
   onUnlock,
@@ -265,6 +211,22 @@ function UnlockFullAnalysisCta({
   );
 }
 
+function PreviewMediaSkeleton() {
+  return (
+    <div className="w-full shrink-0 self-center">
+      <div
+        className={cn(
+          beforeAfterMediaFrameClassName,
+          "overflow-hidden bg-white/[0.04]",
+        )}
+        aria-hidden
+      >
+        <div className="absolute inset-0 animate-pulse bg-[linear-gradient(110deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.1)_42%,rgba(255,255,255,0.03)_78%)]" />
+      </div>
+    </div>
+  );
+}
+
 /**
  * Affichage post-scan : avant / après avec slider superposé.
  */
@@ -272,51 +234,67 @@ export function PotentialPreviewCard({
   language,
   potentialImage,
   isLoading,
+  suppressPreview = false,
   onUnlock,
   isUnlocking,
 }: Props) {
-  const supportsAvif = useAvifSupport();
+  const generatedMediaUrl = potentialImage?.generated_media_url ?? null;
+  const sourceMediaUrl =
+    potentialImage?.source_face_media_url ??
+    potentialImage?.mask_overlay_media_url ??
+    null;
+  const usesAuthenticatedMedia = Boolean(generatedMediaUrl);
+  const generatedImage = useAuthenticatedImageObjectUrl(generatedMediaUrl, {
+    enabled: usesAuthenticatedMedia,
+  });
+  const sourceImage = useAuthenticatedImageObjectUrl(sourceMediaUrl, {
+    enabled: usesAuthenticatedMedia && Boolean(sourceMediaUrl),
+  });
 
-  const signedUrl = potentialImage?.signed_url ?? null;
-  const signedUrlAvif = potentialImage?.signed_url_avif ?? null;
+  const legacySignedUrl = potentialImage?.signed_url ?? null;
+  const legacySignedUrlAvif = potentialImage?.signed_url_avif ?? null;
   /** Côté « actuel » : photo source du scan (identique à l’entrée OneShot), sans masque filaire. */
-  const beforeSrc =
+  const legacyBeforeSrc =
     potentialImage?.source_face_signed_url ??
     potentialImage?.mask_overlay_signed_url ??
     null;
-  const beforeSrcAvif =
+  const legacyBeforeSrcAvif =
     potentialImage?.source_face_signed_url_avif ??
     potentialImage?.mask_overlay_signed_url_avif ??
     null;
 
   const status = potentialImage?.status ?? "pending";
-  const isReady = status === "completed" && !!signedUrl;
-  const isFailed = status === "failed";
-  const afterSrc = isReady && signedUrl ? signedUrl : null;
-  const afterSrcAvif = isReady && signedUrlAvif ? signedUrlAvif : null;
-  /**
-   * For the decode probe we want to know when the *actually rendered* bytes
-   * are ready — that is the AVIF when supported, otherwise the JPEG. The
-   * `<picture>` element below will pick the same variant, so this stays in
-   * sync with what the user sees on the screen.
-   */
-  const beforeDisplayUrl = pickBestImageUrl(
-    { avif: beforeSrcAvif, fallback: beforeSrc },
-    supportsAvif,
-  );
-  const afterDisplayUrl = pickBestImageUrl(
-    { avif: afterSrcAvif, fallback: afterSrc },
-    supportsAvif,
-  );
-  const leftDecoded = useDecodedImage(beforeDisplayUrl);
-  const rightDecoded = useDecodedImage(afterDisplayUrl);
+  const displayState = potentialImage?.display_state;
+  const isReady =
+    displayState === "ready" ||
+    (status === "completed" && Boolean(generatedMediaUrl ?? legacySignedUrl));
+  const isFailed = status === "failed" || displayState === "unavailable";
+  const mediaUnavailable =
+    usesAuthenticatedMedia && generatedImage.status === "unavailable";
+  const mediaLoading =
+    usesAuthenticatedMedia &&
+    isReady &&
+    generatedImage.status !== "ready" &&
+    generatedImage.status !== "unavailable";
+  const beforeSrc = usesAuthenticatedMedia
+    ? sourceImage.objectUrl
+    : legacyBeforeSrc;
+  const beforeSrcAvif = usesAuthenticatedMedia ? null : legacyBeforeSrcAvif;
+  const afterSrc = usesAuthenticatedMedia
+    ? generatedImage.objectUrl
+    : isReady && legacySignedUrl
+      ? legacySignedUrl
+      : null;
+  const afterSrcAvif = usesAuthenticatedMedia
+    ? null
+    : isReady && legacySignedUrlAvif
+      ? legacySignedUrlAvif
+      : null;
 
   const showBlockingLoader =
+    !suppressPreview &&
     !isFailed &&
-    (isLoading ||
-      !isReady ||
-      (!!beforeSrc && leftDecoded !== "ready" && leftDecoded !== "error") ||
-      (!!afterSrc && rightDecoded !== "ready" && rightDecoded !== "error"));
+    (isLoading || !isReady);
 
   if (showBlockingLoader) {
     return (
@@ -381,29 +359,31 @@ export function PotentialPreviewCard({
     );
   }
 
-  if (isFailed) {
+  if (isFailed || suppressPreview || mediaUnavailable) {
     return (
-      <div className="mx-auto flex w-full max-w-full flex-col items-center gap-4 px-2 py-2 sm:gap-5">
-        <div
-          className={cn(
-            saasGlassInsetClassName,
-            "relative isolate flex w-full max-w-full flex-col items-center justify-center overflow-hidden p-6 text-center",
-            onboardingPortraitAspectClassName,
-          )}
-        >
-          <p className="text-sm text-zinc-200">
-            {i18n(language, {
-              en: "We couldn't preview your potential right now.",
-              fr: "Impossible d'afficher ton potentiel pour le moment.",
-            })}
-          </p>
-          <p className="mt-2 text-xs text-zinc-400">
-            {i18n(language, {
-              en: "You can still unlock your full analysis below.",
-              fr: "Tu peux quand même débloquer ton analyse complète ci-dessous.",
-            })}
-          </p>
-        </div>
+      <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0">
+        <DreamFaceProgressCard language={language} />
+        <UnlockFullAnalysisCta
+          language={language}
+          onUnlock={onUnlock}
+          isUnlocking={isUnlocking}
+        />
+      </div>
+    );
+  }
+
+  if (mediaLoading) {
+    return (
+      <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0">
+        <TransformationPreviewHeader
+          language={language}
+          subtitle={{
+            en: "See how ScoreMax can help you reach your potential.",
+            fr: "Découvre comment ScoreMax peut t'aider à atteindre ton potentiel.",
+          }}
+        />
+        <PreviewMediaSkeleton />
+        <DreamFaceProgressCard language={language} />
         <UnlockFullAnalysisCta
           language={language}
           onUnlock={onUnlock}

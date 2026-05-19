@@ -36,19 +36,10 @@ import {
   getSubscriberStandardAnalysisQuota,
 } from "../lib/subscriber-standard-analysis-quota";
 import {
-  downloadR2Object,
   getDefaultR2Bucket,
   getR2SignedUploadUrl,
-  r2ObjectExists,
-  uploadR2Object,
 } from "../lib/r2-storage";
-import {
-  avifKeyFor,
-  encodeAvifFromBuffer,
-  ensureAvifVariantInBackground,
-  isAvifSourceContentTypeSupported,
-} from "../lib/avif-variant";
-import { logger } from "../lib/logger";
+import { serveR2ImageAssetWithAvifNegotiation } from "../lib/serve-r2-image-asset";
 import { supabaseAdmin } from "../lib/supabase-admin";
 import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 import {
@@ -56,102 +47,6 @@ import {
   assertCallerHasPremiumOrAdminForSubject,
   loadAnalysisJobOwner,
 } from "../lib/analysis-user-access";
-
-type ServeImageAsset = {
-  bucket: string | null | undefined;
-  key: string;
-  mimeType: string;
-};
-
-/**
- * Common output handler for thumbnail / per-asset endpoints with optional
- * AVIF negotiation.
- *
- *  - `fmt === "avif"` and the source MIME is encodable → try R2 cache first
- *    (instant), otherwise download the source, encode, persist for next time,
- *    and return the freshly encoded AVIF. If the source isn't encodable or
- *    the encoder fails, return 404 so the client `<picture>` falls back to
- *    the JPEG/PNG `<img>`.
- *  - Otherwise → behave like before: stream the original asset. We *also*
- *    kick off a background AVIF generation so the next caller hits the cache.
- *
- * The 2-minute `Cache-Control: private, max-age=120` matches the prior policy.
- */
-async function serveAssetWithAvifNegotiation(params: {
-  res: import("express").Response;
-  asset: ServeImageAsset;
-  fmt: "avif" | undefined;
-  notFoundMessage: string;
-}): Promise<void> {
-  const { res, asset, fmt, notFoundMessage } = params;
-  const bucket = asset.bucket || getDefaultR2Bucket();
-
-  if (fmt === "avif") {
-    if (!isAvifSourceContentTypeSupported(asset.mimeType)) {
-      throw new ApiError({
-        code: "IMAGE_NOT_FOUND",
-        status: 404,
-        message: notFoundMessage,
-      });
-    }
-
-    const avifKey = avifKeyFor(asset.key);
-
-    if (await r2ObjectExists({ bucket, key: avifKey })) {
-      const cached = await downloadR2Object({ bucket, key: avifKey });
-      const buffer = Buffer.from(await cached.arrayBuffer());
-      res.setHeader("Content-Type", "image/avif");
-      res.setHeader("Cache-Control", "private, max-age=120");
-      res.status(200).send(buffer);
-      return;
-    }
-
-    const sourceBlob = await downloadR2Object({ bucket, key: asset.key });
-    const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer());
-    const encoded = await encodeAvifFromBuffer(sourceBuffer);
-    if (!encoded) {
-      throw new ApiError({
-        code: "IMAGE_NOT_FOUND",
-        status: 404,
-        message: notFoundMessage,
-      });
-    }
-
-    /**
-     * Cache for next time; failure here just means the next request will
-     * re-encode (we already paid the encode for this caller).
-     */
-    void uploadR2Object({
-      bucket,
-      key: avifKey,
-      body: encoded,
-      contentType: "image/avif",
-    }).catch((error) => {
-      logger.warn(
-        { err: error, bucket, avifKey },
-        "Failed to persist AVIF variant after on-demand encode",
-      );
-    });
-
-    res.setHeader("Content-Type", "image/avif");
-    res.setHeader("Cache-Control", "private, max-age=120");
-    res.status(200).send(encoded);
-    return;
-  }
-
-  const sourceBlob = await downloadR2Object({ bucket, key: asset.key });
-  const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer());
-
-  ensureAvifVariantInBackground({
-    bucket,
-    sourceKey: asset.key,
-    sourceContentType: asset.mimeType,
-  });
-
-  res.setHeader("Content-Type", asset.mimeType);
-  res.setHeader("Cache-Control", "private, max-age=120");
-  res.status(200).send(sourceBuffer);
-}
 
 const analysesMetadataSchema = z.object({
   userId: z.string().min(1),
@@ -971,7 +866,7 @@ export function createV1AnalysesRouter(): Router {
         const asset = scanAsset as ScanAssetThumbnailRow;
         const { fmt } = req.query as z.infer<typeof latestAnalysisQuerySchema>;
         try {
-          await serveAssetWithAvifNegotiation({
+          await serveR2ImageAssetWithAvifNegotiation({
             res,
             asset: {
               bucket: asset.r2_bucket,
@@ -1068,7 +963,7 @@ export function createV1AnalysesRouter(): Router {
           typeof analysisJobAssetQuerySchema
         >;
         try {
-          await serveAssetWithAvifNegotiation({
+          await serveR2ImageAssetWithAvifNegotiation({
             res,
             asset: {
               bucket: asset.r2_bucket,

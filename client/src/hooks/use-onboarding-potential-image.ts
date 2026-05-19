@@ -6,6 +6,10 @@ import { useAuth } from "@/hooks/use-auth";
 export type OnboardingPotentialImage = {
   id: string;
   status: "pending" | "completed" | "failed";
+  display_state?: "loading" | "ready" | "unavailable";
+  generated_media_url?: string | null;
+  source_face_media_url?: string | null;
+  mask_overlay_media_url?: string | null;
   signed_url: string | null;
   /**
    * AVIF display variant of `signed_url`. When set, the UI should prefer it
@@ -31,7 +35,7 @@ async function fetchPotentialImage(): Promise<OnboardingPotentialImage | null> {
 
   const res = await apiRequest(
     "GET",
-    "/v1/onboarding/potential-image",
+    "/v1/onboarding/potential-image?media_only=1",
     undefined,
     { Authorization: `Bearer ${token}` },
   );

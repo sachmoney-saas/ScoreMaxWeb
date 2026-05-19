@@ -7,10 +7,12 @@ import { assertSupportedAnalysisLang } from "../lib/supported-analysis-lang";
 import { refreshScanSessionProgress, type ScanSessionRow } from "../lib/analysis-orchestration";
 import {
   getLatestPotentialImageForUser,
+  getPotentialImageMediaAssetForUser,
   triggerOnboardingPotentialImage,
 } from "../lib/onboarding-potential-image";
 import { requireUserId } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { serveR2ImageAssetWithAvifNegotiation } from "../lib/serve-r2-image-asset";
 import { supabaseAdmin } from "../lib/supabase-admin";
 
 const landmarkPointSchema = z.object({
@@ -29,6 +31,14 @@ const meshReplayBodySchema = z.object({
   sessionId: z.string().uuid(),
   frontal: meshReplayFrameSchema,
   eye: meshReplayFrameSchema.nullable().optional(),
+});
+
+const onboardingPotentialMediaParamsSchema = z.object({
+  kind: z.enum(["generated", "source", "mask"]),
+});
+
+const onboardingPotentialMediaQuerySchema = z.object({
+  fmt: z.enum(["avif"]).optional(),
 });
 
 async function markOnboardingCompleted(userId: string): Promise<void> {
@@ -185,12 +195,15 @@ async function assertOnboardingSessionOwner(params: {
   }
 }
 
-async function ensurePotentialImageForCompletedOnboarding(userId: string) {
+async function ensurePotentialImageForCompletedOnboarding(
+  userId: string,
+  options: { includeSignedUrls?: boolean } = {},
+) {
   if (!(await hasCompletedOnboarding(userId))) {
     return null;
   }
 
-  const existing = await getLatestPotentialImageForUser(userId);
+  const existing = await getLatestPotentialImageForUser(userId, options);
   if (existing) {
     return existing;
   }
@@ -201,7 +214,7 @@ async function ensurePotentialImageForCompletedOnboarding(userId: string) {
       userId,
       sessionId: session.id,
     });
-    return getLatestPotentialImageForUser(userId);
+    return getLatestPotentialImageForUser(userId, options);
   } catch (error) {
     logger.warn(
       { err: error, userId },
@@ -222,19 +235,27 @@ export function createV1OnboardingRouter(): Router {
     try {
       const userId = await requireUserId(req.headers.authorization);
       const session = await loadReadyOnboardingSession(userId);
-      const { generationId, reused } = await triggerOnboardingPotentialImage({
+      const generation = await triggerOnboardingPotentialImage({
         userId,
         sessionId: session.id,
+      }).catch((error) => {
+        logger.warn(
+          { err: error, userId, sessionId: session.id },
+          "Unable to start optional onboarding potential image",
+        );
+        return null;
       });
 
       res.status(200).json({
         ok: true,
         httpStatus: 200,
         data: {
-          generation: {
-            id: generationId,
-            reused,
-          },
+          generation: generation
+            ? {
+                id: generation.generationId,
+                reused: generation.reused,
+              }
+            : null,
         },
         error: null,
       });
@@ -257,22 +278,34 @@ export function createV1OnboardingRouter(): Router {
         await markScanSessionReady(session.id, userId);
         await markOnboardingCompleted(userId);
 
-        const { generationId, reused } = await triggerOnboardingPotentialImage({
+        const generation = await triggerOnboardingPotentialImage({
           userId,
           sessionId: session.id,
+        }).catch((error) => {
+          logger.warn(
+            { err: error, userId, sessionId: session.id },
+            "Unable to start optional onboarding potential image",
+          );
+          return null;
         });
 
-        const latest = await getLatestPotentialImageForUser(userId);
+        const latest = generation
+          ? await getLatestPotentialImageForUser(userId, {
+              includeSignedUrls: false,
+            })
+          : null;
 
         res.status(200).json({
           ok: true,
           httpStatus: 200,
           data: {
-            generation: {
-              id: generationId,
-              status: latest?.status ?? "pending",
-              reused,
-            },
+            generation: generation
+              ? {
+                  id: generation.generationId,
+                  status: latest?.status ?? "pending",
+                  reused: generation.reused,
+                }
+              : null,
           },
           error: null,
         });
@@ -285,9 +318,12 @@ export function createV1OnboardingRouter(): Router {
   router.get("/onboarding/potential-image", async (req, res, next) => {
     try {
       const userId = await requireUserId(req.headers.authorization);
+      const includeSignedUrls = req.query.media_only !== "1";
       const payload =
-        (await getLatestPotentialImageForUser(userId)) ??
-        (await ensurePotentialImageForCompletedOnboarding(userId));
+        (await getLatestPotentialImageForUser(userId, { includeSignedUrls })) ??
+        (await ensurePotentialImageForCompletedOnboarding(userId, {
+          includeSignedUrls,
+        }));
 
       res.status(200).json({
         ok: true,
@@ -295,6 +331,42 @@ export function createV1OnboardingRouter(): Router {
         data: { potential_image: payload },
         error: null,
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/onboarding/potential-image/media/:kind", async (req, res, next) => {
+    try {
+      const userId = await requireUserId(req.headers.authorization);
+      const { kind } = onboardingPotentialMediaParamsSchema.parse(req.params);
+      const { fmt } = onboardingPotentialMediaQuerySchema.parse(req.query);
+      const asset = await getPotentialImageMediaAssetForUser({ userId, kind });
+
+      if (!asset) {
+        throw new ApiError({
+          code: "IMAGE_NOT_FOUND",
+          status: 404,
+          message: "Onboarding potential image not found",
+        });
+      }
+
+      try {
+        await serveR2ImageAssetWithAvifNegotiation({
+          res,
+          asset,
+          fmt,
+          notFoundMessage: "Onboarding potential image not found",
+        });
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
+        throw new ApiError({
+          code: "IMAGE_NOT_FOUND",
+          status: 404,
+          message: "Onboarding potential image not found",
+          details: error,
+        });
+      }
     } catch (error) {
       next(error);
     }

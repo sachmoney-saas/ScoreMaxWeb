@@ -34,6 +34,16 @@ describe("shouldSkipOnboardingGeometryPrelude", () => {
     ).toBe(true);
   });
 
+  it("returns true for completed with stable media URL", () => {
+    expect(
+      shouldSkipOnboardingGeometryPrelude({
+        status: "completed",
+        signed_url: null,
+        generated_media_url: "/v1/onboarding/potential-image/media/generated",
+      }),
+    ).toBe(true);
+  });
+
   it("returns true for failed (terminal, no generation to wait)", () => {
     expect(
       shouldSkipOnboardingGeometryPrelude({

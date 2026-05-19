@@ -20,4 +20,18 @@ describe("BeforeAfterSlider", () => {
     expect(afterIndex).toBeGreaterThan(beforeIndex);
     expect(html).toContain("clip-path:inset(0 0 0 50%)");
   });
+
+  it("renders a generated-only image without the pending-generation overlay", () => {
+    const html = renderToStaticMarkup(
+      <BeforeAfterSlider
+        language="fr"
+        beforeSrc={null}
+        afterSrc="after.jpg"
+      />,
+    );
+
+    expect(html).toContain('src="after.jpg"');
+    expect(html).not.toContain("Génération de ton potentiel");
+    expect(html).not.toContain("clip-path:inset");
+  });
 });

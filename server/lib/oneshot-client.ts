@@ -10,8 +10,11 @@ import {
   type OneshotModelVariant,
 } from "@shared/oneshot-image";
 import { getOneShotEnv } from "./env";
-import { ApiError } from "./errors";
+import { ApiError, isApiError } from "./errors";
 import { logger } from "./logger";
+
+const ONESHOT_API_RETRY_ATTEMPTS = 2;
+const ONESHOT_API_RETRY_DELAY_MS = 1_000;
 
 function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/+$/, "");
@@ -19,7 +22,19 @@ function joinUrl(base: string, path: string): string {
   return `${b}${p}`;
 }
 
-async function oneShotFetch<T>(params: {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableOneShotError(error: unknown): boolean {
+  if (!isApiError(error)) {
+    return true;
+  }
+
+  return error.status === 408 || error.status === 429 || error.status >= 500;
+}
+
+async function oneShotFetchOnce<T>(params: {
   method: "GET" | "POST";
   path: string;
   body?: unknown;
@@ -83,6 +98,36 @@ async function oneShotFetch<T>(params: {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function oneShotFetch<T>(params: {
+  method: "GET" | "POST";
+  path: string;
+  body?: unknown;
+}): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= ONESHOT_API_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await oneShotFetchOnce<T>(params);
+    } catch (error) {
+      lastError = error;
+      if (
+        attempt >= ONESHOT_API_RETRY_ATTEMPTS ||
+        !isRetryableOneShotError(error)
+      ) {
+        break;
+      }
+
+      logger.warn(
+        { err: error, path: params.path, attempt },
+        "OneShot API request failed; retrying",
+      );
+      await sleep(ONESHOT_API_RETRY_DELAY_MS);
+    }
+  }
+
+  throw lastError;
 }
 
 export async function signOneShotUpload(params: {

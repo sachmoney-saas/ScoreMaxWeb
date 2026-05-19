@@ -208,6 +208,8 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     React.useState<ScanHeroPreludePhase>("splash");
   /** Image potentiel prête / échec / timeout + délai mini atteint — accélère le loader géométrie puis passage mesh. */
   const [geometryImageWorkDone, setGeometryImageWorkDone] = React.useState(false);
+  const [hasPotentialPreviewTimedOut, setHasPotentialPreviewTimedOut] =
+    React.useState(false);
   /** Reprise du hero 3D depuis l’aperçu potentiel : saute splash + géométrie. */
   const reopenScanHeroAtMeshRef = React.useRef(false);
   const [showCapturedPreview, setShowCapturedPreview] = React.useState(false);
@@ -359,6 +361,43 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   potentialImageForPreludeRef.current = potentialImage;
 
   React.useEffect(() => {
+    if (!isPotentialStep) {
+      setHasPotentialPreviewTimedOut(false);
+      return;
+    }
+
+    const isReady =
+      potentialImage?.display_state === "ready" ||
+      (potentialImage?.status === "completed" &&
+        Boolean(potentialImage.generated_media_url ?? potentialImage.signed_url));
+    if (isReady) {
+      setHasPotentialPreviewTimedOut(false);
+      return;
+    }
+
+    if (
+      potentialImage?.status === "failed" ||
+      potentialImage?.display_state === "unavailable"
+    ) {
+      setHasPotentialPreviewTimedOut(true);
+      return;
+    }
+
+    setHasPotentialPreviewTimedOut(false);
+    const timeoutId = window.setTimeout(() => {
+      setHasPotentialPreviewTimedOut(true);
+    }, ONBOARDING_POST_CAPTURE_POTENTIAL_MAX_WAIT_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    isPotentialStep,
+    potentialImage?.display_state,
+    potentialImage?.id,
+    potentialImage?.generated_media_url,
+    potentialImage?.signed_url,
+    potentialImage?.status,
+  ]);
+
+  React.useEffect(() => {
     if (
       isPotentialStep ||
       capturePhase !== "ready_to_finalize" ||
@@ -494,8 +533,11 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
       const minGeometryDone = elapsed >= ONBOARDING_POST_CAPTURE_GEOMETRY_MIN_MS;
       const status = potentialImage?.status;
       const imageReady =
-        status === "completed" && Boolean(potentialImage?.signed_url);
-      const imageTerminal = status === "failed";
+        potentialImage?.display_state === "ready" ||
+        (status === "completed" &&
+          Boolean(potentialImage?.generated_media_url ?? potentialImage?.signed_url));
+      const imageTerminal =
+        status === "failed" || potentialImage?.display_state === "unavailable";
       const timedOut = elapsed >= ONBOARDING_POST_CAPTURE_POTENTIAL_MAX_WAIT_MS;
 
       if (minGeometryDone && (imageReady || imageTerminal || timedOut)) {
@@ -509,16 +551,27 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   }, [
     showScanCompleteHero,
     scanHeroPreludePhase,
+    potentialImage?.display_state,
+    potentialImage?.generated_media_url,
     potentialImage?.status,
     potentialImage?.signed_url,
   ]);
 
+  const isPotentialImageReady =
+    potentialImage?.display_state === "ready" ||
+    (potentialImage?.status === "completed" &&
+      Boolean(potentialImage.generated_media_url ?? potentialImage.signed_url));
+  const shouldSuppressPotentialPreview =
+    hasPotentialPreviewTimedOut ||
+    potentialImage?.status === "failed" ||
+    potentialImage?.display_state === "unavailable";
+
   const isPotentialBlockingLoad =
     isPotentialStep &&
+    !shouldSuppressPotentialPreview &&
     (isPotentialImageLoading ||
       !potentialImage ||
-      (potentialImage.status !== "completed" &&
-        potentialImage.status !== "failed"));
+      (!isPotentialImageReady && potentialImage.status !== "failed"));
 
   const uploadPosesToScanSession = React.useCallback(
     async (poses: CapturedPose[], sessionId: string) => {
@@ -1192,6 +1245,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                       language={language}
                       potentialImage={potentialImage ?? null}
                       isLoading={isPotentialImageLoading}
+                      suppressPreview={shouldSuppressPotentialPreview}
                       onUnlock={handleUnlock}
                       isUnlocking={isUnlocking}
                     />

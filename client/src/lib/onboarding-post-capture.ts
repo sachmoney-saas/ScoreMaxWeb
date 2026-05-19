@@ -1,4 +1,4 @@
-import { ONBOARDING_POTENTIAL_MAX_WAIT_MS } from "@shared/onboarding-potential";
+import { ONBOARDING_POTENTIAL_DISPLAY_MAX_WAIT_MS } from "@shared/onboarding-potential";
 
 /**
  * Délais post-capture avant l’écran mesh « Ton scan est terminé ».
@@ -8,11 +8,13 @@ export const ONBOARDING_POST_CAPTURE_GEOMETRY_MIN_MS = 2800;
 
 /** Garde-fou : ne pas bloquer indéfiniment si l’API image ne répond pas. */
 export const ONBOARDING_POST_CAPTURE_POTENTIAL_MAX_WAIT_MS =
-  ONBOARDING_POTENTIAL_MAX_WAIT_MS;
+  ONBOARDING_POTENTIAL_DISPLAY_MAX_WAIT_MS;
 
 export type OnboardingPotentialImagePrelude = {
   status: "pending" | "completed" | "failed";
+  display_state?: "loading" | "ready" | "unavailable";
   signed_url: string | null;
+  generated_media_url?: string | null;
 };
 
 /**
@@ -24,6 +26,14 @@ export function shouldSkipOnboardingGeometryPrelude(
   image: OnboardingPotentialImagePrelude | null | undefined,
 ): boolean {
   if (!image) return false;
-  if (image.status === "failed") return true;
-  return image.status === "completed" && Boolean(image.signed_url);
+  if (image.status === "failed" || image.display_state === "unavailable") {
+    return true;
+  }
+  if (image.display_state === "ready") {
+    return true;
+  }
+  return (
+    image.status === "completed" &&
+    Boolean(image.generated_media_url ?? image.signed_url)
+  );
 }

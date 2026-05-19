@@ -4,7 +4,7 @@ import type { PoseId } from "@/lib/face-capture/types";
 import { uploadScanAsset } from "@/lib/face-analysis";
 import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
 import { apiRequest } from "@/lib/queryClient";
-import { i18n, type AppLanguage } from "@/lib/i18n";
+import type { AppLanguage } from "@/lib/i18n";
 
 export const ONBOARDING_POSE_TO_ASSET: Record<PoseId, OnboardingScanAssetCode> = {
   frontal: "FACE_FRONT",
@@ -53,7 +53,7 @@ export async function uploadCapturedOnboardingPoses(params: {
 }
 
 export type CompleteOnboardingResult = {
-  generationId: string;
+  generationId: string | null;
 };
 
 export async function completeOnboardingApi(params: {
@@ -71,16 +71,7 @@ export async function completeOnboardingApi(params: {
   };
 
   const generationId = completePayload.data?.generation?.id;
-  if (!generationId) {
-    throw new Error(
-      i18n(params.language, {
-        en: "Unable to start preview generation",
-        fr: "Impossible de lancer la génération",
-      }),
-    );
-  }
-
-  return { generationId };
+  return { generationId: generationId ?? null };
 }
 
 /**
@@ -91,7 +82,7 @@ export async function completeOnboardingApi(params: {
 export async function startOnboardingPotentialGenerationApi(params: {
   accessToken: string;
   language: AppLanguage;
-}): Promise<{ generationId: string }> {
+}): Promise<{ generationId: string | null }> {
   const res = await apiRequest(
     "POST",
     "/v1/onboarding/start-potential-generation",
@@ -103,14 +94,5 @@ export async function startOnboardingPotentialGenerationApi(params: {
   };
 
   const generationId = body.data?.generation?.id;
-  if (!generationId) {
-    throw new Error(
-      i18n(params.language, {
-        en: "Unable to start your preview image",
-        fr: "Impossible de lancer l’image d’aperçu",
-      }),
-    );
-  }
-
-  return { generationId };
+  return { generationId: generationId ?? null };
 }

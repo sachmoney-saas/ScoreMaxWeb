@@ -91,6 +91,6 @@ export function getOneShotEnv(): {
   return {
     apiKey: requireEnv("ONESHOT_API_KEY"),
     baseUrl: readEnv("ONESHOT_API_BASE_URL") ?? "https://api.oneshotapi.com",
-    timeoutMs: parseTimeoutMs(readEnv("ONESHOT_API_TIMEOUT_MS")),
+    timeoutMs: parseTimeoutMs(readEnv("ONESHOT_API_TIMEOUT_MS") ?? "45000"),
   };
 }

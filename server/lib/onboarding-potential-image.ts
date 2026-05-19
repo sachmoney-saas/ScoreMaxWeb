@@ -1,5 +1,6 @@
 import { oneshotAspectRatioSchema } from "@shared/oneshot-image";
 import {
+  ONBOARDING_POTENTIAL_JOB_RETRY_LIMIT,
   ONBOARDING_POTENTIAL_MAX_CONSECUTIVE_POLL_ERRORS,
   ONBOARDING_POTENTIAL_MAX_WAIT_MS,
   ONBOARDING_POTENTIAL_POLL_INTERVAL_MS,
@@ -38,7 +39,12 @@ export const ONBOARDING_POTENTIAL_PROMPT_KEY = "onboarding_potential_6months" as
 const activePotentialPollers = new Set<string>();
 
 const GENERATION_SELECT =
-  "id, status, r2_bucket, r2_key, error_code, error_message, created_at, source_scan_asset_id, oneshot_job_id";
+  "id, status, r2_bucket, r2_key, result_content_type, error_code, error_message, created_at, source_scan_asset_id, oneshot_job_id, oneshot_reference_file_id, prompt_snapshot";
+const ONBOARDING_POTENTIAL_MEDIA_BASE_PATH =
+  "/v1/onboarding/potential-image/media";
+const ONBOARDING_POTENTIAL_JOB_RETRY_DELAY_MS = 5_000;
+const ONESHOT_JOB_CREATE_ATTEMPTS =
+  ONBOARDING_POTENTIAL_JOB_RETRY_LIMIT + 1;
 
 export type TriggerPotentialImageResult = {
   generationId: string;
@@ -48,6 +54,11 @@ export type TriggerPotentialImageResult = {
 export type PotentialImagePayload = {
   id: string;
   status: "pending" | "completed" | "failed";
+  display_state: "loading" | "ready" | "unavailable";
+  generated_media_url: string | null;
+  source_face_media_url: string | null;
+  mask_overlay_media_url: string | null;
+  /** @deprecated Prefer `generated_media_url`; retained during rollout. */
   signed_url: string | null;
   /**
    * AVIF variant of `signed_url` (display-only derivative). `null` when the
@@ -84,12 +95,27 @@ type GenerationRow = {
   user_id: string;
   oneshot_job_id: string | null;
   status: string;
+  prompt_snapshot: string;
   r2_bucket: string | null;
   r2_key: string | null;
+  result_content_type: string | null;
   error_code: string | null;
   error_message: string | null;
   created_at: string;
   source_scan_asset_id: string | null;
+  oneshot_reference_file_id: string | null;
+};
+
+export type PotentialImageMediaKind = "generated" | "source" | "mask";
+
+export type PotentialImageMediaAsset = {
+  bucket: string | null;
+  key: string;
+  mimeType: string;
+};
+
+type PotentialImagePayloadOptions = {
+  includeSignedUrls?: boolean;
 };
 
 function isUniqueViolation(error: unknown): boolean {
@@ -126,6 +152,26 @@ async function loadPotentialGenerationsForUser(userId: string): Promise<Generati
   return (data ?? []) as GenerationRow[];
 }
 
+function pickPreferredGenerationRow(rows: GenerationRow[]): GenerationRow | null {
+  const preferred = pickPreferredPotentialGeneration(
+    rows.map((row) => ({
+      status: row.status as PotentialGenerationStatus,
+      createdAtMs: new Date(row.created_at).getTime(),
+    })),
+  );
+  if (!preferred) {
+    return null;
+  }
+
+  return (
+    rows.find(
+      (row) =>
+        row.status === preferred.status &&
+        new Date(row.created_at).getTime() === preferred.createdAtMs,
+    ) ?? null
+  );
+}
+
 /**
  * Génération réutilisable : image terminée conservée, ou job encore en cours.
  */
@@ -137,21 +183,7 @@ async function findReusablePotentialGeneration(
     return null;
   }
 
-  const preferred = pickPreferredPotentialGeneration(
-    rows.map((row) => ({
-      status: row.status as PotentialGenerationStatus,
-      createdAtMs: new Date(row.created_at).getTime(),
-    })),
-  );
-  if (!preferred) {
-    return null;
-  }
-
-  const match = rows.find(
-    (row) =>
-      row.status === preferred.status &&
-      new Date(row.created_at).getTime() === preferred.createdAtMs,
-  );
+  const match = pickPreferredGenerationRow(rows);
   if (!match) {
     return null;
   }
@@ -163,49 +195,63 @@ async function findReusablePotentialGeneration(
   return null;
 }
 
-/**
- * Co-sign a JPEG/PNG asset and its AVIF derivative when present on R2.
- *
- * Returns `null` for either URL when the underlying object does not exist
- * (or when AVIF generation has not run yet). Triggers a background AVIF
- * generation when the source exists but the derivative is missing — so the
- * *next* read of the same payload picks up the variant.
- */
-async function signWithAvifFallback(params: {
-  bucket: string | undefined;
-  key: string;
-}): Promise<{ url: string; avifUrl: string | null }> {
+function onboardingPotentialMediaUrl(kind: PotentialImageMediaKind): string {
+  return `${ONBOARDING_POTENTIAL_MEDIA_BASE_PATH}/${kind}`;
+}
+
+async function signMediaAssetWithAvifFallback(
+  asset: PotentialImageMediaAsset | null,
+): Promise<{ url: string | null; avifUrl: string | null }> {
+  if (!asset) {
+    return { url: null, avifUrl: null };
+  }
+
+  const bucket = asset.bucket ?? undefined;
   const [url, avifExists] = await Promise.all([
     getR2SignedDownloadUrl({
-      bucket: params.bucket,
-      key: params.key,
+      bucket,
+      key: asset.key,
       expiresInSeconds: 300,
     }),
     r2ObjectExists({
-      bucket: params.bucket,
-      key: avifKeyFor(params.key),
+      bucket,
+      key: avifKeyFor(asset.key),
     }).catch(() => false),
   ]);
 
   if (avifExists) {
     const avifUrl = await getR2SignedDownloadUrl({
-      bucket: params.bucket,
-      key: avifKeyFor(params.key),
+      bucket,
+      key: avifKeyFor(asset.key),
       expiresInSeconds: 300,
     });
     return { url, avifUrl };
   }
 
   ensureAvifVariantInBackground({
-    bucket: params.bucket,
-    sourceKey: params.key,
+    bucket,
+    sourceKey: asset.key,
+    sourceContentType: asset.mimeType,
   });
   return { url, avifUrl: null };
+}
+
+function potentialDisplayState(
+  row: GenerationRow,
+): PotentialImagePayload["display_state"] {
+  if (row.status === "completed" && row.r2_key) {
+    return "ready";
+  }
+  if (row.status === "pending" && row.oneshot_job_id) {
+    return "loading";
+  }
+  return "unavailable";
 }
 
 async function generationRowToPayload(
   row: GenerationRow,
   userId: string,
+  options: PotentialImagePayloadOptions = {},
 ): Promise<PotentialImagePayload | null> {
   const status = row.status as PotentialGenerationStatus;
   if (status !== "pending" && status !== "completed" && status !== "failed") {
@@ -225,37 +271,56 @@ async function generationRowToPayload(
     dispatchPotentialImagePolling(row.id);
   }
 
-  let signedUrl: string | null = null;
-  let signedUrlAvif: string | null = null;
-  if (status === "completed" && row.r2_key) {
-    const signed = await signWithAvifFallback({
-      bucket: row.r2_bucket ?? undefined,
-      key: row.r2_key,
-    });
-    signedUrl = signed.url;
-    signedUrlAvif = signed.avifUrl;
-  }
+  const generatedAsset =
+    status === "completed" && row.r2_key
+      ? {
+          bucket: row.r2_bucket,
+          key: row.r2_key,
+          mimeType: row.result_content_type ?? "image/jpeg",
+        }
+      : null;
 
   const [maskOverlay, sourceFace] = await Promise.all([
-    resolveMaskOverlaySignedUrl({
+    resolveMaskOverlayMedia({
       userId,
       sourceScanAssetId: row.source_scan_asset_id,
     }),
-    resolveSourceFaceSignedUrl({
+    resolveSourceFaceMedia({
       userId,
       sourceScanAssetId: row.source_scan_asset_id,
     }),
   ]);
+  const includeSignedUrls = options.includeSignedUrls ?? true;
+  const [generatedSigned, sourceSigned, maskSigned] = includeSignedUrls
+    ? await Promise.all([
+        signMediaAssetWithAvifFallback(generatedAsset),
+        signMediaAssetWithAvifFallback(sourceFace),
+        signMediaAssetWithAvifFallback(maskOverlay),
+      ])
+    : [
+        { url: null, avifUrl: null },
+        { url: null, avifUrl: null },
+        { url: null, avifUrl: null },
+      ];
 
   return {
     id: row.id,
     status,
-    signed_url: signedUrl,
-    signed_url_avif: signedUrlAvif,
-    source_face_signed_url: sourceFace.url,
-    source_face_signed_url_avif: sourceFace.avifUrl,
-    mask_overlay_signed_url: maskOverlay.url,
-    mask_overlay_signed_url_avif: maskOverlay.avifUrl,
+    display_state: potentialDisplayState(row),
+    generated_media_url:
+      generatedAsset ? onboardingPotentialMediaUrl("generated") : null,
+    source_face_media_url: sourceFace
+      ? onboardingPotentialMediaUrl("source")
+      : null,
+    mask_overlay_media_url: maskOverlay
+      ? onboardingPotentialMediaUrl("mask")
+      : null,
+    signed_url: generatedSigned.url,
+    signed_url_avif: generatedSigned.avifUrl,
+    source_face_signed_url: sourceSigned.url,
+    source_face_signed_url_avif: sourceSigned.avifUrl,
+    mask_overlay_signed_url: maskSigned.url,
+    mask_overlay_signed_url_avif: maskSigned.avifUrl,
     error_code: row.error_code,
     error_message: row.error_message,
     created_at: row.created_at,
@@ -264,6 +329,63 @@ async function generationRowToPayload(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildPotentialJobRequest(
+  promptRow: PromptRow,
+  referenceFileId: string,
+  prompt = promptRow.prompt,
+): Parameters<typeof createOneShotJob>[0] {
+  const aspectParsed = oneshotAspectRatioSchema.safeParse(promptRow.aspect_ratio);
+  const aspectRatio = aspectParsed.success
+    ? aspectParsed.data
+    : ONBOARDING_PORTRAIT_ASPECT_RATIO;
+
+  const modelVariant =
+    promptRow.model_variant === "default" || promptRow.model_variant === "fast"
+      ? promptRow.model_variant
+      : "fast";
+
+  return {
+    prompt,
+    modelVariant,
+    aspectRatio,
+    safetyFilters: promptRow.safety_filters,
+    referenceFileIds: [referenceFileId],
+  };
+}
+
+async function createPotentialOneShotJobWithRetry(
+  params: Parameters<typeof createOneShotJob>[0] & {
+    generationId?: string;
+    reason: string;
+  },
+): Promise<Awaited<ReturnType<typeof createOneShotJob>>> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= ONESHOT_JOB_CREATE_ATTEMPTS; attempt += 1) {
+    try {
+      return await createOneShotJob(params);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= ONESHOT_JOB_CREATE_ATTEMPTS) {
+        break;
+      }
+
+      logger.warn(
+        {
+          err: error,
+          generationId: params.generationId,
+          attempt,
+          reason: params.reason,
+        },
+        "OneShot job creation failed; retrying",
+      );
+      await sleep(ONBOARDING_POTENTIAL_JOB_RETRY_DELAY_MS);
+    }
+  }
+
+  throw lastError;
 }
 
 async function loadActivePrompt(): Promise<PromptRow> {
@@ -401,10 +523,70 @@ async function finalizeSuccess(params: {
   }
 }
 
+async function retryPotentialJobAfterTerminalFailure(params: {
+  generation: GenerationRow;
+  previousJobId: string;
+}): Promise<string | null> {
+  if (!params.generation.oneshot_reference_file_id) {
+    return null;
+  }
+
+  try {
+    const promptRow = await loadActivePrompt();
+    const job = await createPotentialOneShotJobWithRetry({
+      ...buildPotentialJobRequest(
+        promptRow,
+        params.generation.oneshot_reference_file_id,
+        params.generation.prompt_snapshot,
+      ),
+      generationId: params.generation.id,
+      reason: "terminal-status",
+    });
+
+    const { error } = await supabaseAdmin
+      .from("scoremax_ai_image_generations")
+      .update({
+        oneshot_job_id: job.id,
+        error_code: null,
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.generation.id)
+      .eq("oneshot_job_id", params.previousJobId)
+      .eq("status", "pending");
+
+    if (error) {
+      logger.warn(
+        { err: error, generationId: params.generation.id },
+        "Unable to persist retry OneShot job",
+      );
+      return null;
+    }
+
+    logger.info(
+      {
+        generationId: params.generation.id,
+        previousJobId: params.previousJobId,
+        retryJobId: job.id,
+      },
+      "Retrying onboarding potential image with a new OneShot job",
+    );
+    return job.id;
+  } catch (error) {
+    logger.warn(
+      { err: error, generationId: params.generation.id },
+      "Unable to create retry OneShot job",
+    );
+    return null;
+  }
+}
+
 async function runPotentialPoll(generationId: string): Promise<void> {
   const { data: row, error: loadError } = await supabaseAdmin
     .from("scoremax_ai_image_generations")
-    .select("id, user_id, oneshot_job_id, status")
+    .select(
+      "id, user_id, oneshot_job_id, status, prompt_snapshot, oneshot_reference_file_id",
+    )
     .eq("id", generationId)
     .maybeSingle();
 
@@ -418,7 +600,8 @@ async function runPotentialPoll(generationId: string): Promise<void> {
     return;
   }
 
-  const jobId = gen.oneshot_job_id;
+  let jobId = gen.oneshot_job_id;
+  let remainingJobRetries = ONBOARDING_POTENTIAL_JOB_RETRY_LIMIT;
   const start = Date.now();
   let consecutivePollErrors = 0;
 
@@ -441,6 +624,19 @@ async function runPotentialPoll(generationId: string): Promise<void> {
       }
 
       if (statusLower === "failed" || job.error) {
+        if (remainingJobRetries > 0) {
+          remainingJobRetries -= 1;
+          const retryJobId = await retryPotentialJobAfterTerminalFailure({
+            generation: gen,
+            previousJobId: jobId,
+          });
+          if (retryJobId) {
+            jobId = retryJobId;
+            consecutivePollErrors = 0;
+            continue;
+          }
+        }
+
         await markGenerationFailed({
           generationId,
           code: job.error?.code ?? "ONESHOT_JOB_FAILED",
@@ -555,15 +751,6 @@ export async function triggerOnboardingPotentialImage(params: {
   await completeOneShotUpload({ fileId: sign.fileId });
 
   const promptRow = await loadActivePrompt();
-  const aspectParsed = oneshotAspectRatioSchema.safeParse(promptRow.aspect_ratio);
-  const aspectRatio = aspectParsed.success
-    ? aspectParsed.data
-    : ONBOARDING_PORTRAIT_ASPECT_RATIO;
-
-  const variant =
-    promptRow.model_variant === "default" || promptRow.model_variant === "fast"
-      ? promptRow.model_variant
-      : "fast";
 
   const { data: inserted, error: insertError } = await supabaseAdmin
     .from("scoremax_ai_image_generations")
@@ -599,12 +786,10 @@ export async function triggerOnboardingPotentialImage(params: {
   const generationId = inserted.id as string;
 
   try {
-    const job = await createOneShotJob({
-      prompt: promptRow.prompt,
-      modelVariant: variant,
-      aspectRatio,
-      safetyFilters: promptRow.safety_filters,
-      referenceFileIds: [sign.fileId],
+    const job = await createPotentialOneShotJobWithRetry({
+      ...buildPotentialJobRequest(promptRow, sign.fileId),
+      generationId,
+      reason: "initial",
     });
 
     const { error: updError } = await supabaseAdmin
@@ -636,18 +821,26 @@ export async function triggerOnboardingPotentialImage(params: {
   }
 }
 
-type SignedAssetUrls = { url: string | null; avifUrl: string | null };
+function scanAssetRowToMediaAsset(row: {
+  r2_bucket: string | null;
+  r2_key: string;
+  mime_type: string;
+}): PotentialImageMediaAsset {
+  return {
+    bucket: row.r2_bucket,
+    key: row.r2_key,
+    mimeType: row.mime_type,
+  };
+}
 
-const EMPTY_SIGNED_ASSET_URLS: SignedAssetUrls = { url: null, avifUrl: null };
-
-async function loadLatestScanAssetSignedUrls(params: {
+async function loadLatestScanAssetMedia(params: {
   userId: string;
   sessionId: string;
   assetTypeCode: string;
-}): Promise<SignedAssetUrls> {
+}): Promise<PotentialImageMediaAsset | null> {
   const { data, error } = await supabaseAdmin
     .from("scan_assets")
-    .select("r2_bucket, r2_key")
+    .select("r2_bucket, r2_key, mime_type")
     .eq("user_id", params.userId)
     .eq("session_id", params.sessionId)
     .eq("asset_type_code", params.assetTypeCode)
@@ -657,22 +850,20 @@ async function loadLatestScanAssetSignedUrls(params: {
     .maybeSingle();
 
   if (error || !data?.r2_key) {
-    return EMPTY_SIGNED_ASSET_URLS;
+    return null;
   }
 
-  const row = data as { r2_bucket: string | null; r2_key: string };
-  return signWithAvifFallback({
-    bucket: row.r2_bucket ?? undefined,
-    key: row.r2_key,
-  });
+  return scanAssetRowToMediaAsset(
+    data as { r2_bucket: string | null; r2_key: string; mime_type: string },
+  );
 }
 
-async function loadLatestFaceFrontSignedUrlsForUser(
+async function loadLatestFaceFrontMediaForUser(
   userId: string,
-): Promise<SignedAssetUrls> {
+): Promise<PotentialImageMediaAsset | null> {
   const { data, error } = await supabaseAdmin
     .from("scan_assets")
-    .select("r2_bucket, r2_key, scan_sessions!inner(source)")
+    .select("r2_bucket, r2_key, mime_type, scan_sessions!inner(source)")
     .eq("user_id", userId)
     .eq("asset_type_code", "FACE_FRONT")
     .in("upload_status", ["uploaded", "validated"])
@@ -682,49 +873,45 @@ async function loadLatestFaceFrontSignedUrlsForUser(
     .maybeSingle();
 
   if (error || !data?.r2_key) {
-    return EMPTY_SIGNED_ASSET_URLS;
+    return null;
   }
 
-  const row = data as { r2_bucket: string | null; r2_key: string };
-  return signWithAvifFallback({
-    bucket: row.r2_bucket ?? undefined,
-    key: row.r2_key,
-  });
+  return scanAssetRowToMediaAsset(
+    data as { r2_bucket: string | null; r2_key: string; mime_type: string },
+  );
 }
 
-async function resolveSourceFaceSignedUrl(params: {
+async function resolveSourceFaceMedia(params: {
   userId: string;
   sourceScanAssetId: string | null;
-}): Promise<SignedAssetUrls> {
+}): Promise<PotentialImageMediaAsset | null> {
   if (!params.sourceScanAssetId) {
-    return loadLatestFaceFrontSignedUrlsForUser(params.userId);
+    return loadLatestFaceFrontMediaForUser(params.userId);
   }
 
   const { data, error } = await supabaseAdmin
     .from("scan_assets")
-    .select("r2_bucket, r2_key")
+    .select("r2_bucket, r2_key, mime_type")
     .eq("id", params.sourceScanAssetId)
     .eq("user_id", params.userId)
     .in("upload_status", ["uploaded", "validated"])
     .maybeSingle();
 
   if (error || !data?.r2_key) {
-    return loadLatestFaceFrontSignedUrlsForUser(params.userId);
+    return loadLatestFaceFrontMediaForUser(params.userId);
   }
 
-  const row = data as { r2_bucket: string | null; r2_key: string };
-  return signWithAvifFallback({
-    bucket: row.r2_bucket ?? undefined,
-    key: row.r2_key,
-  });
+  return scanAssetRowToMediaAsset(
+    data as { r2_bucket: string | null; r2_key: string; mime_type: string },
+  );
 }
 
-async function resolveMaskOverlaySignedUrl(params: {
+async function resolveMaskOverlayMedia(params: {
   userId: string;
   sourceScanAssetId: string | null;
-}): Promise<SignedAssetUrls> {
+}): Promise<PotentialImageMediaAsset | null> {
   if (!params.sourceScanAssetId) {
-    return EMPTY_SIGNED_ASSET_URLS;
+    return null;
   }
 
   const { data: src, error: srcErr } = await supabaseAdmin
@@ -735,51 +922,72 @@ async function resolveMaskOverlaySignedUrl(params: {
     .maybeSingle();
 
   if (srcErr || !src?.session_id) {
-    return EMPTY_SIGNED_ASSET_URLS;
+    return null;
   }
 
   const sessionId = src.session_id as string;
-
-  const mask = await loadLatestScanAssetSignedUrls({
+  const mask = await loadLatestScanAssetMedia({
     userId: params.userId,
     sessionId,
     assetTypeCode: "GUIDE_TRACE_FACE_FRONT_MASK_OVERLAY",
   });
-  if (mask.url) {
+
+  if (mask) {
     return mask;
   }
 
-  return loadLatestScanAssetSignedUrls({
+  return loadLatestScanAssetMedia({
     userId: params.userId,
     sessionId,
     assetTypeCode: "FACE_FRONT",
   });
 }
 
-export async function getLatestPotentialImageForUser(userId: string): Promise<PotentialImagePayload | null> {
+export async function getLatestPotentialImageForUser(
+  userId: string,
+  options: PotentialImagePayloadOptions = {},
+): Promise<PotentialImagePayload | null> {
   const rows = await loadPotentialGenerationsForUser(userId);
   if (rows.length === 0) {
     return null;
   }
 
-  const preferred = pickPreferredPotentialGeneration(
-    rows.map((row) => ({
-      status: row.status as PotentialGenerationStatus,
-      createdAtMs: new Date(row.created_at).getTime(),
-    })),
-  );
-  if (!preferred) {
-    return null;
-  }
-
-  const row = rows.find(
-    (candidate) =>
-      candidate.status === preferred.status &&
-      new Date(candidate.created_at).getTime() === preferred.createdAtMs,
-  );
+  const row = pickPreferredGenerationRow(rows);
   if (!row) {
     return null;
   }
 
-  return generationRowToPayload(row, userId);
+  return generationRowToPayload(row, userId, options);
+}
+
+export async function getPotentialImageMediaAssetForUser(params: {
+  userId: string;
+  kind: PotentialImageMediaKind;
+}): Promise<PotentialImageMediaAsset | null> {
+  const rows = await loadPotentialGenerationsForUser(params.userId);
+  const row = pickPreferredGenerationRow(rows);
+
+  if (params.kind === "generated") {
+    if (row?.status !== "completed" || !row.r2_key) {
+      return null;
+    }
+
+    return {
+      bucket: row.r2_bucket,
+      key: row.r2_key,
+      mimeType: row.result_content_type ?? "image/jpeg",
+    };
+  }
+
+  if (params.kind === "source") {
+    return resolveSourceFaceMedia({
+      userId: params.userId,
+      sourceScanAssetId: row?.source_scan_asset_id ?? null,
+    });
+  }
+
+  return resolveMaskOverlayMedia({
+    userId: params.userId,
+    sourceScanAssetId: row?.source_scan_asset_id ?? null,
+  });
 }

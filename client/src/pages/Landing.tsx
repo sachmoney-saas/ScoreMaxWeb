@@ -932,12 +932,15 @@ export default function Landing() {
               </Link>
             </nav>
 
-            <p className="text-center text-sm text-muted-foreground md:text-right">
-              {i18n(language, {
-                en: "© 2026 ScoreMax. All rights reserved.",
-                fr: "© 2026 ScoreMax. Tous droits réservés.",
-              })}
-            </p>
+            <div className="text-center text-muted-foreground md:text-right">
+              <p className="text-sm">
+                {i18n(language, {
+                  en: "© 2026 ScoreMax. All rights reserved.",
+                  fr: "© 2026 ScoreMax. Tous droits réservés.",
+                })}
+              </p>
+              <p className="mt-1 text-xs">V1.01</p>
+            </div>
           </div>
 
           <p

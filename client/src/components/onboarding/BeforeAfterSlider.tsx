@@ -48,6 +48,7 @@ function PortraitPicture({
         src={src}
         alt={alt}
         decoding="async"
+        loading="eager"
         draggable={false}
         className={className}
       />
@@ -121,6 +122,7 @@ export function BeforeAfterSlider({
   }, []);
 
   const showAfter = Boolean(afterSrc);
+  const canCompare = Boolean(beforeSrc && afterSrc);
   const beforeLabel = i18n(language, {
     en: "CURRENTLY",
     fr: "ACTUELLEMENT",
@@ -157,24 +159,24 @@ export function BeforeAfterSlider({
           beforeAfterMediaFrameClassName,
           "touch-none select-none",
           isDragging && "cursor-ew-resize",
-          showAfter &&
+          canCompare &&
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
         )}
-        role={showAfter ? "slider" : "group"}
-        tabIndex={showAfter ? 0 : undefined}
-        aria-valuemin={showAfter ? 0 : undefined}
-        aria-valuemax={showAfter ? 100 : undefined}
-        aria-valuenow={showAfter ? Math.round(position) : undefined}
+        role={canCompare ? "slider" : "group"}
+        tabIndex={canCompare ? 0 : undefined}
+        aria-valuemin={canCompare ? 0 : undefined}
+        aria-valuemax={canCompare ? 100 : undefined}
+        aria-valuenow={canCompare ? Math.round(position) : undefined}
         aria-label={i18n(language, {
           en: "Current vs after 12 weeks — drag to compare",
           fr: "Actuellement vs après 12 premières semaines — fais glisser pour comparer",
         })}
-        onKeyDown={showAfter ? onKeyDown : undefined}
-        onPointerDown={showAfter ? onPointerDown : undefined}
-        onPointerMove={showAfter ? onPointerMove : undefined}
-        onPointerUp={showAfter ? onPointerUp : undefined}
-        onPointerCancel={showAfter ? onPointerUp : undefined}
-        onLostPointerCapture={showAfter ? onPointerUp : undefined}
+        onKeyDown={canCompare ? onKeyDown : undefined}
+        onPointerDown={canCompare ? onPointerDown : undefined}
+        onPointerMove={canCompare ? onPointerMove : undefined}
+        onPointerUp={canCompare ? onPointerUp : undefined}
+        onPointerCancel={canCompare ? onPointerUp : undefined}
+        onLostPointerCapture={canCompare ? onPointerUp : undefined}
       >
         <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
           {showAfter ? (
@@ -185,7 +187,7 @@ export function BeforeAfterSlider({
                 alt={beforeSrc ? currentLookAlt : generatedPotentialAlt}
                 className={onboardingPortraitImageClassName}
               />
-              {beforeSrc ? (
+              {canCompare ? (
                 <div
                   className="absolute inset-0 z-[1] overflow-hidden"
                   style={{ clipPath: `inset(0 0 0 ${position}%)` }}
@@ -198,11 +200,7 @@ export function BeforeAfterSlider({
                     className={onboardingPortraitImageClassName}
                   />
                 </div>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                  <Loader2 className="h-6 w-6 animate-spin text-zinc-400" aria-hidden />
-                </div>
-              )}
+              ) : null}
             </>
           ) : (
             <>
@@ -232,12 +230,12 @@ export function BeforeAfterSlider({
           )}
         </div>
 
-        {(showAfter || beforeSrc) && (
+        {(canCompare || beforeSrc) && (
           <>
             <div className="pointer-events-none absolute left-2 top-2 z-20 max-w-[min(12rem,46%)] sm:left-2.5 sm:top-2.5">
               <span className={cn(pillClass, "block text-left")}>{beforeLabel}</span>
             </div>
-            {showAfter ? (
+            {canCompare ? (
               <div
                 className="pointer-events-none absolute right-2 top-2 z-20 max-w-[min(13.5rem,50%)] sm:right-2.5 sm:top-2.5"
                 aria-label={afterLabelAria}
@@ -256,7 +254,7 @@ export function BeforeAfterSlider({
           </>
         )}
 
-        {showAfter ? (
+        {canCompare ? (
           <>
             <div
               className="pointer-events-none absolute inset-y-0 z-10 w-0"

@@ -156,8 +156,7 @@ function OnboardingRoute() {
     if (
       initialStep === 2 &&
       isPotentialImageLoading &&
-      !potentialImage &&
-      (persistedStep ?? 0) < 2
+      !potentialImage
     ) {
       return <FullScreenLoader />;
     }
