@@ -2,6 +2,9 @@ import type { Plan, PremiumAccessState } from "@shared/schema";
 import { reportClientError } from "@/lib/report-client-error";
 import { supabase } from "@/lib/supabase";
 
+export const BILLING_QUERY_KEY = ["billing", "subscription"] as const;
+export const BILLING_QUERY_STALE_TIME_MS = 30_000;
+
 type ApiEnvelope<T> = {
   ok: boolean;
   data: T | null;

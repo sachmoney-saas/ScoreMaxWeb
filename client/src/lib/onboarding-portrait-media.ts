@@ -15,12 +15,14 @@ const portraitFrameShellClassName =
 
 /**
  * Cadre avant/après onboarding : carré 1:1, borné par largeur et hauteur viewport
- * (les deux contraintes gardent un carré lisible sur mobile).
+ * (les deux contraintes gardent un carré lisible sur mobile sans pousser le CTA).
  */
 export const beforeAfterMediaFrameClassName = cn(
   portraitFrameShellClassName,
   onboardingPortraitAspectClassName,
-  "mx-auto w-full max-w-[min(100%,20rem)] max-h-[min(70svh,22rem)] sm:max-w-[min(100%,22rem)] sm:max-h-[min(72svh,24rem)] md:max-w-[min(100%,24rem)] md:max-h-[min(74svh,26rem)] lg:max-w-[min(100%,26rem)] lg:max-h-[min(76svh,28rem)] xl:max-w-[min(100%,28rem)] xl:max-h-[min(78svh,30rem)]",
+  "mx-auto w-full",
+  "max-w-[clamp(13.5rem,min(78vw,calc(100svh-24rem)),18.75rem)] max-h-[clamp(13.5rem,min(78vw,calc(100svh-24rem)),18.75rem)]",
+  "sm:max-w-[min(100%,22rem)] sm:max-h-[min(68svh,24rem)] md:max-w-[min(100%,24rem)] md:max-h-[min(72svh,26rem)] lg:max-w-[min(100%,26rem)] lg:max-h-[min(74svh,28rem)] xl:max-w-[min(100%,28rem)] xl:max-h-[min(76svh,30rem)]",
 );
 
 /** Cadre portrait compact (landing, placeholders). */

@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreditCard, Loader2, Sparkles } from "lucide-react";
-import {
-  BILLING_QUERY_KEY,
-  BillingPaywall,
-} from "@/components/billing/BillingPaywall";
+import { BillingPaywall } from "@/components/billing/BillingPaywall";
 import {
   Card,
   CardContent,
@@ -16,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
+  BILLING_QUERY_KEY,
+  BILLING_QUERY_STALE_TIME_MS,
   createBillingPortalSession,
   fetchBillingState,
 } from "@/lib/billing-api";
@@ -64,7 +63,7 @@ export default function Billing() {
   } = useQuery({
     queryKey: BILLING_QUERY_KEY,
     queryFn: fetchBillingState,
-    staleTime: 30_000,
+    staleTime: BILLING_QUERY_STALE_TIME_MS,
     refetchOnWindowFocus: true,
   });
 

@@ -58,12 +58,14 @@ const STEP_INSTRUCTION: Record<PoseId, { en: string; fr: string }> = {
 
 interface FaceCaptureViewProps {
   onComplete: (poses: CapturedPose[]) => void;
+  onPoseCaptured?: (pose: CapturedPose) => void;
   onCancel: () => void;
   language?: AppLanguage;
 }
 
 export function FaceCaptureView({
   onComplete,
+  onPoseCaptured,
   onCancel,
   language = 'fr',
 }: FaceCaptureViewProps) {
@@ -71,6 +73,8 @@ export function FaceCaptureView({
   const videoRef = useRef<HTMLVideoElement>(null!);
   const overlayRef = useRef<HTMLCanvasElement>(null!);
   const guideOverlayRef = useRef<HTMLCanvasElement>(null!);
+  const notifiedPoseIdsRef = useRef<Set<PoseId>>(new Set());
+  const completionNotifiedRef = useRef(false);
 
   const captureSessionConfig = useMemo(
     () => ({ pauseForAdminCaptureReview: Boolean(adminCaptureExtrasActive) }),
@@ -124,10 +128,51 @@ export function FaceCaptureView({
   }, [adminCaptureExtrasActive, isLoading, hasError, refreshVideoDevices]);
 
   useEffect(() => {
-    if (state.sessionState === 'Done' && state.capturedPoses.length > 0) {
+    if (!onPoseCaptured) return;
+    for (const pose of state.capturedPoses) {
+      if (notifiedPoseIdsRef.current.has(pose.poseId)) continue;
+      notifiedPoseIdsRef.current.add(pose.poseId);
+      onPoseCaptured(pose);
+    }
+  }, [onPoseCaptured, state.capturedPoses]);
+
+  useEffect(() => {
+    if (
+      state.sessionState === 'Done' &&
+      state.capturedPoses.length > 0 &&
+      !completionNotifiedRef.current
+    ) {
+      completionNotifiedRef.current = true;
       onComplete(state.capturedPoses);
     }
   }, [state.sessionState, state.capturedPoses, onComplete]);
+
+  const cameraErrorMessage = useMemo(() => {
+    if (!state.error) return null;
+    const lower = state.error.toLowerCase();
+    if (
+      lower.includes('load failed') ||
+      lower.includes('video load error') ||
+      lower.includes('failed to fetch') ||
+      lower.includes('network')
+    ) {
+      return i18n(language, {
+        en: 'Camera loading failed. Check your connection, keep this tab open, then try again.',
+        fr: 'Le chargement caméra a échoué. Vérifie ta connexion, garde cet onglet ouvert, puis réessaie.',
+      });
+    }
+    if (
+      lower.includes('permission') ||
+      lower.includes('notallowed') ||
+      lower.includes('denied')
+    ) {
+      return i18n(language, {
+        en: 'Camera access was blocked. Allow camera access in your browser, then try again.',
+        fr: 'L’accès caméra est bloqué. Autorise la caméra dans ton navigateur, puis réessaie.',
+      });
+    }
+    return state.error;
+  }, [language, state.error]);
 
   const hasNoFace =
     (state.sessionState === 'AwaitFace' || state.sessionState === 'Aligning' || state.sessionState === 'Holding') &&
@@ -394,7 +439,7 @@ export function FaceCaptureView({
                 </svg>
               </div>
               <p className="font-display text-base tracking-tight" style={{ color: 'hsl(218 34% 96%)' }}>
-                {state.error}
+                {cameraErrorMessage}
               </p>
               <button
                 type="button"
@@ -443,33 +488,31 @@ export function FaceCaptureView({
 
           {!isLoading && !hasError && showPoseInstructionOverlay ? (
             <>
-              {profileTurnArrow === 'left' ? (
-                <div
-                  className="pointer-events-none absolute left-2 top-1/2 z-20 -translate-y-1/2 sm:left-6"
-                  aria-hidden
-                >
-                  <ChevronLeft
-                    className="h-16 w-16 animate-pulse text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)] sm:h-20 sm:w-20"
-                    strokeWidth={2.25}
-                  />
-                </div>
-              ) : null}
-              {profileTurnArrow === 'right' ? (
-                <div
-                  className="pointer-events-none absolute right-2 top-1/2 z-20 -translate-y-1/2 sm:right-6"
-                  aria-hidden
-                >
-                  <ChevronRight
-                    className="h-16 w-16 animate-pulse text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)] sm:h-20 sm:w-20"
-                    strokeWidth={2.25}
-                  />
-                </div>
-              ) : null}
-              <p
-                className="pointer-events-none absolute left-0 right-0 top-0 z-20 mx-auto max-w-md px-5 pt-8 text-center font-display text-lg font-semibold leading-snug tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] sm:max-w-lg sm:text-xl"
+              <div
+                className="pointer-events-none absolute left-0 right-0 top-0 z-20 mx-auto flex max-w-md flex-col items-center px-5 pt-8 text-center sm:max-w-lg"
               >
-                {instruction}
-              </p>
+                <p className="font-display text-lg font-semibold leading-snug tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)] sm:text-xl">
+                  {instruction}
+                </p>
+                {profileTurnArrow ? (
+                  <div
+                    className="mt-2 flex h-12 w-12 items-center justify-center rounded-full bg-black/25 text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)] backdrop-blur-sm sm:mt-2.5 sm:h-14 sm:w-14"
+                    aria-hidden
+                  >
+                    {profileTurnArrow === 'left' ? (
+                      <ChevronLeft
+                        className="h-9 w-9 animate-pulse sm:h-11 sm:w-11"
+                        strokeWidth={2.25}
+                      />
+                    ) : (
+                      <ChevronRight
+                        className="h-9 w-9 animate-pulse sm:h-11 sm:w-11"
+                        strokeWidth={2.25}
+                      />
+                    )}
+                  </div>
+                ) : null}
+              </div>
 
               {state.sessionState === 'Holding' &&
               state.validation?.poseId === activePoseId ? (

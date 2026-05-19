@@ -36,8 +36,11 @@ const POTENTIAL_MULTISTEP_STEPS = [
 
 const DREAM_FACE_PROGRESS_PCT = 14;
 
+const potentialPreviewStackClassName =
+  "mx-auto my-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.35rem,1vh,0.85rem)] px-0";
+
 const dreamFaceCardClassName =
-  "w-full max-w-none shrink-0 rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(2,4,8,0.97)_0%,rgba(0,1,4,0.99)_100%)] p-[clamp(0.75rem,1.8vh,1.25rem)] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.65)]";
+  "w-full max-w-none shrink-0 rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(2,4,8,0.97)_0%,rgba(0,1,4,0.99)_100%)] p-[clamp(0.65rem,1.45vh,1.05rem)] text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_8px_24px_-12px_rgba(0,0,0,0.65)]";
 
 /** Cible affichée : aujourd'hui + 12 semaines (84 jours). */
 function useTwelveWeekTargetDate(): Date {
@@ -151,11 +154,8 @@ function TransformationPreviewHeader({
     <header className="w-full shrink-0 text-center">
       <h2
         className={cn(
-          "font-hero mx-auto max-w-[min(100%,22ch)] font-semibold tracking-[-0.02em] text-balance text-white sm:max-w-[min(100%,28ch)] md:max-w-[min(100%,32ch)]",
-          // Tailles 100% fluides en `vh` : le titre rétrécit avec la hauteur
-          // dispo (et grossit sur les grands écrans) pour rester lisible
-          // sans pousser le CTA hors de la vue.
-          "text-[clamp(1.1rem,3vh,2.1rem)] leading-[1.08]",
+          "font-hero mx-auto max-w-[min(100%,22ch)] overflow-visible pb-[0.06em] pt-[0.08em] font-semibold tracking-[-0.015em] text-balance text-white sm:max-w-[min(100%,28ch)] md:max-w-[min(100%,32ch)]",
+          "text-[clamp(1.05rem,2.65vh,1.9rem)] leading-[1.18]",
         )}
       >
         {i18n(language, {
@@ -163,7 +163,7 @@ function TransformationPreviewHeader({
           fr: "Ton aperçu transformation",
         })}
       </h2>
-      <p className="mt-[clamp(0.2rem,0.6vh,0.5rem)] text-[clamp(0.78rem,1.5vh,0.875rem)] leading-snug text-zinc-300">
+      <p className="mt-[clamp(0.15rem,0.45vh,0.45rem)] text-[clamp(0.74rem,1.35vh,0.875rem)] leading-snug text-zinc-300">
         {i18n(language, subtitle)}
       </p>
     </header>
@@ -193,7 +193,7 @@ function UnlockFullAnalysisCta({
         onClick={() => void onUnlock()}
         disabled={isUnlocking}
         className={cn(
-          "mx-auto flex w-full min-w-[10.5rem] max-w-full items-center justify-center gap-2 rounded-sm px-6 py-[clamp(0.55rem,1.4vh,0.875rem)] transition disabled:pointer-events-none disabled:opacity-60",
+          "mx-auto flex w-full min-w-[10.5rem] max-w-full items-center justify-center gap-2 rounded-sm px-6 py-[clamp(0.5rem,1.15vh,0.78rem)] transition disabled:pointer-events-none disabled:opacity-60",
           onboardingPrimaryCtaClassName,
         )}
       >
@@ -302,7 +302,7 @@ export function PotentialPreviewCard({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.22, ease: "easeOut" }}
-        className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0"
+        className={potentialPreviewStackClassName}
       >
         <TransformationPreviewHeader
           language={language}
@@ -361,7 +361,7 @@ export function PotentialPreviewCard({
 
   if (isFailed || suppressPreview || mediaUnavailable) {
     return (
-      <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0">
+      <div className={potentialPreviewStackClassName}>
         <DreamFaceProgressCard language={language} />
         <UnlockFullAnalysisCta
           language={language}
@@ -374,7 +374,7 @@ export function PotentialPreviewCard({
 
   if (mediaLoading) {
     return (
-      <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0">
+      <div className={potentialPreviewStackClassName}>
         <TransformationPreviewHeader
           language={language}
           subtitle={{
@@ -394,7 +394,7 @@ export function PotentialPreviewCard({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-full flex-col items-stretch gap-[clamp(0.4rem,1.2vh,1rem)] px-0">
+    <div className={potentialPreviewStackClassName}>
       <TransformationPreviewHeader
         language={language}
         subtitle={{

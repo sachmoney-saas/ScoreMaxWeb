@@ -2,24 +2,14 @@ import * as React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  ArrowLeft,
   CalendarClock,
-  Camera,
   Loader2,
   Lock,
   ScanFace,
 } from "lucide-react";
-import type { OnboardingScanAssetCode } from "@shared/schema";
 import { FaceCaptureView } from "@/components/FaceCaptureView";
 import { AnalysisProcessingState, analysisElapsedAnchorEpochMs } from "@/components/analysis/AnalysisProcessingState";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useAnalysisJobStatus,
@@ -30,17 +20,13 @@ import {
 } from "@/hooks/use-supabase";
 import {
   getScanAssetLabels,
-  resetScanSessionAssets,
-  uploadScanAsset,
 } from "@/lib/face-analysis";
-import { guideTraceBlobUploadsFromCapturedPose } from "@/lib/guide-trace-scan-uploads";
 import { buildAnalysisSupportMessage } from "@/lib/analysis-error-message";
 import type { CapturedPose } from "@/lib/face-capture/CaptureSession";
-import { CAPTURE_POSES, type PoseId } from "@/lib/face-capture/types";
+import { type PoseId } from "@/lib/face-capture/types";
+import { uploadCapturedOnboardingPose } from "@/lib/onboarding-complete-flow";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
 import {
-  analysisBackNavButtonClassName,
   analysisHeroGlassClassName,
 } from "@/components/analysis/workers/_shared";
 import { queryClient } from "@/lib/queryClient";
@@ -48,11 +34,83 @@ import { formatSubscriberStandardQuotaSidebarLine } from "@/lib/subscriber-stand
 import { i18n, useAppLanguage, type AppLanguage } from "@/lib/i18n";
 
 function getErrorMessage(error: unknown, language: AppLanguage): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("load failed") ||
+    lower.includes("video load error") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("network request failed") ||
+    lower.includes("fetch failed")
+  ) {
+    return i18n(language, {
+      en: "The request failed, likely because of the connection. Check your network and try again.",
+      fr: "La requête a échoué, probablement à cause de la connexion. Vérifie ton réseau et réessaie.",
+    });
+  }
+  if (lower.includes("abort") || lower.includes("timeout")) {
+    return i18n(language, {
+      en: "The request took too long. Check your connection and try again.",
+      fr: "La requête a pris trop de temps. Vérifie ta connexion et réessaie.",
+    });
+  }
   if (error instanceof Error) return error.message;
   return i18n(language, {
     en: "An error occurred.",
     fr: "Une erreur est survenue.",
   });
+}
+
+const CAPTURE_POSE_UPLOAD_MAX_ATTEMPTS = 2;
+const CAPTURE_POSE_UPLOAD_RETRY_DELAY_MS = 1_200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function isRetryableCaptureUploadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("load failed") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("fetch failed") ||
+    lower.includes("network") ||
+    lower.includes("timeout") ||
+    lower.includes("délai") ||
+    lower.includes("upload") ||
+    lower.includes("storage") ||
+    lower.includes("stockage")
+  );
+}
+
+async function uploadCapturedPoseWithRetry(params: {
+  userId: string;
+  sessionId: string;
+  pose: CapturedPose;
+  language: AppLanguage;
+}): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= CAPTURE_POSE_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await uploadCapturedOnboardingPose(params);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (
+        attempt >= CAPTURE_POSE_UPLOAD_MAX_ATTEMPTS ||
+        !isRetryableCaptureUploadError(error)
+      ) {
+        throw error;
+      }
+      await sleep(CAPTURE_POSE_UPLOAD_RETRY_DELAY_MS);
+    }
+  }
+
+  throw lastError;
 }
 
 export default function NewAnalysis() {
@@ -106,11 +164,14 @@ export default function NewAnalysis() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [showCameraCapture, setShowCameraCapture] = useState(false);
   const [capturedPoses, setCapturedPoses] = useState<CapturedPose[]>([]);
-  const [showCapturedPreview, setShowCapturedPreview] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUploadingAll, setIsUploadingAll] = useState(false);
-  const [isRetakingCaptures, setIsRetakingCaptures] = useState(false);
+  const [uploadedPoseCount, setUploadedPoseCount] = useState(0);
+  const uploadPromisesRef = React.useRef<Map<PoseId, Promise<void>>>(new Map());
+  const completedUploadPoseIdsRef = React.useRef<Set<PoseId>>(new Set());
+  const autoLaunchStartedRef = React.useRef(false);
+  const captureRunIdRef = React.useRef(0);
 
   const createSessionMutation = useCreateManualAnalysisSession();
   const launchMutation = useLaunchManualAnalysis();
@@ -159,180 +220,174 @@ export default function NewAnalysis() {
                 fr: "Préparation du lancement...",
               })
             : isUploadingAll
-              ? i18n(language, {
-                  en: "Preparing your analysis...",
-                  fr: "Préparation de l'analyse...",
-                })
+              ? uploadedPoseCount > 0 && capturedPoses.length > 0
+                ? i18n(language, {
+                    en: `Initializing analysis... ${uploadedPoseCount}/${capturedPoses.length} photos uploaded`,
+                    fr: `Initialisation de l’analyse... ${uploadedPoseCount}/${capturedPoses.length} photos envoyées`,
+                  })
+                : i18n(language, {
+                    en: "Initializing analysis...",
+                    fr: "Initialisation de l’analyse...",
+                  })
               : message;
 
   /**
-   * Lazy-creates a scan session when the user starts camera capture.
-   * Avoids creating an empty session on every page mount.
+   * Creates a fresh manual scan session for every browser capture attempt.
+   * This keeps cancelled / partial uploads isolated from the next scan.
    */
-  const ensureManualSession = React.useCallback(() => {
-    if (sessionId) return Promise.resolve(sessionId);
-    return new Promise<string>((resolve, reject) => {
-      createSessionMutation.mutate(undefined, {
-        onSuccess: (data) => {
-          setSessionId(data.session.id);
-          resolve(data.session.id);
-        },
-        onError: (error) => reject(error),
-      });
-    });
-  }, [createSessionMutation, sessionId]);
+  const createManualSession = React.useCallback(async () => {
+    const data = await createSessionMutation.mutateAsync();
+    setSessionId(data.session.id);
+    return data.session.id;
+  }, [createSessionMutation]);
 
-  /**
-   * Map our internal PoseId → the Supabase asset type code expected by the backend.
-   */
-  const poseIdToAssetCode: Record<PoseId, OnboardingScanAssetCode> = {
-    frontal: "FACE_FRONT",
-    "profile-right": "PROFILE_RIGHT",
-    "profile-left": "PROFILE_LEFT",
-    "jaw-up": "LOOK_UP",
-    "crown-down": "LOOK_DOWN",
-    "closeup-eye": "EYE_CLOSEUP",
-    "closeup-smile": "SMILE",
-  };
-
-  const handleCapturedComplete = useCallback(
-    async (poses: CapturedPose[]) => {
-      setCapturedPoses(poses);
-      setShowCameraCapture(false);
-      setShowCapturedPreview(true);
-      setErrorMessage(null);
-    },
-    [],
-  );
-
-  async function handleRetakeFromPreview() {
+  const resetLocalCapturePipeline = React.useCallback(() => {
+    captureRunIdRef.current += 1;
+    uploadPromisesRef.current.clear();
+    completedUploadPoseIdsRef.current.clear();
+    autoLaunchStartedRef.current = false;
+    setSessionId(null);
+    setUploadedPoseCount(0);
+    setCapturedPoses([]);
+    setJobId(null);
+    setMessage(null);
     setErrorMessage(null);
-    /**
-     * Le reset serveur doit rester disponible même si le lancement est bloqué
-     * par le quota hebdo (sinon anciens blobs / lignes orphan restent après « Refaire »).
-     */
-    if (!user?.id || !sessionId || !hasPremiumAccess) {
-      setCapturedPoses([]);
-      setShowCapturedPreview(false);
-      setShowCameraCapture(true);
-      return;
-    }
+  }, []);
 
-    setIsRetakingCaptures(true);
-    try {
-      const {
-        data: { session: authSession },
-      } = await supabase.auth.getSession();
-      const accessToken = authSession?.access_token;
-      if (!accessToken) {
-        throw new Error(
-          i18n(language, {
-            en: "Supabase session not found",
-            fr: "Session Supabase introuvable",
-          }),
+  const startPoseUpload = useCallback(
+    (pose: CapturedPose): Promise<void> => {
+      const existingUpload = uploadPromisesRef.current.get(pose.poseId);
+      if (existingUpload) return existingUpload;
+
+      const currentUserId = user?.id;
+      const currentSessionId = sessionId;
+      if (!currentUserId || !currentSessionId || !hasPremiumAccess) {
+        return Promise.reject(
+          new Error(
+            i18n(language, {
+              en: "Unable to upload this photo. Start a new scan and try again.",
+              fr: "Impossible d’envoyer cette photo. Relance un scan et réessaie.",
+            }),
+          ),
         );
       }
 
-      await resetScanSessionAssets({ accessToken, sessionId });
+      const uploadRunId = captureRunIdRef.current;
+      const uploadPromise = uploadCapturedPoseWithRetry({
+        userId: currentUserId,
+        sessionId: currentSessionId,
+        pose,
+        language,
+      })
+        .then(() => {
+          if (captureRunIdRef.current !== uploadRunId) return;
+          completedUploadPoseIdsRef.current.add(pose.poseId);
+          setUploadedPoseCount(completedUploadPoseIdsRef.current.size);
+        })
+        .catch((error) => {
+          if (captureRunIdRef.current !== uploadRunId) {
+            throw error;
+          }
+          uploadPromisesRef.current.delete(pose.poseId);
+          completedUploadPoseIdsRef.current.delete(pose.poseId);
+          setUploadedPoseCount(completedUploadPoseIdsRef.current.size);
+          throw error;
+        });
 
-      await queryClient.invalidateQueries({
-        queryKey: ["manual-analysis-session-status", user.id, sessionId],
+      uploadPromisesRef.current.set(pose.poseId, uploadPromise);
+      return uploadPromise;
+    },
+    [hasPremiumAccess, language, sessionId, user?.id],
+  );
+
+  const handlePoseCaptured = useCallback(
+    (pose: CapturedPose) => {
+      const poseRunId = captureRunIdRef.current;
+      setCapturedPoses((previousPoses) => {
+        const posesWithoutCurrent = previousPoses.filter(
+          (previousPose) => previousPose.poseId !== pose.poseId,
+        );
+        return [...posesWithoutCurrent, pose];
       });
 
-      setCapturedPoses([]);
-      setShowCapturedPreview(false);
-      setShowCameraCapture(true);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, language));
-    } finally {
-      setIsRetakingCaptures(false);
-    }
-  }
+      void startPoseUpload(pose).catch((error) => {
+        if (captureRunIdRef.current !== poseRunId) return;
+        setErrorMessage(getErrorMessage(error, language));
+      });
+    },
+    [language, startPoseUpload],
+  );
 
-  /**
-   * Upload all captured poses to R2, then launch the analysis.
-   *
-   * Captures are first PUT to Cloudflare R2 via signed URLs (`uploadScanAsset`),
-   * then `launchManualAnalysis` queues the job server-side, which downloads the
-   * R2 objects and forwards them as base64 to the upstream analysis API.
-   *
-   * The preview dialog is kept open until the launch is queued. Combined with
-   * `Boolean(jobId)` in `shouldShowProcessing`, this removes the brief flash
-   * back to the launch CTA between the dialog closing and the first
-   * `jobStatus` fetch reporting "queued".
-   */
-  async function handleUploadAllCaptured() {
-    if (
-      !user?.id ||
-      !sessionId ||
-      !hasPremiumAccess ||
-      isWeeklyAnalysisLocked ||
-      subscriberQuotaBlockingUi
-    ) {
-      return;
-    }
-    setIsUploadingAll(true);
-    setErrorMessage(null);
+  const handleCapturedComplete = useCallback(
+    async (poses: CapturedPose[]) => {
+      if (autoLaunchStartedRef.current) return;
+      autoLaunchStartedRef.current = true;
+      const completionRunId = captureRunIdRef.current;
 
-    const codes: OnboardingScanAssetCode[] = [];
-    try {
-      for (const pose of capturedPoses) {
-        const code = poseIdToAssetCode[pose.poseId];
-        if (!code) continue;
+      setCapturedPoses(poses);
+      setShowCameraCapture(false);
+      setErrorMessage(null);
 
-        await uploadScanAsset({
-          userId: user.id,
-          sessionId,
-          assetTypeCode: code,
-          file: new File([pose.blob], `${pose.poseId}.jpg`, {
-            type: "image/jpeg",
-          }),
-          lang: language,
-        });
-        codes.push(code);
-
-        for (const trace of guideTraceBlobUploadsFromCapturedPose(pose)) {
-          await uploadScanAsset({
-            userId: user.id,
-            sessionId,
-            assetTypeCode: trace.assetTypeCode,
-            file: new File(
-              [trace.blob],
-              `${pose.poseId}-guide-${trace.fileLabel}.png`,
-              { type: "image/png" },
-            ),
-            lang: language,
-            captureMetadata: trace.captureMetadata,
-          });
-        }
+      if (
+        !user?.id ||
+        !sessionId ||
+        !hasPremiumAccess ||
+        isWeeklyAnalysisLocked ||
+        subscriberQuotaBlockingUi
+      ) {
+        autoLaunchStartedRef.current = false;
+        return;
       }
 
-      await queryClient.invalidateQueries({
-        queryKey: ["manual-analysis-session-status", user.id, sessionId],
-      });
-
+      setIsUploadingAll(true);
       setMessage(
         i18n(language, {
-          en: `${codes.length} poses ready.`,
-          fr: `${codes.length} poses prêtes.`,
+          en: "Initializing analysis...",
+          fr: "Initialisation de l’analyse...",
         }),
       );
 
-      const data = await launchMutation.mutateAsync(sessionId);
-      setJobId(data.job.id);
-      setMessage(
-        i18n(language, {
-          en: "Analysis queued...",
-          fr: "Analyse en file d'attente...",
-        }),
-      );
-      setShowCapturedPreview(false);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, language));
-    } finally {
-      setIsUploadingAll(false);
-    }
-  }
+      try {
+        await Promise.all(poses.map((pose) => startPoseUpload(pose)));
+        if (captureRunIdRef.current !== completionRunId) return;
+
+        await queryClient.invalidateQueries({
+          queryKey: ["manual-analysis-session-status", user.id, sessionId],
+        });
+        if (captureRunIdRef.current !== completionRunId) return;
+
+        const data = await launchMutation.mutateAsync(sessionId);
+        if (captureRunIdRef.current !== completionRunId) return;
+        setJobId(data.job.id);
+        setMessage(
+          i18n(language, {
+            en: "Analysis queued...",
+            fr: "Analyse en file d'attente...",
+          }),
+        );
+      } catch (error) {
+        if (captureRunIdRef.current !== completionRunId) return;
+        autoLaunchStartedRef.current = false;
+        setJobId(null);
+        setMessage(null);
+        setErrorMessage(getErrorMessage(error, language));
+      } finally {
+        if (captureRunIdRef.current === completionRunId) {
+          setIsUploadingAll(false);
+        }
+      }
+    },
+    [
+      hasPremiumAccess,
+      isWeeklyAnalysisLocked,
+      language,
+      launchMutation,
+      sessionId,
+      startPoseUpload,
+      subscriberQuotaBlockingUi,
+      user?.id,
+    ],
+  );
 
   async function handleLaunchRecentAppScan() {
     const appSessionId = recentScan?.latest_session_id;
@@ -369,7 +424,6 @@ export default function NewAnalysis() {
         queryKey: ["recent-scan-status", user.id],
       });
       setShowCameraCapture(false);
-      setShowCapturedPreview(false);
     } catch (error) {
       setErrorMessage(getErrorMessage(error, language));
     }
@@ -380,14 +434,21 @@ export default function NewAnalysis() {
     setErrorMessage(null);
     if (authLoading || !hasPremiumAccess) return;
     if (subscriberQuotaBlockingUi || isWeeklyAnalysisLocked) return;
-    void ensureManualSession().then(() => setShowCameraCapture(true));
+    resetLocalCapturePipeline();
+    setIsUploadingAll(false);
+    void createManualSession()
+      .then(() => setShowCameraCapture(true))
+      .catch((error) => {
+        setErrorMessage(getErrorMessage(error, language));
+      });
   }
 
   useEffect(() => {
     if (!heroContentLocked) return;
     setShowCameraCapture(false);
-    setShowCapturedPreview(false);
+    setIsUploadingAll(false);
   }, [heroContentLocked]);
+
 
   /**
    * When the job completes, refresh dashboard queries then navigate.
@@ -453,20 +514,6 @@ export default function NewAnalysis() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {!shouldShowProcessing ? (
-        <div className="shrink-0 pt-2">
-          <Button asChild variant="ghost" className={analysisBackNavButtonClassName}>
-            <Link href="/app">
-              <ArrowLeft className="h-4 w-4 shrink-0" />
-              {i18n(language, {
-                en: "Back to analyses",
-                fr: "Retour aux analyses",
-              })}
-            </Link>
-          </Button>
-        </div>
-      ) : null}
-
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] pt-2">
         <section
           className={cn(
@@ -725,105 +772,13 @@ export default function NewAnalysis() {
         <FaceCaptureView
           language={language}
           onComplete={handleCapturedComplete}
+          onPoseCaptured={handlePoseCaptured}
           onCancel={() => {
+            resetLocalCapturePipeline();
             setShowCameraCapture(false);
           }}
         />
       ) : null}
-
-      {/* ── Captured preview: grilles des poses + Lancer le scan ── */}
-      <Dialog
-        open={
-          showCapturedPreview &&
-          hasPremiumAccess &&
-          !subscriberQuotaBlockingUi &&
-          !isWeeklyAnalysisLocked
-        }
-        onOpenChange={setShowCapturedPreview}
-      >
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/15 bg-[linear-gradient(135deg,rgba(10,16,22,0.98)_0%,rgba(18,27,35,0.96)_55%,rgba(255,255,255,0.06)_100%)] text-zinc-50 shadow-[0_35px_110px_-70px_rgba(0,0,0,0.95)] sm:rounded-[2rem]">
-          <DialogHeader>
-            <DialogTitle className="font-display text-3xl tracking-tight text-zinc-50">
-              {i18n(language, {
-                en: "Pose preview",
-                fr: "Aperçu des poses",
-              })}
-            </DialogTitle>
-            <DialogDescription className="space-y-1.5 text-zinc-400">
-              <span className="block">
-                {i18n(language, {
-                  en: "Check quality before launching.",
-                  fr: "Vérifie la qualité avant de lancer.",
-                })}
-              </span>
-              <span className="block text-sm opacity-95">
-                {i18n(language, {
-                  en: `${capturedPoses.length}/${CAPTURE_POSES.length} poses.`,
-                  fr: `${capturedPoses.length}/${CAPTURE_POSES.length} poses.`,
-                })}
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Pose image grid */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-            {capturedPoses.map((pose) => {
-              const code = poseIdToAssetCode[pose.poseId];
-              const label = scanAssetLabels[code] ?? pose.poseId;
-              return (
-                <div
-                  key={pose.poseId}
-                  className="space-y-1"
-                >
-                  <div className="relative aspect-square overflow-hidden rounded-xl border border-white/20 bg-black/40">
-                    <img
-                      src={pose.thumbnailUrl}
-                      alt={label}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  <p className="text-center text-xs text-zinc-300">{label}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          {errorMessage ? (
-            <p className="text-sm font-medium text-red-300">{errorMessage}</p>
-          ) : null}
-
-          <div className="flex gap-3 border-t border-white/10 pt-4">
-            <Button
-              variant="outline"
-              className="flex-1 rounded-full border-white/20 text-zinc-300 hover:text-zinc-50"
-              disabled={isRetakingCaptures || isUploadingAll}
-              onClick={() => void handleRetakeFromPreview()}
-            >
-              {isRetakingCaptures ? (
-                <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
-              ) : (
-                <Camera className="mr-2 h-4 w-4" />
-              )}
-              {i18n(language, { en: "Retake", fr: "Refaire" })}
-            </Button>
-            <Button
-              className="flex-1 rounded-full bg-white text-slate-950 hover:bg-zinc-200"
-              disabled={isUploadingAll || capturedPoses.length === 0}
-              onClick={() => void handleUploadAllCaptured()}
-            >
-              {isUploadingAll ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <ScanFace className="mr-2 h-4 w-4 shrink-0" />
-              )}
-              {i18n(language, {
-                en: "Launch scan",
-                fr: "Lancer le scan",
-              })}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

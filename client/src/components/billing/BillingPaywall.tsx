@@ -4,18 +4,24 @@ import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
+  BILLING_QUERY_KEY,
+  BILLING_QUERY_STALE_TIME_MS,
   createBillingCheckout,
   fetchBillingState,
 } from "@/lib/billing-api";
 import { i18n, useAppLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
+  hardmaxxingGradientPillClassName,
+  softmaxxingGradientPillClassName,
+} from "@/components/analysis/recommendations/recommendation-type-styles";
+import {
   PLAN_DISPLAY,
   SUBSCRIPTION_PLANS,
   type Plan,
 } from "@shared/schema";
 
-export const BILLING_QUERY_KEY = ["billing", "subscription"] as const;
+export { BILLING_QUERY_KEY };
 
 const paywallOuterClass =
   "relative mx-auto max-w-5xl overflow-hidden rounded-[1.85rem] border border-white/[0.12] bg-zinc-950/55 p-8 shadow-[0_48px_120px_-72px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:p-10";
@@ -29,44 +35,94 @@ const planCardInnerClass =
 const planCardEmbeddedClass =
   "relative flex h-full flex-col rounded-2xl border border-white/[0.12] bg-black/45 p-[clamp(0.75rem,2vh,1.75rem)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm";
 
-const PLAN_BENEFITS: Record<
-  Plan,
-  { fr: readonly string[]; en: readonly string[] }
-> = {
+type PlanBenefit = {
+  fr: string;
+  en: string;
+  accent?: "soft" | "hard";
+};
+
+const PRIMARY_PLAN_BENEFITS: Record<Plan, PlanBenefit> = {
   monthly: {
-    fr: [
-      "Une analyse faciale chaque semaine pour suivre ton évolution",
-      "Protocole sur mesure ajusté à chaque analyse",
-      "Recommandations personnalisées",
-      "Support prioritaire",
-    ],
-    en: [
-      "A facial analysis every week to track your progress",
-      "Personalized protocol adjusted after each analysis",
-      "Personalized recommendations",
-      "Priority support",
-    ],
+    fr: "Une analyse faciale chaque semaine pour suivre ton évolution",
+    en: "A facial analysis every week to track your progress",
   },
   yearly: {
-    fr: [
-      "Une analyse faciale chaque semaine pour suivre ton évolution",
-      "Protocole sur mesure ajusté à chaque analyse",
-      "Recommandations personnalisées",
-      "Support prioritaire",
-      "2 mois offerts vs mensuel",
-    ],
-    en: [
-      "A facial analysis every week to track your progress",
-      "Personalized protocol adjusted after each analysis",
-      "Personalized recommendations",
-      "Priority support",
-      "≈2 months free vs monthly",
-    ],
+    fr: "Une analyse faciale chaque semaine pour suivre ton évolution",
+    en: "A facial analysis every week to track your progress",
   },
 };
 
-function planFeatures(plan: Plan, lang: "fr" | "en"): string[] {
-  return [...(lang === "fr" ? PLAN_BENEFITS[plan].fr : PLAN_BENEFITS[plan].en)];
+const SHARED_PLAN_BENEFITS: readonly PlanBenefit[] = [
+  {
+    fr: "Protocole sur mesure ajusté à chaque analyse",
+    en: "Personalized protocol adjusted after each analysis",
+  },
+  {
+    fr: "Recommandations personnalisées",
+    en: "Personalized recommendations",
+  },
+  {
+    fr: "Recommandations SoftMaxxing",
+    en: "SoftMaxxing recommendations",
+    accent: "soft",
+  },
+  {
+    fr: "Recommandations HardMaxxing",
+    en: "HardMaxxing recommendations",
+    accent: "hard",
+  },
+  {
+    fr: "Support prioritaire",
+    en: "Priority support",
+  },
+];
+
+const YEARLY_EXTRA_BENEFITS: readonly PlanBenefit[] = [
+  {
+    fr: "2 mois offerts vs mensuel",
+    en: "≈2 months free vs monthly",
+  },
+];
+
+function planFeatures(plan: Plan): PlanBenefit[] {
+  return [
+    PRIMARY_PLAN_BENEFITS[plan],
+    ...SHARED_PLAN_BENEFITS,
+    ...(plan === "yearly" ? YEARLY_EXTRA_BENEFITS : []),
+  ];
+}
+
+function PlanBenefitText({
+  feature,
+  lang,
+}: {
+  feature: PlanBenefit;
+  lang: "fr" | "en";
+}) {
+  const label = lang === "fr" ? feature.fr : feature.en;
+  if (!feature.accent) return <span>{label}</span>;
+
+  const term = feature.accent === "soft" ? "SoftMaxxing" : "HardMaxxing";
+  const [before, after] = label.split(term);
+  const pillClass =
+    feature.accent === "soft"
+      ? softmaxxingGradientPillClassName
+      : hardmaxxingGradientPillClassName;
+
+  return (
+    <span className="min-w-0">
+      {before}
+      <span
+        className={cn(
+          pillClass,
+          "mx-1 inline-flex rounded-lg px-2 py-0.5 text-[0.68em] leading-none align-middle",
+        )}
+      >
+        <span className="relative z-10">{term}</span>
+      </span>
+      {after}
+    </span>
+  );
 }
 
 type Props = {
@@ -93,7 +149,7 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
   } = useQuery({
     queryKey: BILLING_QUERY_KEY,
     queryFn: fetchBillingState,
-    staleTime: 30_000,
+    staleTime: BILLING_QUERY_STALE_TIME_MS,
     refetchOnWindowFocus: true,
   });
 
@@ -394,19 +450,27 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
                   : "mt-5 gap-2.5 text-sm",
               )}
             >
-              {planFeatures(pid, lang).map((feature) => (
-                <li key={feature} className="flex gap-2.5">
-                  <Check
-                    className={cn(
-                      "mt-0.5 shrink-0 text-emerald-300/90",
-                      useEmbeddedLayout ? "h-[1.125rem] w-[1.125rem]" : "h-4 w-4",
-                    )}
-                    strokeWidth={2.5}
-                    aria-hidden
-                  />
-                  <span>{feature}</span>
-                </li>
-              ))}
+              {planFeatures(pid).map((feature) => {
+                const label = lang === "fr" ? feature.fr : feature.en;
+                return (
+                  <li
+                    key={`${feature.accent ?? "default"}-${label}`}
+                    className="flex gap-2.5"
+                  >
+                    <Check
+                      className={cn(
+                        "mt-0.5 shrink-0 text-emerald-300/90",
+                        useEmbeddedLayout
+                          ? "h-[1.125rem] w-[1.125rem]"
+                          : "h-4 w-4",
+                      )}
+                      strokeWidth={2.5}
+                      aria-hidden
+                    />
+                    <PlanBenefitText feature={feature} lang={lang} />
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -456,4 +520,3 @@ export function BillingPaywall({ variant = "standalone" }: Props) {
     </div>
   );
 }
-

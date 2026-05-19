@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { i18n, useAppLanguage } from "@/lib/i18n";
 import { useAuth } from "@/hooks/use-auth";
 import { AUTH_CONFIG } from "@/config/auth";
+import { BILLING_QUERY_KEY } from "@/lib/billing-api";
 import {
   kickPostPaymentAnalysis,
   type PostPaymentLaunchOutcome,
@@ -13,8 +14,6 @@ import {
 
 const innerClassName =
   "relative mx-auto max-w-lg overflow-hidden rounded-[1.85rem] border border-white/[0.12] bg-zinc-950/55 p-8 shadow-[0_48px_120px_-72px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:p-10";
-
-const BILLING_QUERY_KEY = ["billing", "subscription"] as const;
 
 type AutoAnalysisState =
   | { kind: "idle" }

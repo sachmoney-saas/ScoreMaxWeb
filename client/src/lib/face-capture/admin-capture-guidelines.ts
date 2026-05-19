@@ -146,8 +146,12 @@ export function mouthToNoseWidthRatioFromLandmarks(
 }
 
 /**
- * Inclinaison moyenne des segments canthaux (médial → latéral) en degrés,
- * angles mesurés dans le plan image (px) pour respecter le ratio largeur / hauteur.
+ * Inclinaison moyenne des segments canthaux en degrés.
+ *
+ * Convention d'affichage : angle signé autour de l'horizontale, positif quand
+ * le canthus latéral est plus haut que le canthus médial (canthal tilt positif).
+ * On utilise `abs(dx)` pour neutraliser le miroir gauche/droite et éviter les
+ * artefacts autour de -90° / +90°.
  */
 export function averageCanthalTiltDegreesFromLandmarks(
   landmarks: LandmarkPoint[],
@@ -165,22 +169,31 @@ export function averageCanthalTiltDegreesFromLandmarks(
     rMed.x === undefined ||
     rLat.x === undefined ||
     lMed.x === undefined ||
-    lLat.x === undefined
+    lLat.x === undefined ||
+    rMed.y === undefined ||
+    rLat.y === undefined ||
+    lMed.y === undefined ||
+    lLat.y === undefined
   ) {
     return null;
   }
   const fw = Math.max(1, frame?.width ?? 1);
   const fh = Math.max(1, frame?.height ?? 1);
-  const deg = (x0: number, y0: number, x1: number, y1: number) =>
-    (Math.atan2((y1 - y0) * fh, (x1 - x0) * fw) * 180) / Math.PI;
+  const deg = (x0: number, y0: number, x1: number, y1: number) => {
+    const dx = Math.abs((x1 - x0) * fw);
+    const dyUp = (y0 - y1) * fh;
+    if (!(dx > 1e-6) || !Number.isFinite(dyUp)) return null;
+    return (Math.atan2(dyUp, dx) * 180) / Math.PI;
+  };
   const right = deg(rMed.x, rMed.y, rLat.x, rLat.y);
   const left = deg(lMed.x, lMed.y, lLat.x, lLat.y);
+  if (right == null || left == null) return null;
   const mean = (right + left) / 2;
   return Number.isFinite(mean) ? mean : null;
 }
 
 /** Bande morte (°) : inclinaisons proches de 0° sont affichées comme « neutre ». */
-const CANTHAL_TILT_NEUTRAL_DEADBAND_DEG = 2.5;
+const CANTHAL_TILT_NEUTRAL_DEADBAND_DEG = 0.5;
 
 export type CanthalTiltDisplayCategory = "positive" | "neutral" | "negative";
 

@@ -16,6 +16,41 @@ export const ONBOARDING_POSE_TO_ASSET: Record<PoseId, OnboardingScanAssetCode> =
   "closeup-smile": "SMILE",
 };
 
+export async function uploadCapturedOnboardingPose(params: {
+  userId: string;
+  sessionId: string;
+  pose: CapturedPose;
+  language: AppLanguage;
+}): Promise<void> {
+  const code = ONBOARDING_POSE_TO_ASSET[params.pose.poseId];
+  if (!code) return;
+
+  await uploadScanAsset({
+    userId: params.userId,
+    sessionId: params.sessionId,
+    assetTypeCode: code,
+    file: new File([params.pose.blob], `${params.pose.poseId}.jpg`, {
+      type: "image/jpeg",
+    }),
+    lang: params.language,
+  });
+
+  for (const trace of guideTraceBlobUploadsFromCapturedPose(params.pose)) {
+    await uploadScanAsset({
+      userId: params.userId,
+      sessionId: params.sessionId,
+      assetTypeCode: trace.assetTypeCode,
+      file: new File(
+        [trace.blob],
+        `${params.pose.poseId}-guide-${trace.fileLabel}.png`,
+        { type: "image/png" },
+      ),
+      lang: params.language,
+      captureMetadata: trace.captureMetadata,
+    });
+  }
+}
+
 export async function uploadCapturedOnboardingPoses(params: {
   userId: string;
   sessionId: string;
@@ -23,32 +58,12 @@ export async function uploadCapturedOnboardingPoses(params: {
   language: AppLanguage;
 }): Promise<void> {
   for (const pose of params.poses) {
-    const code = ONBOARDING_POSE_TO_ASSET[pose.poseId];
-    if (!code) continue;
-    await uploadScanAsset({
+    await uploadCapturedOnboardingPose({
       userId: params.userId,
       sessionId: params.sessionId,
-      assetTypeCode: code,
-      file: new File([pose.blob], `${pose.poseId}.jpg`, {
-        type: "image/jpeg",
-      }),
-      lang: params.language,
+      pose,
+      language: params.language,
     });
-
-    for (const trace of guideTraceBlobUploadsFromCapturedPose(pose)) {
-      await uploadScanAsset({
-        userId: params.userId,
-        sessionId: params.sessionId,
-        assetTypeCode: trace.assetTypeCode,
-        file: new File(
-          [trace.blob],
-          `${pose.poseId}-guide-${trace.fileLabel}.png`,
-          { type: "image/png" },
-        ),
-        lang: params.language,
-        captureMetadata: trace.captureMetadata,
-      });
-    }
   }
 }
 

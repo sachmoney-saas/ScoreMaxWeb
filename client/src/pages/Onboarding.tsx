@@ -68,6 +68,11 @@ import {
   shouldSkipOnboardingGeometryPrelude,
 } from "@/lib/onboarding-post-capture";
 import { deleteMyAccount } from "@/lib/account-api";
+import {
+  BILLING_QUERY_KEY,
+  BILLING_QUERY_STALE_TIME_MS,
+  fetchBillingState,
+} from "@/lib/billing-api";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -293,11 +298,24 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
   const isPreCaptureIntroA = stepIndex === 0;
   const isPreCaptureIntroB = stepIndex === 1;
 
+  const preloadBillingState = React.useCallback(() => {
+    return queryClient.ensureQueryData({
+      queryKey: BILLING_QUERY_KEY,
+      queryFn: fetchBillingState,
+      staleTime: BILLING_QUERY_STALE_TIME_MS,
+    });
+  }, []);
+
   React.useEffect(() => {
     if (user?.id) {
       writeOnboardingFlowState({ userId: user.id, step: stepIndex, v: 2 });
     }
   }, [stepIndex, user?.id]);
+
+  React.useEffect(() => {
+    if (!user?.id || !isPotentialStep) return;
+    void preloadBillingState();
+  }, [isPotentialStep, preloadBillingState, user?.id]);
 
   React.useEffect(() => {
     /** Préchargement léger : favicon utilisé sur l'écran d'analyse. */
@@ -940,7 +958,7 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     })();
   }, [finalizeFromServer, language]);
 
-  const handleUnlock = React.useCallback(() => {
+  const handleUnlock = React.useCallback(async () => {
     if (!user?.id) {
       setLocation(AUTH_CONFIG.LOGIN_PATH);
       return;
@@ -948,12 +966,17 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
     setIsUnlocking(true);
     try {
       writeOnboardingFlowState({ userId: user.id, step: 2, v: 2 });
+      await preloadBillingState();
+      setBillingPaywallOpen(true);
+      setHasStartedRun(true);
+    } catch (error) {
+      console.warn("Unable to preload billing paywall:", error);
       setBillingPaywallOpen(true);
       setHasStartedRun(true);
     } finally {
       setIsUnlocking(false);
     }
-  }, [setLocation, user?.id]);
+  }, [preloadBillingState, setLocation, user?.id]);
 
   const handleLogout = React.useCallback(async () => {
     await supabase.auth.signOut();
@@ -1181,7 +1204,9 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     ? "flex w-full flex-col overflow-hidden p-4 sm:p-6"
                     : cn(
                         "flex min-h-0 flex-1 flex-col overflow-hidden",
-                        "px-4 pt-7 pb-8 sm:px-6 sm:pt-8 sm:pb-9 md:px-8 md:pt-9 md:pb-10 lg:px-10 lg:pt-10 lg:pb-11",
+                        isPotentialStep
+                          ? "px-4 pb-5 pt-5 sm:px-6 sm:pb-7 sm:pt-7 md:px-8 md:pb-8 md:pt-8 lg:px-9 lg:pb-9 lg:pt-9"
+                          : "px-4 pt-7 pb-8 sm:px-6 sm:pt-8 sm:pb-9 md:px-8 md:pt-9 md:pb-10 lg:px-10 lg:pt-10 lg:pb-11",
                       ),
                   "mx-auto w-full",
                   isPotentialStep
@@ -1231,15 +1256,12 @@ export default function Onboarding({ initialStep }: OnboardingProps = {}) {
                     <OnboardingScanCompleteSplash language={language} />
                   )
                 ) : isPotentialStep ? (
-                  // `overflow-hidden` + paddings fluides : tout le contenu
-                  // (titre → CTA Continuer) reste dans la vue, peu importe la
-                  // hauteur. L'ancien combo `justify-center + overflow-y-auto`
-                  // rendait le haut inaccessible quand ça débordait.
+                  // Le contenu se compacte d'abord (image/paddings fluides).
+                  // Le scroll interne reste seulement un filet de sécurité sur
+                  // les webviews mobiles qui reportent une hauteur viewport trop
+                  // optimiste avec la barre navigateur.
                   <div
-                    className={cn(
-                      "flex min-h-0 flex-1 flex-col overflow-hidden px-1 py-[clamp(0.35rem,1.2vh,1rem)] sm:px-2",
-                      isPotentialBlockingLoad ? "justify-start" : "justify-center",
-                    )}
+                    className="flex min-h-0 flex-1 flex-col justify-start overflow-x-hidden overflow-y-auto px-1 py-[clamp(0.2rem,0.7vh,0.65rem)] sm:px-2"
                   >
                     <PotentialPreviewCard
                       language={language}

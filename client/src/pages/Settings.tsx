@@ -14,7 +14,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Shield, AlertTriangle, Info } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchBillingState } from "@/lib/billing-api";
+import {
+  BILLING_QUERY_KEY,
+  BILLING_QUERY_STALE_TIME_MS,
+  fetchBillingState,
+} from "@/lib/billing-api";
 import { i18n, useAppLanguage, useLanguage, type AppLanguage } from "@/lib/i18n";
 import {
   Select,
@@ -52,10 +56,10 @@ export default function Settings() {
   );
 
   const { data: billingState } = useQuery({
-    queryKey: ["billing", "subscription"],
+    queryKey: BILLING_QUERY_KEY,
     queryFn: fetchBillingState,
     enabled: Boolean(user),
-    staleTime: 30_000,
+    staleTime: BILLING_QUERY_STALE_TIME_MS,
   });
 
   /** Active subscription without scheduled end-of-period cancellation blocks deletion. */
@@ -157,11 +161,11 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-col items-center justify-center text-center">
         <h1 className="text-3xl font-bold tracking-tight text-white">
           {i18n(uiLang, { en: "Settings", fr: "Paramètres" })}
         </h1>
-        <p className="text-zinc-300">
+        <p className="mt-1 text-zinc-300">
           {i18n(uiLang, {
             en: "Manage your account and preferences.",
             fr: "Gérez votre compte et vos préférences.",
