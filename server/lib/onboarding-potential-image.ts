@@ -1,4 +1,9 @@
 import { oneshotAspectRatioSchema } from "@shared/oneshot-image";
+import {
+  ONBOARDING_POTENTIAL_MAX_CONSECUTIVE_POLL_ERRORS,
+  ONBOARDING_POTENTIAL_MAX_WAIT_MS,
+  ONBOARDING_POTENTIAL_POLL_INTERVAL_MS,
+} from "@shared/onboarding-potential";
 import { ONBOARDING_PORTRAIT_ASPECT_RATIO } from "@shared/onboarding-portrait-media";
 import { ApiError } from "./errors";
 import { logger } from "./logger";
@@ -29,9 +34,6 @@ import {
 } from "./onboarding-potential-image-policy";
 
 export const ONBOARDING_POTENTIAL_PROMPT_KEY = "onboarding_potential_6months" as const;
-
-const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_MS = 90_000;
 
 const activePotentialPollers = new Set<string>();
 
@@ -418,12 +420,14 @@ async function runPotentialPoll(generationId: string): Promise<void> {
 
   const jobId = gen.oneshot_job_id;
   const start = Date.now();
+  let consecutivePollErrors = 0;
 
-  while (Date.now() - start < POLL_MAX_MS) {
-    await sleep(POLL_INTERVAL_MS);
+  while (Date.now() - start < ONBOARDING_POTENTIAL_MAX_WAIT_MS) {
+    await sleep(ONBOARDING_POTENTIAL_POLL_INTERVAL_MS);
 
     try {
       const job = await getOneShotJob(jobId);
+      consecutivePollErrors = 0;
       const statusLower = job.status.toLowerCase();
 
       if (statusLower === "completed" && job.result?.url) {
@@ -445,13 +449,30 @@ async function runPotentialPoll(generationId: string): Promise<void> {
         return;
       }
     } catch (error) {
-      logger.error({ err: error, generationId, jobId }, "Potential image poll tick failed");
-      await markGenerationFailed({
-        generationId,
-        code: "POLLING_ERROR",
-        message: error instanceof Error ? error.message : "Polling error",
-      });
-      return;
+      consecutivePollErrors += 1;
+      const pollErrorMessage =
+        error instanceof Error ? error.message : "Polling error";
+      logger.warn(
+        {
+          err: error,
+          generationId,
+          jobId,
+          consecutivePollErrors,
+        },
+        "Potential image poll tick failed; retrying",
+      );
+
+      if (
+        consecutivePollErrors >=
+        ONBOARDING_POTENTIAL_MAX_CONSECUTIVE_POLL_ERRORS
+      ) {
+        await markGenerationFailed({
+          generationId,
+          code: "POLLING_ERROR",
+          message: pollErrorMessage,
+        });
+        return;
+      }
     }
   }
 

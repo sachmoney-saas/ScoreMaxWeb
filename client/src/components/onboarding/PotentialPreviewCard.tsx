@@ -1,6 +1,6 @@
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Flag, Loader2, Sparkles } from "lucide-react";
+import { Flag, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { saasGlassInsetClassName } from "@/lib/auth-page-shell-styles";
 import { onboardingPrimaryCtaClassName } from "@/lib/cta-button-styles";
@@ -391,8 +391,7 @@ export function PotentialPreviewCard({
             onboardingPortraitAspectClassName,
           )}
         >
-          <Sparkles className="h-6 w-6 text-zinc-400" />
-          <p className="mt-3 text-sm text-zinc-200">
+          <p className="text-sm text-zinc-200">
             {i18n(language, {
               en: "We couldn't preview your potential right now.",
               fr: "Impossible d'afficher ton potentiel pour le moment.",
